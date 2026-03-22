@@ -69,9 +69,9 @@ function ShelfWrapper({children, isDraggingOver = false, shelfName}: {
             </div>
             <button
                 onClick={handleClose}
-                className="hover:cursor-pointer absolute -top-0 -right-4.5 w-20 h-4.5 bg-amber-500/50 rounded-xl z-100 rotate-45 flex items-center justify-start pl-10 transition-all group z-50 -pb-5.5 opacity-0 peer-hover:opacity-100 hover:opacity-100 rounded-2xl"
+                className="hover:cursor-pointer absolute -top-0 -right-4.5 w-20 h-4.5 bg-muted-foreground/10 rounded-xl z-100 rotate-45 flex items-center justify-start pl-10 transition-all group z-50 -pb-5.5 opacity-0 peer-hover:opacity-100 hover:opacity-100 rounded-2xl"
             >
-                <Minus className="w-4 h-4.5 scale-y-180 text-lg font-bold text-amber-200 -rotate-45">-</Minus>
+                <Minus className="w-4 h-4.5 scale-y-180 text-lg font-bold text-foreground -rotate-45"></Minus>
             </button>
             {children}
         </Card>
@@ -88,7 +88,13 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
     const [isDraggingOver, setIsDraggingOver] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
 
-    useShelfClipboard({shelfId, containerRef});
+    useShelfClipboard({shelfId});
+
+    useEffect(() => {
+        if (shelfId && containerRef.current) {
+            containerRef.current.focus();
+        }
+    }, [shelfId]);
 
     useEffect(() => {
         if (effectRan.current || !shelfId) return;
@@ -97,7 +103,7 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
         let unlisten: (() => void) | undefined;
 
         const setup = async () => {
-            unlisten = await window.onDragDropEvent(throttle((event) => {
+            unlisten = await window.onDragDropEvent((event) => {
                 const {payload} = event
                 const eventPosition: PhysicalPosition | undefined = (payload as any)?.position
                 const isLeftSide = eventPosition?.x !== undefined && eventPosition.x < windowInfo.position.x + windowInfo.size.width / 2;
@@ -112,11 +118,15 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
                 } else if (payload.type === "drop") {
                     setIsDraggingOver(false);
 
-                    if (isLeftSide && payload.paths.length > 0) {
-                        invoke("add_resources", {shelfId, paths: payload.paths}).then(noop);
+                    if (isLeftSide) {
+                        if (payload.paths.length > 0) {
+                            invoke("add_resources", {shelfId, paths: payload.paths}).then(noop);
+                        } else {
+                            invoke("add_resources_from_drag_pasteboard", {shelfId}).then(noop);
+                        }
                     }
                 }
-            }, 50, {leading: true, trailing: true}));
+            })
         };
 
         setup();
@@ -138,11 +148,7 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
 
     return (
         <ShelfWrapper isDraggingOver={isDraggingOver} shelfName={currentShelf?.name}>
-            <div
-                ref={containerRef}
-                tabIndex={0}
-                className="w-full h-full outline-none"
-            >
+            <div ref={containerRef} tabIndex={0} className="w-full h-full outline-none">
             <div
                 className={`absolute z-40 inset-0 bg-bluePrimary/10 backdrop-blur-[3px] flex items-center justify-center animate-in fade-in duration-200 ${!isDraggingOver && 'hidden'}`}>
                 <div className="flex flex-col items-center w-full gap-2 text-primary">
@@ -155,7 +161,7 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
                 {selectedResources.length === 0 ? (
                     <div
                         className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2 absolute left-0 top-0 w-full">
-                        <p className="text-md text-muted-foreground animate-pulse duration-1500">Drop or paste files here</p>
+                        <p className="text-md text-muted-foreground animate-pop-down-pulse">Drop or paste files here</p>
                     </div>
                 ) : (
                     <div className="flex flex-col gap-2">

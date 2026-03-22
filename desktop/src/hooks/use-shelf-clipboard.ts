@@ -1,22 +1,28 @@
-import {useEffect, RefObject} from "react";
+import {useEffect} from "react";
 import {invoke} from "@tauri-apps/api/core";
 
 interface UseShelfClipboardOptions {
     shelfId: string | undefined;
-    containerRef: RefObject<HTMLElement | null>;
     enabled?: boolean;
 }
 
 export function useShelfClipboard(options: UseShelfClipboardOptions): void {
-    const {shelfId, containerRef, enabled = true} = options;
+    const {shelfId, enabled = true} = options;
 
     useEffect(() => {
-        if (!enabled || !shelfId || !containerRef.current) return;
+        if (!enabled || !shelfId) return;
 
         const handlePaste = async (e: ClipboardEvent) => {
-            e.preventDefault();
+            const target = e.target as HTMLElement;
+            if (
+                target instanceof HTMLInputElement ||
+                target instanceof HTMLTextAreaElement ||
+                target.isContentEditable
+            ) {
+                return;
+            }
 
-            if (!shelfId) return;
+            e.preventDefault();
 
             try {
                 await invoke('paste_from_clipboard', {shelfId});
@@ -25,11 +31,10 @@ export function useShelfClipboard(options: UseShelfClipboardOptions): void {
             }
         };
 
-        const element = containerRef.current;
-        element.addEventListener('paste', handlePaste);
+        window.addEventListener('paste', handlePaste, true);
 
         return () => {
-            element.removeEventListener('paste', handlePaste);
+            window.removeEventListener('paste', handlePaste, true);
         };
-    }, [shelfId, enabled, containerRef]);
+    }, [shelfId, enabled]);
 }

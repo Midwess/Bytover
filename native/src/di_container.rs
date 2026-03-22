@@ -1,4 +1,4 @@
-use crate::config::{get_gateway_grpc_url, get_locator_url, get_signalling_server_ws_url};
+use crate::config::{get_gateway_grpc_url, get_locator_url, get_signalling_server_ws_url, GATEWAY_HOST};
 use crate::core_api_impl::net_stream::NetStreamImpl;
 use crate::native::executor::NativeExecutor;
 use crate::native::p2p::P2PNativeExecutorImpl;
@@ -53,7 +53,7 @@ impl DiContainer {
                 core_bridge: OnceCell::new(),
                 native_executor: OnceCell::new(),
                 db: OnceCell::new(),
-                rpc_connection: RpcNetworkModuleImpl::new(get_gateway_grpc_url()),
+                rpc_connection: RpcNetworkModuleImpl::new(get_gateway_grpc_url(), GATEWAY_HOST.unwrap().to_string()),
                 cloud_server: OnceCell::new()
             };
 

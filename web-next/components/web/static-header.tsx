@@ -1,6 +1,8 @@
+'use client';
 import React from 'react';
 import { getAssetUrl } from '@/utils/asset-url';
 import Link from 'next/link';
+import { GitHubStarsButton } from '@/components/animate-ui/components/buttons/github-stars';
 
 export default function StaticHeader({ className, isFullWidth, theme = 'dark' }: { className?: string, isFullWidth?: boolean, theme?: 'light' | 'dark' }) {
     const isLight = theme === 'light';
@@ -57,6 +59,12 @@ export default function StaticHeader({ className, isFullWidth, theme = 'dark' }:
                 </nav>
 
                 <div className="flex items-center gap-2">
+                    <GitHubStarsButton 
+                        username="Midwess" 
+                        repo="Bytover" 
+                        variant="ghost" 
+                        className={isLight ? "text-zinc-500 hover:text-zinc-900" : "text-foreground hover:text-white"} 
+                    />
                 </div>
            </div>
         </div>

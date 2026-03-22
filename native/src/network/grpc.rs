@@ -13,15 +13,17 @@ use tonic::transport::{Channel, ClientTlsConfig};
 pub struct RpcNetworkModuleImpl {
     channel: Arc<Mutex<Option<Channel>>>,
     internet_connection: InternetConnection,
-    endpoint: String
+    endpoint: String,
+    domain: String
 }
 
 impl RpcNetworkModuleImpl {
-    pub fn new(endpoint: String) -> Self {
+    pub fn new(endpoint: String, domain: String) -> Self {
         Self {
             channel: Default::default(),
             endpoint,
-            internet_connection: InternetConnection::new(get_locator_url())
+            internet_connection: InternetConnection::new(get_locator_url()),
+            domain
         }
     }
 
@@ -39,8 +41,8 @@ impl RpcNetworkModuleImpl {
             .timeout(Duration::from_millis(12000));
 
         if self.endpoint.starts_with("https") {
-            let tls = ClientTlsConfig::new().with_native_roots();
-
+            log::info!("Connecting to gRPC server over TLS");
+            let tls = ClientTlsConfig::new().with_webpki_roots().domain_name(self.domain.clone());
             builder = builder.tls_config(tls).unwrap();
         };
 

@@ -1,0 +1,2229 @@
+<!DOCTYPE html>
+<!-- saved from url=(0135)file:///Users/tiendang/Library/Application%20Support/com.westrise.bitbridge.desktop/private/bytover/bytover_1774077157840_0b0fd2ed.html -->
+<html lang="en" data-color-scheme="system" class="scroll-smooth"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+    <title>Implementing Drag And Drop Operations Using NSPasteboard on macOS</title>
+
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <meta name="theme-color" content="#ff3a00">
+
+      <link rel="preconnect" href="https://fonts.googleapis.com/">
+  <link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin="">
+
+      <script src="file:///cdn-cgi/scripts/7d0fa10a/cloudflare-static/rocket-loader.min.js" data-cf-settings="8ac227113e9aca74270db58c-|49"></script><link rel="stylesheet" href="./drag-drop-planing_files/css2" as="style" onload="this.onload=null;this.rel=&#39;stylesheet&#39;" crossorigin="">
+  <style>body { --font-headings: 'DM Sans', sans-serif; }</style>
+
+
+
+
+
+
+
+
+
+
+
+
+    <style>body { --font-body: 'DM Sans', sans-serif; }</style>
+
+
+
+
+
+
+
+
+
+
+
+    <script type="8ac227113e9aca74270db58c-module" src="file:///assets/built/app.js?v=28d103da17"></script>
+
+    <link rel="stylesheet" type="text/css" href="file:///assets/built/app.css?v=28d103da17">
+
+    <script type="8ac227113e9aca74270db58c-text/javascript">
+  let preferredTheme = localStorage.getItem('PREFERRED_COLOR_SCHEME') || `system`;
+  document.documentElement.setAttribute('data-color-scheme', preferredTheme);
+  
+  // Global values needed
+  const themeGlobal = {
+    siteUrl: 'https://www.appcoda.com',
+    currentPage: parseInt(''),
+    nextPage: parseInt(''),
+    nextPageLink: '',
+    maxPages: parseInt(''), 
+    lastPage: `` === `` ? true : false,
+    postsPerPage: parseInt('12'),
+    total: parseInt(''),
+    searchJobsFeaturedFirst: false
+  }
+
+  function hexToRgb(hexColor) {
+    if (hexColor.slice(0, 1) === '#') { hexColor = hexColor.slice(1); }
+    if (hexColor.length === 3) { hexColor = hexColor.split('').map(function (hex) { return hex + hex;}).join(''); }
+    const r = parseInt(hexColor.substr(0,2),16);
+    const g = parseInt(hexColor.substr(2,2),16);
+    const b = parseInt(hexColor.substr(4,2),16);
+
+    return [r,g,b]
+  }
+
+  // Get contrast color;
+  function getColorContrast(hexColor) {
+    const rgb = hexToRgb(hexColor);
+    let yiq = ((rgb[0] * 299) + (rgb[1] * 587) + (rgb[2] * 114)) / 1000;
+    const colorContrast = (yiq >= 128) ? 'hsl(0 0% 0%)' : 'hsl(0 0% 100%)';
+
+    // return
+    return colorContrast
+  };
+
+  function hexToHsl(hexColor) {
+    const rgb = hexToRgb(hexColor);
+
+    // Make r, g, and b fractions of 1
+    const r = rgb[0]/255;
+    const g = rgb[1]/255;
+    const b = rgb[2]/255;
+
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h, s, l = (max + min)  /  2;  
+    if ( max == min ) { h = s = 0; } else {
+      let d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      switch(max){
+        case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+        case g: h = (b - r) / d + 2; break;
+        case b: h = (r - g) / d + 4; break;
+      }
+      h /= 6;
+    }
+
+    return [Math.round(h * 360),Math.round(s * 100),Math.round(l * 100)]
+  }
+
+  function setBrandHSL(hex) {
+    const colorHsl = hexToHsl(hex)
+    document.documentElement.style.setProperty('--color-brand-hsl', `${colorHsl[0]} ${colorHsl[1]}% ${colorHsl[2]}%`);
+    document.documentElement.style.setProperty('--color-brand-contrast', getColorContrast(hex));
+  }
+
+  setBrandHSL("#ff3a00");
+</script>
+    <link rel="icon" href="https://www.appcoda.com/content/images/size/w256h256/format/jpeg/2024/05/appcoda-fav-logo-1024-300x300.jpg" type="image/jpeg">
+    <link rel="canonical" href="https://www.appcoda.com/nspasteboard-macos/">
+    <meta name="referrer" content="no-referrer-when-downgrade">
+    
+    <meta property="og:site_name" content="AppCoda">
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="Implementing Drag And Drop Operations Using NSPasteboard on macOS">
+    <meta property="og:description" content="One of the most common operations macOS users perform and they are quite familiar with is drag and drop. On a daily basis we all drag things around when working on our Macs. We drag files, text, images, and many, many more. Dragging is a kind of action that users">
+    <meta property="og:url" content="https://www.appcoda.com/nspasteboard-macos/">
+    <meta property="og:image" content="https://www.appcoda.com/content/images/wordpress/2020/03/hgoir_bbmve.jpg">
+    <meta property="article:published_time" content="2020-03-21T13:18:20.000Z">
+    <meta property="article:modified_time" content="2024-05-22T04:40:39.000Z">
+    <meta property="article:tag" content="macOS programming">
+    
+    <meta property="article:publisher" content="https://www.facebook.com/appcodamobile">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Implementing Drag And Drop Operations Using NSPasteboard on macOS">
+    <meta name="twitter:description" content="One of the most common operations macOS users perform and they are quite familiar with is drag and drop. On a daily basis we all drag things around when working on our Macs. We drag files, text, images, and many, many more. Dragging is a kind of action that users">
+    <meta name="twitter:url" content="https://www.appcoda.com/nspasteboard-macos/">
+    <meta name="twitter:image" content="https://www.appcoda.com/content/images/wordpress/2020/03/hgoir_bbmve.jpg">
+    <meta name="twitter:label1" content="Written by">
+    <meta name="twitter:data1" content="Gabriel Theodoropoulos">
+    <meta name="twitter:label2" content="Filed under">
+    <meta name="twitter:data2" content="macOS programming">
+    <meta name="twitter:site" content="@appcodamobile">
+    <meta name="twitter:creator" content="@gabtheodor">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="851">
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "AppCoda",
+        "url": "https://www.appcoda.com/",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://www.appcoda.com/content/images/2024/05/appcoda_new_logo_4001.png"
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Gabriel Theodoropoulos",
+        "image": {
+            "@type": "ImageObject",
+            "url": "https://secure.gravatar.com/avatar/582c964c3dafd700a4df627225d859fe?s=512&d=mm&r=g",
+            "width": 512,
+            "height": 512
+        },
+        "url": "https://www.appcoda.com/author/gabrielth/",
+        "sameAs": [
+            "https://twitter.com/gabtheodor"
+        ]
+    },
+    "headline": "Implementing Drag And Drop Operations Using NSPasteboard on macOS",
+    "url": "https://www.appcoda.com/nspasteboard-macos/",
+    "datePublished": "2020-03-21T13:18:20.000Z",
+    "dateModified": "2024-05-22T04:40:39.000Z",
+    "image": {
+        "@type": "ImageObject",
+        "url": "https://www.appcoda.com/content/images/wordpress/2020/03/hgoir_bbmve.jpg",
+        "width": 1200,
+        "height": 851
+    },
+    "keywords": "macOS programming",
+    "description": "\n\n\n\n\nOne of the most common operations macOS users perform and they are quite familiar with is drag and drop. On a daily basis we all drag things around when working on our Macs. We drag files, text, images, and many, many more. Dragging is a kind of action that users expect to find pretty much in every app on macOS, so supporting it in our apps is something we should seriously consider.\n\n\n\n\n\n\n\nEditor’s note: This tutorial is just one of the many tutorials of our macOS programming series. If you",
+    "mainEntityOfPage": "https://www.appcoda.com/nspasteboard-macos/"
+}
+    </script>
+
+    <meta name="generator" content="Ghost 5.83">
+    <link rel="alternate" type="application/rss+xml" title="AppCoda" href="https://www.appcoda.com/rss/">
+    
+    <script defer="" src="./drag-drop-planing_files/sodo-search.min.js" data-key="be82560a441b80824243388347" data-styles="https://cdn.jsdelivr.net/ghost/sodo-search@~1.1/umd/main.css" data-sodo-search="https://www.appcoda.com/" crossorigin="anonymous" type="8ac227113e9aca74270db58c-text/javascript"></script>
+    
+    <link href="https://www.appcoda.com/webmentions/receive/" rel="webmention">
+    <script defer="" src="file:///public/cards.min.js?v=28d103da17" type="8ac227113e9aca74270db58c-text/javascript"></script>
+    <link rel="stylesheet" type="text/css" href="file:///public/cards.min.css?v=28d103da17">
+    <style>
+.prose :where(code):not(:where([class~="not-prose"], [class~="not-prose"] *))::before {
+  content: "";
+}
+.prose :where(code):not(:where([class~="not-prose"], [class~="not-prose"] *))::after {
+  content: "";
+}
+
+.gh-card-date { visibility: none }
+
+.hljs {
+  background: rgb(38, 38, 38) !important;
+}
+
+.prose :where(pre):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
+  background: rgb(38, 38, 38);
+}
+</style>
+
+<link rel="stylesheet" href="./drag-drop-planing_files/stackoverflow-dark.min.css">
+<script src="./drag-drop-planing_files/highlight.min.js" type="8ac227113e9aca74270db58c-text/javascript"></script>
+<!-- and it's easy to individually load additional languages -->
+<script src="./drag-drop-planing_files/swift.min.js" type="8ac227113e9aca74270db58c-text/javascript"></script>
+<script src="./drag-drop-planing_files/objectivec.min.js" type="8ac227113e9aca74270db58c-text/javascript"></script>
+
+<!-- ConvertKit Form -->
+<script async="" data-uid="83675b220b" src="./drag-drop-planing_files/index.js" type="8ac227113e9aca74270db58c-text/javascript"></script>
+
+<!-- Google tag (gtag.js) -->
+<script async="" src="./drag-drop-planing_files/js" type="8ac227113e9aca74270db58c-text/javascript"></script>
+<script type="8ac227113e9aca74270db58c-text/javascript">
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-E2SXGWW623');
+</script><style>:root {--ghost-accent-color: #ff3a00;}</style>
+
+  </head>
+  <body class="post-template tag-drag-and-drop tag-macos-programming tag-nspasteboard tag-hash-import-2024-06-06-03-16 subpixel-antialiased relative overflow-x-hidden bg-bgr text-typ" x-data="{ menuOpen: false }" :class="menuOpen ? &#39;overflow-hidden&#39; : &#39;overflow-y-auto&#39;" data-user="visitor" @keydown.escape="menuOpen = false" @keydown.cmk.k="document.querySelector(&#39;[data-ghost-search]&#39;).click()" x-init="navigator.platform.includes(&#39;Win&#39;) &amp;&amp; document.body.classList.add(&#39;is-win&#39;)">
+      <progress value="0" max="100" data-progress-bar="" class="appearance-none fixed top-0 w-full h-[5px] bg-transparent z-[1100]" x-init="$nextTick(() =&gt; { document.querySelector(&#39;[data-progress-bar]&#39;).setAttribute(&#39;value&#39;,getScrollPercent()) })" @scroll.window="document.querySelector(&#39;[data-progress-bar]&#39;).setAttribute(&#39;value&#39;,getScrollPercent())">
+  </progress>
+    
+    <header class="px-4 sm:px-6 text-typ whitespace-nowrap" data-header="" x-init="renderSubmenus()">
+  <div class="max-w-container mx-auto py-4 md:py-6 flex items-center justify-center gap-4 relative before:content-[&#39;&#39;] before:absolute before:bottom-0 before:left-0 before:w-full before:h-[1px] before:bg-fading">
+
+    <div class="flex-1 flex justify-start lg:transition-move duration-300" data-header-brand="">
+      <a class="" href="https://www.appcoda.com/" data-brand="">
+          <picture data-logo="dark">
+  <source srcset="/content/images/size/w100/format/webp/2024/05/appcoda-logo-dark.png 100w, /content/images/size/w320/format/webp/2024/05/appcoda-logo-dark.png 320w, /content/images/size/w640/format/webp/2024/05/appcoda-logo-dark.png 600w" sizes="(max-width: 800px) 200px, 320px" type="image/webp">
+  <img class="h-[var(--logo-h-mobile)] w-[var(--logo-w-mobile)] md:h-[var(--logo-h-desktop)] md:w-[var(--logo-w-desktop)]" loading="eager" srcset="/content/images/size/w100/format/webp/2024/05/appcoda-logo-dark.png 100w, /content/images/size/w320/format/webp/2024/05/appcoda-logo-dark.png 320w, /content/images/size/w640/format/webp/2024/05/appcoda-logo-dark.png 600w" sizes="(max-width: 800px) 200px, 320px" src="file:///content/images/size/w30/2024/05/appcoda-logo-dark.png" alt="AppCoda">
+</picture>
+  <picture data-logo="default">
+  <source srcset="/content/images/size/w100/format/webp/2024/05/appcoda_new_logo_4001.png 100w, /content/images/size/w320/format/webp/2024/05/appcoda_new_logo_4001.png 320w, /content/images/size/w640/format/webp/2024/05/appcoda_new_logo_4001.png 600w" sizes="(max-width: 800px) 200px, 320px" type="image/webp">
+  <img class="h-[var(--logo-h-mobile)] w-[var(--logo-w-mobile)] md:h-[var(--logo-h-desktop)] md:w-[var(--logo-w-desktop)]" loading="eager" srcset="/content/images/size/w100/format/webp/2024/05/appcoda_new_logo_4001.png 100w, /content/images/size/w320/format/webp/2024/05/appcoda_new_logo_4001.png 320w, /content/images/size/w640/format/webp/2024/05/appcoda_new_logo_4001.png 600w" sizes="(max-width: 800px) 200px, 320px" src="file:///content/images/size/w30/2024/05/appcoda_new_logo_4001.png" alt="AppCoda">
+</picture>
+      </a>
+    </div>
+
+    <nav class="relative hidden transition-[width,filter] duration-300 text-sm lg:flex justify-center p-1 border border-brd rounded-theme-lg" data-nav="desktop" :class="isScrolled ? &#39;drop-shadow-xl&#39; : &#39;&#39;">
+      <ul class="flex gap-0.5">
+    <li class="nav-home flex relative border border-transparent hover:bg-bgr-tone rounded-theme" data-label="Home" data-slug="home" data-length="4">
+      <a class="w-full flex px-4 py-1.5 rounded-theme" href="https://www.appcoda.com/">
+        <span>Home</span>
+      </a>
+    </li>
+    <li class="nav-books flex relative border border-transparent hover:bg-bgr-tone rounded-theme" data-label="Books" data-slug="books" data-length="5">
+      <a class="w-full flex px-4 py-1.5 rounded-theme" href="https://www.appcoda.com/books/">
+        <span>Books</span>
+      </a>
+    </li>
+    <li class="nav-beginning-ios-programming-with-swift flex relative border border-transparent hover:bg-bgr-tone rounded-theme is-subitem" data-label="- Beginning iOS Programming with Swift" data-slug="beginning-ios-programming-with-swift" data-length="38">
+      <a class="w-full flex px-4 py-1.5 rounded-theme" href="https://www.appcoda.com/swift">
+        <span>- Beginning iOS Programming with Swift</span>
+      </a>
+    </li>
+    <li class="nav-mastering-swiftui flex relative border border-transparent hover:bg-bgr-tone rounded-theme is-subitem" data-label="- Mastering SwiftUI" data-slug="mastering-swiftui" data-length="19">
+      <a class="w-full flex px-4 py-1.5 rounded-theme" href="https://www.appcoda.com/swiftui">
+        <span>- Mastering SwiftUI</span>
+      </a>
+    </li>
+    <li class="nav-intermediate-ios-programming-with-swift flex relative border border-transparent hover:bg-bgr-tone rounded-theme is-subitem" data-label="- Intermediate iOS Programming with Swift" data-slug="intermediate-ios-programming-with-swift" data-length="41">
+      <a class="w-full flex px-4 py-1.5 rounded-theme" href="https://www.appcoda.com/intermediate-swift-book">
+        <span>- Intermediate iOS Programming with Swift</span>
+      </a>
+    </li>
+    <li class="nav-tutorials flex relative border border-transparent hover:bg-bgr-tone rounded-theme" data-label="Tutorials" data-slug="tutorials" data-length="9">
+      <a class="w-full flex px-4 py-1.5 rounded-theme" href="https://www.appcoda.com/tags/">
+        <span>Tutorials</span>
+      </a>
+    </li>
+    <li class="nav-swiftui flex relative border border-transparent hover:bg-bgr-tone rounded-theme is-subitem" data-label="- SwiftUI" data-slug="swiftui" data-length="9">
+      <a class="w-full flex px-4 py-1.5 rounded-theme" href="https://www.appcoda.com/tag/swiftui/">
+        <span>- SwiftUI</span>
+      </a>
+    </li>
+    <li class="nav-uikit flex relative border border-transparent hover:bg-bgr-tone rounded-theme is-subitem" data-label="- UIKit" data-slug="uikit" data-length="7">
+      <a class="w-full flex px-4 py-1.5 rounded-theme" href="https://www.appcoda.com/tag/uikit/">
+        <span>- UIKit</span>
+      </a>
+    </li>
+    <li class="nav-swift flex relative border border-transparent hover:bg-bgr-tone rounded-theme is-subitem" data-label="- Swift" data-slug="swift" data-length="7">
+      <a class="w-full flex px-4 py-1.5 rounded-theme" href="https://www.appcoda.com/tag/swift/">
+        <span>- Swift</span>
+      </a>
+    </li>
+    <li class="nav-ai flex relative border border-transparent hover:bg-bgr-tone rounded-theme is-subitem" data-label="- AI" data-slug="ai" data-length="4">
+      <a class="w-full flex px-4 py-1.5 rounded-theme" href="https://www.appcoda.com/tag/ai/">
+        <span>- AI</span>
+      </a>
+    </li>
+    <li class="nav-macos flex relative border border-transparent hover:bg-bgr-tone rounded-theme is-subitem" data-label="- macOS" data-slug="macos" data-length="7">
+      <a class="w-full flex px-4 py-1.5 rounded-theme" href="https://www.appcoda.com/tag/macos/">
+        <span>- macOS</span>
+      </a>
+    </li>
+    <li class="nav-watchos flex relative border border-transparent hover:bg-bgr-tone rounded-theme is-subitem" data-label="- watchOS" data-slug="watchos" data-length="9">
+      <a class="w-full flex px-4 py-1.5 rounded-theme" href="https://www.appcoda.com/tag/watchos/">
+        <span>- watchOS</span>
+      </a>
+    </li>
+    <li class="nav-data-management flex relative border border-transparent hover:bg-bgr-tone rounded-theme is-subitem" data-label="- Data Management" data-slug="data-management" data-length="17">
+      <a class="w-full flex px-4 py-1.5 rounded-theme" href="https://www.appcoda.com/tag/core-data/">
+        <span>- Data Management</span>
+      </a>
+    </li>
+    <li class="nav-xcode flex relative border border-transparent hover:bg-bgr-tone rounded-theme is-subitem" data-label="- Xcode" data-slug="xcode" data-length="7">
+      <a class="w-full flex px-4 py-1.5 rounded-theme" href="https://www.appcoda.com/tag/xcode/">
+        <span>- Xcode</span>
+      </a>
+    </li>
+    <li class="nav-app-templates flex relative border border-transparent hover:bg-bgr-tone rounded-theme" data-label="App Templates" data-slug="app-templates" data-length="13">
+      <a class="w-full flex px-4 py-1.5 rounded-theme" href="https://www.appcoda.com/">
+        <span>App Templates</span>
+      </a>
+    </li>
+    <li class="nav-rss-app-template flex relative border border-transparent hover:bg-bgr-tone rounded-theme is-subitem" data-label="- RSS App Template" data-slug="rss-app-template" data-length="18">
+      <a class="w-full flex px-4 py-1.5 rounded-theme" href="https://www.appcoda.com/rss-app-template/">
+        <span>- RSS App Template</span>
+      </a>
+    </li>
+    <li class="nav-motionbar flex relative border border-transparent hover:bg-bgr-tone rounded-theme is-subitem" data-label="- MotionBar" data-slug="motionbar" data-length="11">
+      <a class="w-full flex px-4 py-1.5 rounded-theme" href="https://www.appcoda.com/motionbar-intro/">
+        <span>- MotionBar</span>
+      </a>
+    </li>
+    <li class="nav-ai-chatbot-with-google-gemini flex relative border border-transparent hover:bg-bgr-tone rounded-theme is-subitem" data-label="- AI Chatbot with Google Gemini" data-slug="ai-chatbot-with-google-gemini" data-length="31">
+      <a class="w-full flex px-4 py-1.5 rounded-theme" href="https://www.appcoda.com/ai-chatbot-app/">
+        <span>- AI Chatbot with Google Gemini</span>
+      </a>
+    </li>
+    <li class="nav-zhong-wen-ban flex relative border border-transparent hover:bg-bgr-tone rounded-theme" data-label="中文版" data-slug="zhong-wen-ban" data-length="3">
+      <a class="w-full flex px-4 py-1.5 rounded-theme" href="https://www.appcoda.com.tw/">
+        <span>中文版</span>
+      </a>
+    </li>
+</ul>
+
+          <a data-formkit-toggle="83675b220b" href="https://appcodamobile.ck.page/83675b220b" data-nav-cta="" class="flex items-center justify-center opacity-0 w-0 p-0 translate-x-full shadow-btn border border-b-0 border-opac bg-brand text-sm font-medium text-brand-contrast py-1.5 rounded-theme transition-all duration-200 hover:brightness-105 hover:shadow-btn-hover">
+            <span>Get Free Ebook</span>
+          </a>
+    </nav>
+
+    <div class="flex flex-1 gap-2 items-center justify-end transition-move duration-300" data-header-actions="">
+
+      <button class="hidden sm:flex items-center justify-center rounded-theme size-8 md:size-9 hover:text-brand" data-ghost-search="" title="Search" aria-label="Search">
+        <i class="icon icon-search w-5 h-5 stroke-2 stroke-2">
+  <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
+  <circle cx="10" cy="10" r="7"></circle>
+  <line x1="21" y1="21" x2="15" y2="15"></line>
+</svg>
+
+
+
+</i>      </button>
+
+          <a data-formkit-toggle="83675b220b" href="https://appcodamobile.ck.page/83675b220b" class="shadow-btn border border-b-0 border-opac bg-brand text-sm font-medium text-brand-contrast px-4 py-2 rounded-theme md:px-5 transition duration-300 hover:brightness-105 hover:shadow-btn-hover">
+            <span>Get Free Ebook</span>
+          </a>
+
+
+
+
+      <button class="flex flex-col gap-1.5 size-8 md:size-9 items-center justify-center rounded-theme group hover:text-brand lg:hidden" data-menu-toggle="" aria-label="Menu toggle" aria-expanded="false" aria-haspopup="true" aria-controls="menu" @click="menuOpen = !menuOpen; event.currentTarget.setAttribute(&#39;aria-expanded&#39;, menuOpen);">
+        <span class="relative pointer-events-none w-5 h-0.5 rounded-sm bg-typ-tone group-hover:bg-brand transition-all" :class="menuOpen ? &#39;rotate-45 top-1&#39; : &#39;rotate-0 top-0&#39;"></span>
+        <span class="relative pointer-events-none w-5 h-0.5 rounded-sm bg-typ-tone group-hover:bg-brand transition-all" :class="menuOpen ? &#39;-rotate-45 -top-1&#39; : &#39;&#39;"></span>
+      </button>
+    </div>
+
+  </div>
+</header>
+    <div class="absolute shadow-xl z-[100] top-[68px] md:top-[84px] w-full bg-bgr text-typ-tone pt-4 border-t border-brd lg:hidden" :class="menuOpen ? &#39;block&#39; : &#39;hidden&#39;" data-menu="" id="menu"> 
+  <div class="px-4 sm:px-6">
+    <nav class="" data-nav="mobile">
+      <ul class="flex flex-col gap-1">
+    <li class="nav-home flex relative" data-label="Home" data-slug="home" data-length="4">
+      <a class="flex py-0.5 rounded-theme hover:text-brand" href="https://www.appcoda.com/">
+        <span>Home</span>
+      </a>
+    </li>
+    <li class="nav-books flex relative" data-label="Books" data-slug="books" data-length="5">
+      <a class="flex py-0.5 rounded-theme hover:text-brand" href="https://www.appcoda.com/books/">
+        <span>Books</span>
+      </a>
+    </li>
+    <li class="nav-beginning-ios-programming-with-swift flex relative is-subitem" data-label="- Beginning iOS Programming with Swift" data-slug="beginning-ios-programming-with-swift" data-length="38">
+      <a class="flex py-0.5 rounded-theme hover:text-brand" href="https://www.appcoda.com/swift">
+        <span>- Beginning iOS Programming with Swift</span>
+      </a>
+    </li>
+    <li class="nav-mastering-swiftui flex relative is-subitem" data-label="- Mastering SwiftUI" data-slug="mastering-swiftui" data-length="19">
+      <a class="flex py-0.5 rounded-theme hover:text-brand" href="https://www.appcoda.com/swiftui">
+        <span>- Mastering SwiftUI</span>
+      </a>
+    </li>
+    <li class="nav-intermediate-ios-programming-with-swift flex relative is-subitem" data-label="- Intermediate iOS Programming with Swift" data-slug="intermediate-ios-programming-with-swift" data-length="41">
+      <a class="flex py-0.5 rounded-theme hover:text-brand" href="https://www.appcoda.com/intermediate-swift-book">
+        <span>- Intermediate iOS Programming with Swift</span>
+      </a>
+    </li>
+    <li class="nav-tutorials flex relative" data-label="Tutorials" data-slug="tutorials" data-length="9">
+      <a class="flex py-0.5 rounded-theme hover:text-brand" href="https://www.appcoda.com/tags/">
+        <span>Tutorials</span>
+      </a>
+    </li>
+    <li class="nav-swiftui flex relative is-subitem" data-label="- SwiftUI" data-slug="swiftui" data-length="9">
+      <a class="flex py-0.5 rounded-theme hover:text-brand" href="https://www.appcoda.com/tag/swiftui/">
+        <span>- SwiftUI</span>
+      </a>
+    </li>
+    <li class="nav-uikit flex relative is-subitem" data-label="- UIKit" data-slug="uikit" data-length="7">
+      <a class="flex py-0.5 rounded-theme hover:text-brand" href="https://www.appcoda.com/tag/uikit/">
+        <span>- UIKit</span>
+      </a>
+    </li>
+    <li class="nav-swift flex relative is-subitem" data-label="- Swift" data-slug="swift" data-length="7">
+      <a class="flex py-0.5 rounded-theme hover:text-brand" href="https://www.appcoda.com/tag/swift/">
+        <span>- Swift</span>
+      </a>
+    </li>
+    <li class="nav-ai flex relative is-subitem" data-label="- AI" data-slug="ai" data-length="4">
+      <a class="flex py-0.5 rounded-theme hover:text-brand" href="https://www.appcoda.com/tag/ai/">
+        <span>- AI</span>
+      </a>
+    </li>
+    <li class="nav-macos flex relative is-subitem" data-label="- macOS" data-slug="macos" data-length="7">
+      <a class="flex py-0.5 rounded-theme hover:text-brand" href="https://www.appcoda.com/tag/macos/">
+        <span>- macOS</span>
+      </a>
+    </li>
+    <li class="nav-watchos flex relative is-subitem" data-label="- watchOS" data-slug="watchos" data-length="9">
+      <a class="flex py-0.5 rounded-theme hover:text-brand" href="https://www.appcoda.com/tag/watchos/">
+        <span>- watchOS</span>
+      </a>
+    </li>
+    <li class="nav-data-management flex relative is-subitem" data-label="- Data Management" data-slug="data-management" data-length="17">
+      <a class="flex py-0.5 rounded-theme hover:text-brand" href="https://www.appcoda.com/tag/core-data/">
+        <span>- Data Management</span>
+      </a>
+    </li>
+    <li class="nav-xcode flex relative is-subitem" data-label="- Xcode" data-slug="xcode" data-length="7">
+      <a class="flex py-0.5 rounded-theme hover:text-brand" href="https://www.appcoda.com/tag/xcode/">
+        <span>- Xcode</span>
+      </a>
+    </li>
+    <li class="nav-app-templates flex relative" data-label="App Templates" data-slug="app-templates" data-length="13">
+      <a class="flex py-0.5 rounded-theme hover:text-brand" href="https://www.appcoda.com/">
+        <span>App Templates</span>
+      </a>
+    </li>
+    <li class="nav-rss-app-template flex relative is-subitem" data-label="- RSS App Template" data-slug="rss-app-template" data-length="18">
+      <a class="flex py-0.5 rounded-theme hover:text-brand" href="https://www.appcoda.com/rss-app-template/">
+        <span>- RSS App Template</span>
+      </a>
+    </li>
+    <li class="nav-motionbar flex relative is-subitem" data-label="- MotionBar" data-slug="motionbar" data-length="11">
+      <a class="flex py-0.5 rounded-theme hover:text-brand" href="https://www.appcoda.com/motionbar-intro/">
+        <span>- MotionBar</span>
+      </a>
+    </li>
+    <li class="nav-ai-chatbot-with-google-gemini flex relative is-subitem" data-label="- AI Chatbot with Google Gemini" data-slug="ai-chatbot-with-google-gemini" data-length="31">
+      <a class="flex py-0.5 rounded-theme hover:text-brand" href="https://www.appcoda.com/ai-chatbot-app/">
+        <span>- AI Chatbot with Google Gemini</span>
+      </a>
+    </li>
+    <li class="nav-zhong-wen-ban flex relative" data-label="中文版" data-slug="zhong-wen-ban" data-length="3">
+      <a class="flex py-0.5 rounded-theme hover:text-brand" href="https://www.appcoda.com.tw/">
+        <span>中文版</span>
+      </a>
+    </li>
+</ul>
+    </nav>
+  </div>
+  
+  <div class="p-4 mt-4 flex gap-2 border-y border-brd">
+
+    <button class="flex gap-0.5 p-[3px] border border-brd text-typ-tone rounded-theme hover:bg-bgr-tone" aria-label="Toggle color scheme" data-color-scheme-toggle="" @click="toggleColorScheme(event)">
+  <span data-theme="light" class="px-[5px] py-0.5 border border-transparent opacity-50 rounded-theme">
+    <i class="icon icon-sun size-4 stroke-2">
+  <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-sun-filled" width="24" height="24" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
+  <path d="M12 19a1 1 0 0 1 .993 .883l.007 .117v1a1 1 0 0 1 -1.993 .117l-.007 -.117v-1a1 1 0 0 1 1 -1z" stroke-width="0" fill="currentColor"></path>
+  <path d="M18.313 16.91l.094 .083l.7 .7a1 1 0 0 1 -1.32 1.497l-.094 -.083l-.7 -.7a1 1 0 0 1 1.218 -1.567l.102 .07z" stroke-width="0" fill="currentColor"></path>
+  <path d="M7.007 16.993a1 1 0 0 1 .083 1.32l-.083 .094l-.7 .7a1 1 0 0 1 -1.497 -1.32l.083 -.094l.7 -.7a1 1 0 0 1 1.414 0z" stroke-width="0" fill="currentColor"></path>
+  <path d="M4 11a1 1 0 0 1 .117 1.993l-.117 .007h-1a1 1 0 0 1 -.117 -1.993l.117 -.007h1z" stroke-width="0" fill="currentColor"></path>
+  <path d="M21 11a1 1 0 0 1 .117 1.993l-.117 .007h-1a1 1 0 0 1 -.117 -1.993l.117 -.007h1z" stroke-width="0" fill="currentColor"></path>
+  <path d="M6.213 4.81l.094 .083l.7 .7a1 1 0 0 1 -1.32 1.497l-.094 -.083l-.7 -.7a1 1 0 0 1 1.217 -1.567l.102 .07z" stroke-width="0" fill="currentColor"></path>
+  <path d="M19.107 4.893a1 1 0 0 1 .083 1.32l-.083 .094l-.7 .7a1 1 0 0 1 -1.497 -1.32l.083 -.094l.7 -.7a1 1 0 0 1 1.414 0z" stroke-width="0" fill="currentColor"></path>
+  <path d="M12 2a1 1 0 0 1 .993 .883l.007 .117v1a1 1 0 0 1 -1.993 .117l-.007 -.117v-1a1 1 0 0 1 1 -1z" stroke-width="0" fill="currentColor"></path>
+  <path d="M12 7a5 5 0 1 1 -4.995 5.217l-.005 -.217l.005 -.217a5 5 0 0 1 4.995 -4.783z" stroke-width="0" fill="currentColor"></path>
+</svg>
+</i>  </span>
+  <span data-theme="dark" class="px-[5px] py-0.5 border border-transparent opacity-50 rounded-theme">
+    <i class="icon icon-moon size-4 stroke-2">
+  <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-moon-filled" width="24" height="24" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
+  <path d="M12 1.992a10 10 0 1 0 9.236 13.838c.341 -.82 -.476 -1.644 -1.298 -1.31a6.5 6.5 0 0 1 -6.864 -10.787l.077 -.08c.551 -.63 .113 -1.653 -.758 -1.653h-.266l-.068 -.006l-.06 -.002z" stroke-width="0" fill="currentColor"></path>
+</svg>
+</i>  </span>
+</button>  </div>
+</div>    
+    <main class="main">
+      
+    <section class="px-4 sm:px-6" data-post-hero="">
+    <div class="max-w-container mx-auto">
+    <script async="" src="./drag-drop-planing_files/f.txt" crossorigin="anonymous" type="8ac227113e9aca74270db58c-text/javascript"></script>
+<!-- Appcoda-Top-banner-Ad -->
+<ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-8501671653071605" data-ad-slot="2701739164" data-ad-format="auto" data-full-width-responsive="true"></ins>
+<script type="8ac227113e9aca74270db58c-text/javascript">
+     (adsbygoogle = window.adsbygoogle || []).push({});
+</script>    </div>
+  
+  <div class="max-w-wide mx-auto py-12 flex items-center flex-col gap-8 md:flex-wrap md:flex-row md:items-end">
+
+    <div class="text-typ-tone w-full flex-1 flex flex-col gap-4 mx-auto max-w-wide flex-[2]" data-post-hero-content="">
+        <div class="text-typ-tone flex gap-2">
+            <a href="file:///tag/macos-programming/" class="hover:text-brand">macOS programming</a>
+            <span>·</span>
+          <time class="" datetime="2020-03-21">Mar 21, 2020</time> 
+            <span>·</span>
+            <span class="">
+              30 min read
+            </span>
+        </div>
+
+      <h1 class="text-typ font-semibold tracking-tight text-2xl md:text-3xl lg:text-4xl">
+        Implementing Drag And Drop Operations Using NSPasteboard on macOS
+      </h1>
+
+
+        <ul class="flex gap-3" data-post-hero-authors="">
+            <li>
+              <a href="file:///author/gabrielth/" class="flex gap-1.5 items-center hover:text-brand">
+                  <picture>
+  <source srcset="https://secure.gravatar.com/avatar/582c964c3dafd700a4df627225d859fe?s=512&amp;d=mm&amp;r=g 30w, https://secure.gravatar.com/avatar/582c964c3dafd700a4df627225d859fe?s=512&amp;d=mm&amp;r=g 100w" sizes="32px" type="image/webp">
+  <script src="file:///cdn-cgi/scripts/7d0fa10a/cloudflare-static/rocket-loader.min.js" data-cf-settings="8ac227113e9aca74270db58c-|49"></script><img class="size-8 object-cover rounded-full will-change-[filter] transition-[filter]" onload="this.classList.remove(&#39;blur&#39;)" loading="lazy" srcset="https://secure.gravatar.com/avatar/582c964c3dafd700a4df627225d859fe?s=512&amp;d=mm&amp;r=g 30w, https://secure.gravatar.com/avatar/582c964c3dafd700a4df627225d859fe?s=512&amp;d=mm&amp;r=g 100w" sizes="32px" src="./drag-drop-planing_files/582c964c3dafd700a4df627225d859fe.png" alt="">
+</picture>
+                <span>Gabriel Theodoropoulos</span>
+              </a>
+            </li>
+        </ul>
+    </div>
+
+
+      <figure class="max-w-wide w-full h-full relative">
+        <picture>
+  <source srcset="/content/images/size/w320/format/webp/wordpress/2020/03/hgoir_bbmve.jpg 320w, /content/images/size/w640/format/webp/wordpress/2020/03/hgoir_bbmve.jpg 600w, /content/images/size/w960/format/webp/wordpress/2020/03/hgoir_bbmve.jpg 960w, /content/images/size/w1280/format/webp/wordpress/2020/03/hgoir_bbmve.jpg 1200w" sizes="(max-width: 600px) 480px, 720px" type="image/webp">
+  <img class="w-full object-cover rounded-theme-xs aspect-[16/9] border border-brd bg-bgr-tone" loading="eager" srcset="/content/images/size/w320/format/webp/wordpress/2020/03/hgoir_bbmve.jpg 320w, /content/images/size/w640/format/webp/wordpress/2020/03/hgoir_bbmve.jpg 600w, /content/images/size/w960/format/webp/wordpress/2020/03/hgoir_bbmve.jpg 960w, /content/images/size/w1280/format/webp/wordpress/2020/03/hgoir_bbmve.jpg 1200w" sizes="(max-width: 600px) 480px, 720px" src="file:///content/images/size/w30/wordpress/2020/03/hgoir_bbmve.jpg" alt="Implementing Drag And Drop Operations Using NSPasteboard on macOS">
+</picture>
+        
+      </figure>
+
+  </div>
+</section>
+    <section class="max-w-wide mx-auto flex flex-col gap-6 lg:flex-row" data-post-content="">
+      <aside class="px-4 md:px-0 w-full max-w-content mx-auto lg:max-w-xs" data-toc="" x-init="$nextTick(() =&gt; { renderTOC(&#39;h2,h3,h4&#39;) })"> 
+  
+  <div class="pb-3">
+    <script async="" src="./drag-drop-planing_files/f.txt" crossorigin="anonymous" type="8ac227113e9aca74270db58c-text/javascript"></script>
+    <!-- AppCoda-left-sidebar-square-ad -->
+    <ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-8501671653071605" data-ad-slot="9133858523" data-ad-format="auto" data-full-width-responsive="true"></ins>
+    <script type="8ac227113e9aca74270db58c-text/javascript">
+        (adsbygoogle = window.adsbygoogle || []).push({});
+    </script>
+  </div>
+
+  <div class="sticky border-b border-brd pb-2 mb-8 lg:border-none top-4" x-data="{ tocOpen: false }"> 
+    <div class="pb-3 pt-3">
+      <img class="pb-3" src="file:///content/images/2024/05/appcoda-swift-book-ad_300x250.png">
+    </div>
+  
+    <button class="w-full text-xs lg:text-[0.8rem] uppercase text-typ-tone font-semibold border border-brd px-6 py-2 mb-2 flex items-center justify-center gap-2 rounded-theme hover:bg-bgr-tone lg:border-none lg:px-2.5 lg:py-1 lg:cursor-text lg:hover:bg-bgr lg:justify-start" :data-toc-toggle="tocOpen ? &#39;active&#39; : &#39;inactive&#39;" aria-label="Table of Contents" @click="tocOpen = !tocOpen">
+      <span class="mt-[1px]">Table of Contents</span>
+      <i class="icon icon-plus size-[14px] stroke-[2.5] hidden lg:invisible stroke-2">
+  <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-plus" width="24" height="24" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M12 5l0 14"></path><path d="M5 12l14 0"></path></svg>
+</i>      <i class="icon icon-minus size-[14px] stroke-[2.5] hidden lg:invisible stroke-2">
+  <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-minus" width="24" height="24" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M5 12l14 0"></path></svg>
+</i>    </button>
+
+    <div data-toc-content="" class="text-typ-tone text-sm lg:text-[0.95rem] lg:block" :class="tocOpen ? &#39;block&#39; : &#39;hidden&#39;">
+    </div>
+  </div>
+</aside>
+      <article class="ghost-content prose md:prose-lg prose-theme lg:flex-1" data-no-overflow="">
+        
+<!--kg-card-begin: html-->
+
+<p>One of the most common operations macOS users perform and they are quite familiar with is <strong>drag and drop</strong>. On a daily basis we all drag things around when working on our Macs. We drag files, text, images, and many, many more. Dragging is a kind of action that users expect to find pretty much in every app on macOS, so supporting it in our apps is something we should seriously consider.</p>
+
+
+
+<p></p><div class="alert gray"><strong>Editor’s note</strong>: This tutorial is just one of the many tutorials of our macOS programming series. If you’re new to macOS programming, you can <a href="https://www.appcoda.com/macos-programming/">start from here</a>.</div><p></p>
+
+
+
+<p>A drag operation starts somewhere, so it has a <em>source</em>, and it ends somewhere, so there is a <em>destination</em>. Dragging source and destination can be either within the same app, or in different apps. For example, when dragging to move a file in Finder from one directory to another the source and destination are the same; the Finder app. On the other hand, when dragging files to a web browser for uploading to a server, source and destination are different apps; Finder app and the browser app (Safari, Chrome, etc).</p>
+
+
+
+<p>Drag and drop would be impossible without the existence of <em>pasteboard</em>, the mechanism that keeps <em>copied</em> or <em>cut</em> data in memory. When dragging, dragged data is copied to memory and it becomes available to be used by the destination application through the pasteboard. Pasteboard is represented programmatically by the <a href="https://developer.apple.com/documentation/appkit/nspasteboard?ref=appcoda.com"><em>NSPasteboard</em></a> class.</p>
+
+
+
+<p>So, in this tutorial we are going to learn how to implement drag and drop functionalities in our own macOS apps. We’ll learn how to accept drag operations on a single view and a table view, as well as how to trigger a new <em>drag session</em> from our own app. If all that sounds interesting to you, then just keep on reading! There are a lot of new interesting things coming next!</p>
+
+
+
+<h2 class="wp-block-heading">About The Demo App</h2>
+
+
+
+<p>We are going to explore how drag and drop operations are being implemented using, as usually, a demo application. Before you continue, please download <em>the starter pack</em> from <a href="https://github.com/appcoda/AvatarDrag/raw/master/starter-pack.zip?ref=appcoda.com">here</a> where you will find two things in the zip file you’ll get: A starter project to open in Xcode, and a folder with some sample files.</p>
+
+
+
+<p>The demo application is a sort of an avatar maker, where we’ll make it possible through drag and drop operations to:</p>
+
+
+
+<ul><li>Add an avatar image</li><li>Add a favorite color</li><li>Add a favorite <em>quote</em> text</li></ul>
+
+
+
+<figure class="wp-block-image size-large"><img loading="lazy" decoding="async" width="762" height="674" src="./drag-drop-planing_files/mt11_1_app_sample.png" alt="nspasteboard-drag-and-drop-demo" class="wp-image-17877" srcset="https://www.appcoda.com/content/images/wordpress/2020/03/mt11_1_app_sample.png 762w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_1_app_sample-339x300.png 339w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_1_app_sample-200x177.png 200w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_1_app_sample-680x601.png 680w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_1_app_sample-400x354.png 400w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_1_app_sample-50x44.png 50w" sizes="(max-width: 762px) 100vw, 762px"></figure>
+
+
+
+<p>We will also allow to drag and drop image and text files for the avatar image and quote respectively; that’s what sample files in the starter pack are for.</p>
+
+
+
+<p>The above will let us go through the steps required to accept drag operations. Once we finish with it, we’ll see how to initiate drag operations from our app and drop either within the same app, or another app. In the first case where drag <em>source</em> and <em>destination</em> are in the same app (the demo app), drop operation will take place in an <em>auxiliary window</em> that contains a table view. Dragged avatar image, color and quote text will be shown in columns in the table view.</p>
+
+
+
+<figure class="wp-block-image size-large"><img loading="lazy" decoding="async" width="1024" height="511" src="./drag-drop-planing_files/mt11_2_drag_drop_tableview-1024x511.gif" alt="" class="wp-image-17878" srcset="https://www.appcoda.com/content/images/wordpress/2020/03/mt11_2_drag_drop_tableview-1024x511.gif 1024w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_2_drag_drop_tableview-600x300.gif 600w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_2_drag_drop_tableview-200x100.gif 200w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_2_drag_drop_tableview-768x383.gif 768w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_2_drag_drop_tableview-860x429.gif 860w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_2_drag_drop_tableview-680x339.gif 680w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_2_drag_drop_tableview-400x199.gif 400w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_2_drag_drop_tableview-50x25.gif 50w" sizes="(max-width: 1024px) 100vw, 1024px"></figure>
+
+
+
+<p>The starter Xcode project implements all that parts of the app that are irrelative to drag and drop but necessary to make it work. Go through it, and when you’re ready keep reading to learn how to support drag and drop in macOS apps!</p>
+
+
+
+<h2 class="wp-block-heading">The Dragging Destination View</h2>
+
+
+
+<p>We are going to start by making our app a <em>drag operation destination</em> capable of handling dragged data. The first thing you should have in mind is that any class that we want to be a dragging destination must conform to a specific protocol, called <a href="https://developer.apple.com/documentation/appkit/nsdraggingdestination?ref=appcoda.com"><em>NSDraggingDestination</em></a>. This protocol provides collection of methods through which we have full control over the drag operation.</p>
+
+
+
+<p>There are Cocoa classes that already adopt the <code>NSDraggingDestination</code> protocol, and classes that do not. If you want for example a view controller to be a drag destination and handle the drag operation, then you should explicitly conform to <code>NSDraggingDestination</code>. If however you want a custom view (a <code>NSView</code> subclass) to be the drag destination, there is no need to manually conform to <code>NSDraggingDestination</code> protocol; it already does. Besides all that, drag destinations are usually views or windows (NSView and NSWindow instances).</p>
+
+
+
+<p>In the demo application of this tutorial we are going to use a custom view as the dragging destination. It is the <em>AvatarView</em> in the starter project that you have downloaded. Right now it contains a minimum implementation, but we’ll be adding more code to it as we move on.</p>
+
+
+
+<p><em>Note: AvatarView has been set as the class of the view controller’s default view in the Main.storyboard file. You can see that by opening the storyboard, selecting the view controller’s view in the Document Outline and displaying the Identity inspector. In addition, the image view and the quote label have been connected to IBOutlet properties already defined in the AvatarView. You can see the connections by opening the Connections inspector.</em></p>
+
+
+
+<h2 class="wp-block-heading">Registering for Dragged Types</h2>
+
+
+
+<p>Various kinds of data can be dragged in a drag and drop operation, and of course not all of them are interesting to an app. Apps must specify the desired <em>dragged types</em>, also called <em>pasteboard types</em> that want to accept and handle. These types can be found <a href="https://developer.apple.com/documentation/appkit/nspasteboard/pasteboardtype?ref=appcoda.com">here</a>, and they include a variety of data types, such as colors, fonts, files, URLs, images, PDF data and more.</p>
+
+
+
+<p>So, the first step when enabling drag and drop is to specify the dragged types that the app will accept. We will make our demo application here capable of handling the following kind of data:</p>
+
+
+
+<ul><li><a href="https://developer.apple.com/documentation/appkit/nspasteboard/pasteboardtype/1530437-tiff?ref=appcoda.com"><em>tiff</em></a> for images</li><li><a href="https://developer.apple.com/documentation/appkit/nspasteboard/pasteboardtype/1528356-color?ref=appcoda.com"><em>color</em></a> for color data (NSColor objects).</li><li><a href="https://developer.apple.com/documentation/appkit/nspasteboard/pasteboardtype/1527185-string?ref=appcoda.com"><em>string</em></a> for plain text (no Rich Text Format – RTF).</li><li><a href="https://developer.apple.com/documentation/appkit/nspasteboard/pasteboardtype/2919747-fileurl?ref=appcoda.com"><em>fileURL</em></a> for dragged files.</li></ul>
+
+
+
+<p>Open the <em>AvatarView.swift</em> file, and declare the following property:</p>
+
+
+
+<pre class="wp-block-code"><code>class TestView: NSView {
+    let supportedTypes: [NSPasteboard.PasteboardType] = [.tiff, .color, .string, .fileURL]
+
+    ...
+}</code></pre>
+
+
+
+<p>Each element in the <code>supportedTypes</code> array is a <code>NSPasteboard.PasteboardType</code> value. It’s easy to see all available options simply by trying to add a new item to the array; add the dot “.” and Xcode’s autocompletion will show all values.</p>
+
+
+
+<p>The above declaration does nothing at all however. What has to be done is to <em>register</em> the current view as a dragging destination and include the specified types that will accept.</p>
+
+
+
+<p>Go to the <code>awakeFromNib()</code> method and add the next statement:</p>
+
+
+
+<pre class="wp-block-code"><code>override func awakeFromNib() {
+    ...
+
+    self.registerForDraggedTypes(supportedTypes)
+}</code></pre>
+
+
+
+<p><code>registerForDraggedTypes(_:)</code> is a method of the <code>NSView</code> class. It registers the current view as a dragging destination that can accept the provided pasteboard types. With the above in place, let’s go to start handling dragging itself.</p>
+
+
+
+<h2 class="wp-block-heading">Handling Start Of Dragging</h2>
+
+
+
+<p>There is a number of methods in the <code>NSDraggingDestination</code> protocol that should be overridden and implemented in order to properly handle dragging. Not all of them are required; but some others, as the one we’ll meet here, are necessary when implementing dragging support.</p>
+
+
+
+<p>So, after having registered the view and the supported pasteboard types, our next move is to <em>detect when dragged items enter the area of the destination view</em>. That’s an important step for two reasons:</p>
+
+
+
+<ol><li>First, we must check if the dragged items are indeed of the data types we want to handle or not. In case they are, then we will “tell” pasteboard to copy them in memory, otherwise we just disregard them.</li><li>Second, the destination view must be <em>visually highlighted</em> somehow to indicate that it’s an area where dragged items can be dropped. That’s not a mandatory action, but it helps a lot to user experience.</li></ol>
+
+
+
+<p>With the above said, go to <code>AvatarView</code> class and add the following method:</p>
+
+
+
+<pre class="wp-block-code"><code>override func draggingEntered(_ sender: NSDraggingInfo) -&gt; NSDragOperation {
+
+}</code></pre>
+
+
+
+<p>In its body we’ll call an instance method of the <code>NSPasteboard</code> class called <code>canReadObject(forClasses:options:)</code>. It returns a true or false value depending on whether the class types that we will provide as the first argument match to the data types of the dragged items, or to some of them at least. If the returned value is false, then dragged items are not of any interest for our app.</p>
+
+
+
+<p>Add the following in the above method:</p>
+
+
+
+<pre class="wp-block-code"><code>let canReadPasteboardObjects = sender.draggingPasteboard.canReadObject(forClasses: [NSImage.self, NSColor.self, NSString.self, NSURL.self], options: nil)</code></pre>
+
+
+
+<p>What we are interested about here is:</p>
+
+
+
+<ul><li>images (NSImage objects),</li><li>colors (NSColor objects),</li><li>string (text) (NSString objects),</li><li>URLs (NSURL objects),</li></ul>
+
+
+
+<p>so, these are the class types we pass as the first argument in the <code>canReadObject(forClasses:options:)</code> method in the form of an array. For now we set the <code>options</code> parameter value to nil. We’ll come back to that in a while. For a list of available classes that can be given in the above method have a look at <a href="https://developer.apple.com/documentation/appkit/nspasteboardreading?ref=appcoda.com">this documentation page</a>.</p>
+
+
+
+<p>Besides all that, also notice that we access the <em>dragging pasteboard</em> (or in other words, the dragged items in memory) through the <code>draggingPasteboard</code> property of the <code>sender</code> method’s argument. According to documentation, <code>draggingPasteboard</code>:</p>
+
+
+
+<blockquote class="wp-block-quote is-layout-flow wp-block-quote-is-layout-flow"><p>Returns the pasteboard object that holds the data being dragged.</p></blockquote>
+
+
+
+<p>More details about the <code>NSDraggingInfo</code> protocol can be found <a href="https://developer.apple.com/documentation/appkit/nsdragginginfo?ref=appcoda.com">here</a>.</p>
+
+
+
+<p>Depending on the <code>canReadPasteboardObjects</code> value now, we will return a proper <a href="https://developer.apple.com/documentation/appkit/nsdragoperation?ref=appcoda.com"><code>NSDragOperation</code></a> value from the method. In case it’s true and dragged items match to the class types we specified, we’ll return the <code>copy</code> value. This will indicate that the dragged items can be copied to pasteboard. If not, then we’ll just initialize a <code>NSDragOperation</code> object without a specific value.</p>
+
+
+
+<pre class="wp-block-code"><code>if canReadPasteboardObjects {
+    return .copy
+}
+
+return NSDragOperation()</code></pre>
+
+
+
+<p>Here’s the entire method right now:</p>
+
+
+
+<pre class="wp-block-code"><code>override func draggingEntered(_ sender: NSDraggingInfo) -&gt; NSDragOperation {
+    let canReadPasteboardObjects = sender.draggingPasteboard.canReadObject(forClasses: [NSImage.self, NSColor.self, NSString.self, NSURL.self], options: nil)
+
+    if canReadPasteboardObjects {
+        return .copy
+    }
+
+    return NSDragOperation()
+}</code></pre>
+
+
+
+<p>We’ll revisit this method a couple of times again to update it as needed. For now it’s good enough to let us proceed to the next steps.</p>
+
+
+
+<h2 class="wp-block-heading">Highlighting Visually The Destination View</h2>
+
+
+
+<p>In order to increase user experience it’s always a good idea to visually highlight the destination view of the drag operation. There’s no recipe on how to do that however. It’s up to you and your imagination to decide how you will indicate that the destination view can accept the dragged items.</p>
+
+
+
+<p>For example, you can have a semi-transparent overlay view on top of the destination view, maybe coloured, along with a custom message. Or you can show an image when drag can be accepted. Or, just show a simple coloured border around the view as we’ll do here.</p>
+
+
+
+<p>In the <code>AvatarView</code> implement the following method:</p>
+
+
+
+<pre class="wp-block-code"><code>func highlight() {
+    self.layer?.borderColor = NSColor.controlAccentColor.cgColor
+    self.layer?.borderWidth = 2.0
+}</code></pre>
+
+
+
+<p>This method does two things: The first is to set a border colour to the view’s layer (the <em>controlAccentColor</em> system color). Notice that since we’re talking about the view’s layer, the colour must be given as a <em>CGColor</em> and not as a <em>NSColor</em>. The second thing is that it sets the border width to 2.0px.</p>
+
+
+
+<p>Back to the <code>draggingEntered(_:)</code> method again, update the following <code>if</code> statement as shown next and call the <code>highlight()</code> method we just added here:</p>
+
+
+
+<pre class="wp-block-code"><code>override func draggingEntered(_ sender: NSDraggingInfo) -&gt; NSDragOperation {
+    ...
+
+    if canReadPasteboardObjects {
+        highlight()
+        return .copy
+    }
+
+    ...
+}</code></pre>
+
+
+
+<p>For first time now you can test the app and the progress we’ve done so far. Try to drag an image, some text, a color object or <em>any</em> file from the Finder to the app’s window (more specifically to the AvatarView destination view). Two observations:</p>
+
+
+
+<ol><li>You can bring up the Colors panel by going to the <em>Format &gt; Font &gt; Show Colors</em> menu, or just press <code>Cmd+Shift+C</code> in your keyboard. From there you can drag colours to the app.</li><li>I just mentioned above that you can drag any file from the Finder. That’s not something we desire here, as we want to allow only image and text files. But don’t worry, we’ll fix it soon.</li></ol>
+
+
+
+<p>What you’ll see by running the app is the view that gets highlighted when valid items are being dragged to it. To see how the app reacts to non-desired types, try to remove any of the allowed supported types in the <code>supportedTypes</code> array, and also remove the respective class in the <code>canReadObject(forClasses:options)</code> method call. Note that once the view shows the highlight border it will remain like that, but that’s just temporary, it’ll be fixed later.</p>
+
+
+
+<figure class="wp-block-image size-large"><img loading="lazy" decoding="async" width="952" height="571" src="./drag-drop-planing_files/mt11_3_first_try.gif" alt="macOS-programming-drag-and-drop" class="wp-image-17879"></figure>
+
+
+
+<h2 class="wp-block-heading">The AvatarInfo Class</h2>
+
+
+
+<p>In the starter project and in the <em>AvatarInfo.swift</em> file you will find a class named <code>AvatarInfo</code>. This is a custom type that contains three properties matching to the avatar image, favourite colour and quote text respectively:</p>
+
+
+
+<pre class="wp-block-code"><code>var imageData: Data?
+var colorData: Data?
+var quote: String?</code></pre>
+
+
+
+<p><code>imageData</code> and <code>colorData</code> are both of <code>Data</code> type so it’s possible to <em>encode</em> instances of the <code>AvatarInfo</code> class as JSON objects. We’ll need to do that later. NSImage and NSColor classes do not conform to <code>Codable</code> protocol so encoding such objects wouldn’t be possible.</p>
+
+
+
+<p>In addition, a few convenient methods are implemented in the class. All they do is to simply convert NSImage and NSColor objects to <code>Data</code> and storing them in the respective properties, as well as the exact opposing thing; returning NSImage and NSColor objects from the respective <code>Data</code> properties.</p>
+
+
+
+<p><em>An instance of this class that is declared already in the <code>AvatarView</code> is going to keep the data matching to the dragged items</em>. We are going to use it right next, and as you will see, that instance will help us update the UI and display dragged item data to the proper controls.</p>
+
+
+
+<p><em>Note: Later we are going to add more and quite interesting stuff in the AvatarInfo class. What you get in the starter project is just an initial implementation that consists of what we need just to keep going here.</em></p>
+
+
+
+<h2 class="wp-block-heading">An Optional Step Before Performing The Drag Operation</h2>
+
+
+
+<p>Previously we met the <code>draggingEntered(_:)</code> method that gets called when dragged items enter the area of the destination view. Although this is the place where the app decides whether dragged items are wanted or not, there is one more <em>optional</em> method you can use in order to accept or reject dragging in case you have any special conditions or limitations that are met:</p>
+
+
+
+<pre class="wp-block-code"><code>override func prepareForDragOperation(_ sender: NSDraggingInfo) -&gt; Bool {
+    return true
+}</code></pre>
+
+
+
+<p>By returning true in the above method the dragging operation is being accepted by the app and handled by the method we’ll see in the next part.</p>
+
+
+
+<p>If you return false, the dragged items will be rejected even if their types match to the supported by the app pasteboard types. Return false if only you have specific conditions under which dragging should be cancelled. Otherwise just return true, or even better, do not implement this method at all!</p>
+
+
+
+<h2 class="wp-block-heading">Performing The Drag Operation</h2>
+
+
+
+<p>So, it’s time to handle the dragged items! In a similar fashion to using the <code>canReadObject(forClasses:options:)</code>, we are going to use another method which will let us get the dragged objects from the dragging pasteboard.</p>
+
+
+
+<p>First, though, it’s necessary to implement the following method:</p>
+
+
+
+<pre class="wp-block-code"><code>override func performDragOperation(_ sender: NSDraggingInfo) -&gt; Bool {
+
+}</code></pre>
+
+
+
+<p>In its body we will get the pasteboard objects by calling the <a href="https://developer.apple.com/documentation/appkit/nspasteboard/1524454-readobjects?ref=appcoda.com"><code>readObjects(forClasses:options:)</code></a> method of the dragging pasteboard property, available through the <code>sender</code> parameter object. This method returns an optional array of <code>Any</code> elements (<code>[Any]?</code>), so we’ll unwrap its results using a <code>guard</code> statement. In addition, we’ll make sure that there are indeed dragged items in the same <code>guard</code> statement:</p>
+
+
+
+<pre class="wp-block-code"><code>guard let pasteboardObjects = sender.draggingPasteboard.readObjects(forClasses: [NSImage.self, NSColor.self, NSString.self, NSURL.self], options: nil), pasteboardObjects.count &gt; 0 else { return false }</code></pre>
+
+
+
+<p>As you can see, the first argument provided above is the same array of classes that we also provided in the <code>canReadObject(forClasses:options:)</code> method earlier. If for some reason there are no objects in the pasteboard so the return value of the above method is nil, or the number of items is zero, we just return false from the method.</p>
+
+
+
+<p>Now, we’ll go through the elements of the <code>pasteboardObjects</code> array:</p>
+
+
+
+<pre class="wp-block-code"><code>pasteboardObjects.forEach { (object) in
+
+}</code></pre>
+
+
+
+<p>The <code>object</code> parameter in the <code>forEach</code> function above is an <code>Any</code> value. Using a series of simple <code>if-let</code> statements we’ll cast <code>object</code> to the types of interest (NSImage, NSColor, NSString, NSURL), and depending on the cast we’ll update the <code>avatarInfo</code> instance accordingly. Here it is:</p>
+
+
+
+<pre class="wp-block-code"><code>if let image = object as? NSImage {
+    avatarInfo.setImageData(using: image)
+}
+
+if let color = object as? NSColor {
+    avatarInfo.setColorData(using: color)
+}
+
+if let quote = object as? NSString {
+    avatarInfo.quote = quote as String
+}
+
+if let url = object as? NSURL {
+    self.handleFileURLObject(url as URL)
+}</code></pre>
+
+
+
+<p>In “order of appearance”:</p>
+
+
+
+<ul><li>If <code>object</code> can be casted to a NSImage object, then we use it as argument to the <code>setImageData(using:)</code> method of the <code>AvatarInfo</code> class and we keep the image data in the <code>imageData</code> property of the <code>avatarInfo</code> instance.</li><li>If <code>object</code> can be casted to a NSColor object, then we pass the color object as an argument to the <code>setColorData(using:)</code> method of the <code>AvatarInfo</code> class in order to keep the color data.</li><li>If <code>object</code> can be casted to a NSString object, then we use assign it to the <code>quote</code> property of the <code>avatarInfo</code> instance. Casting to the Swift <code>String</code> type is necessary as <code>quote</code> is a NSString object, not <code>String</code>.</li><li>If <code>object</code> can be casted to a NSURL object, then we call the <code>handleFileURLObject(_:)</code> method to handle further the URL. We’ll implement this method soon. Similarly as in the previous case, casting to Swift <code>URL</code> type from NSURL is necessary.</li></ul>
+
+
+
+<p>Finally, two more things remain to be done. The first isn’t always necessary to do, but we’ll add it for greater user experience. In case you drag files from Finder to the app, the Finder window might remain above the app’s window. That’s fine here, but in real applications most probably you’ll want to bring your app’s window to the top, so the next line ensures that:</p>
+
+
+
+<pre class="wp-block-code"><code>sender.draggingDestinationWindow?.orderFrontRegardless()</code></pre>
+
+
+
+<p>Here’s another new thing; we access the window of the dragging destination through the <code>sender</code> parameter object.</p>
+
+
+
+<p>Lastly, we need to return a Boolean value from the method. We’ll return true, given that if the execution made it up to the <code>forEach</code> function then the drag operation can be considered successful.</p>
+
+
+
+<pre class="wp-block-code"><code>return true</code></pre>
+
+
+
+<p>Here’s our brand new method in one piece:</p>
+
+
+
+<pre class="wp-block-code"><code>override func performDragOperation(_ sender: NSDraggingInfo) -&gt; Bool {
+    guard let pasteboardObjects = sender.draggingPasteboard.readObjects(forClasses: [NSImage.self, NSColor.self, NSString.self, NSURL.self], options: nil), pasteboardObjects.count &gt; 0 else {
+        return false
+    }
+
+    pasteboardObjects.forEach { (object) in
+        if let image = object as? NSImage {
+            avatarInfo.setImageData(using: image)
+        }
+
+        if let color = object as? NSColor {
+            avatarInfo.setColorData(using: color)
+        }
+
+        if let quote = object as? NSString {
+            avatarInfo.quote = quote as String
+        }
+
+        if let url = object as? NSURL {
+            self.handleFileURLObject(url as URL)
+        }
+    }
+}</code></pre>
+
+
+
+<h2 class="wp-block-heading">Handling File URLs</h2>
+
+
+
+<p>In the implementation right above we call a method that is still not implemented; the <code>handleFileURLObject(_:)</code>. Let’s deal with it now. But first, why do we need it?</p>
+
+
+
+<p>As I said in the beginning, we’ll make it possible to add avatar images and quote texts to the app not only by dragging and dropping actual images and strings, but also by dragging image and text files. The problem we have right now is that when dragging files to the app, the respective objects in the dragging pasteboard are always of the same type; they are NSURL objects pointing to files. So, there’s not a straightforward way to be informed if we’re talking about an image file, a text file, or something else.</p>
+
+
+
+<p>Here’s where <code>handleFileURLObject(_:)</code> gets into play. It will accept a URL object as a parameter value, and it will do two distinct things:</p>
+
+
+
+<ol><li>Using the given URL, it will try to read the file contents and create a NSImage object with them. If that’s successful, then we’re talking about an image file, and it will keep the image data to the <code>avatarInfo</code> property as we previously did.</li><li>If the above fails, then it will try to read the file contents and create a NSString object. If that’s successful, then we’ll use the loaded text as the quote that will be kept in the <code>avatarInfo</code> property as before.</li></ol>
+
+
+
+<p>In any other case, nothing will happen. Here’s the implementation of the <code>handleFileURLObject(_:)</code> method:</p>
+
+
+
+<pre class="wp-block-code"><code>func handleFileURLObject(_ url: URL) {
+    if let image = NSImage(contentsOfFile: url.path) {
+        avatarInfo.setImageData(using: image)        
+    } else {
+        guard let text = try? NSString(contentsOf: url, encoding: String.Encoding.utf8.rawValue) else { return }
+        avatarInfo.quote = text as String
+    }
+}</code></pre>
+
+
+
+<h2 class="wp-block-heading">Updating The UI</h2>
+
+
+
+<p>When a drag operation is complete and the <code>performDragOperation(_:)</code> we implemented previously returns true, then another method is automatically invoked, called <code>concludeDragOperation(_:)</code>. Implementing it is not necessary, especially if you update the UI of your app with the dragged items in the <code>performDragOperation(_:)</code>. However, it’s recommended to use <code>concludeDragOperation(_:)</code> as the place to update the UI, and to perform any clean up actions if necessary.</p>
+
+
+
+<p>In this demo application we are going to implement the <code>concludeDragOperation(_:)</code> method in order to update the user interface. In the <code>performDragOperation(_:)</code> we kept all data of the dragged items to the properties of the <code>avatarInfo</code> instance, so here we are going to use them.</p>
+
+
+
+<p>As you can see right next, the simple implementation that follows speaks for itself. We populate previously kept data to proper controls by converting image and color data to NSImage and NSColor objects respectively using the already implemented helper methods of the <code>AvatarInfo</code> class, and getting the quote text if exists:</p>
+
+
+
+<pre class="wp-block-code"><code>override func concludeDragOperation(_ sender: NSDraggingInfo?) {
+    imageView.image = avatarInfo.getImage()
+    imageView.layer?.borderColor = avatarInfo.getColor()?.cgColor
+    quoteLabel.stringValue = avatarInfo.quote ?? ""
+}</code></pre>
+
+
+
+<h2 class="wp-block-heading">Handling End Of Dragging</h2>
+
+
+
+<p>If you tested the app at least once so far, then you’ve seen that the destination view (the <code>AvatarView</code> view) is highlighted and remains like that forever after the first dragging. What we must do in order to fix that is to change the view’s layer border color when:</p>
+
+
+
+<ol><li>a dragging operation is finished,</li><li>a dragging operation leaves the area of the destination view.</li></ol>
+
+
+
+<p>So, following the above order, we need to implement the following two methods:</p>
+
+
+
+<pre class="wp-block-code"><code>override func draggingEnded(_ sender: NSDraggingInfo) {
+    unhighlight()
+}
+
+
+override func draggingExited(_ sender: NSDraggingInfo?) {
+    unhighlight()
+}</code></pre>
+
+
+
+<p>The above methods are automatically called when one or the other case happens. The <code>unhighlight()</code> method that both call is the following, which also must be added to the <code>AvatarView</code>:</p>
+
+
+
+<pre class="wp-block-code"><code>func unhighlight() {
+    self.layer?.borderColor = NSColor.clear.cgColor
+    self.layer?.borderWidth = 0.0
+}</code></pre>
+
+
+
+<p>Even though there are still things to do in the demo application, accepting dragged items is almost ready and you can try it out! See that the destination view remains highlighted for as long as there are valid dragged items over it. After dropping them, or by exiting the destination view’s area, highlight is removed.</p>
+
+
+
+<figure class="wp-block-image size-large"><img loading="lazy" decoding="async" width="1024" height="653" src="./drag-drop-planing_files/mt11_4_drag_and_drop-1024x653.gif" alt="" class="wp-image-17880" srcset="https://www.appcoda.com/content/images/wordpress/2020/03/mt11_4_drag_and_drop-1024x653.gif 1024w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_4_drag_and_drop-470x300.gif 470w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_4_drag_and_drop-200x128.gif 200w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_4_drag_and_drop-768x490.gif 768w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_4_drag_and_drop-1240x791.gif 1240w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_4_drag_and_drop-860x549.gif 860w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_4_drag_and_drop-680x434.gif 680w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_4_drag_and_drop-400x255.gif 400w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_4_drag_and_drop-50x32.gif 50w" sizes="(max-width: 1024px) 100vw, 1024px"></figure>
+
+
+
+<p><em>Note: For testing you can use one of the many websites that offer fake avatar images. You can do the same for the quotes. It’s the best way to drag and drop actual images and texts to the app. Of course, you can use the sample files provided in the starter project you downloaded. For my testing purposes, I chose to use <a href="https://generated.photos/faces/?ref=appcoda.com">this</a> site of AI generated faces, and <a href="https://www.brainyquote.com/?ref=appcoda.com">this</a> website for quotes.</em></p>
+
+
+
+<h2 class="wp-block-heading">Filtering Dragged Files</h2>
+
+
+
+<p>Up to this point, if you drag one or more files of any type, not just image or text files, you’ll see that the destination view of our app is highlighted. That’s an indication that those files can be dropped to the app, but for irrelative file types dropping is not possible. So, we must filter somehow the accepted file types and avoid to mislead users about an action that cannot be done.</p>
+
+
+
+<p>The way to filter the accepted file types is by using the <code>options</code> parameter value in the <code>canReadObject(forClasses:options:)</code> and <code>readObjects(forClasses:options:)</code> methods we met earlier. <code>options</code> expect a dictionary with <a href="https://developer.apple.com/documentation/appkit/nspasteboard/readingoptionkey?ref=appcoda.com"><code>NSPasteboard.ReadingOptionKey</code></a> objects as keys and <code>Any</code> values.</p>
+
+
+
+<p>According to documentation, <code>NSPasteboard.ReadingOptionKey</code> provides two options (two static properties):</p>
+
+
+
+<ol><li><code>urlReadingContentsConformToTypes</code>: <em>Option for reading URLs to restrict the results to URLs with contents that conform to any of the provided UTI types.</em></li><li><code>urlReadingFileURLsOnly</code>: <em>Option for reading URLs to restrict the results to file URLs only.</em></li></ol>
+
+
+
+<p>What we care about here is the first option which gives us the ability to restrict the allowed file types. So, knowing that and using that option as the key for the dictionary, let’s see how to determine the file types we need.</p>
+
+
+
+<p>If you take a look at the <a href="https://developer.apple.com/documentation/appkit/nspasteboard/readingoptionkey/1530353-urlreadingcontentsconformtotypes?ref=appcoda.com">documentation</a> of <code>urlReadingContentsConformToTypes</code> option, you will see that it states this:</p>
+
+
+
+<blockquote class="wp-block-quote is-layout-flow wp-block-quote-is-layout-flow"><p>The value for this key is an array of UTI type strings.</p></blockquote>
+
+
+
+<p>This means that we cannot provide an array of file extensions, such as <code>[png, jpg, txt, ...]</code>. We must provide an array of <em>UTI type strings</em>, such as <code>[public.text, public.plain-text, public.jpeg, ...]</code>.</p>
+
+
+
+<p><em>Read more about UTI types <a href="https://developer.apple.com/library/archive/documentation/FileManagement/Conceptual/understanding_utis/understand_utis_conc/understand_utis_conc.html?ref=appcoda.com#//apple_ref/doc/uid/TP40001319-CH202-CHDHIJDE">here</a>.</em></p>
+
+
+
+<p>But wait a minute. Does this mean that we have to manually search and find all available UTI types for the file types we are interested in?</p>
+
+
+
+<p>The answer is… No! We don’t have to collect UTI types manually. There are programming ways to get them. Being specific:</p>
+
+
+
+<ul><li>NSImage class provides them through the <code>imageTypes</code> class property.</li><li>NSString class provides them through the <code>readableTypeIdentifiersForItemProvider</code> class property.</li></ul>
+
+
+
+<p>Be aware though, especially about the text UTI types: Any file type that supports any of the UTIs returned by the above property will be able to be opened by our app, even… Swift files! You can fine tune the allowed types even further if you want by checking their extensions, but that’s not something we’ll do here.</p>
+
+
+
+<p>Both the <code>imageTypes</code> and <code>readableTypeIdentifiersForItemProvider</code> properties mentioned above return arrays of strings with the available UTI types. All we need is to “merge” them in one array and make that array the value for the <code>urlReadingContentsConformToTypes</code> key.</p>
+
+
+
+<p>Having said all the above, let’s implement the following method in the <code>AvatarView</code> class:</p>
+
+
+
+<pre class="wp-block-code"><code>func acceptableUTITypes() -&gt; [NSPasteboard.ReadingOptionKey : Any] {
+    let types = [NSImage.imageTypes, NSString.readableTypeIdentifiersForItemProvider].flatMap { $0 }
+    return [NSPasteboard.ReadingOptionKey.urlReadingContentsConformToTypes : types]
+}</code></pre>
+
+
+
+<p>In the first line we create the array with all the desired UTI types. In the second line we create and return a <code>[NSPasteboard.ReadingOptionKey : Any]</code> dictionary which we’re going to use right away.</p>
+
+
+
+<p>Go to the <code>draggingEntered(_:)</code> method and update the call of the <code>canReadObject(forClasses:options:)</code> so it uses the <code>acceptableUTITypes()</code> method we just implemented as shown right next:</p>
+
+
+
+<pre class="wp-block-code"><code>override func draggingEntered(_ sender: NSDraggingInfo) -&gt; NSDragOperation {
+
+    let canReadPasteboardObjects = sender.draggingPasteboard.canReadObject(forClasses: [NSImage.self, NSColor.self, NSString.self, NSURL.self], options: acceptableUTITypes())
+
+    ...
+}</code></pre>
+
+
+
+<p>Next, go to <code>performDragOperation(_:)</code> method and update the <code>readObjects(forClasses:options:)</code> call in the <code>guard</code> statement as well, so it uses the result of the <code>acceptableUTITypes()</code> method in the <code>options</code> parameter value:</p>
+
+
+
+<pre class="wp-block-code"><code>override func performDragOperation(_ sender: NSDraggingInfo) -&gt; Bool {
+    guard let pasteboardObjects = sender.draggingPasteboard.readObjects(forClasses: [NSImage.self, NSColor.self, NSString.self, NSURL.self], options: acceptableUTITypes()), pasteboardObjects.count &gt; 0 else {
+        return false
+    }
+
+    ...
+}</code></pre>
+
+
+
+<p>Now, if you run the app and you try to drag an irrelevant file type (for example a movie file) you’ll see that the destination view is not highlighted any more.</p>
+
+
+
+<p><em><a href="https://developer.apple.com/documentation/mobilecoreservices/uttype?ref=appcoda.com">See</a> in categories all available UTI types you use programmatically.</em></p>
+
+
+
+<h2 class="wp-block-heading">Preparing To Start A New Drag Session</h2>
+
+
+
+<p>What we have seen and done so far regards only drag operations that our demo application can accept, and usually being able to handle incoming dragged items is sufficient for many apps. However, that’s just the one side of the coin when talking about drag and drop operations. The other side is to learn how to <em>initiate</em> a <em>drag session</em> straight from our application, and this is where we are going to focus from now on.</p>
+
+
+
+<p>More specifically, we’ll make it possible to start a new drag session from our demo app by clicking and dragging on the <em>AvatarView</em>. We’ll cover two different cases; when the drop destination is <em>within</em> the demo app, and when it’s <em>outside</em> the app.</p>
+
+
+
+<p>In both cases it’s necessary to create <em>a pasteboard item</em> (NSPasteboardItem object) that will be written to the dragging pasteboard. It will contain the available pasteboard types that the app will provide data for upon a successful drop operation.</p>
+
+
+
+<p>We have already met pasteboard types when we registered for dragged types in the <code>AvatarView</code> class. Remember this?</p>
+
+
+
+<pre class="wp-block-code"><code>let supportedTypes: [NSPasteboard.PasteboardType] = [.tiff, .color, .string, .fileURL]</code></pre>
+
+
+
+<p>To showcase how to include multiple pasteboard types in a new drag session we will allow for the following:</p>
+
+
+
+<ul><li><code>tiff</code> pasteboard type so we can drag and drop the avatar image to another application that supports it.</li><li><code>string</code> pasteboard type so we can drag and drop the quote text to another application that supports it.</li><li><strong>A custom pasteboard type</strong> that will be recognizable only within our demo application and it will be used to drag and drop the <code>avatarInfo</code> instance in the <code>AvatarView</code> class to another window.</li></ul>
+
+
+
+<p>The first thing that has to be done when preparing an app for initiating drag sessions is to make it capable of <em>writing data to pasteboard</em>. So, let’s start by allowing the <code>AvararInfo</code> class in the <em>AvatarInfo.swift</em> file to write to pasteboard. In order to do that, it’s necessary to conform to <a href="https://developer.apple.com/documentation/appkit/nspasteboardwriting?ref=appcoda.com"><code>NSPasteboardWriting</code></a> protocol and implement two required methods. Add the following extension to <em>AvatarInfo.swift</em> file:</p>
+
+
+
+<pre class="wp-block-code"><code>extension AvatarInfo: NSPasteboardWriting {
+    func writableTypes(for pasteboard: NSPasteboard) -&gt; [NSPasteboard.PasteboardType] {
+
+    }
+
+    func pasteboardPropertyList(forType type: NSPasteboard.PasteboardType) -&gt; Any? {
+
+    }
+}</code></pre>
+
+
+
+<p>In the first method we will return all the pasteboard types that the item we are going to write in the dragging pasteboard will contain. The second method can be used to return data as a property list for any of the pasteboard types returned in the first method. In order to keep the tutorial’s length in a reasonable level we won’t use it here, so just return from it:</p>
+
+
+
+<pre class="wp-block-code"><code>func pasteboardPropertyList(forType type: NSPasteboard.PasteboardType) -&gt; Any? {
+    return nil
+}</code></pre>
+
+
+
+<h3 class="wp-block-heading">Returning Writable Pasteboard Types</h3>
+
+
+
+<p>Pasteboard types are actually UTI string values, and returning supported by the system types is as easy as shown next. Notice that an array of pasteboard types is what must be returned by the following method:</p>
+
+
+
+<pre class="wp-block-code"><code>func writableTypes(for pasteboard: NSPasteboard) -&gt; [NSPasteboard.PasteboardType] {
+    var types = [NSPasteboard.PasteboardType]()
+
+    if let _ = imageData {
+        types.append(.tiff)
+    }
+
+    if let _ = quote {
+        types.append(.string)
+    }
+
+    return types
+}</code></pre>
+
+
+
+<p>What’s interesting though is how to return a custom pasteboard type that will allow us to drag and drop an <code>AvatarInfo</code> instance from one place in our app to another. In order to do that, we have to <em>initialize a new pasteboard type with a custom UTI type</em>.</p>
+
+
+
+<h3 class="wp-block-heading">Creating A Custom Pasteboard Type</h3>
+
+
+
+<p>A custom pasteboard type can be created really easy, as long as we provide upon its initialization a <em>unique string</em> that represents the custom UTI type. The recommended process to generate such a unique string is to compose it by combining <em>the bundle identifier and a string value that describes the purpose of the UTI type</em>.</p>
+
+
+
+<p>The following does what was just described:</p>
+
+
+
+<pre class="wp-block-code"><code>let customUTIType = (Bundle.main.bundleIdentifier ?? "") + ".avatarInfoCustomUTI"</code></pre>
+
+
+
+<p>Note that the <code>bundleIdentifier</code> is an optional value. If it’s nil then the prefix before the “avatarInfoCustomUTI” will be just an empty string.</p>
+
+
+
+<p>We will return the above string from a <em>class method</em> in the <code>AvatarInfo</code> class. By doing so we will be able to create pasteboard types using the custom UTI type from anywhere in the app. And as you will see, we will need to do so a couple more times later.</p>
+
+
+
+<p>So, inside body of the <code>AvatarInfo</code> class add the following:</p>
+
+
+
+<pre class="wp-block-code"><code>class func getUTIType() -&gt; String {
+    return (Bundle.main.bundleIdentifier ?? "") + ".avatarInfoCustomUTI"
+}</code></pre>
+
+
+
+<p>Back to the <code>writableTypes(for:)</code> method, add the following line after initializng the <code>types</code> array:</p>
+
+
+
+<pre class="wp-block-code"><code>func writableTypes(for pasteboard: NSPasteboard) -&gt; [NSPasteboard.PasteboardType] {
+    var types = [NSPasteboard.PasteboardType]()
+
+    types.append(NSPasteboard.PasteboardType(rawValue: AvatarInfo.getUTIType()))
+
+    ...
+
+    return types
+}</code></pre>
+
+
+
+<p>And that’s it. All the desired pasteboard types are now returned and they will be used by the pasteboard item we will create pretty soon.</p>
+
+
+
+<h3 class="wp-block-heading">Providing Data</h3>
+
+
+
+<p>When a drag operation is taking place, no actual data is being moved or copied. However, after a successful drop operation the destination app asks for the actual data for any pasteboard type defined in the <code>writableTypes(for:)</code> method that supports.</p>
+
+
+
+<p>We can make <code>AvatarInfo</code> class provide that data by adopting the <a href="https://developer.apple.com/documentation/appkit/nspasteboarditemdataprovider?ref=appcoda.com"><code>NSPasteboardItemDataProvider</code></a> protocol. In the <em>AvatarInfo.swift</em> file add the following new extension with the one and only required method:</p>
+
+
+
+<pre class="wp-block-code"><code>extension AvatarInfo: NSPasteboardItemDataProvider {
+    func pasteboard(_ pasteboard: NSPasteboard?, item: NSPasteboardItem, provideDataForType type: NSPasteboard.PasteboardType) {
+
+    }
+}</code></pre>
+
+
+
+<p>Now, for each supported pasteboard type we returned earlier in the <code>writableTypes(for:)</code> method we must set the equivalent data to the <code>item</code> parameter. We have already said that we’ll be supporting three different types: The custom pasteboard type that will be used internally in our app, image type for the avatar image and string type for the quote text. Based on that, we can define a <code>switch</code> statement and act for each case separately:</p>
+
+
+
+<pre class="wp-block-code"><code>switch type {
+    case .init(AvatarInfo.getUTIType()):
+
+    case .tiff:
+
+    case .string:
+
+    default: break
+}</code></pre>
+
+
+
+<p>See that again we initialize a pasteboard type using the custom UTI type that the <code>getUTIType()</code> method returns.</p>
+
+
+
+<p>Let’s start with the easiest, the <code>tiff</code> pasteboard type. It represents the image pasteboard type, so we’ll set the data of the <code>imageData</code> property to the <code>item</code> if it’s not nil:</p>
+
+
+
+<pre class="wp-block-code"><code>case .tiff:
+    guard let imageData = imageData else { return }
+    item.setData(imageData, forType: type)</code></pre>
+
+
+
+<p><code>NSPasteboardItem</code> class provides a couple of handy methods to set and get data such the one you see here. As arguments it requires the actual data as a <code>Data</code> object and the pasteboard type.</p>
+
+
+
+<p>Continuing to the quote text, we can create a data object based on the quote string value and pass it to the item (if it’s not nil as well):</p>
+
+
+
+<pre class="wp-block-code"><code>case .string:
+    guard let quoteData = quote?.data(using: .utf8) else { return }
+    item.setData(quoteData, forType: type)</code></pre>
+
+
+
+<p>Finally, in case of the custom pasteboard type and given that we want all data from the contained properties in the <code>AvatarInfo</code> class to be copied to the destination view, we will <em>encode as JSON</em> and pass the encoded data to the pasteboard item:</p>
+
+
+
+<pre class="wp-block-code"><code>case .init(AvatarInfo.getUTIType()):
+    guard let encodedSelf = try? JSONEncoder().encode(self) else { return }
+    item.setData(encodedSelf, forType: type)</code></pre>
+
+
+
+<p><em>Note: In order to achieve encoding now and decoding later, it’s really important that our class adopts the <code>Encodable</code> and <code>Decodable</code> protocols, or simply the <code>Codable</code> protocol.</em></p>
+
+
+
+<p>So, here’s the entire new method now:</p>
+
+
+
+<pre class="wp-block-code"><code>extension AvatarInfo: NSPasteboardItemDataProvider {
+    func pasteboard(_ pasteboard: NSPasteboard?, item: NSPasteboardItem, provideDataForType type: NSPasteboard.PasteboardType) {
+        switch type {
+            case .init(AvatarInfo.getUTIType()):
+                guard let encodedSelf = try? JSONEncoder().encode(self) else { return }
+                item.setData(encodedSelf, forType: type)
+
+            case .tiff:
+                guard let imageData = imageData else { return }
+                item.setData(imageData, forType: type)
+
+            case .string:
+                guard let quoteData = quote?.data(using: .utf8) else { return }
+                item.setData(quoteData, forType: type)
+
+            default: break
+        }
+    }
+}</code></pre>
+
+
+
+<h2 class="wp-block-heading">Starting A Drag Session</h2>
+
+
+
+<p>A drag session starts from a view or from a window as it’s an action that involves user interaction. In our demo app, the <code>AvatarView</code> that we used so far as a drag destination will become a drag source as well. To do that, let’s extend it and let’s adopt a new protocol, the <a href="https://developer.apple.com/documentation/appkit/nsdraggingsource?ref=appcoda.com"><code>NSDraggingSource</code></a> protocol.</p>
+
+
+
+<pre class="wp-block-code"><code>extension AvatarView: NSDraggingSource {
+
+}</code></pre>
+
+
+
+<p>There is one required method we have to implement:</p>
+
+
+
+<pre class="wp-block-code"><code>func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -&gt; NSDragOperation {
+
+}</code></pre>
+
+
+
+<p>Here we need to return the <a href="https://developer.apple.com/documentation/appkit/nsdragoperation?ref=appcoda.com">drag operation</a> that we desire to take place by the drag operation. Even further, we can return different drag operation value depending on whether the drag takes place inside or outside the app. For example:</p>
+
+
+
+<pre class="wp-block-code"><code>func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -&gt; NSDragOperation {
+    if context == .outsideApplication {
+        return .copy
+    } else {
+        return .move
+    }
+}</code></pre>
+
+
+
+<p>In the implementation shown above we specify a <a href="https://developer.apple.com/documentation/appkit/nsdragoperation/1415973-copy?ref=appcoda.com">copy</a> operation when drag and drop takes place out of the app, and a <a href="https://developer.apple.com/documentation/appkit/nsdragoperation/1416037-move?ref=appcoda.com">move</a> operation when drag and drop happens inside our app only.</p>
+
+
+
+<p>However, let’s keep things simple and let’s return the <code>copy</code> operation in all cases:</p>
+
+
+
+<pre class="wp-block-code"><code>func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -&gt; NSDragOperation {
+    return .copy
+}</code></pre>
+
+
+
+<p>A drag session starts with <em>a mouse event</em>, usually a <em>mouse down or mouse dragged</em> event. Here we’ll override the mouse dragged event, but it would be equally right if you wanted to use the mouse down:</p>
+
+
+
+<pre class="wp-block-code"><code>override func mouseDragged(with event: NSEvent) {
+
+}</code></pre>
+
+
+
+<p>The first thing we’ll do here is to <em>create a new pasteboard item</em> that will be written to the dragging pasteboard, and along with that to specify the <em>data provider</em> for the dragged item:</p>
+
+
+
+<pre class="wp-block-code"><code>let pasteboardItem = NSPasteboardItem()
+pasteboardItem.setDataProvider(avatarInfo, forTypes: [.init(AvatarInfo.getUTIType()), .tiff, .string])</code></pre>
+
+
+
+<p>See that the <code>avatarInfo</code> instance is the data provider in the second line above since the <code>AvatarInfo</code> class conforms to <code>NSPasteboardItemDataProvider</code> protocol, and that we specify the pasteboard types that will be included in the dragging session.</p>
+
+
+
+<p>Next, we have to create a <em>dragging item</em>. This is what users will see and “touch” while dragging. We will pass the <code>pasteboardItem</code> we created above as an argument upon initialization:</p>
+
+
+
+<pre class="wp-block-code"><code>let draggingItem = NSDraggingItem(pasteboardWriter: pasteboardItem)</code></pre>
+
+
+
+<p>A dragging item must have a source frame. Since our <code>AvatarView</code> view is a dragging source, we will set its <em>bounds</em> as the item’s frame:</p>
+
+
+
+<pre class="wp-block-code"><code>draggingItem.setDraggingFrame(self.bounds, contents: nil)</code></pre>
+
+
+
+<p>Finally, the dragging session starts with the following:</p>
+
+
+
+<pre class="wp-block-code"><code>beginDraggingSession(with: [draggingItem], event: event, source: self)</code></pre>
+
+
+
+<p>The first argument expected above is an array of dragging items. Here we have just one, and most of the times you’ll have one item only, but this doesn’t really matter. Wrap them up in an array and pass them as you see here.</p>
+
+
+
+<p>The second argument is the event that triggers the new dragging session, and the third argument is the view or window that consists of the dragging source; in this case the <code>self</code> <code>AvatarView</code> instance.</p>
+
+
+
+<p>You can run the app now and start a dragging session from the app. However you won’t see any visual indication that the drag operation has started. Let’s fix that now.</p>
+
+
+
+<h3 class="wp-block-heading">Getting A View Snapshot</h3>
+
+
+
+<p>In order to indicate a drag operation you can use either a custom image, or to get a <em>snapshot</em> (a screenshot) of the source view. Here we’ll get a snapshot of the <code>AvatarView</code>.</p>
+
+
+
+<p><code>NSView</code> class provides an instance method called <code>dataWithPDF(inside:)</code> and its purpose is to return the contents of a view inside a specified frame as PDF data. This data can be used then to create a NSImage object and finally use it with the dragging item.</p>
+
+
+
+<p>In the <code>mouseDragged(with:)</code> method and right after the line where the <code>draggingItem</code> is being initialized add the following two statements:</p>
+
+
+
+<pre class="wp-block-code"><code>override func mouseDragged(with event: NSEvent) {
+    ...
+    let draggingItem = NSDraggingItem(pasteboardWriter: pasteboardItem)
+
+    let pdfData = self.dataWithPDF(inside: self.bounds)
+    let imageFromPDF = NSImage(data: pdfData)
+
+    ...
+}</code></pre>
+
+
+
+<p>Now update the <code>setDraggingFrame(_:contents:)</code> method of the <code>draggingItem</code> and pass the <code>imageFromPDF</code> as argument to the <code>contents</code> parameter:</p>
+
+
+
+<pre class="wp-block-code"><code>override func mouseDragged(with event: NSEvent) {
+    ...
+    let draggingItem = NSDraggingItem(pasteboardWriter: pasteboardItem)
+
+    let pdfData = self.dataWithPDF(inside: self.bounds)
+    let imageFromPDF = NSImage(data: pdfData)
+
+    draggingItem.setDraggingFrame(self.bounds, contents: imageFromPDF)
+
+    beginDraggingSession(with: [draggingItem], event: event, source: self)
+}</code></pre>
+
+
+
+<p>Now run the app again and start dragging from the <code>AvatarView</code>. You will have a snapshot of the view contents being dragged around.</p>
+
+
+
+<figure class="wp-block-image size-large"><img loading="lazy" decoding="async" width="658" height="567" src="./drag-drop-planing_files/mt11_5_drag_snapshot.gif" alt="" class="wp-image-17881"></figure>
+
+
+
+<p>Even though it’s not possible to drag and drop inside the app yet, it’s possible to drag and drop to other applications. For example, open Textedit app and drop the dragged item there. The quote text and the image will be copied over!</p>
+
+
+
+<figure class="wp-block-image size-large"><img loading="lazy" decoding="async" width="1024" height="458" src="./drag-drop-planing_files/mt11_6_drag_drop_textedit-1024x458.gif" alt="drag-and-drop-pasteboard" class="wp-image-17882" srcset="https://www.appcoda.com/content/images/wordpress/2020/03/mt11_6_drag_drop_textedit-1024x458.gif 1024w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_6_drag_drop_textedit-600x268.gif 600w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_6_drag_drop_textedit-200x89.gif 200w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_6_drag_drop_textedit-768x343.gif 768w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_6_drag_drop_textedit-1240x554.gif 1240w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_6_drag_drop_textedit-860x384.gif 860w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_6_drag_drop_textedit-680x304.gif 680w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_6_drag_drop_textedit-400x179.gif 400w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_6_drag_drop_textedit-50x22.gif 50w" sizes="(max-width: 1024px) 100vw, 1024px"></figure>
+
+
+
+<h3 class="wp-block-heading">A Few Optional Methods</h3>
+
+
+
+<p>When starting a new dragging session you can optionally implement some additional methods that let you track the drag operation. Even though we won’t use them, I present them here in case you want to use them in your own projects. In the order they are presented, these methods notify when a dragging session starts, is in progress, and ends. All of them belong to <code>NSDraggingSource</code> protocol.</p>
+
+
+
+<pre class="wp-block-code"><code>func draggingSession(_ session: NSDraggingSession, willBeginAt screenPoint: NSPoint) {
+
+}
+
+
+func draggingSession(_ session: NSDraggingSession, movedTo screenPoint: NSPoint) {
+
+}
+
+
+func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+
+}</code></pre>
+
+
+
+<h2 class="wp-block-heading">Dropping A Custom Pasteboard Item On A Table View</h2>
+
+
+
+<p>In order to see how drag and drop works inside the app, we’ll use another view as the drag destination. This is the <code>AvatarListView</code> that can be found in the starter project, and it has been set as the default view of the <code>AvatarListViewController</code> which in turn is presented in a different window.</p>
+
+
+
+<figure class="wp-block-image size-large"><img loading="lazy" decoding="async" width="1024" height="539" src="./drag-drop-planing_files/mt11_7_open_window-1024x539.gif" alt="" class="wp-image-17883" srcset="https://www.appcoda.com/content/images/wordpress/2020/03/mt11_7_open_window-1024x539.gif 1024w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_7_open_window-570x300.gif 570w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_7_open_window-200x105.gif 200w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_7_open_window-768x404.gif 768w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_7_open_window-860x453.gif 860w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_7_open_window-680x358.gif 680w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_7_open_window-400x211.gif 400w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_7_open_window-50x26.gif 50w" sizes="(max-width: 1024px) 100vw, 1024px"></figure>
+
+
+
+<p>Actually, <code>AvatarListView</code> won’t be the destination view of the drag operation, but the <em>table view</em> included in it. We have already seen in the previous parts how to accept drag operations in a NSView object, so this is an opportunity to get a taste about how to do the same in table views.</p>
+
+
+
+<p>So, open the <em>AvatarListView.swift</em> file, where you’ll find most code that’s necessary to make table view working already implemented. As you will see, <code>AvatarListView</code> class contains a property called <code>avatars</code>. It’s an array that can hold <code>AvatarInfo</code> objects and it consists of the data source for the table view.</p>
+
+
+
+<p>Our starting point is to define the dragged types that the table view will accept. Here we want to register for the custom UTI type we specified in the <code>AvatarInfo</code> class only.</p>
+
+
+
+<p>In the <code>awakeFromNib()</code> method add the following line:</p>
+
+
+
+<pre class="wp-block-code"><code>override func awakeFromNib() {
+    ...
+
+    tableView.registerForDraggedTypes([NSPasteboard.PasteboardType(rawValue: AvatarInfo.getUTIType())])
+}</code></pre>
+
+
+
+<p>Once again we initialize a new pasteboard type using the custom UTI type string.</p>
+
+
+
+<p>Now we need to implement two delegate methods, so go inside the extension that conforms to <code>NSTableViewDelegate</code> protocol. Start by adding this:</p>
+
+
+
+<pre class="wp-block-code"><code>func tableView(_ tableView: NSTableView, validateDrop info: NSDraggingInfo, proposedRow row: Int, proposedDropOperation dropOperation: NSTableView.DropOperation) -&gt; NSDragOperation {
+
+}</code></pre>
+
+
+
+<p>This method can be used to <em>validate the drop</em>. Here we can first of all check if the dragged item has a valid type or not. What’s also interesting is that we can change the visually indicated row that the drop will take place on.</p>
+
+
+
+<p>By default, the row after the last one is highlighted automatically to indicate where drop operation will happen. The <code>row</code> parameter value provides the index of proposed row. We can change that and set a specific row to be highlighted when dragging items using the <code>setDropRow(_:dropOperation:)</code> table view method. For example, the following will always highlight the first row:</p>
+
+
+
+<pre class="wp-block-code"><code>func tableView(_ tableView: NSTableView, validateDrop info: NSDraggingInfo, proposedRow row: Int, proposedDropOperation dropOperation: NSTableView.DropOperation) -&gt; NSDragOperation {
+    if avatars.count &gt; 0 {
+        tableView.setDropRow(0, dropOperation: .on)
+    }
+
+    return .copy
+}</code></pre>
+
+
+
+<p>Of course, the order of <code>AvatarInfo</code> objects in the <code>avatars</code> array must be in accordance to the way you want them displayed, otherwise any new dropped item will be shown in the last row of the table view.</p>
+
+
+
+<p>The following variation causes the entire table to be selected instead of a specific row whenever a new item is about to be dropped:</p>
+
+
+
+<pre class="wp-block-code"><code>func tableView(_ tableView: NSTableView, validateDrop info: NSDraggingInfo, proposedRow row: Int, proposedDropOperation dropOperation: NSTableView.DropOperation) -&gt; NSDragOperation {
+    tableView.setDropRow(-1, dropOperation: .on)
+    return .copy
+}</code></pre>
+
+
+
+<p>Of course, you can avoid all the above and keep the default behaviour by the system. In this case just return the desired drag operation value:</p>
+
+
+
+<pre class="wp-block-code"><code>func tableView(_ tableView: NSTableView, validateDrop info: NSDraggingInfo, proposedRow row: Int, proposedDropOperation dropOperation: NSTableView.DropOperation) -&gt; NSDragOperation {
+    return .copy
+}</code></pre>
+
+
+
+<p>You will be able to try out all the above after having implemented the following method. The actual drop operation is taking place here, as this is where the data matching to the dragged item is fetched from the dragging pasteboard:</p>
+
+
+
+<pre class="wp-block-code"><code>func tableView(_ tableView: NSTableView, acceptDrop info: NSDraggingInfo, row: Int, dropOperation: NSTableView.DropOperation) -&gt; Bool {
+
+}</code></pre>
+
+
+
+<p>Let’s go step by step in the actions that will let us fetch the dragged data, which is nothing else but an encoded <code>AvatarInfo</code> object.</p>
+
+
+
+<p><em>Note: For clarity reasons, objects presented next will be unwrapped in separate <code>guard</code> statements.</em></p>
+
+
+
+<p>At first we will get the pasteboard item from the dragging pasteboard:</p>
+
+
+
+<pre class="wp-block-code"><code>guard let draggedItem = info.draggingPasteboard.pasteboardItems?.first else { return false }</code></pre>
+
+
+
+<p>Next, we will get the data matching to the pasteboard type with the custom UTI type:</p>
+
+
+
+<pre class="wp-block-code"><code>guard let avatarInfoData = draggedItem.data(forType: NSPasteboard.PasteboardType(AvatarInfo.getUTIType())) else { return false }</code></pre>
+
+
+
+<p>In one more <code>guard</code> statement we’ll <em>decode</em> the dragged data and get an <code>AvatarInfo</code> object:</p>
+
+
+
+<pre class="wp-block-code"><code>guard let draggedAvatarInfo = try? JSONDecoder().decode(AvatarInfo.self, from: avatarInfoData) else { return false }</code></pre>
+
+
+
+<p>Passing that point we have an <code>AvatarInfo</code> object that can be appended to <code>avatars</code> array:</p>
+
+
+
+<pre class="wp-block-code"><code>avatars.append(draggedAvatarInfo)</code></pre>
+
+
+
+<p>Alternatively, if you want each dropped item to be appearing first in the table view then <em>insert</em> instead of <em>appending</em>:</p>
+
+
+
+<pre class="wp-block-code"><code>avatars.insert(draggedAvatarInfo, at: 0)</code></pre>
+
+
+
+<p>Lastly, two more things: We have to reload the table view and return <code>true</code> from the method indicating that drop operation was successful:</p>
+
+
+
+<pre class="wp-block-code"><code>tableView.reloadData()
+
+return true</code></pre>
+
+
+
+<p>Here’s the entire method:</p>
+
+
+
+<pre class="wp-block-code"><code>func tableView(_ tableView: NSTableView, acceptDrop info: NSDraggingInfo, row: Int, dropOperation: NSTableView.DropOperation) -&gt; Bool {
+
+    guard let draggedItem = info.draggingPasteboard.pasteboardItems?.first,
+     let avatarInfoData = draggedItem.data(forType: NSPasteboard.PasteboardType(AvatarInfo.getUTIType())),
+     let draggedAvatarInfo = try? JSONDecoder().decode(AvatarInfo.self, from: avatarInfoData)
+     else { return false }
+
+    avatars.append(draggedAvatarInfo)
+    tableView.reloadData()
+
+    return true
+}</code></pre>
+
+
+
+<p><em>Note: Previously in this post, when we were making the AvatarView capable of accepting drag operations, we used the <code>readObjects(forClasses:options:)</code> method in order to get data from the dragging pasteboard. In the method above you see an alternative way of getting data from the dragging pasteboard; using the pasteboard items.</em></p>
+
+
+
+<p>Run the app now and open the secondary window by clicking on the toolbar item. After you’ve dragged an avatar image, color and quote text start a new drag session by clicking and dragging from the <code>AvatarView</code> towards the table view in the secondary window. You’ll see that the drag and drop is working perfectly for our custom UTI type and within our app!</p>
+
+
+
+<figure class="wp-block-image size-large"><img loading="lazy" decoding="async" width="1024" height="511" src="./drag-drop-planing_files/mt11_2_drag_drop_tableview-1-1024x511.gif" alt="macOS-drag-and-drop-demo-app" class="wp-image-17884" srcset="https://www.appcoda.com/content/images/wordpress/2020/03/mt11_2_drag_drop_tableview-1-1024x511.gif 1024w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_2_drag_drop_tableview-1-600x300.gif 600w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_2_drag_drop_tableview-1-200x100.gif 200w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_2_drag_drop_tableview-1-768x383.gif 768w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_2_drag_drop_tableview-1-860x429.gif 860w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_2_drag_drop_tableview-1-680x339.gif 680w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_2_drag_drop_tableview-1-400x199.gif 400w, https://www.appcoda.com/content/images/wordpress/2020/03/mt11_2_drag_drop_tableview-1-50x25.gif 50w" sizes="(max-width: 1024px) 100vw, 1024px"></figure>
+
+
+
+<h2 class="wp-block-heading">Conclusion</h2>
+
+
+
+<p>In this post we explored new things on macOS programming that have to do with drag and drop operations. Certainly it consists of a big chapter in programming and obviously not all of its aspects could be covered in one tutorial. However, what you’ve read here reflects the most important things you should know about drag and drop. </p>
+
+
+
+<p>You can use this knowledge as the starting point for further research on the topic. Undoubtedly, making an app support drag and drop operations is a big advantage regarding user experience, and it allows for greater usability as well. I leave you with that, hoping that you’ve enjoyed reading about this interesting and useful topic!</p>
+
+
+
+<p>For reference, you can <a href="https://github.com/appcoda/AvatarDrag/?ref=appcoda.com">download the full project</a> on GitHub.</p>
+
+<!--kg-card-end: html-->
+
+      </article>
+    </section>
+
+    <div class="px-4 sm:px-6 mb-12">
+    <div class="pt-8 text-typ text-sm font-medium max-w-content mx-auto flex gap-3 md:gap-4 justify-center flex-wrap items-center relative before:content-[&#39;&#39;] before:absolute before:top-0 before:left-0 before:w-full before:h-[1px] before:bg-fading" data-share="">
+      <span class="text-base flex-1 basis-full sm:basis-auto text-center sm:text-left">Share</span>
+
+      <a class="border border-brd bg-bgr leading-tight p-1.5 flex-1 flex gap-1.5 items-center justify-center rounded-theme hover:bg-bgr-tone" target="_blank" href="https://twitter.com/share?text=Implementing%20Drag%20And%20Drop%20Operations%20Using%20NSPasteboard%20on%20macOS&amp;url=https://www.appcoda.com/nspasteboard-macos/" title="Share on Twitter" aria-label="Tweet">
+        <i class="icon icon-twitter-x size-4 stroke-2">
+  <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-x" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
+  <path d="M4 4l11.733 16h4.267l-11.733 -16z"></path>
+  <path d="M4 20l6.768 -6.768m2.46 -2.46l6.772 -6.772"></path>
+</svg>
+</i>        <span class="">Tweet</span>
+      </a>
+      <a class="border border-brd bg-bgr leading-tight p-1.5 flex-1 flex gap-1.5 items-center justify-center rounded-theme hover:bg-bgr-tone" target="_blank" href="https://www.facebook.com/sharer.php?u=https://www.appcoda.com/nspasteboard-macos/" title="Share on Facebook" aria-label="Share">
+        <i class="icon icon-facebook size-4 stroke-2">
+  <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-facebook" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
+  <path d="M7 10v4h3v7h4v-7h3l1 -4h-4v-2a1 1 0 0 1 1 -1h3v-4h-3a5 5 0 0 0 -5 5v2h-3"></path>
+</svg>
+
+
+
+</i>        <span class="">Share</span>
+      </a>
+      <a class="border border-brd bg-bgr leading-tight p-1.5 flex-1 flex gap-1.5 items-center justify-center rounded-theme hover:bg-bgr-tone" target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&amp;url=https://www.appcoda.com/nspasteboard-macos/&amp;title=Implementing%20Drag%20And%20Drop%20Operations%20Using%20NSPasteboard%20on%20macOS&amp;summary=Implementing%20Drag%20And%20Drop%20Operations%20Using%20NSPasteboard%20on%20macOS" title="Share on Linkedin" aria-label="Share">
+        <i class="icon icon-linkedin size-4 stroke-2">
+  <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-linkedin" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path>
+  <rect x="2" y="9" width="4" height="12"></rect>
+  <circle cx="4" cy="4" r="2"></circle>
+</svg>
+</i>        <span class="">Share</span>
+      </a>
+      <a class="border border-brd bg-bgr leading-tight p-1.5 flex-1 flex gap-1.5 items-center justify-center rounded-theme hover:bg-bgr-tone" data-share-mail="" href="file:///cdn-cgi/l/email-protection#49763a3c2b232c2a3d74002439252c242c273d20272e6c7b790d3b282e6c7b7908272d6c7b790d3b26396c7b7906392c3b283d2026273a6c7b791c3a20272e6c7b79071a19283a3d2c2b26283b2d6c7b7926276c7b7924282a061a6f2b262d3074213d3d393a7366663e3e3e672839392a262d28672a262466273a39283a3d2c2b26283b2d6424282a263a666f272b3a3972002439252c242c273d20272e6c7b790d3b282e6c7b7908272d6c7b790d3b26396c7b7906392c3b283d2026273a6c7b791c3a20272e6c7b79071a19283a3d2c2b26283b2d6c7b7926276c7b7924282a061a" title="Share by email" aria-label="Email">
+        <i class="icon icon-mail size-4 stroke-2">
+  <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-mail" width="24" height="24" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
+  <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+  <polyline points="3 7 12 13 21 7"></polyline>
+</svg>
+</i>        <span class="">Email</span>
+      </a>
+      <button class="border border-brd bg-bgr leading-tight p-1.5 flex-1 flex gap-1.5 items-center justify-center rounded-theme hover:bg-bgr-tone" data-share-copy="" data-url="https://www.appcoda.com/nspasteboard-macos/" title="Copy URL" data-label="Copy" data-success="Copied!" aria-label="Copy" data-class="text-success !border-success" @click="copyURL(event.currentTarget, event.currentTarget.getAttribute(&#39;data-url&#39;))">
+        <i class="icon icon-link size-4 stroke-2">
+  <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-link" width="24" height="24" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
+  <path d="M9 15l6 -6"></path>
+  <path d="M11 6l.463 -.536a5 5 0 0 1 7.071 7.072l-.534 .464"></path>
+  <path d="M13 18l-.397 .534a5.068 5.068 0 0 1 -7.127 0a4.972 4.972 0 0 1 0 -7.071l.524 -.463"></path>
+</svg>
+</i>        <span class="">Copy</span>
+      </button>
+    </div>
+  </div>
+
+  <section class="px-4 sm:px-6 mb-12" id="comments" data-comments="">
+    <div id="disqus_thread" class="px-4 sm:px-6 rounded-theme-xs pt-4 bg-bgr-tone max-w-content mx-auto border border-brd"></div>
+    <script data-cfasync="false" src="file:///cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script type="8ac227113e9aca74270db58c-text/javascript">
+        var disqus_config = function () {
+            this.page.url = "https://www.appcoda.com/nspasteboard-macos/";
+            this.page.identifier = "ghost-17876"
+        };
+        (function() {
+        var d = document, s = d.createElement('script');
+        s.src = 'https://appcoda.disqus.com/embed.js';
+        s.setAttribute('data-timestamp', +new Date());
+        (d.head || d.body).appendChild(s);
+        })();
+    </script>
+</section>
+
+
+<span data-aborted-get-helper="">Could not load content</span>
+    </main>
+
+    
+
+    <footer class="px-4 sm:px-6 bg-bgr mt-16" data-footer="">
+  <div class="max-w-container mx-auto relative before:content-[&#39;&#39;] before:absolute before:top-0 before:left-0 before:w-full before:h-[1px] before:bg-fading">
+    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 py-8 md:gap-8 md:py-12">
+      <div class="flex flex-col items-start gap-3 col-span-2 md:col-span-1 lg:col-span-2" data-footer-brand="">
+        <a href="https://www.appcoda.com/" data-brand="">
+            <picture data-logo="dark">
+  <source srcset="/content/images/size/w100/format/webp/2024/05/appcoda-logo-dark.png 100w, /content/images/size/w320/format/webp/2024/05/appcoda-logo-dark.png 320w, /content/images/size/w640/format/webp/2024/05/appcoda-logo-dark.png 600w" sizes="(max-width: 800px) 200px, 320px" type="image/webp">
+  <script src="file:///cdn-cgi/scripts/7d0fa10a/cloudflare-static/rocket-loader.min.js" data-cf-settings="8ac227113e9aca74270db58c-|49"></script><img class="h-[var(--logo-h-mobile)] w-[var(--logo-w-mobile)] md:h-[var(--logo-h-desktop)] md:w-[var(--logo-w-desktop)] will-change-[filter] transition-[filter] blur" onload="this.classList.remove(&#39;blur&#39;)" loading="lazy" srcset="/content/images/size/w100/format/webp/2024/05/appcoda-logo-dark.png 100w, /content/images/size/w320/format/webp/2024/05/appcoda-logo-dark.png 320w, /content/images/size/w640/format/webp/2024/05/appcoda-logo-dark.png 600w" sizes="(max-width: 800px) 200px, 320px" src="file:///content/images/size/w30/2024/05/appcoda-logo-dark.png" alt="AppCoda">
+</picture>
+  <picture data-logo="default">
+  <source srcset="/content/images/size/w100/format/webp/2024/05/appcoda_new_logo_4001.png 100w, /content/images/size/w320/format/webp/2024/05/appcoda_new_logo_4001.png 320w, /content/images/size/w640/format/webp/2024/05/appcoda_new_logo_4001.png 600w" sizes="(max-width: 800px) 200px, 320px" type="image/webp">
+  <script src="file:///cdn-cgi/scripts/7d0fa10a/cloudflare-static/rocket-loader.min.js" data-cf-settings="8ac227113e9aca74270db58c-|49"></script><img class="h-[var(--logo-h-mobile)] w-[var(--logo-w-mobile)] md:h-[var(--logo-h-desktop)] md:w-[var(--logo-w-desktop)] will-change-[filter] transition-[filter] blur" onload="this.classList.remove(&#39;blur&#39;)" loading="lazy" srcset="/content/images/size/w100/format/webp/2024/05/appcoda_new_logo_4001.png 100w, /content/images/size/w320/format/webp/2024/05/appcoda_new_logo_4001.png 320w, /content/images/size/w640/format/webp/2024/05/appcoda_new_logo_4001.png 600w" sizes="(max-width: 800px) 200px, 320px" src="file:///content/images/size/w30/2024/05/appcoda_new_logo_4001.png" alt="AppCoda">
+</picture>
+        </a>
+
+        <p class="text-typ-tone">AppCoda is one of the leading iOS programming communities. Our goal is to empower everyone to create apps through easy-to-understand tutorials. Learn by doing is the heart of our learning materials. </p>
+
+        <nav class="flex items-center gap-2 text-typ-tone text-base" data-footer-social="">
+            <a href="https://www.facebook.com/appcodamobile" class="p-2 border border-brd bg-bgr rounded-theme hover:bg-bgr-tone hover:text-brand hover:border-brand facebook" aria-label="Facebook"><i class="icon icon-facebook w-4 h-4 stroke-2 stroke-2">
+  <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-facebook" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
+  <path d="M7 10v4h3v7h4v-7h3l1 -4h-4v-2a1 1 0 0 1 1 -1h3v-4h-3a5 5 0 0 0 -5 5v2h-3"></path>
+</svg>
+
+
+
+</i><span class="sr-only">Facebook</span></a>
+
+  <a href="https://twitter.com/appcodamobile" class="p-2 border border-brd bg-bgr rounded-theme hover:bg-bgr-tone hover:text-brand hover:border-brand twitter" aria-label="Twitter"><i class="icon icon-twitter-x w-4 h-4 stroke-2 stroke-2">
+  <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-x" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
+  <path d="M4 4l11.733 16h4.267l-11.733 -16z"></path>
+  <path d="M4 20l6.768 -6.768m2.46 -2.46l6.772 -6.772"></path>
+</svg>
+</i><span class="sr-only">Twitter</span></a>
+
+<a href="https://www.appcoda.com/rss" class="p-2 border border-brd bg-bgr rounded-theme hover:bg-bgr-tone hover:text-brand hover:border-brand rss" aria-label="RSS"><i class="icon icon-rss w-4 h-4 stroke-2 stroke-2">
+  <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-rss" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
+  <circle cx="5" cy="19" r="1"></circle>
+  <path d="M4 4a16 16 0 0 1 16 16"></path>
+  <path d="M4 11a9 9 0 0 1 9 9"></path>
+</svg>
+
+
+
+</i><span class="sr-only">RSS</span></a>
+
+
+
+
+
+
+
+
+
+
+        </nav>
+      </div>
+
+      <span class="hidden lg:block"></span>
+
+      <div class="flex flex-col gap-2 mt-2" data-footer-nav="primary">
+      </div>
+
+      <div class="flex flex-col gap-2 mt-2" data-footer-nav="secondary">
+        <span class="font-semibold">About</span>
+        <nav class="">
+            <ul class="flex flex-col items-start gap-2 text-typ-tone text-sm">
+    <li class="nav-about-appcoda flex flex-col relative" data-label="About AppCoda" data-slug="about-appcoda" data-length="13">
+      <a class="flex hover:text-brand" href="https://www.appcoda.com/about/">
+        <span>About AppCoda</span>
+      </a>
+    </li>
+    <li class="nav-meet-our-team flex flex-col relative" data-label="Meet our team" data-slug="meet-our-team" data-length="13">
+      <a class="flex hover:text-brand" href="https://www.appcoda.com/about#team">
+        <span>Meet our team</span>
+      </a>
+    </li>
+    <li class="nav-write-for-us flex flex-col relative" data-label="Write for us" data-slug="write-for-us" data-length="12">
+      <a class="flex hover:text-brand" href="https://www.appcoda.com/write-for-us/">
+        <span>Write for us</span>
+      </a>
+    </li>
+    <li class="nav-advertise flex flex-col relative" data-label="Advertise" data-slug="advertise" data-length="9">
+      <a class="flex hover:text-brand" href="https://www.appcoda.com/advertise/">
+        <span>Advertise</span>
+      </a>
+    </li>
+    <li class="nav-contact-us flex flex-col relative" data-label="Contact Us" data-slug="contact-us" data-length="10">
+      <a class="flex hover:text-brand" href="https://www.appcoda.com/contact/">
+        <span>Contact Us</span>
+      </a>
+    </li>
+</ul>
+        </nav>
+      </div>
+
+            <div class="flex flex-col gap-2 mt-2" data-footer-nav="categories">
+              <span class="font-semibold">Topics</span>
+              <nav class="">
+                <ul class="flex flex-col items-start gap-2 text-typ-tone text-sm">
+                    <li class="flex flex-col relative">
+                      <a href="file:///tag/swiftui/" class="flex hover:text-brand">SwiftUI</a>
+                    </li>
+                    <li class="flex flex-col relative">
+                      <a href="file:///tag/swift/" class="flex hover:text-brand">Swift</a>
+                    </li>
+                    <li class="flex flex-col relative">
+                      <a href="file:///tag/ai/" class="flex hover:text-brand">AI</a>
+                    </li>
+                    <li class="flex flex-col relative">
+                      <a href="file:///tag/arkit/" class="flex hover:text-brand">ARKit</a>
+                    </li>
+                    <li class="flex flex-col relative">
+                      <a href="file:///tag/core-data/" class="flex hover:text-brand">Database</a>
+                    </li>
+                </ul>
+              </nav>
+            </div>
+    </div>
+
+
+    <div class="py-4 md:py-6 flex flex-wrap items-center gap-2 relative before:content-[&#39;&#39;] before:absolute before:top-0 before:left-0 before:w-full before:h-[1px] before:bg-fading">
+      <div class="text-sm text-typ-tone">
+        <span data-footer-date="">©2026&nbsp;<a class="hover:underline" href="https://www.appcoda.com/">AppCoda</a>.</span>
+      </div>
+
+      <button class="flex gap-0.5 p-[3px] border border-brd text-typ-tone rounded-theme hover:bg-bgr-tone" aria-label="Toggle color scheme" data-color-scheme-toggle="" @click="toggleColorScheme(event)">
+  <span data-theme="light" class="px-[5px] py-0.5 border border-transparent opacity-50 rounded-theme">
+    <i class="icon icon-sun size-4 stroke-2">
+  <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-sun-filled" width="24" height="24" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
+  <path d="M12 19a1 1 0 0 1 .993 .883l.007 .117v1a1 1 0 0 1 -1.993 .117l-.007 -.117v-1a1 1 0 0 1 1 -1z" stroke-width="0" fill="currentColor"></path>
+  <path d="M18.313 16.91l.094 .083l.7 .7a1 1 0 0 1 -1.32 1.497l-.094 -.083l-.7 -.7a1 1 0 0 1 1.218 -1.567l.102 .07z" stroke-width="0" fill="currentColor"></path>
+  <path d="M7.007 16.993a1 1 0 0 1 .083 1.32l-.083 .094l-.7 .7a1 1 0 0 1 -1.497 -1.32l.083 -.094l.7 -.7a1 1 0 0 1 1.414 0z" stroke-width="0" fill="currentColor"></path>
+  <path d="M4 11a1 1 0 0 1 .117 1.993l-.117 .007h-1a1 1 0 0 1 -.117 -1.993l.117 -.007h1z" stroke-width="0" fill="currentColor"></path>
+  <path d="M21 11a1 1 0 0 1 .117 1.993l-.117 .007h-1a1 1 0 0 1 -.117 -1.993l.117 -.007h1z" stroke-width="0" fill="currentColor"></path>
+  <path d="M6.213 4.81l.094 .083l.7 .7a1 1 0 0 1 -1.32 1.497l-.094 -.083l-.7 -.7a1 1 0 0 1 1.217 -1.567l.102 .07z" stroke-width="0" fill="currentColor"></path>
+  <path d="M19.107 4.893a1 1 0 0 1 .083 1.32l-.083 .094l-.7 .7a1 1 0 0 1 -1.497 -1.32l.083 -.094l.7 -.7a1 1 0 0 1 1.414 0z" stroke-width="0" fill="currentColor"></path>
+  <path d="M12 2a1 1 0 0 1 .993 .883l.007 .117v1a1 1 0 0 1 -1.993 .117l-.007 -.117v-1a1 1 0 0 1 1 -1z" stroke-width="0" fill="currentColor"></path>
+  <path d="M12 7a5 5 0 1 1 -4.995 5.217l-.005 -.217l.005 -.217a5 5 0 0 1 4.995 -4.783z" stroke-width="0" fill="currentColor"></path>
+</svg>
+</i>  </span>
+  <span data-theme="dark" class="px-[5px] py-0.5 border border-transparent opacity-50 rounded-theme">
+    <i class="icon icon-moon size-4 stroke-2">
+  <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-moon-filled" width="24" height="24" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
+  <path d="M12 1.992a10 10 0 1 0 9.236 13.838c.341 -.82 -.476 -1.644 -1.298 -1.31a6.5 6.5 0 0 1 -6.864 -10.787l.077 -.08c.551 -.63 .113 -1.653 -.758 -1.653h-.266l-.068 -.006l-.06 -.002z" stroke-width="0" fill="currentColor"></path>
+</svg>
+</i>  </span>
+</button>    </div>
+  </div>
+</footer>
+      <template data-toggle-template=""></template>
+  <script type="8ac227113e9aca74270db58c-text/javascript">
+    function renderSubmenus() {
+      const navItems = document.querySelectorAll('[data-nav] li')
+      const subItems = document.querySelectorAll('.is-subitem')
+      const mobileClass = "hidden pl-4 flex flex-col gap-0.5 py-1 px-1.5 basis-full"
+      const desktopClass = "z-[50] min-w-[calc(100%_+_24px)] absolute flex flex-col gap-1 shadow-2xl border border-brd rounded-theme-xxs bg-bgr py-2 px-1.5 -ml-2 mt-11 opacity-0 invisible translate-y-1 transition-all"
+
+      // Remove '-' signs
+      subItems.forEach(item => {
+        const itemName = item.querySelector('a span')
+        itemName.innerText = itemName.innerText.slice(1)
+      });
+
+      // Add subitems in place
+      let subMenu, hasItems
+      navItems.forEach((item, index) => {
+        if (item.classList.contains('is-subitem') && !navItems[index - 1].classList.contains('is-subitem')) {
+          navItems[index - 1].classList.add('is-mainitem'); 
+          navItems[index - 1].setAttribute('x-on:click.outside', 'closeSubmenus(event)')
+        }
+        subMenu = item.classList.contains('is-subitem') ? subMenu : document.createElement('ul');
+        if (item.classList.contains('is-subitem')) { 
+          subMenu.appendChild(item)
+          subMenu.setAttribute('data-submenu', '')
+          subMenu.getAttribute('id') === null ? subMenu.setAttribute('id', navItems[index - 1].getAttribute('data-slug')) : ''
+          const menuType = subMenu.closest('nav').getAttribute('data-nav')
+          subMenu.classList = menuType === 'desktop' ? desktopClass : mobileClass
+        } else { 
+          item.appendChild(subMenu)
+        }
+      });
+
+      const dropdownMenus = document.querySelectorAll('[data-nav] .is-mainitem')
+      const toggle = document.querySelector('[data-toggle-template]');
+
+      dropdownMenus.forEach(menu => { 
+        const toggleBtn = toggle.content.firstElementChild.cloneNode(true);
+        toggleBtn.setAttribute('aria-controls', menu.getAttribute('data-slug'))
+        menu.insertBefore(toggleBtn, menu.children[1]);
+      });
+    }
+  </script>
+
+
+    <script type="8ac227113e9aca74270db58c-text/javascript">
+  document.querySelectorAll('pre, pre[lang]').forEach(el => {
+    hljs.highlightElement(el);
+  });
+</script>
+
+<script type="8ac227113e9aca74270db58c-text/javascript">
+  (function(d,t) {
+    var BASE_URL="https://app.chatwoot.com";
+    var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
+    g.src=BASE_URL+"/packs/js/sdk.js";
+    g.async = true;
+    s.parentNode.insertBefore(g,s);
+    g.onload=function(){
+      window.chatwootSDK.run({
+        websiteToken: 'efpsvCezkgFKK5whW2ggZh3H',
+        baseUrl: BASE_URL
+      })
+    }
+  })(document,"script");
+</script>
+
+  <foreignobject><script src="file:///cdn-cgi/scripts/7d0fa10a/cloudflare-static/rocket-loader.min.js" data-cf-settings="8ac227113e9aca74270db58c-|49" defer=""></script></foreignobject>
+
+</body></html>

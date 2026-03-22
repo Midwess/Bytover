@@ -8,7 +8,10 @@ export function SEOSchemas() {
         "@context": "https://schema.org",
         "@type": "Organization",
         "name": "Midwess",
-        "url": "https://midwess.com"
+        "url": "https://midwess.com",
+        "sameAs": [
+            "https://github.com/Midwess/Bytover"
+        ]
     };
 
     const websiteSchema = {

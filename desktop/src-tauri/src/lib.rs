@@ -26,6 +26,10 @@ use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::tray::{TrayIcon, TrayIconBuilder};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_opener::{open_path, OpenerExt};
+#[cfg(feature = "log-file")]
+use simplelog::{Config, LevelFilter, WriteLogger};
+#[cfg(feature = "log-file")]
+use std::fs::File;
 use tauri_plugin_updater::UpdaterExt;
 use tokio::{fs, spawn};
 use uuid::Uuid;
@@ -47,11 +51,13 @@ mod thumbnail;
 pub(crate) mod mouse_tracking;
 mod theme;
 mod content_handlers;
+mod pasteboard;
 
 static CORE: LazyLock<Arc<Core<BitBridge>>> = LazyLock::new(|| Arc::new(Core::new()));
 static TRAY_ICON: LazyLock<Mutex<Option<TrayIcon>>> = LazyLock::new(|| Mutex::new(None));
 static TOAST_MESSAGE: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::new(None));
 static INTRO_SHOWN_AFTER_AUTH: LazyLock<Mutex<bool>> = LazyLock::new(|| Mutex::new(false));
+static EXPLICIT_AUTH_REQUESTED: LazyLock<Mutex<bool>> = LazyLock::new(|| Mutex::new(false));
 
 #[tauri::command]
 async fn get_resource_path(app_handle: AppHandle, path: String) -> Result<String, String> {
@@ -192,7 +198,16 @@ async fn sign_out(app_handle: AppHandle) {
 
 #[tauri::command]
 async fn authenticate(app_handle: AppHandle) {
+    if let Ok(mut requested) = EXPLICIT_AUTH_REQUESTED.lock() {
+        *requested = true;
+    }
     process_event(AuthenticationEvent::Authenticate, app_handle).await;
+}
+
+#[tauri::command]
+async fn submit_token(token: String, app_handle: AppHandle) {
+    let url = format!("bytover://auth?access_token={}", token);
+    process_event(AuthenticationEvent::OnRedirected { url }, app_handle).await;
 }
 
 #[tauri::command]
@@ -205,6 +220,21 @@ async fn add_resources(shelf_id: String, paths: Vec<String>, app_handle: AppHand
     }).collect::<Vec<_>>();
 
     process_event(ShelfEvent::AddResources { shelf_id, selections }, app_handle).await;
+}
+
+#[tauri::command]
+async fn add_resources_from_drag_pasteboard(shelf_id: String, app_handle: AppHandle) -> Result<(), String> {
+    notify_user_did_drop();
+    let shelf_id = shelf_id.parse::<u64>().map_err(|e| e.to_string())?;
+
+    let selections = pasteboard::read_drag_pasteboard_selections().await?;
+    if !selections.is_empty() {
+        process_event(
+            ShelfEvent::AddResources { shelf_id, selections },
+            app_handle,
+        ).await;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -328,12 +358,22 @@ pub(crate) async fn process_event(event: impl Into<AppEvent> + Send + Sync + 'st
 fn render(view: AppViewModel, app_handle: AppHandle) {
     let is_authorized = view.authentication.as_ref().map(|auth| auth.user.is_some()).unwrap_or(false);
 
-    // Show intro after first successful sign-in
+    // Show intro after first successful sign-in if explicitly requested
     if is_authorized {
-        if let Ok(mut intro_shown) = INTRO_SHOWN_AFTER_AUTH.lock() {
-            if !*intro_shown {
-                app_handle.show_intro();
-                *intro_shown = true;
+        let mut should_trigger_intro = false;
+        if let Ok(mut requested) = EXPLICIT_AUTH_REQUESTED.lock() {
+            if *requested {
+                should_trigger_intro = true;
+                *requested = false;
+            }
+        }
+
+        if should_trigger_intro {
+            if let Ok(mut intro_shown) = INTRO_SHOWN_AFTER_AUTH.lock() {
+                if !*intro_shown {
+                    app_handle.show_intro();
+                    *intro_shown = true;
+                }
             }
         }
     }
@@ -377,6 +417,7 @@ fn update_tray_menu_signed_out(app_handle: &AppHandle) {
 fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel]) {
     let Ok(new_shelf_item) = MenuItemBuilder::with_id("new_shelf", "New Shelf").build(app_handle) else { return };
     let Ok(new_shelf_clipboard_item) = MenuItemBuilder::with_id("new_shelf_from_clipboard", "New Shelf from Clipboard").build(app_handle) else { return };
+    let Ok(close_all_shelves_item) = MenuItemBuilder::with_id("close_all_shelves", "Close all shelves").build(app_handle) else { return };
     let Ok(user_guide_item) = MenuItemBuilder::with_id("user_guide", "User Guide").build(app_handle) else { return };
     let Ok(settings_item) = MenuItemBuilder::with_id("settings", "Settings").build(app_handle) else { return };
     let Ok(quit_item) = MenuItemBuilder::with_id("quit", "Quit").build(app_handle) else { return };
@@ -393,11 +434,17 @@ fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel]) {
 
     let Ok(recent_submenu) = recent_submenu_builder.build() else { return };
 
-    let Ok(menu) = MenuBuilder::new(app_handle)
+    let mut menu_builder = MenuBuilder::new(app_handle)
         .item(&new_shelf_item)
         .item(&new_shelf_clipboard_item)
         .item(&recent_submenu)
-        .separator()
+        .separator();
+
+    if app_handle.is_any_shelf_window_open() {
+        menu_builder = menu_builder.item(&close_all_shelves_item).separator();
+    }
+
+    let Ok(menu) = menu_builder
         .item(&user_guide_item)
         .item(&settings_item)
         .item(&quit_item)
@@ -546,8 +593,19 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub async fn run() {
+    #[cfg(feature = "log-file")]
+    {
+        WriteLogger::init(
+            LevelFilter::Trace,
+            Config::default(),
+            File::create("bytover.log").unwrap(),
+        )
+        .unwrap();
+    }
+
     logger::setup();
-    let mut builder = tauri::Builder::default().plugin(tauri_plugin_deep_link::init());
+    let mut builder = tauri::Builder::default()
+        .plugin(tauri_plugin_deep_link::init());
 
     #[cfg(desktop)]
     {
@@ -565,7 +623,7 @@ pub async fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
-            authenticate, add_resources,
+            authenticate, add_resources, add_resources_from_drag_pasteboard, submit_token,
             remove_resource, ui_launched, public_transfer, p2p_transfer, email_transfer,
             cancel_send, cancel_receive, delete_receive_session,
             open_received_resource, open_session, open_shelf, open_shelf_resource,
@@ -596,8 +654,19 @@ pub async fn run() {
                     .item(&quit_item)
                     .build()?;
 
+                let edit_menu = SubmenuBuilder::with_id(app, "edit_menu", "Edit")
+                    .item(&PredefinedMenuItem::undo(app, None)?)
+                    .item(&PredefinedMenuItem::redo(app, None)?)
+                    .separator()
+                    .item(&PredefinedMenuItem::cut(app, None)?)
+                    .item(&PredefinedMenuItem::copy(app, None)?)
+                    .item(&PredefinedMenuItem::paste(app, None)?)
+                    .item(&PredefinedMenuItem::select_all(app, None)?)
+                    .build()?;
+
                 let menu = MenuBuilder::new(app)
                     .item(&app_menu)
+                    .item(&edit_menu)
                     .build()?;
 
                 app.set_menu(menu)?;
@@ -647,16 +716,20 @@ pub async fn run() {
                         },
                         "new_shelf" => {
                             notify_user_did_drop();
-                            app.open_new_shelf_window();
+                            app.open_new_shelf_window(None);
                         },
                         "new_shelf_from_clipboard" => {
                             notify_user_did_drop();
                             let shelf_id = shared::gen_shelf_id();
-                            app.show_shelf(shelf_id);
+                            app.show_shelf(shelf_id, None);
                             let app_handle = app.clone();
                             spawn(async move {
                                 process_event(ShelfEvent::CreateAndPasteFromClipboard { shelf_id }, app_handle).await;
                             });
+                        },
+                        "close_all_shelves" => {
+                            app.close_all_shelves();
+                            render(CORE.view(), app.clone());
                         },
                         "settings" => {
                             app.show_settings();
@@ -667,7 +740,7 @@ pub async fn run() {
                         id if id.starts_with("shelf_") => {
                             if let Some(shelf_id_str) = id.strip_prefix("shelf_") {
                                 if let Ok(shelf_id) = shelf_id_str.parse::<u64>() {
-                                    app.show_shelf(shelf_id);
+                                    app.show_shelf(shelf_id, None);
                                 }
                             }
                         },
@@ -686,8 +759,11 @@ pub async fn run() {
             let handle = app.handle().clone();
             let workdir_path = app.path().app_data_dir().expect("We still solving issue that don't have app data dir");
 
+            #[cfg(target_os = "windows")]
+            let _ = app.deep_link().register("bytover");
+
             let access_url = var("BYTOVER_ACCESS_TOKEN").ok()
-                .map(|it| format!("bitbridge://authorize?access_token={it}"));
+                .map(|it| format!("bytover://auth?access_token={it}"));
 
             let mut start_urls = app.deep_link().get_current()?.unwrap_or_default();
             if let Some(mock_url) = access_url {

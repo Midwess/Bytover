@@ -47,12 +47,17 @@ tauri-plugin-positioner = { version = "2", features = ["tray-icon"] }
 tauri-plugin-clipboard = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-global-shortcut = "2"
+simplelog = { version = "0.7", optional = true }
 semver = "1"
 chrono = { workspace = true, features = ["std", "clock"] }
 reqwest = { version = "0.12", features = ["rustls-tls"] }
 
+[features]
+default = []
+log-file = ["simplelog"]
+
 [target.'cfg(target_os = "windows")'.dependencies]
-windows = { version = "0.62.2", features = ["Win32_UI_Input_KeyboardAndMouse", "Win32_Foundation", "Win32_Graphics_Gdi", "Win32_UI_Shell", "Win32_System_Com"] }
+windows = { version = "0.62.2", features = ["Win32_UI_Input_KeyboardAndMouse", "Win32_Foundation", "Win32_Graphics_Gdi", "Win32_UI_Shell", "Win32_System_Com", "Win32_UI_WindowsAndMessaging"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 cacao = { version = "0.4.0-beta2", features = ["appkit"] }

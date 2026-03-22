@@ -2,56 +2,120 @@ use tauri::{Emitter, Manager, Runtime, WebviewUrl, WebviewWindow, WebviewWindowB
 use tauri::webview::Color;
 use tauri::window::{Effect, EffectState, EffectsBuilder};
 use tauri_plugin_positioner::{Position, WindowExt};
+use std::collections::{HashMap, VecDeque};
+use std::sync::{LazyLock, Mutex};
 
-fn constrain_window_to_screen<R: Runtime>(window: &WebviewWindow<R>) {
-    let Ok(Some(monitor)) = window.current_monitor() else { return; };
-    let Ok(window_position) = window.outer_position() else { return; };
-    let Ok(window_size) = window.outer_size() else { return; };
+// ── Shelf slot registry ───────────────────────────────────────────────────────
+//
+// Each monitor has a full-screen grid of (col, row) slots that tiles its entire
+// surface.  The grid dimensions are computed at runtime from the screen size so
+// the mouse always lands near a slot.  Slots are keyed by
+// (monitor_hash, col, row); col 0 is the rightmost column, row 0 the top.
+//
+// At most MAX_SHELVES windows are open globally.  When a new shelf would exceed
+// that limit the oldest one is closed first (front of `creation_order`).
 
-    let screen_size = monitor.size();
-    let screen_position = monitor.position();
+const MAX_SHELVES: usize = 8;
+
+struct ShelfRegistry {
+    /// (monitor_hash, col, row) → window label
+    slots: HashMap<(u64, usize, usize), String>,
+    /// Labels in creation order; front = oldest, back = newest
+    creation_order: VecDeque<String>,
+}
+
+static SHELF_REGISTRY: LazyLock<Mutex<ShelfRegistry>> = LazyLock::new(|| {
+    Mutex::new(ShelfRegistry {
+        slots: HashMap::new(),
+        creation_order: VecDeque::new(),
+    })
+});
+
+/// Stable identity for a monitor derived from its physical position and size.
+fn monitor_hash(monitor: &tauri::Monitor) -> u64 {
+    let pos = monitor.position();
+    let size = monitor.size();
+    let mut h: u64 = pos.x as u64;
+    h = h.wrapping_mul(1_000_003).wrapping_add(pos.y as u64);
+    h = h.wrapping_mul(1_000_003).wrapping_add(size.width as u64);
+    h = h.wrapping_mul(1_000_003).wrapping_add(size.height as u64);
+    h
+}
+
+// Grid layout in logical pixels ───────────────────────────────────────────────
+const WIN_WIDTH: f64 = 245.0;
+const WIN_HEIGHT: f64 = 270.0;
+const CELL_W: f64 = WIN_WIDTH * 1.1;   // 10 % horizontal padding
+const CELL_H: f64 = WIN_HEIGHT * 1.1;  // 10 % vertical padding
+const MARGIN: f64 = 50.0;              // uniform margin on every edge (logical px)
+
+/// How many columns and rows fit inside `monitor`, covering the full screen.
+/// Uses the same `MARGIN` on all four sides so the grid is always fully visible.
+fn grid_dimensions(monitor: &tauri::Monitor) -> (usize, usize) {
     let scale = monitor.scale_factor();
+    let size  = monitor.size();
+    let p_margin = MARGIN * scale;
+    let cols = ((size.width  as f64 - 2.0 * p_margin) / (CELL_W * scale)).floor() as usize;
+    let rows = ((size.height as f64 - 2.0 * p_margin) / (CELL_H * scale)).floor() as usize;
+    (cols.max(1), rows.max(1))
+}
 
-    let screen_width = screen_size.width as f64 / scale;
-    let screen_height = screen_size.height as f64 / scale;
-    let screen_x = screen_position.x as f64;
-    let screen_y = screen_position.y as f64;
+/// Returns `(center_x, center_y, win_top_x, win_top_y)` in **physical pixels**.
+///
+/// `col 0` is the rightmost column, `row 0` is the top row.
+/// The grid fills the screen; use `grid_dimensions()` to get valid col/row ranges.
+fn slot_physics(monitor: &tauri::Monitor, col: usize, row: usize) -> (f64, f64, f64, f64) {
+    let scale    = monitor.scale_factor();
+    let pos      = monitor.position();
+    let size     = monitor.size();
+    let p_cell_w = CELL_W * scale;
+    let p_cell_h = CELL_H * scale;
+    let p_win_w  = WIN_WIDTH  * scale;
+    let p_win_h  = WIN_HEIGHT * scale;
+    let p_margin = MARGIN * scale;
 
-    let win_width = window_size.width as f64;
-    let win_height = window_size.height as f64;
-    let win_x = window_position.x as f64;
-    let win_y = window_position.y as f64;
+    let sx = pos.x as f64;
+    let sy = pos.y as f64;
+    let sw = size.width as f64;
 
-    let mut new_x = win_x;
-    let mut new_y = win_y;
+    // Top-left of the cell
+    let cell_x = sx + sw - p_margin - ((col as f64 + 1.0) * p_cell_w);
+    let cell_y = sy + p_margin       +  (row as f64        * p_cell_h);
 
-    if win_x < screen_x {
-        new_x = screen_x;
-    } else if win_x + win_width > screen_x + screen_width {
-        new_x = screen_x + screen_width - win_width;
-    }
+    let cx = cell_x + p_cell_w / 2.0;
+    let cy = cell_y + p_cell_h / 2.0;
 
-    if win_y < screen_y {
-        new_y = screen_y;
-    } else if win_y + win_height > screen_y + screen_height {
-        new_y = screen_y + screen_height - win_height;
-    }
+    (cx, cy, cx - p_win_w / 2.0, cy - p_win_h / 2.0)
+}
 
-    if new_x != win_x || new_y != win_y {
-        let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition {
-            x: new_x as i32,
-            y: new_y as i32,
-        }));
+/// Called from `on_window_event(Destroyed)` to free the slot.
+fn release_registry_slot(label: &str) {
+    if let Ok(mut reg) = SHELF_REGISTRY.lock() {
+        reg.slots.retain(|_, v| v != label);
+        reg.creation_order.retain(|l| l != label);
     }
 }
+
+// ── Monitor helper ────────────────────────────────────────────────────────────
+
+fn get_monitor_at_point<R: Runtime>(app: &tauri::AppHandle<R>, x: i32, y: i32) -> Option<tauri::Monitor> {
+    app.available_monitors().ok()?.into_iter().find(|m| {
+        let pos = m.position();
+        let size = m.size();
+        x >= pos.x && x < pos.x + size.width as i32 &&
+        y >= pos.y && y < pos.y + size.height as i32
+    })
+}
+
+// ── Trait definition ──────────────────────────────────────────────────────────
 
 pub trait AppHandleExt<R: Runtime> {
     fn close_all_windows(&self, whitelist: Vec<&str>);
     fn show_auth(&self) -> WebviewWindow<R>;
     fn create_receive(&self) -> WebviewWindow<R>;
     fn show_send(&self) -> WebviewWindow<R>;
-    fn show_shelf(&self, shelf_id: u64) -> WebviewWindow<R>;
-    fn open_new_shelf_window(&self) -> WebviewWindow<R>;
+    fn show_shelf(&self, shelf_id: u64, mouse_pos: Option<tauri::PhysicalPosition<f64>>) -> WebviewWindow<R>;
+    fn open_new_shelf_window(&self, mouse_pos: Option<tauri::PhysicalPosition<f64>>) -> WebviewWindow<R>;
     fn show_settings(&self) -> WebviewWindow<R>;
     fn show_settings_with_tab(&self, tab: &str) -> WebviewWindow<R>;
     fn hide_auth(&self);
@@ -62,7 +126,7 @@ pub trait AppHandleExt<R: Runtime> {
     fn is_any_shelf_window_open(&self) -> bool;
     fn get_visible_shelf_windows(&self) -> Vec<WebviewWindow<R>>;
     fn hide_send(&self);
-    fn hide_all_shelves(&self);
+    fn close_all_shelves(&self);
     fn show_toast(&self, message: &str) -> WebviewWindow<R>;
 }
 
@@ -70,6 +134,8 @@ fn animate_window<R: Runtime>(window: WebviewWindow<R>) {
     let _ = window.show();
     let _ = window.set_focus();
 }
+
+// ── Trait implementation ──────────────────────────────────────────────────────
 
 impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
     fn close_all_windows(&self, whitelist: Vec<&str>) {
@@ -197,63 +263,169 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
         window
     }
 
-    fn show_shelf(&self, shelf_id: u64) -> WebviewWindow<R> {
+    fn show_shelf(&self, shelf_id: u64, mouse_pos: Option<tauri::PhysicalPosition<f64>>) -> WebviewWindow<R> {
         let label = format!("send-{}", shelf_id);
+
+        // Create the window if it does not yet exist.
         let window = match self.get_webview_window(&label) {
-            Some(window) => window,
+            Some(w) => w,
             None => {
-                WebviewWindowBuilder::new(
+                let w = WebviewWindowBuilder::new(
                     self,
                     &label,
-                    WebviewUrl::App("send.html".into())
+                    WebviewUrl::App("send.html".into()),
                 )
-                    .title(&label)
-                    .inner_size(245.0, 270.0)
-                    .resizable(false)
-                    .decorations(false)
-                    .transparent(true)
-                    .visible_on_all_workspaces(true)
-                    .always_on_top(true)
-                    .skip_taskbar(true)
-                    .shadow(false)
-                    .devtools(true)
-                    .build()
-                    .expect("failed to create shelf window")
+                .title(&label)
+                .inner_size(WIN_WIDTH, WIN_HEIGHT)
+                .resizable(false)
+                .decorations(false)
+                .transparent(true)
+                .visible_on_all_workspaces(true)
+                .always_on_top(true)
+                .skip_taskbar(true)
+                .shadow(false)
+                .devtools(true)
+                .build()
+                .expect("failed to create shelf window");
+
+                let label_clone = label.clone();
+                w.on_window_event(move |event| {
+                    if let tauri::WindowEvent::Destroyed = event {
+                        release_registry_slot(&label_clone);
+                    }
+                });
+                w
             }
         };
 
-        if let Some(monitor) = window.current_monitor().ok().flatten() {
-            let screen_size = monitor.size();
+        // Collect all monitors.  If none are found fall back to just showing.
+        let monitors = self.available_monitors().unwrap_or_default();
+        if monitors.is_empty() {
+            animate_window(window.clone());
+            return window;
+        }
+
+        // Build the full candidate list: every (col, row) slot on every monitor.
+        // grid_dimensions() fills the screen, so no matter where the mouse is a
+        // nearby slot always exists.
+        //
+        // Tuple layout:
+        //   0:mh  1:col  2:row  3:cx  4:cy  5:wx  6:wy  7:win_right  8:win_bottom
+        //
+        // win_right / win_bottom are the exclusive right/bottom edges of the
+        // window in physical pixels — used to test whether the mouse falls inside.
+        let mut candidates: Vec<(u64, usize, usize, f64, f64, f64, f64, f64, f64)> = Vec::new();
+        for monitor in &monitors {
+            let mh    = monitor_hash(monitor);
             let scale = monitor.scale_factor();
+            let win_w = WIN_WIDTH  * scale;
+            let win_h = WIN_HEIGHT * scale;
+            let (num_cols, num_rows) = grid_dimensions(monitor);
+            for col in 0..num_cols {
+                for row in 0..num_rows {
+                    let (cx, cy, wx, wy) = slot_physics(monitor, col, row);
+                    candidates.push((mh, col, row, cx, cy, wx, wy, wx + win_w, wy + win_h));
+                }
+            }
+        }
 
-            const WIN_WIDTH: f64 = 245.0;
-            const WIN_HEIGHT: f64 = 270.0;
-            let max_offset_x = WIN_WIDTH * 1.5;
-            let max_offset_y = WIN_HEIGHT * 1.5;
+        // ── Phase 1: evict oldest shelves until there is room (lock held briefly) ──
+        let to_evict: Vec<String> = {
+            let Ok(mut reg) = SHELF_REGISTRY.lock() else {
+                animate_window(window.clone());
+                return window;
+            };
+            // Re-showing an existing shelf: remove it first so it gets a fresh slot.
+            reg.slots.retain(|_, v| v != &label);
+            reg.creation_order.retain(|l| l != &label);
 
-            let hash_x = ((shelf_id.wrapping_mul(2654435761)) & 0xFFFF) as f64 / 65535.0;
-            let hash_y = ((shelf_id.wrapping_mul(2654435761).wrapping_shr(16)) & 0xFFFF) as f64 / 65535.0;
+            let mut evicted = Vec::new();
+            while reg.creation_order.len() >= MAX_SHELVES {
+                if let Some(oldest) = reg.creation_order.pop_front() {
+                    reg.slots.retain(|_, v| v != &oldest);
+                    evicted.push(oldest);
+                } else {
+                    break;
+                }
+            }
+            evicted
+        };
 
-            let offset_x = (hash_x * 2.0 - 1.0) * max_offset_x;
-            let offset_y = (hash_y * 2.0 - 1.0) * max_offset_y;
+        // ── Phase 2: close evicted windows (outside lock) ─────────────────────────
+        for evict_label in &to_evict {
+            if let Some(w) = self.get_webview_window(evict_label) {
+                let _ = w.close();
+            }
+        }
 
-            let center_x = (screen_size.width as f64 / scale - WIN_WIDTH) / 2.0;
-            let center_y = (screen_size.height as f64 / scale - WIN_HEIGHT) / 2.0;
+        // ── Phase 3: pick the best free slot and record it ────────────────────────
+        let primary_hash = self.primary_monitor().ok().flatten().map(|m| monitor_hash(&m));
 
-            let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition {
-                x: center_x + offset_x,
-                y: center_y + offset_y,
+        let chosen_pos: Option<(f64, f64)> = {
+            let Ok(mut reg) = SHELF_REGISTRY.lock() else {
+                animate_window(window.clone());
+                return window;
+            };
+
+            let chosen = if let Some(pos) = mouse_pos {
+                // Mouse-triggered: find the closest FREE slot whose window would
+                // NOT overlap the current mouse cursor position.
+                candidates.iter()
+                    .filter(|c| {
+                        // Slot must be unoccupied …
+                        let free = !reg.slots.contains_key(&(c.0, c.1, c.2));
+                        // … and the window rectangle must not contain the mouse.
+                        // c.5=wx  c.6=wy  c.7=win_right  c.8=win_bottom
+                        let under_mouse = pos.x >= c.5 && pos.x < c.7
+                                       && pos.y >= c.6 && pos.y < c.8;
+                        free && !under_mouse
+                    })
+                    .min_by(|a, b| {
+                        let da = (pos.x - a.3).powi(2) + (pos.y - a.4).powi(2);
+                        let db = (pos.x - b.3).powi(2) + (pos.y - b.4).powi(2);
+                        da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+                    })
+                    .map(|c| (c.0, c.1, c.2, c.5, c.6))
+            } else {
+                // Button-triggered: primary monitor first; within each monitor
+                // col 0 (rightmost) before col 1, row 0 (top) before row 1, …
+                // This ensures the top-right slot fills first.
+                let mut sorted = candidates.clone();
+                sorted.sort_by(|a, b| {
+                    let a_primary = primary_hash.map_or(false, |ph| ph == a.0);
+                    let b_primary = primary_hash.map_or(false, |ph| ph == b.0);
+                    b_primary.cmp(&a_primary)  // primary first
+                        .then(a.1.cmp(&b.1))   // col ascending (0 = rightmost)
+                        .then(a.2.cmp(&b.2))   // row ascending (0 = top)
+                });
+                sorted.iter()
+                    .find(|c| !reg.slots.contains_key(&(c.0, c.1, c.2)))
+                    .map(|c| (c.0, c.1, c.2, c.5, c.6))
+            };
+
+            if let Some((mh, col, row, wx, wy)) = chosen {
+                reg.slots.insert((mh, col, row), label.clone());
+                reg.creation_order.push_back(label.clone());
+                Some((wx, wy))
+            } else {
+                None
+            }
+        };
+
+        if let Some((win_x, win_y)) = chosen_pos {
+            let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition {
+                x: win_x as i32,
+                y: win_y as i32,
             }));
         }
 
-        constrain_window_to_screen(&window);
         animate_window(window.clone());
         window
     }
 
-    fn open_new_shelf_window(&self) -> WebviewWindow<R> {
+    fn open_new_shelf_window(&self, mouse_pos: Option<tauri::PhysicalPosition<f64>>) -> WebviewWindow<R> {
         let shelf_id = shared::gen_shelf_id();
-        self.show_shelf(shelf_id)
+        self.show_shelf(shelf_id, mouse_pos)
     }
 
     fn show_settings_with_tab(&self, tab: &str) -> WebviewWindow<R> {
@@ -401,10 +573,10 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
         }
     }
 
-    fn hide_all_shelves(&self) {
+    fn close_all_shelves(&self) {
         for (label, window) in self.webview_windows() {
             if label.starts_with("send-") {
-                let _ = window.hide();
+                let _ = window.close();
             }
         }
     }

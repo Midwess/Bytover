@@ -17,6 +17,7 @@ import {
 import core from '@/wasm/wasm_core';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import { GitHubStarsButton } from '@/components/animate-ui/components/buttons/github-stars';
 
 export default function Header({ className, theme = 'dark' }: { className?: string, theme?: 'light' | 'dark' }) {
     const coreReady = core.useCoreReady();
@@ -129,6 +130,15 @@ export default function Header({ className, theme = 'dark' }: { className?: stri
                     </div>
 
                     <div className="flex items-center gap-3">
+                        <GitHubStarsButton 
+                            username="Midwess" 
+                            repo="Bytover" 
+                            variant="ghost" 
+                            className={cn(
+                                "hidden sm:flex",
+                                isLight ? "text-zinc-500 hover:text-zinc-900" : "text-zinc-400 hover:text-white"
+                            )} 
+                        />
                         {isSignedIn ? (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
