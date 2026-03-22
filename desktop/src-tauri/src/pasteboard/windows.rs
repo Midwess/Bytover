@@ -312,7 +312,7 @@ unsafe fn try_read_cf_bitmap() -> Option<DragContent> {
 
     let hbitmap = HBITMAP(handle.0 as _);
     let mut bm = std::mem::zeroed::<BITMAP>();
-    let bytes_copied = GetObjectW(hbitmap, std::mem::size_of::<BITMAP>() as i32, Some(&mut bm as *mut _ as *mut _));
+    let bytes_copied = GetObjectW(hbitmap.into(), std::mem::size_of::<BITMAP>() as i32, Some(&mut bm as *mut _ as *mut _));
     if bytes_copied == 0 {
         log::info!("[pasteboard] CF_BITMAP: GetObjectW failed");
         return None;
@@ -324,13 +324,12 @@ unsafe fn try_read_cf_bitmap() -> Option<DragContent> {
     let row_size = ((width * bpp + 31) / 32) * 4;
     log::info!("[pasteboard] CF_BITMAP: {}x{}, bpp={}, row_size={}", width, height, bpp, row_size);
 
-    let screen_dc = HDC(std::ptr::null_mut());
-    let mem_dc = CreateCompatibleDC(screen_dc);
+    let mem_dc = CreateCompatibleDC(None);
     if mem_dc.is_invalid() {
         log::info!("[pasteboard] CF_BITMAP: CreateCompatibleDC failed");
         return None;
     }
-    let old_bitmap = SelectObject(mem_dc, hbitmap);
+    let old_bitmap = SelectObject(mem_dc, hbitmap.into());
 
     let mut bmi = std::mem::zeroed::<BITMAPINFO>();
     bmi.bmiHeader.biSize = std::mem::size_of::<BITMAPINFOHEADER>() as u32;
@@ -366,7 +365,7 @@ unsafe fn try_read_cf_bitmap() -> Option<DragContent> {
 
     let _ = SelectObject(mem_dc, old_bitmap);
     let _ = DeleteDC(mem_dc);
-    let _ = DeleteObject(HBITMAP(handle.0 as _));
+    let _ = DeleteObject(HBITMAP(handle.0 as _).into());
     let _ = GlobalFree(Some(hglobal));
 
     if lines == 0 {
