@@ -43,7 +43,7 @@ export default function DownloadButtonWithProgress({
         }
 
         if (isCompleted && wasInProgressRef.current) {
-            setShowCompleted(true)
+            requestAnimationFrame(() => setShowCompleted(true))
             const timer = setTimeout(() => {
                 setShowCompleted(false)
                 wasInProgressRef.current = false
@@ -51,7 +51,7 @@ export default function DownloadButtonWithProgress({
             return () => clearTimeout(timer)
         } else if (!isInProgress && !isCompleted) {
             wasInProgressRef.current = false
-            setShowCompleted(false)
+            requestAnimationFrame(() => setShowCompleted(false))
         }
     }, [isCompleted, isInProgress])
 

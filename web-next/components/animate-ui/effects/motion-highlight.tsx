@@ -125,6 +125,9 @@ function MotionHighlight<T extends string>({
     mode = 'children',
   } = props;
 
+  const boundsOffset = (props as ParentModeMotionHighlightProps)?.boundsOffset;
+  const containerClassName = (props as ParentModeMotionHighlightProps)?.containerClassName;
+
   const localRef = React.useRef<HTMLDivElement>(null);
   React.useImperativeHandle(ref, () => localRef.current as HTMLDivElement);
 
@@ -135,6 +138,7 @@ function MotionHighlight<T extends string>({
   const [activeClassNameState, setActiveClassNameState] =
     React.useState<string>('');
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- React Compiler cannot preserve memoization
   const safeSetActiveValue = React.useCallback(
     (id: T | null) => {
       setActiveValue((prev) => (prev === id ? prev : id));
@@ -143,12 +147,12 @@ function MotionHighlight<T extends string>({
     [activeValue, onValueChange],
   );
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- React Compiler cannot preserve memoization
   const safeSetBounds = React.useCallback(
     (bounds: DOMRect) => {
       if (!localRef.current) return;
 
-      const boundsOffset = (props as ParentModeMotionHighlightProps)
-        ?.boundsOffset ?? {
+      const effectiveBoundsOffset = boundsOffset ?? {
         top: 0,
         left: 0,
         width: 0,
@@ -157,10 +161,10 @@ function MotionHighlight<T extends string>({
 
       const containerRect = localRef.current.getBoundingClientRect();
       const newBounds: Bounds = {
-        top: bounds.top - containerRect.top + (boundsOffset.top ?? 0),
-        left: bounds.left - containerRect.left + (boundsOffset.left ?? 0),
-        width: bounds.width + (boundsOffset.width ?? 0),
-        height: bounds.height + (boundsOffset.height ?? 0),
+        top: bounds.top - containerRect.top + (effectiveBoundsOffset.top ?? 0),
+        left: bounds.left - containerRect.left + (effectiveBoundsOffset.left ?? 0),
+        width: bounds.width + (effectiveBoundsOffset.width ?? 0),
+        height: bounds.height + (effectiveBoundsOffset.height ?? 0),
       };
 
       setBoundsState((prev) => {
@@ -176,7 +180,7 @@ function MotionHighlight<T extends string>({
         return newBounds;
       });
     },
-    [props],
+    [boundsOffset],
   );
 
   const clearBounds = React.useCallback(() => {
@@ -207,6 +211,7 @@ function MotionHighlight<T extends string>({
     return () => container.removeEventListener('scroll', onScroll);
   }, [mode, activeValue, safeSetBounds]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- React Compiler cannot preserve memoization
   const render = React.useCallback(
     (children: React.ReactNode) => {
       if (mode === 'parent') {
@@ -216,7 +221,7 @@ function MotionHighlight<T extends string>({
             data-slot="motion-highlight-container"
             className={cn(
               'relative',
-              (props as ParentModeMotionHighlightProps)?.containerClassName,
+              containerClassName,
             )}
           >
             <AnimatePresence initial={false}>
@@ -262,7 +267,7 @@ function MotionHighlight<T extends string>({
     },
     [
       mode,
-      props,
+      containerClassName,
       boundsState,
       transition,
       exitDelay,
@@ -469,6 +474,7 @@ function MotionHighlightItem({
 
   if (asChild) {
     if (mode === 'children') {
+      // eslint-disable-next-line react-hooks/rules-of-hooks -- Ref access pattern required for cloneElement
       return React.cloneElement(
         element,
         {
@@ -521,6 +527,7 @@ function MotionHighlightItem({
       );
     }
 
+    // eslint-disable-next-line react-hooks/rules-of-hooks -- Ref access pattern required for cloneElement
     return React.cloneElement(element, {
       ref: localRef,
       ...getNonOverridingDataAttributes(element, {

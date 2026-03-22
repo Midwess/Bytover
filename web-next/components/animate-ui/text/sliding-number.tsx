@@ -132,7 +132,7 @@ function SlidingNumber({
   });
   const isInView = !inView || inViewResult;
 
-  const prevNumberRef = React.useRef<number>(0);
+  const [prevNumber, setPrevNumber] = React.useState(0);
 
   const effectiveNumber = React.useMemo(
     () => (!isInView ? 0 : Math.abs(Number(number))),
@@ -150,7 +150,7 @@ function SlidingNumber({
   const newIntStr =
     padStart && newIntStrRaw?.length === 1 ? '0' + newIntStrRaw : newIntStrRaw;
 
-  const prevFormatted = formatNumber(prevNumberRef.current);
+  const prevFormatted = formatNumber(prevNumber);
   const [prevIntStrRaw = '', prevDecStrRaw = ''] = prevFormatted.split('.');
   const prevIntStr =
     padStart && prevIntStrRaw.length === 1
@@ -171,7 +171,7 @@ function SlidingNumber({
   }, [prevDecStrRaw, newDecStrRaw]);
 
   React.useEffect(() => {
-    if (isInView) prevNumberRef.current = effectiveNumber;
+    if (isInView) setPrevNumber(effectiveNumber);
   }, [effectiveNumber, isInView]);
 
   const intDigitCount = newIntStr?.length ?? 0;

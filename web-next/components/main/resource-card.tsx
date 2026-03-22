@@ -32,7 +32,7 @@ export function ResourceCard(props: {
 
     useEffect(() => {
         if (!model?.thumbnail_path) {
-            setThumbnailSource(undefined)
+            requestAnimationFrame(() => setThumbnailSource(undefined))
             return
         }
 
