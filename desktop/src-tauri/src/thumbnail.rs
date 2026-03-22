@@ -212,7 +212,7 @@ async fn generate_os_thumbnail(
 #[cfg(target_os = "windows")]
 fn save_hbitmap_as_png(hbitmap: windows::Win32::Graphics::Gdi::HBITMAP, output_path: &PathBuf) -> Result<(), ThumbnailError> {
     use windows::Win32::Graphics::Gdi::{
-        GetDIBits, GetObjectW, DeleteObject, DeleteDC, CreateCompatibleDC, SelectObject,
+        GetDIBits, GetObjectW, DeleteObject, DeleteDC, CreateCompatibleDC,
         BITMAP, BITMAPINFO, BITMAPINFOHEADER, DIB_RGB_COLORS, BI_RGB, HDC,
     };
 

@@ -292,10 +292,10 @@ unsafe fn try_read_cf_dib() -> Option<DragContent> {
 }
 
 unsafe fn try_read_cf_bitmap() -> Option<DragContent> {
-    use windows::Win32::Foundation::{HBITMAP, HDC};
-    use windows::Win32::Graphics::Gdi::{CreateCompatibleDC, DeleteDC, DeleteObject, GetDIBits, GetObjectW, SelectObject, BITMAP, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS};
+    use windows::Win32::Graphics::Gdi::{CreateCompatibleDC, DeleteDC, DeleteObject, GetDIBits, GetObjectW, SelectObject, BITMAP, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, HBITMAP, HDC};
     use windows::Win32::System::DataExchange::GetClipboardData;
-    use windows::Win32::System::Memory::{GlobalAlloc, GlobalFree, GMEM_MOVEABLE};
+    use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
+    use windows::Win32::Foundation::GlobalFree;
     use std::io::Cursor;
 
     log::info!("[pasteboard] CF_BITMAP: trying...");
@@ -341,30 +341,33 @@ unsafe fn try_read_cf_bitmap() -> Option<DragContent> {
     bmi.bmiHeader.biCompression = BI_RGB.0 as u32;
 
     let pixels_size = (row_size * height) as usize;
-    let hglobal = GlobalAlloc(GMEM_MOVEABLE, pixels_size);
-    if hglobal.is_null() {
-        log::info!("[pasteboard] CF_BITMAP: GlobalAlloc failed");
-        let _ = SelectObject(mem_dc, old_bitmap);
-        let _ = DeleteDC(mem_dc);
-        return None;
-    }
+    let hglobal = match GlobalAlloc(GMEM_MOVEABLE, pixels_size) {
+        Ok(h) => h,
+        Err(_) => {
+            log::info!("[pasteboard] CF_BITMAP: GlobalAlloc failed");
+            let _ = SelectObject(mem_dc, old_bitmap);
+            let _ = DeleteDC(mem_dc);
+            return None;
+        }
+    };
 
-    let pixels = std::slice::from_raw_parts_mut(GlobalLock(hglobal) as *mut u8, pixels_size);
+    let pixels_ptr = GlobalLock(hglobal);
     let lines = GetDIBits(
         mem_dc,
         hbitmap,
         0,
         height,
-        Some(pixels),
+        Some(pixels_ptr),
         &mut bmi,
         DIB_RGB_COLORS,
     );
+    let pixels = std::slice::from_raw_parts(pixels_ptr as *const u8, pixels_size).to_vec();
     let _ = GlobalUnlock(hglobal);
 
     let _ = SelectObject(mem_dc, old_bitmap);
     let _ = DeleteDC(mem_dc);
     let _ = DeleteObject(HBITMAP(handle.0 as _));
-    let _ = GlobalFree(hglobal);
+    let _ = GlobalFree(Some(hglobal));
 
     if lines == 0 {
         log::info!("[pasteboard] CF_BITMAP: GetDIBits returned 0 lines");
@@ -448,7 +451,7 @@ unsafe fn try_read_cf_enhmetafile() -> Option<DragContent> {
 
     let mut buf = vec![0u8; size as usize];
     let actual = GetEnhMetaFileBits(hemf, Some(&mut buf));
-    let _ = DeleteEnhMetaFile(hemf);
+    let _ = DeleteEnhMetaFile(Some(hemf));
 
     if actual != size {
         log::info!("[pasteboard] CF_ENHMETAFILE: GetEnhMetaFileBits returned {} != {}", actual, size);
