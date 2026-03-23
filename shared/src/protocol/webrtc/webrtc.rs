@@ -256,8 +256,6 @@ impl WebRtc {
                 ordered: false,
                 max_retransmits: None
             })
-            .udp_reader_buffer_size(1024 * 1024 * 8)
-            .udp_writer_buffer_size(1024 * 1024 * 8)
             .add_unreliable_channel(Some(MIN_BUFFER_SIZE))
             .add_unreliable_channel(Some(MIN_BUFFER_SIZE))
             .add_unreliable_channel(Some(MIN_BUFFER_SIZE))
