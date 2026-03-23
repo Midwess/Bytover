@@ -5661,7 +5661,7 @@ dependencies = [
 [[package]]
 name = "matchbox_protocol"
 version = "0.12.0"
-source = "git+https://github.com/Midwess/matchbox.git?branch=main#4c5fee1768893f4846ffbcd2b7a0afdac859379a"
+source = "git+https://github.com/Midwess/matchbox.git?branch=main#cb747c0dc76edbc4e777054cdc52363939594215"
 dependencies = [
  "bincode 2.0.1",
  "cfg-if 1.0.4",
@@ -5673,7 +5673,7 @@ dependencies = [
 [[package]]
 name = "matchbox_socket"
 version = "0.12.0"
-source = "git+https://github.com/Midwess/matchbox.git?branch=main#4c5fee1768893f4846ffbcd2b7a0afdac859379a"
+source = "git+https://github.com/Midwess/matchbox.git?branch=main#cb747c0dc76edbc4e777054cdc52363939594215"
 dependencies = [
  "async-compat",
  "async-trait",
@@ -5694,7 +5694,9 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
+ "socket2 0.5.10",
  "thiserror 2.0.17",
+ "tokio",
  "tokio-util",
  "wasm-bindgen",
  "wasm-bindgen-futures",
