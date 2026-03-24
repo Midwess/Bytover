@@ -1,16 +1,17 @@
+mod client;
+mod client_manager;
 mod locator;
-mod scope_key;
-mod signaller;
-mod websocket;
+mod server;
 mod turn_manager;
 mod turn_server_registry;
 
+use std::sync::Arc;
+
 use crate::locator::LocatorServer;
-use crate::websocket::SignallingServer;
+use crate::server::SignallingServer;
 use crate::turn_manager::TurnManager;
 use core_services::logger;
 use devlog_sdk::distributed_id::init_scoped_id_generator;
-use std::sync::Arc;
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
@@ -25,10 +26,7 @@ async fn main() {
     };
     let turn_manager = std::sync::Arc::new(turn_manager);
     let turn_registry = turn_manager.get_registry();
-
-    let scope_task = signaller::Signaller::new();
-    let scope_request_tx = scope_task.request_tx();
-    let signalling_server = SignallingServer::new(scope_request_tx, Arc::clone(&turn_manager));
+    let signalling_server = SignallingServer::new(3003, "localhost".to_string(), Arc::clone(&turn_manager));
     let locator_server = LocatorServer::new();
 
     tokio::select! {
@@ -37,9 +35,6 @@ async fn main() {
         }
         result = locator_server.run() => {
             log::info!("Locator server stopped: {:?}", result);
-        }
-        result = scope_task.run() => {
-            log::info!("Scope task stopped: {:?}", result);
         }
         _ = turn_registry.run() => {
             log::info!("TURN registry stopped");

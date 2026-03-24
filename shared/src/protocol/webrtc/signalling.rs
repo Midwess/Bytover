@@ -12,8 +12,6 @@ use n0_future::time::Instant;
 use schema::devlog::bitbridge::peer_message_body::Response;
 use schema::devlog::rpc_signalling::server::{
     AnswerMessage,
-    IceCandidate,
-    IceCandidateUpdateMessage,
     IceConfig,
     JoinMessage,
     LeftMessage,
@@ -248,10 +246,6 @@ impl TryFrom<SignallingPeerRequest> for Message {
                 };
 
                 match signal {
-                    PeerSignal::IceCandidate(ice) => {
-                        let ice_msg = IceCandidate::from(ice);
-                        msg.ice_candidate_update = Some(IceCandidateUpdateMessage { ice_candidates: ice_msg });
-                    }
                     PeerSignal::Offer { offer, .. } => {
                         msg.offer = Some(OfferMessage {
                             sdp: offer,
@@ -290,13 +284,6 @@ impl TryFrom<SignallingPeerResponse> for PeerEvent {
             return Ok(Self::NewPeer {
                 id: peer_id,
                 ice_config: join_msg.ice_config.map(create_matchbox_ice_config)
-            })
-        } else if let Some(ice_msg) = value.ice_candidate_update {
-            let ice = ice_msg.ice_candidates.as_string();
-            let signal = PeerSignal::IceCandidate(ice);
-            return Ok(Self::Signal {
-                sender: sender_id,
-                data: signal
             })
         } else if let Some(offer_msg) = value.offer {
             let offer = offer_msg.sdp;

@@ -156,6 +156,7 @@ pub struct TurnManager {
     server_registry: Arc<TurnServerRegistry>,
     peer_turn_cache: Arc<Mutex<HashMap<PeerPair, IceConfig>>>,
     client_continents: Arc<Mutex<HashMap<String, Continent>>>,
+    client_relay_configs: Arc<Mutex<HashMap<String, IceConfig>>>,
     turn_secret: Option<String>,
     turn_realm: Option<String>,
 }
@@ -193,6 +194,7 @@ impl TurnManager {
             turn_realm: Some(std::env::var("BYTOVER_TURN_REALM").ok().unwrap_or("bytover.com".to_string())),
             peer_turn_cache: Arc::new(Mutex::new(HashMap::new())),
             client_continents: Arc::new(Mutex::new(HashMap::new())),
+            client_relay_configs: Arc::new(Mutex::new(HashMap::new())),
             turn_secret,
         })
     }
@@ -209,6 +211,46 @@ impl TurnManager {
     pub async fn unregister_client(&self, client_id: &str) {
         let mut continents = self.client_continents.lock().await;
         continents.remove(client_id);
+        let mut relay_configs = self.client_relay_configs.lock().await;
+        relay_configs.remove(client_id);
+    }
+
+    pub async fn assign_relay_for_client(
+        &self,
+        client_id: &str,
+        continent: Continent,
+    ) -> Result<IceConfig, TurnManagerErrors> {
+        let servers_vec = self.server_registry.get_servers().await?;
+
+        let stun_server = self.select_stun_for_peer(continent, &servers_vec);
+        let turn_server = self.select_turn_for_peer(continent, &servers_vec);
+
+        turn_server.counter.fetch_add(1, Ordering::Relaxed);
+
+        let turn_url_udp = format!("turn:{}:3478?transport=udp", turn_server.domain);
+        let turn_url_tcp = format!("turn:{}:3478?transport=tcp", turn_server.domain);
+
+        let (username, credential, _ttl) = self.generate_turn_credential(client_id, "relay")?;
+
+        let ice_config = IceConfig {
+            urls: vec![
+                format!("stun:{}", stun_server.domain),
+                turn_url_udp,
+                turn_url_tcp,
+            ],
+            username: Some(username),
+            credential: Some(credential),
+        };
+
+        let mut relay_configs = self.client_relay_configs.lock().await;
+        relay_configs.insert(client_id.to_string(), ice_config.clone());
+
+        Ok(ice_config)
+    }
+
+    pub async fn get_relay_config(&self, client_id: &str) -> Option<IceConfig> {
+        let relay_configs = self.client_relay_configs.lock().await;
+        relay_configs.get(client_id).cloned()
     }
 
     /// Generate TURN REST API credentials

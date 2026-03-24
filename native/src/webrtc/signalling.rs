@@ -2,7 +2,7 @@ use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
 use prost::Message as ProstMessage;
 use schema::devlog::rpc_signalling::server::{
-    AnswerMessage, IceCandidate, IceCandidateUpdateMessage, Message,
+    AnswerMessage, Message,
 };
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
@@ -192,25 +192,6 @@ impl SignalingClient {
             from_id,
             to_id: Some(to_id),
             answer: Some(AnswerMessage { sdp }),
-            ..Default::default()
-        };
-        self.send_message(&msg).await
-    }
-
-    pub async fn send_ice_candidate(
-        &self,
-        to_id: String,
-        candidate: String,
-        scopes: Vec<String>,
-        from_id: String,
-    ) -> Result<(), SignallingError> {
-        let msg = Message {
-            scopes,
-            from_id,
-            to_id: Some(to_id),
-            ice_candidate_update: Some(IceCandidateUpdateMessage {
-                ice_candidates: IceCandidate { candidate },
-            }),
             ..Default::default()
         };
         self.send_message(&msg).await
