@@ -297,10 +297,10 @@ impl Client {
             return;
         }
 
-        if let Some(to_id) = message.to_id.as_ref() &&
-            to_id.ne(&self.client_id())
-        {
-            return;
+        if let Some(to_id) = message.to_id.as_ref() {
+            if to_id.ne(&self.client_id()) {
+                return;
+            }
         }
 
         if message.join.is_some() || message.offer.is_some() {
@@ -422,9 +422,8 @@ impl SignallingServer {
 
         self.setup_gateway(&tcp_listener).await?;
 
-        let std_listener = tcp_listener.listener;
-        std_listener.set_nonblocking(true)?;
-        let listener = tokio::net::TcpListener::from_std(std_listener)?;
+        // Use the tokio TcpListener directly (find_tcp_listener returns tokio::net::TcpListener)
+        let listener = tcp_listener.listener;
 
         log::info!(
             target: "websocket",
@@ -475,9 +474,9 @@ impl SignallingServer {
     }
 
     pub async fn setup_gateway(&self, connection: &TcpConnection) -> Result<(), Box<dyn std::error::Error>> {
-        let api_gateway = KongGatewayAdminClient {
-            url: devlog_sdk::config::CONFIGS.kong.admin_url.clone()
-        };
+        let api_gateway = KongGatewayAdminClient::new(
+            devlog_sdk::config::CONFIGS.kong.admin_url.clone()
+        );
 
         let service = GatewayServiceBuilder::new()
             .http(connection.public_host.clone(), connection.port)

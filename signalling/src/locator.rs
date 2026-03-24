@@ -115,17 +115,21 @@ impl LocatorServer {
         let address = find_tcp_listener(Some(4000)).await?;
         self.setup_gateway(&address).await?;
 
+        // Bind a std TcpListener for actix-web (actix requires std::net::TcpListener)
+        let std_listener = std::net::TcpListener::bind(format!("[::]:{}", address.port))?;
+        std_listener.set_nonblocking(true)?;
+
         HttpServer::new(|| App::new().service(locate))
             .workers(4)
-            .listen(address.listener)?.run().await?;
+            .listen(std_listener)?.run().await?;
 
         Ok(())
     }
 
     pub async fn setup_gateway(&self, connection: &TcpConnection) -> Result<(), LocatorErrors> {
-        let api_gateway = KongGatewayAdminClient {
-            url: devlog_sdk::config::CONFIGS.kong.admin_url.clone()
-        };
+        let api_gateway = KongGatewayAdminClient::new(
+            devlog_sdk::config::CONFIGS.kong.admin_url.clone()
+        );
 
         let service = GatewayServiceBuilder::new()
             .http(connection.public_host.clone(), connection.port)

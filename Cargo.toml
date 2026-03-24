@@ -8,6 +8,7 @@ members = [
     "native",
     "web-next/wasm",
     "web-next/worker",
+    "signalling"
 ]
 
 resolver = "2"
@@ -75,6 +76,14 @@ tokio-cron-scheduler = { version = "0.15.1", default-features = false }
 str0m = "0.17.0"
 tokio-tungstenite = "0.29.0"
 socket2 = "0.6.3"
+sha1 = "0.10.6"
+base64 = "0.22.1"
+hmac = "0.12.1"
+actix-web = "4.11.0"
+h3ron = "0.18.0"
+geo-types = "0.7"
+maxminddb = "0.24"
+jsonwebtoken = "9.3"
 
 [workspace.metadata.bin]
 cargo-xcode = { version = "=1.7.0" }
