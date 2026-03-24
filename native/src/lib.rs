@@ -11,6 +11,7 @@ pub mod di_container;
 pub mod native;
 pub mod network;
 pub mod repository;
+pub mod webrtc;
 
 use crate::core_api_impl::bridge::CoreBridgeImpl;
 use crate::native::message_to_shell::{MessageToShell, MessageToShellResponse};
