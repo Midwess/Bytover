@@ -78,8 +78,6 @@ impl WebRtcServer {
         let mut buf = vec![0u8; 65535];
 
         let mut connect_futs: FuturesUnordered<_> = FuturesUnordered::new();
-        let mut pending_peers: HashMap<usize, String> = HashMap::new();
-        let mut next_conn_id: usize = 0;
 
         loop {
             tokio::select! {
@@ -92,31 +90,25 @@ impl WebRtcServer {
                         }
                     };
 
-                    let from_id = msg.from_id.clone();
-
                     if let Some(offer) = msg.offer {
-                        let conn_id = next_conn_id;
-                        next_conn_id += 1;
-                        pending_peers.insert(conn_id, from_id.clone());
+                        let from_id = msg.from_id.clone();
                         let ices = self.gathering_ices().await?;
                         let client_socket = Arc::clone(&socket);
                         connect_futs.push(async move {
-                            (conn_id, WebRtcClient::connect(offer, ices, client_socket, local_addr).await)
+                            (from_id, WebRtcClient::connect(offer, ices, client_socket).await)
                         });
                     }
                 }
 
-                Some((conn_id, result)) = connect_futs.next() => {
-                    if let Some(peer_id) = pending_peers.remove(&conn_id) {
-                        match result {
-                            Ok(client) => {
-                                log::info!("[webrtc-server] Client {peer_id} connected");
-                                self.clients.insert(peer_id, client);
-                                log::info!("[webrtc-server] Active clients: {}", self.clients.len());
-                            }
-                            Err(e) => {
-                                log::error!("[webrtc-server] Client {peer_id} connection failed: {e}");
-                            }
+                Some((peer_id, result)) = connect_futs.next() => {
+                    match result {
+                        Ok(client) => {
+                            log::info!("[webrtc-server] Client {peer_id} connected");
+                            self.clients.insert(peer_id, client);
+                            log::info!("[webrtc-server] Active clients: {}", self.clients.len());
+                        }
+                        Err(e) => {
+                            log::error!("[webrtc-server] Client {peer_id} connection failed: {e}");
                         }
                     }
                 }
