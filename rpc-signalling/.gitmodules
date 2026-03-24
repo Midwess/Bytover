@@ -1,0 +1,9 @@
+[submodule "devlog-sdk"]
+	path = devlog-sdk
+	url = git@github.com:Midwess/devlog-sdk.git
+[submodule "core-services"]
+	path = core-services
+	url = git@github.com:Midwess/core-services.git
+[submodule "schema"]
+	path = schema
+	url = git@github.com:Midwess/schema.git

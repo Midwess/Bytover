@@ -4,6 +4,7 @@ use prost::Message as ProstMessage;
 use schema::devlog::rpc_signalling::server::{
     AnswerMessage, IceCandidate, IceCandidateUpdateMessage, Message,
 };
+use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use thiserror::Error;
@@ -40,7 +41,7 @@ pub struct SignalingClient {
     port: u16,
     ssl: bool,
     sink: Arc<Mutex<Option<SignallingSink>>>,
-    msg_rx: Mutex<mpsc::Receiver<Result<Message, SignallingError>>>,
+    msg_rx: Arc<Mutex<Option<mpsc::Receiver<Result<Message, SignallingError>>>>>,
     shutdown_tx: Arc<tokio::sync::watch::Sender<bool>>,
 }
 
@@ -48,13 +49,12 @@ impl SignalingClient {
     pub fn new(host: String, port: u16, ssl: bool) -> Self {
         let (shutdown_tx, _) = tokio::sync::watch::channel(false);
         let (msg_tx, msg_rx) = mpsc::channel(128);
-        let msg_rx = Mutex::new(msg_rx);
         Self {
             host,
             port,
             ssl,
             sink: Arc::new(Mutex::new(None)),
-            msg_rx,
+            msg_rx: Arc::new(Mutex::new(Some(msg_rx))),
             shutdown_tx: Arc::new(shutdown_tx),
         }
     }
@@ -72,15 +72,16 @@ impl SignalingClient {
         let url = self.url();
         let shutdown_rx = Arc::clone(&self.shutdown_tx).subscribe();
         let sink = Arc::clone(&self.sink);
+        let msg_rx = Arc::clone(&self.msg_rx);
         let msg_tx = {
-            let mut guard = self.msg_rx.lock().unwrap();
             let (tx, new_rx) = mpsc::channel(128);
-            *guard = new_rx;
+            let mut guard = msg_rx.lock().unwrap();
+            *guard = Some(new_rx);
             tx
         };
 
         tokio::spawn(async move {
-            Self::run_loop(url, shutdown_rx, sink, msg_tx).await;
+            Self::run_loop(url, shutdown_rx, sink, msg_rx, msg_tx).await;
         });
     }
 
@@ -88,6 +89,7 @@ impl SignalingClient {
         url: String,
         mut shutdown_rx: tokio::sync::watch::Receiver<bool>,
         sink: Arc<Mutex<Option<SignallingSink>>>,
+        msg_rx: Arc<Mutex<Option<mpsc::Receiver<Result<Message, SignallingError>>>>>,
         msg_tx: mpsc::Sender<Result<Message, SignallingError>>,
     ) {
         let mut backoff = Duration::from_secs(1);
@@ -173,7 +175,8 @@ impl SignalingClient {
     }
 
     pub async fn next(&self) -> Result<Message, SignallingError> {
-        let mut rx = self.msg_rx.lock().unwrap();
+        let mut rx_guard = self.msg_rx.lock().unwrap();
+        let rx = rx_guard.as_mut().ok_or(SignallingError::NotConnected)?;
         rx.recv().await.ok_or(SignallingError::Stopped)?
     }
 
@@ -182,7 +185,6 @@ impl SignalingClient {
         to_id: String,
         sdp: String,
         scopes: Vec<String>,
-        version: String,
         from_id: String,
     ) -> Result<(), SignallingError> {
         let msg = Message {
@@ -190,7 +192,6 @@ impl SignalingClient {
             from_id,
             to_id: Some(to_id),
             answer: Some(AnswerMessage { sdp }),
-            version,
             ..Default::default()
         };
         self.send_message(&msg).await
@@ -201,7 +202,6 @@ impl SignalingClient {
         to_id: String,
         candidate: String,
         scopes: Vec<String>,
-        version: String,
         from_id: String,
     ) -> Result<(), SignallingError> {
         let msg = Message {
@@ -211,7 +211,6 @@ impl SignalingClient {
             ice_candidate_update: Some(IceCandidateUpdateMessage {
                 ice_candidates: IceCandidate { candidate },
             }),
-            version,
             ..Default::default()
         };
         self.send_message(&msg).await
@@ -237,6 +236,19 @@ impl SignalingClient {
 
     pub fn decode_message(data: &[u8]) -> Result<Message, SignallingError> {
         Message::decode(data).map_err(SignallingError::from)
+    }
+}
+
+impl Clone for SignalingClient {
+    fn clone(&self) -> Self {
+        Self {
+            host: self.host.clone(),
+            port: self.port,
+            ssl: self.ssl,
+            sink: Arc::clone(&self.sink),
+            msg_rx: Arc::clone(&self.msg_rx),
+            shutdown_tx: Arc::clone(&self.shutdown_tx),
+        }
     }
 }
 

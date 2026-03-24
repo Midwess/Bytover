@@ -1,13 +1,13 @@
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::time::Instant;
 
 use str0m::change::SdpOffer;
 use str0m::net::{Protocol, Receive};
 use str0m::{Candidate, Event, IceConnectionState, Input, Output, Rtc, RtcConfig};
 use thiserror::Error;
-use tokio::net::UdpSocket;
 
+use crate::webrtc::signalling::SignalingClient;
+use crate::webrtc::socket::SyncUdpSocket;
 use schema::devlog::rpc_signalling::server::OfferMessage;
 
 #[derive(Debug, Error)]
@@ -20,6 +20,9 @@ pub enum WebRtcClientError {
 
     #[error("ICE parse error: {0}")]
     IceParse(String),
+
+    #[error("Signalling error: {0}")]
+    Signalling(String),
 }
 
 pub struct InboundUdp {
@@ -29,14 +32,19 @@ pub struct InboundUdp {
 
 pub struct WebRtcClient {
     rtc: Rtc,
-    socket: Arc<UdpSocket>,
+    socket: SyncUdpSocket,
+    signalling: SignalingClient,
+    peer_id: String,
 }
 
 impl WebRtcClient {
     pub async fn connect(
         offer_message: OfferMessage,
         gathered_ices: Vec<Candidate>,
-        socket: Arc<UdpSocket>,
+        socket: SyncUdpSocket,
+        signalling: SignalingClient,
+        peer_id: String,
+        scopes: Vec<String>,
     ) -> Result<Self, WebRtcClientError> {
         let mut rtc = RtcConfig::new()
             .set_ice_lite(true)
@@ -49,16 +57,23 @@ impl WebRtcClient {
         let offer = SdpOffer::from_sdp_string(&offer_message.sdp)
             .map_err(|e| WebRtcClientError::SdpParse(format!("{e}")))?;
 
-        let _answer = rtc
+        let answer = rtc
             .sdp_api()
             .accept_offer(offer)
             .map_err(WebRtcClientError::Rtc)?;
 
-        let local_addr = socket.local_addr().map_err(|e| WebRtcClientError::IceParse(format!("local_addr error: {e}")))?;
+        signalling
+            .send_answer(peer_id.clone(), answer.to_sdp_string(), scopes, peer_id.clone())
+            .await
+            .map_err(|e| WebRtcClientError::Signalling(format!("{e}")))?;
+
+        let local_addr = socket.local_addr();
 
         let mut client = Self {
             rtc,
             socket,
+            signalling,
+            peer_id,
         };
 
         let mut buf = vec![0u8; 65536];

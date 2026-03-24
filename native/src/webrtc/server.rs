@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::sync::Arc;
 use futures_util::stream::FuturesUnordered;
 use futures_util::StreamExt;
 use str0m::net::Transmit;
@@ -11,6 +10,7 @@ use tokio::sync::mpsc;
 
 use crate::webrtc::client::WebRtcClient;
 use crate::webrtc::signalling::SignalingClient;
+use crate::webrtc::socket::SyncUdpSocket;
 
 #[derive(Debug, Error)]
 pub enum WebRtcServerError {
@@ -67,8 +67,8 @@ impl WebRtcServer {
     }
 
     pub async fn run(&mut self) -> Result<(), WebRtcServerError> {
-        let socket = Arc::new(UdpSocket::bind(self.config.bind_addr).await?);
-        let local_addr = socket.local_addr()?;
+        let socket = SyncUdpSocket::new(UdpSocket::bind(self.config.bind_addr).await?);
+        let local_addr = socket.local_addr();
         log::info!("[webrtc-server] UDP socket bound on {local_addr}");
 
         self.signalling.start();
@@ -93,9 +93,11 @@ impl WebRtcServer {
                     if let Some(offer) = msg.offer {
                         let from_id = msg.from_id.clone();
                         let ices = self.gathering_ices().await?;
-                        let client_socket = Arc::clone(&socket);
+                        let client_socket = socket.clone();
+                        let signalling = self.signalling.clone();
+                        let scopes = self.config.scopes.clone();
                         connect_futs.push(async move {
-                            (from_id, WebRtcClient::connect(offer, ices, client_socket).await)
+                            (from_id.clone(), WebRtcClient::connect(offer, ices, client_socket, signalling, from_id, scopes).await)
                         });
                     }
                 }
