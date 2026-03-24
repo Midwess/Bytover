@@ -112,21 +112,7 @@ impl TurnServerRegistry {
             new_server_set.insert(server);
         }
 
-        let removed_servers: Vec<_> = discovered.difference(&new_server_set).cloned().collect();
-
-        if !added_servers.is_empty() {
-            // log::info!("Discovered {} new TURN server(s)", added_servers.len());
-            for server in &added_servers {
-                // log::info!("  + {} -> {} ({:?})", server.domain, server.ip, server.continent);
-            }
-        }
-
-        if !removed_servers.is_empty() {
-            // log::info!("Removed {} TURN server(s)", removed_servers.len());
-            for server in &removed_servers {
-                // log::info!("  - {} -> {} ({:?})", server.domain, server.ip, server.continent);
-            }
-        }
+        let _removed_servers: Vec<_> = discovered.difference(&new_server_set).cloned().collect();
 
         *discovered = new_server_set;
         Ok(())
@@ -140,16 +126,6 @@ impl TurnServerRegistry {
                 _ = ticker.tick() => {
                     if let Err(e) = self.discover_turn_servers().await {
                         log::debug!("TURN discovery error: {}", e);
-                    }
-
-                    let servers = self.discovered_servers.lock().await;
-                    if servers.is_empty() {
-                        // log::info!("Current TURN server list: (empty)");
-                    } else {
-                        // log::info!("Current TURN server list ({} servers):", servers.len());
-                        for server in servers.iter() {
-                            // log::info!("  - {} -> {} ({:?})", server.domain, server.ip, server.continent);
-                        }
                     }
                 }
             }

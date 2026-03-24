@@ -35,10 +35,6 @@ impl SignallingServer {
         }
     }
 
-    pub fn client_manager(&self) -> Arc<ClientManager> {
-        Arc::clone(&self.client_manager)
-    }
-
     pub async fn run(self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let geoip_reader = self.geoip_reader.clone();
         let port = self.port;

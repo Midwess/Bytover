@@ -52,28 +52,6 @@ impl Continent {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct PeerPair {
-    peer1: String,
-    peer2: String,
-}
-
-impl PeerPair {
-    pub fn new(peer1: String, peer2: String) -> Self {
-        // peer1 is the main peer (from), peer2 is the target (to)
-        // (p1, p2) and (p2, p1) are now different
-        Self { peer1, peer2 }
-    }
-}
-
-impl Hash for PeerPair {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        // Hash both peers in the established order
-        self.peer1.hash(state);
-        self.peer2.hash(state);
-    }
-}
-
 pub fn detect_continent(ip: &str, reader: Option<&maxminddb::Reader<Vec<u8>>>) -> Continent {
     if let Some(reader) = reader {
         if let Ok(addr) = ip.parse::<IpAddr>() {
@@ -120,8 +98,6 @@ pub enum TurnManagerErrors {
     GeoIpError(#[from] maxminddb::MaxMindDBError),
     #[error("BYTOVER_TURN_SECRET not configured")]
     NoTurnSecret,
-    #[error("BYTOVER_TURN_SECRET not configured")]
-    NoTurnRealm,
     #[error("JWT generation error: {0}")]
     JwtError(String),
     #[error("Registry error: {0}")]
@@ -154,11 +130,9 @@ impl Eq for TurnServer {}
 
 pub struct TurnManager {
     server_registry: Arc<TurnServerRegistry>,
-    peer_turn_cache: Arc<Mutex<HashMap<PeerPair, IceConfig>>>,
     client_continents: Arc<Mutex<HashMap<String, Continent>>>,
     client_relay_configs: Arc<Mutex<HashMap<String, IceConfig>>>,
     turn_secret: Option<String>,
-    turn_realm: Option<String>,
 }
 
 impl TurnManager {
@@ -191,8 +165,6 @@ impl TurnManager {
 
         Ok(Self {
             server_registry,
-            turn_realm: Some(std::env::var("BYTOVER_TURN_REALM").ok().unwrap_or("bytover.com".to_string())),
-            peer_turn_cache: Arc::new(Mutex::new(HashMap::new())),
             client_continents: Arc::new(Mutex::new(HashMap::new())),
             client_relay_configs: Arc::new(Mutex::new(HashMap::new())),
             turn_secret,
@@ -298,88 +270,6 @@ impl TurnManager {
         let password = general_purpose::STANDARD.encode(mac.finalize().into_bytes());
 
         Ok((username, password, ttl))
-    }
-
-    pub async fn get_turn_for_message(&self, from_id: &str, to_id: Option<&str>) -> Option<IceConfig> {
-        let to_id = to_id?;
-        let continents = self.client_continents.lock().await;
-
-        let from_continent = continents.get(from_id).copied()?;
-        let to_continent = continents.get(to_id).copied()?;
-
-        drop(continents);
-
-        match self.closest_turn_for_peers(
-            from_id.to_string(),
-            from_continent,
-            to_id.to_string(),
-            to_continent
-        ).await {
-            Ok(config) => Some(config),
-            Err(e) => {
-                log::warn!("Failed to get TURN config for peers {:?} {:?}: {:?}", from_id, to_id, e);
-                None
-            }
-        }
-    }
-
-    pub async fn closest_turn_for_peers(&self, peer1_id: String, peer1_continent: Continent, peer2_id: String, peer2_continent: Continent) -> Result<IceConfig, TurnManagerErrors> {
-        let peer_pair = PeerPair::new(peer1_id.clone(), peer2_id.clone());
-        let mut cache = self.peer_turn_cache.lock().await;
-        if let Some(cached_config) = cache.get(&peer_pair) {
-            log::debug!("Using cached ICE config for peer pair");
-            return Ok(cached_config.clone());
-        }
-
-        let servers_vec = self.server_registry.get_servers().await?;
-
-        let peer1_stun_server = self.select_stun_for_peer(peer1_continent, &servers_vec);
-
-        let peer1_turn_server = self.select_turn_for_peer(peer1_continent, &servers_vec);
-
-        let peer2_stun_server = self.select_stun_for_peer(peer2_continent, &servers_vec);
-
-        let peer2_turn_server = self.select_turn_for_peer(peer2_continent, &servers_vec);
-
-        let selected_turn_server = if peer1_turn_server.counter.load(Ordering::Relaxed)
-            <= peer2_turn_server.counter.load(Ordering::Relaxed) {
-            peer1_turn_server.counter.fetch_add(1, Ordering::Relaxed);
-            peer1_turn_server
-        } else {
-            peer2_turn_server.counter.fetch_add(1, Ordering::Relaxed);
-            peer2_turn_server
-        };
-
-        let turn_url_udp = format!("turn:{}:3478?transport=udp", selected_turn_server.domain);
-        let turn_url_tcp = format!("turn:{}:3478?transport=tcp", selected_turn_server.domain);
-
-        let (username1, credential1, _ttl1) = self.generate_turn_credential(
-            &peer1_id,
-            &peer2_id,
-        )?;
-
-        let (username2, credential2, _ttl2) = self.generate_turn_credential(
-            &peer2_id,
-            &peer1_id,
-        )?;
-
-        let ice_config1 = IceConfig {
-            urls: vec![format!("stun:{}", peer1_stun_server.domain), turn_url_udp.clone(), turn_url_tcp.clone()],
-            username: Some(username1.clone()),
-            credential: Some(credential1.clone()),
-        };
-
-        let ice_config2 = IceConfig {
-            urls: vec![format!("stun:{}", peer2_stun_server.domain), turn_url_udp, turn_url_tcp],
-            username: Some(username2.clone()),
-            credential: Some(credential2.clone()),
-        };
-
-        let result = ice_config1.clone();
-        cache.insert(PeerPair::new(peer1_id.clone(), peer2_id.clone()), ice_config1);
-        cache.insert(PeerPair::new(peer2_id, peer1_id), ice_config2);
-
-        Ok(result)
     }
 
     #[inline]
