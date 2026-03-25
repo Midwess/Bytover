@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-use crate::entities::finding_scope::FindingScope;
 use crate::entities::peer::Peer;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -15,7 +14,6 @@ pub enum P2PConnectionState {
 pub enum TransferTarget {
     P2P {
         from_peer: Option<Peer>,
-        scope: FindingScope,
         connection_state: P2PConnectionState
     },
     Internet {

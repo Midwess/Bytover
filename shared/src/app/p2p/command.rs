@@ -36,7 +36,6 @@ impl AppCommand {
                 avatar_url: user.avatar,
                 email: Some(user.email),
                 device,
-                scopes: vec![]
             },
             None => Peer {
                 id: peer_id.clone(),
@@ -44,7 +43,6 @@ impl AppCommand {
                 avatar_url: self.run(RpcOperation::random_avatar()).await.unwrap_or_default(),
                 email: None,
                 device,
-                scopes: vec![]
             }
         }
     }
@@ -104,10 +102,6 @@ impl AppCommand {
                     log::info!(target: "nearby", "Nearby server stopped, stop server");
                     self.notify_event(P2PEvent::ClearNearbyPeers);
                     break;
-                }
-                CoreOperationOutput::P2P(P2POperationOutput::ScopeStateChanged { scope_id, state, owner_id }) => {
-                    log::info!(target: "nearby", "Scope state changed: {} -> {:?}, owner: {:?}", scope_id, state, owner_id);
-                    self.notify_event(P2PEvent::ScopeStateUpdated { scope_id, state, owner_id });
                 }
                 CoreOperationOutput::None => {}
                 _ => {
@@ -171,9 +165,6 @@ impl AppCommand {
                 CoreOperationOutput::P2P(P2POperationOutput::NearbyServerStopped) => {
                     log::info!("Nearby server stopped, stop peer connection");
                     break;
-                }
-                CoreOperationOutput::P2P(P2POperationOutput::ScopeStateChanged { scope_id, state, owner_id }) => {
-                    self.notify_event(P2PEvent::ScopeStateUpdated { scope_id, state, owner_id });
                 }
                 CoreOperationOutput::Error(error) => {
                     log::error!("Connection error: {error:?}");

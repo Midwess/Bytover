@@ -206,7 +206,7 @@ pub trait NativePersistent: Send + Sync {
             }
             PersistentOperation::DeviceAlias(DeviceAliasPersistentOperation::GetAll) => {
                 let aliases = self.device_alias_repository().get_all_aliases().await?;
-                Ok(CoreOperationOutput::Aliases(aliases))
+                Ok(CoreOperationOutput::DeviceAliases(aliases))
             }
             PersistentOperation::DeviceAlias(DeviceAliasPersistentOperation::ClearAll) => {
                 self.device_alias_repository().clear_all().await?;

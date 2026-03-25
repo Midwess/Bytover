@@ -791,7 +791,9 @@ impl AppModule<BitBridge> for TransferModule {
                 Some(ReceiveSessionViewModel {
                     is_cloud: it.target.is_public(),
                     is_scope_online: match &it.target {
-                        TransferTarget::P2P { scope, .. } => scope.is_online(),
+                        TransferTarget::P2P { connection_state, .. } => {
+                            matches!(connection_state, crate::entities::target::P2PConnectionState::Connected)
+                        },
                         _ => false
                     },
                     id: it.order_id.to_string(),

@@ -46,7 +46,7 @@ where
             }
             RpcOperation::GetDeviceAliases => {
                 let aliases = self.app_server().get_device_aliases().await?;
-                Ok(CoreOperationOutput::Aliases(aliases))
+                Ok(CoreOperationOutput::DeviceAliases(aliases))
             }
         }
     }

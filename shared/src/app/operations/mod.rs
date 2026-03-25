@@ -13,7 +13,6 @@ use std::time::Duration;
 use crate::app::operations::device::GeoLocation;
 use crate::app::shelf::module::ResourceSelection;
 use crate::entities::device::DeviceInfo;
-use crate::entities::finding_scope::FindingScope;
 use crate::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use crate::entities::peer::Peer;
 use crate::entities::session::Session;
@@ -37,7 +36,7 @@ use webview::WebViewOperation;
 
 use super::AppEvent;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, From)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, From, TryFrom, TryInto)]
 pub enum CoreOperation {
     WebView(WebViewOperation),
     Device(DeviceOperation),
@@ -72,14 +71,13 @@ pub enum CoreOperationOutput {
     GeoLocation(GeoLocation),
     DeviceInfo(DeviceInfo),
     ThumbnailPng(Vec<u8>),
-    FindingScopes(Vec<FindingScope>),
     Bool(bool),
     TransferSessions(Vec<TransferSession>),
     LocalResources(Vec<LocalResource>),
     LocalResource(LocalResource),
     Shelf(Shelf),
     Shelves(Vec<Shelf>),
-    Aliases(Vec<String>),
+    DeviceAliases(Vec<String>),
     ResourcePathMap(std::collections::HashMap<u64, LocalResourcePath>),
     ZipDownloadPaths(ZipDownloadPaths),
     ResourceSelections(Vec<ResourceSelection>),

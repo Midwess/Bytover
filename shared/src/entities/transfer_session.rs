@@ -1,7 +1,6 @@
 use std::fmt::Display;
 
 use crate::app::core::model_events::{ConnectionRecovered, SessionLoadError, UpdateAction};
-use crate::entities::finding_scope::FindingScope;
 use crate::entities::local_resource::{LocalResource, LocalResourcePath};
 use crate::entities::peer::{Peer, ResourceReceivedPeer};
 use crate::entities::target::{P2PConnectionState, TransferTarget};
@@ -11,7 +10,6 @@ use chrono::Utc;
 use core_services::db::repository::abstraction::id::DbId;
 use core_services::utils::cancellation::CancellationToken;
 use schema::devlog::bitbridge::P2pTransferSessionMessage;
-use schema::devlog::rpc_signalling::server::ScopeState;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
@@ -277,7 +275,6 @@ impl TransferSession {
             transfer_type,
             target: TransferTarget::P2P {
                 from_peer: None,
-                scope: FindingScope::new(&signalling_key),
                 connection_state: P2PConnectionState::NotConnected
             },
             from_user: User {
@@ -326,14 +323,12 @@ impl TransferSession {
     pub fn owner_connected(&mut self, peer: Peer) {
         if let TransferTarget::P2P {
             from_peer,
-            scope,
             connection_state,
             ..
         } = &mut self.target
         {
             from_peer.replace(peer);
             *connection_state = P2PConnectionState::Connected;
-            scope.update_state(ScopeState::Online);
         }
 
         self.connection_error = None;
@@ -343,12 +338,11 @@ impl TransferSession {
         if let TransferTarget::P2P {
             from_peer,
             connection_state,
-            scope
+            ..
         } = &mut self.target
         {
             from_peer.take();
             *connection_state = P2PConnectionState::NotConnected;
-            scope.update_state(ScopeState::Offline);
             self.is_required_password = false;
         }
 
@@ -584,16 +578,9 @@ impl TransferSession {
         }
 
         if let TransferTarget::P2P {
-            connection_state, scope, ..
+            connection_state, ..
         } = &self.target
         {
-            if !scope.is_online() {
-                return TransferSessionStatus::Initializing {
-                    loading_state: Some("Waiting for the session owner to come online...".to_owned()),
-                    loading_error: None
-                };
-            }
-
             match connection_state {
                 P2PConnectionState::NotConnected => {
                     return TransferSessionStatus::Initializing {

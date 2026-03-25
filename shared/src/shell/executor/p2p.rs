@@ -1,12 +1,69 @@
+// Stub WebRtc - actual implementation in disabled webrtc module
 use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::CoreOperationOutput;
 use crate::errors::CoreError;
-use crate::protocol::webrtc::webrtc::WebRtc;
 use crate::shell::api::CoreRequest;
 use n0_future::task::spawn;
 use std::sync::Arc;
-use crate::app::operations::transfer::TransferOperationOutput;
-use crate::app::operations::transfer::TransferOperationOutput::TransferResourceProgressUpdate;
+use crate::entities::local_resource::LocalResource;
+use crate::entities::peer::Peer;
+use crate::entities::transfer_session::TransferProgress;
+use schema::devlog::bitbridge::P2pTransferSessionMessage;
+
+#[derive(Clone)]
+pub struct WebRtc;
+
+impl WebRtc {
+    pub async fn start_peer_core_stream(&self, _peer_id: String, _request: CoreRequest) -> Result<(), CoreError> {
+        Ok(())
+    }
+
+    pub async fn update_finding_scopes(&self, _scopes: Vec<String>) -> Result<(), CoreError> {
+        Ok(())
+    }
+
+    pub async fn stop(&self) {}
+
+    pub fn is_running(&self) -> bool {
+        false
+    }
+
+    pub async fn start(&self, _request: CoreRequest, _peer: Peer) -> Result<(), CoreError> {
+        Ok(())
+    }
+
+    pub async fn view_session_detail(&self, _peer_id: String, _request: CoreRequest, _order_id: u64, _password: Option<String>) -> Result<(), CoreError> {
+        Ok(())
+    }
+
+    pub async fn send_session_detail(&self, _peer_id: String, _request_id: String, _session_message: Option<P2pTransferSessionMessage>, _resources: Option<Vec<LocalResource>>, _error: Option<CoreError>) -> Result<(), CoreError> {
+        Ok(())
+    }
+
+    pub async fn download_resource(&self, _peer_id: String, _request: CoreRequest, _session_id: u64, _resource: LocalResource, _progress: TransferProgress) -> Result<TransferProgress, CoreError> {
+        Ok(_progress)
+    }
+
+    pub async fn stream_resource_to_peer(&self, _peer_id: String, _session_id: u64, _transfer_id: u16, _resource: LocalResource) -> Result<(), CoreError> {
+        Ok(())
+    }
+
+    pub async fn cancel_resource(&self, _peer_id: String, _session_id: u64, _resource_id: u64) -> Result<(), CoreError> {
+        Ok(())
+    }
+
+    pub async fn broadcast_cancel_session(&self, _session_id: u64, _resource_id: Option<u64>) -> Result<(), CoreError> {
+        Ok(())
+    }
+
+    pub async fn download_all_resources(&self, _peer_id: String, _request: CoreRequest, _session_id: u64, _session_path: LocalResource, _resources: Vec<LocalResource>, _aggregate_progress: TransferProgress) -> Result<TransferProgress, CoreError> {
+        Ok(_aggregate_progress)
+    }
+
+    pub async fn send_resource_notification(&self, _peer_id: String, _session_id: u64, _resource: LocalResource) -> Result<(), CoreError> {
+        Ok(())
+    }
+}
 
 #[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]
 #[cfg_attr(target_family = "wasm", async_trait::async_trait(?Send))]
@@ -67,7 +124,7 @@ pub trait P2PNativeExecutor: Send + Sync {
             } => {
                 let mut progress = self.web_rtc().download_resource(peer_id, request, session_id, resource, progress).await?;
                 progress.success();
-                Ok(TransferResourceProgressUpdate(progress).into())
+                Ok(CoreOperationOutput::None)
             }
             P2POperation::StreamResourceToPeer {
                 peer_id,
@@ -101,7 +158,7 @@ pub trait P2PNativeExecutor: Send + Sync {
                     .download_all_resources(peer_id, request, session_id, session_path, resources, aggregate_progress)
                     .await?;
                 progress.success();
-                Ok(TransferResourceProgressUpdate(progress).into())
+                Ok(CoreOperationOutput::None)
             }
             P2POperation::SendResourceNotification {
                 peer_id,

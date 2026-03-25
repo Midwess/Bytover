@@ -5,12 +5,10 @@ use crux_core::Command;
 use serde::{Deserialize, Serialize};
 
 use crate::app::AppRequestBuilder;
-use crate::entities::finding_scope::FindingScope;
 use crate::entities::local_resource::LocalResource;
 use crate::entities::peer::Peer;
 use crate::entities::transfer_session::{TransferProgress, TransferSession};
 use crate::errors::CoreError;
-use schema::devlog::rpc_signalling::server::ScopeState;
 
 use super::CoreOperation;
 
@@ -18,7 +16,7 @@ use super::CoreOperation;
 pub enum P2POperation {
     StartNearbyServer(Peer),
     StopNearbyServer,
-    UpdateFindingScopes(Vec<FindingScope>),
+    UpdateFindingScopes(Vec<String>),
     PeerEvents(String),
     IsRunning,
     ViewSessionDetail {
@@ -100,11 +98,6 @@ pub enum P2POperationOutput {
         session_order_id: u64,
         resource: LocalResource,
         peer_id: String
-    },
-    ScopeStateChanged {
-        scope_id: String,
-        state: ScopeState,
-        owner_id: Option<String>
     }
 }
 
@@ -113,7 +106,7 @@ impl Operation for P2POperation {
 }
 
 impl P2POperation {
-    pub fn update_finding_scopes(scopes: Vec<FindingScope>) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
+    pub fn update_finding_scopes(scopes: Vec<String>) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
         Command::request_from_shell(CoreOperation::P2P(P2POperation::UpdateFindingScopes(scopes))).map(|it| it.result())
     }
 

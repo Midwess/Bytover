@@ -85,7 +85,7 @@ impl RpcOperation {
 
     pub fn get_device_aliases() -> AppRequestBuilder<impl Future<Output = Result<Vec<String>, CoreError>>> {
         Command::request_from_shell(CoreOperation::Rpc(RpcOperation::GetDeviceAliases)).map(|res| match res {
-            CoreOperationOutput::Aliases(aliases) => Ok(aliases),
+            CoreOperationOutput::DeviceAliases(aliases) => Ok(aliases),
             CoreOperationOutput::Error(error) => Err(error),
             _ => panic!("Invalid output for RpcOperation::GetDeviceAliases")
         })

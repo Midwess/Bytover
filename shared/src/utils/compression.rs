@@ -1,4 +1,5 @@
-use crate::protocol::webrtc::webrtc::MAX_BUFFER_SIZE;
+// Stub value - actual value was in disabled webrtc module
+const MAX_BUFFER_SIZE: usize = 5 * 1024 * 1024;
 
 pub static NON_COMPRESSIBLE_EXTENSIONS: &[&str] = &[
     "3gp", "7z", "aac", "alac", "aiff", "apk", "avi", "avif", "bin", "bmp", "bz2", "class", "cpio", "db", "dbf", "deb", "dll", "dmg",

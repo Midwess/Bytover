@@ -1,5 +1,6 @@
+use std::time::Duration;
+
 use crate::app::operations::device::GeoLocation;
-use crate::entities::finding_scope::FindingScope;
 use crate::errors::CoreError;
 use core_services::retry;
 use serde::{Deserialize, Serialize};
@@ -18,13 +19,11 @@ pub struct NetworkResponse {
 }
 
 impl NetworkResponse {
-    pub fn finding_scopes(&self) -> Vec<FindingScope> {
-        let mut scopes = vec![FindingScope::new(
-            &self.ip_address
-        )];
+    pub fn finding_scopes(&self) -> Vec<String> {
+        let mut scopes = vec![self.ip_address.clone()];
 
         for code in &self.location_codes {
-            scopes.push(FindingScope::new(&format!("local://{}", code)))
+            scopes.push(format!("local://{}", code))
         }
 
         scopes

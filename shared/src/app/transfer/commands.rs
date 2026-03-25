@@ -10,7 +10,6 @@ use crate::app::operations::{CoreOperation, CoreOperationOutput};
 use crate::app::p2p::module::P2PEvent;
 use crate::app::transfer::module::TransferEvent;
 use crate::entities::device::DeviceInfo;
-use crate::entities::finding_scope::FindingScope;
 use crate::entities::local_resource::LocalResource;
 use crate::entities::peer::Peer;
 use crate::entities::target::{P2PConnectionState, TransferTarget};
@@ -56,8 +55,8 @@ impl AppCommand {
         let receive_sessions = self.run(TransferSessionPersistentOperation::get_all_received_sessions()).await?;
 
         for session in &receive_sessions {
-            if let TransferTarget::P2P { ref scope, .. } = session.target {
-                self.update_model(P2PEvent::AddFindingScope(scope.clone()));
+            if matches!(session.target, TransferTarget::P2P { .. }) {
+                self.update_model(P2PEvent::AddFindingScope(session.order_id.to_string()));
             }
         }
 
@@ -84,8 +83,8 @@ impl AppCommand {
             ))
             .await;
 
-        if let TransferTarget::P2P { ref scope, .. } = transfer_session.target {
-            self.update_model(P2PEvent::RemoveFindingScope(scope.clone()));
+        if matches!(transfer_session.target, TransferTarget::P2P { .. }) {
+            self.update_model(P2PEvent::RemoveFindingScope(transfer_session.order_id.to_string()));
         }
 
         let _ = self.run(TransferSessionPersistentOperation::remove(transfer_session.id())).await;
@@ -208,8 +207,8 @@ impl AppCommand {
             log::error!("Failed to save session: {e:?}");
         };
 
-        if let TransferTarget::P2P { ref scope, .. } = session.target {
-            self.update_model(P2PEvent::AddFindingScope(scope.clone()));
+        if matches!(session.target, TransferTarget::P2P { .. }) {
+            self.update_model(P2PEvent::AddFindingScope(session.order_id.to_string()));
         }
 
         let should_auto_view = matches!(session.transfer_type, TransferType::Receive);
@@ -720,7 +719,6 @@ impl AppCommand {
         match &session.target {
             TransferTarget::P2P {
                 connection_state,
-                scope,
                 from_peer,
                 ..
             } => {
@@ -735,7 +733,7 @@ impl AppCommand {
                 }
 
                 if from_peer.is_none() {
-                    self.update_model(AppEvent::P2P(P2PEvent::AddFindingScope(scope.clone())));
+                    self.update_model(AppEvent::P2P(P2PEvent::AddFindingScope(session.order_id.to_string())));
                     return Ok(());
                 }
 
@@ -767,7 +765,7 @@ impl AppCommand {
             from_shelf_id
         );
 
-        let scope = FindingScope::new(&p2p_session.signalling_room_id);
+        let scope = p2p_session.signalling_room_id.clone();
         self.update_model(P2PEvent::AddFindingScope(scope));
 
         session.from_user = user;
