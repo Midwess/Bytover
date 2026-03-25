@@ -3,19 +3,22 @@ use std::net::SocketAddr;
 use futures_util::stream::FuturesUnordered;
 use futures_util::StreamExt;
 use str0m::net::Transmit;
-use str0m::Candidate;
 use thiserror::Error;
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 
 use crate::webrtc::client::WebRtcClient;
+use crate::webrtc::ice::IceAgent;
 use crate::webrtc::signalling::SignalingClient;
-use crate::webrtc::socket::SyncUdpSocket;
+use crate::webrtc::socket::{SyncUdpSocket, SyncUdpSocketError};
 
 #[derive(Debug, Error)]
 pub enum WebRtcServerError {
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+
     #[error("Socket error: {0}")]
-    Socket(#[from] std::io::Error),
+    Socket(#[from] SyncUdpSocketError),
 
     #[error("Signalling error: {0}")]
     Signalling(#[from] crate::webrtc::signalling::SignallingError),
@@ -68,15 +71,13 @@ impl WebRtcServer {
 
     pub async fn run(&mut self) -> Result<(), WebRtcServerError> {
         let socket = SyncUdpSocket::new(UdpSocket::bind(self.config.bind_addr).await?);
-        let local_addr = socket.local_addr();
+        let local_addr = socket.local_addr()?;
         log::info!("[webrtc-server] UDP socket bound on {local_addr}");
 
         self.signalling.start();
         log::info!("[webrtc-server] Signalling background task started");
 
-        let (outbound_tx, mut outbound_rx) = mpsc::unbounded_channel::<Transmit>();
-        let mut buf = vec![0u8; 65535];
-
+        let mut ice_agent: Option<IceAgent> = None;
         let mut connect_futs: FuturesUnordered<_> = FuturesUnordered::new();
 
         loop {
@@ -92,15 +93,27 @@ impl WebRtcServer {
 
                     let Some(request_id) = msg.request_id.clone() else {
                         continue;
-                    }
+                    };
 
-                    if let Some(offer) = msg.offer {
-                        let ices = self.gathering_ices().await?;
+                    let msg_offer = msg.offer;
+
+                    if let Some(offer) = msg_offer {
+                        if ice_agent.is_none() {
+                            let config = self.signalling
+                                .fetch_relay_config(&self.config.server_id)
+                                .await?;
+                            log::info!(
+                                "[webrtc-server] IceAgent created with {} STUN URLs",
+                                config.urls.len()
+                            );
+                            ice_agent = Some(IceAgent::new(config));
+                        }
+                        let agent = ice_agent.as_ref().unwrap().clone();
+
                         let client_socket = socket.clone();
                         let signalling = self.signalling.clone();
-                        let scopes = self.config.scopes.clone();
                         connect_futs.push(async move {
-                            WebRtcClient::connect(offer, ices, client_socket, signalling, request_id).await
+                            WebRtcClient::connect(offer, client_socket, signalling, request_id, agent).await
                         });
                     }
                 }
@@ -108,32 +121,12 @@ impl WebRtcServer {
                 Some(result) = connect_futs.next() => {
                     match result {
                         Ok(client) => {
-                            log::info!("[webrtc-server] Client {peer_id} connected");
+                            log::info!("[webrtc-server] Client connected");
                             self.clients.push(client);
                             log::info!("[webrtc-server] Active clients: {}", self.clients.len());
                         }
                         Err(e) => {
-                            log::error!("[webrtc-server] Client {peer_id} connection failed: {e}");
-                        }
-                    }
-                }
-
-                result = socket.recv_from(&mut buf) => {
-                    match result {
-                        Ok((len, source)) => {
-                            log::debug!("[webrtc-server] Received {} bytes from {}", len, source);
-                        }
-                        Err(e) => {
-                            log::error!("[webrtc-server] UDP recv error: {e}");
-                            break;
-                        }
-                    }
-                }
-
-                transmit = outbound_rx.recv() => {
-                    if let Some(t) = transmit {
-                        if let Err(e) = socket.send_to(&t.contents, t.destination).await {
-                            log::warn!("[webrtc-server] UDP send error: {e}");
+                            log::error!("[webrtc-server] Client connection failed: {e}");
                         }
                     }
                 }
@@ -141,9 +134,5 @@ impl WebRtcServer {
         }
 
         Ok(())
-    }
-
-    pub async fn gathering_ices(&self) -> Result<Vec<Candidate>, WebRtcServerError> {
-        Ok(vec![])
     }
 }

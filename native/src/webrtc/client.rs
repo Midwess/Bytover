@@ -1,13 +1,14 @@
 use std::net::SocketAddr;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use str0m::change::SdpOffer;
 use str0m::net::{Protocol, Receive};
 use str0m::{Candidate, Event, IceConnectionState, Input, Output, Rtc, RtcConfig};
 use thiserror::Error;
 
+use crate::webrtc::ice::IceAgent;
 use crate::webrtc::signalling::SignalingClient;
-use crate::webrtc::socket::SyncUdpSocket;
+use crate::webrtc::socket::{SyncUdpSocket, SyncUdpSocketError};
 use schema::devlog::rpc_signalling::server::OfferMessage;
 
 #[derive(Debug, Error)]
@@ -18,16 +19,14 @@ pub enum WebRtcClientError {
     #[error("SDP parse error: {0}")]
     SdpParse(String),
 
-    #[error("ICE parse error: {0}")]
-    IceParse(String),
-
     #[error("Signalling error: {0}")]
     Signalling(String),
-}
 
-pub struct InboundUdp {
-    pub data: Vec<u8>,
-    pub source: SocketAddr,
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+
+    #[error("Socket error: {0}")]
+    Socket(#[from] SyncUdpSocketError),
 }
 
 pub struct WebRtcClient {
@@ -39,18 +38,20 @@ pub struct WebRtcClient {
 impl WebRtcClient {
     pub async fn connect(
         offer_message: OfferMessage,
-        gathered_ices: Vec<Candidate>,
         socket: SyncUdpSocket,
         signalling: SignalingClient,
         request_id: String,
+        ice_agent: IceAgent,
     ) -> Result<Self, WebRtcClientError> {
-        let mut rtc = RtcConfig::new()
-            .set_ice_lite(true)
-            .build(Instant::now());
+        let mut rtc = RtcConfig::new().build(Instant::now());
 
-        for candidate in gathered_ices {
-            rtc.add_remote_candidate(candidate);
-        }
+        let local_addr = socket.local_addr()?;
+        let host_candidate = Candidate::host(local_addr, "udp")
+            .map_err(|e| WebRtcClientError::Signalling(format!("{e}")))?;
+        rtc.add_local_candidate(host_candidate);
+        log::info!("[webrtc-client] Added host candidate: {local_addr}");
+
+        ice_agent.gather_candidates(&mut rtc, local_addr).await;
 
         let offer = SdpOffer::from_sdp_string(&offer_message.sdp)
             .map_err(|e| WebRtcClientError::SdpParse(format!("{e}")))?;
@@ -60,12 +61,14 @@ impl WebRtcClient {
             .accept_offer(offer)
             .map_err(WebRtcClientError::Rtc)?;
 
+        log::info!("[webrtc-client] SDP answer created with all local candidates");
+
         signalling
             .send_answer(answer.to_sdp_string(), &request_id)
             .await
             .map_err(|e| WebRtcClientError::Signalling(format!("{e}")))?;
 
-        let local_addr = socket.local_addr();
+        log::info!("[webrtc-client] Answer sent, entering poll loop");
 
         let mut client = Self {
             rtc,
@@ -73,15 +76,13 @@ impl WebRtcClient {
             signalling,
         };
 
-        let mut buf = vec![0u8; 65536];
+        let mut buf = vec![0u8; 2000];
         loop {
-            match client.rtc.poll_output()? {
+            let timeout = match client.rtc.poll_output()? {
+                Output::Timeout(t) => t,
                 Output::Transmit(t) => {
-                    client
-                        .socket
-                        .send_to(&t.contents, t.destination)
-                        .await
-                        .map_err(|e| WebRtcClientError::IceParse(format!("send error: {e}")))?;
+                    client.socket.send_to(&t.contents, t.destination).await?;
+                    continue;
                 }
                 Output::Event(e) => {
                     match &e {
@@ -92,32 +93,35 @@ impl WebRtcClient {
                         Event::IceConnectionStateChange(state) => {
                             log::info!("[webrtc-client] ICE state: {:?}", state);
                             if matches!(state, IceConnectionState::Disconnected) {
-                                log::info!("[webrtc-client] Peer disconnected");
-                                return Ok(client);
+                                return Err(WebRtcClientError::Signalling(
+                                    "Peer disconnected during setup".into(),
+                                ));
                             }
                         }
                         _ => {}
                     }
+                    continue;
                 }
-                Output::Timeout(deadline) => {
-                    let now = Instant::now();
-                    if deadline > now {
-                        tokio::time::sleep(deadline - now).await;
-                    }
-                    let _ = client.rtc.handle_input(Input::Timeout(Instant::now()));
-                }
+            };
+
+            let duration = timeout.saturating_duration_since(Instant::now());
+            if duration.is_zero() {
+                client.rtc.handle_input(Input::Timeout(Instant::now()))?;
+                continue;
             }
 
-            let (n, source) = client
-                .socket
-                .recv_from(&mut buf)
-                .await
-                .map_err(|e| WebRtcClientError::IceParse(format!("recv error: {e}")))?;
-
-            let receive = Receive::new(Protocol::Udp, source, local_addr, &buf[..n])
-                .map_err(|e| WebRtcClientError::IceParse(format!("{e}")))?;
-
-            let _ = client.rtc.handle_input(Input::Receive(Instant::now(), receive));
+            tokio::select! {
+                result = client.socket.recv_any(&mut buf) => {
+                    let (n, source) = result?;
+                    let receive = Receive::new(Protocol::Udp, source, local_addr, &buf[..n])
+                        .map_err(|e| WebRtcClientError::Signalling(format!("{e}")))?;
+                    client.rtc.handle_input(Input::Receive(Instant::now(), receive))?;
+                }
+                _ = tokio::time::sleep(duration) => {
+                    log::warn!("[webrtc-client] No data received for 5 seconds during handshake, sending keepalive");
+                    client.rtc.handle_input(Input::Timeout(Instant::now()))?;
+                }
+            }
         }
     }
 }

@@ -2,7 +2,7 @@ use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
 use prost::Message as ProstMessage;
 use schema::devlog::rpc_signalling::server::{
-    AnswerMessage, Message,
+    AnswerMessage, IceConfig, Message,
 };
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
@@ -34,6 +34,9 @@ pub enum SignallingError {
 
     #[error("Signalling task stopped")]
     Stopped,
+
+    #[error("HTTP request failed: {0}")]
+    HttpFailed(String),
 }
 
 pub struct SignalingClient {
@@ -66,6 +69,35 @@ impl SignalingClient {
             self.host,
             self.port
         )
+    }
+
+    fn http_url(&self) -> String {
+        format!(
+            "{}://{}:{}",
+            if self.ssl { "https" } else { "http" },
+            self.host,
+            self.port
+        )
+    }
+
+    pub async fn fetch_relay_config(&self, key: &str) -> Result<IceConfig, SignallingError> {
+        let url = format!("{}/relay/{}", self.http_url(), key);
+        let response = reqwest::get(&url)
+            .await
+            .map_err(|e| SignallingError::HttpFailed(format!("{e}")))?;
+
+        if !response.status().is_success() {
+            return Err(SignallingError::HttpFailed(
+                format!("relay endpoint returned {}", response.status()),
+            ));
+        }
+
+        let bytes = response
+            .bytes()
+            .await
+            .map_err(|e| SignallingError::HttpFailed(format!("{e}")))?;
+
+        IceConfig::decode(&bytes[..]).map_err(SignallingError::from)
     }
 
     pub fn start(&self) {

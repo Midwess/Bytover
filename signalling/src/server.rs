@@ -73,8 +73,9 @@ impl SignallingServer {
                     "/offer/{key}",
                     web::post().to({
                         let client_manager = Arc::clone(&client_manager_for_closure2);
+                        let turn_manager = Arc::clone(&turn_manager_for_closure);
                         move |key: web::Path<String>, body: Bytes| {
-                            offer_handler(key.into_inner(), body, client_manager.clone())
+                            offer_handler(key.into_inner(), body, client_manager.clone(), turn_manager.clone())
                         }
                     }),
                 )
@@ -219,6 +220,7 @@ async fn offer_handler(
     key: String,
     body: Bytes,
     client_manager: Arc<ClientManager>,
+    turn_manager: Arc<TurnManager>,
 ) -> HttpResponse {
     let client = match client_manager.get(&key).await {
         Some(c) => c,
@@ -228,13 +230,15 @@ async fn offer_handler(
         }
     };
 
-    let message = match schema::devlog::rpc_signalling::server::Message::decode(&body[..]) {
+    let mut message = match schema::devlog::rpc_signalling::server::Message::decode(&body[..]) {
         Ok(m) => m,
         Err(e) => {
             return HttpResponse::BadRequest()
                 .body(format!("failed to decode message: {}", e));
         }
     };
+
+    message.ice_config = turn_manager.get_relay_config(&key).await;
 
     match client.request(message).await {
         Ok(response) => {
