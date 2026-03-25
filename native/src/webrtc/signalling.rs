@@ -182,15 +182,11 @@ impl SignalingClient {
 
     pub async fn send_answer(
         &self,
-        to_id: String,
         sdp: String,
-        scopes: Vec<String>,
-        from_id: String,
+        request_id: &str,
     ) -> Result<(), SignallingError> {
         let msg = Message {
-            scopes,
-            from_id,
-            to_id: Some(to_id),
+            request_id: Some(request_id.to_string()),
             answer: Some(AnswerMessage { sdp }),
             ..Default::default()
         };

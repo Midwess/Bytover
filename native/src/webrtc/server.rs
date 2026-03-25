@@ -47,7 +47,7 @@ pub struct WebRtcServerConfig {
 pub struct WebRtcServer {
     config: WebRtcServerConfig,
     signalling: SignalingClient,
-    clients: HashMap<String, WebRtcClient>,
+    clients: Vec<WebRtcClient>,
     addr_to_peer: HashMap<SocketAddr, String>,
 }
 
@@ -61,7 +61,7 @@ impl WebRtcServer {
         Self {
             config,
             signalling,
-            clients: HashMap::new(),
+            clients: Default::default(),
             addr_to_peer: HashMap::new(),
         }
     }
@@ -90,23 +90,26 @@ impl WebRtcServer {
                         }
                     };
 
+                    let Some(request_id) = msg.request_id.clone() else {
+                        continue;
+                    }
+
                     if let Some(offer) = msg.offer {
-                        let from_id = msg.from_id.clone();
                         let ices = self.gathering_ices().await?;
                         let client_socket = socket.clone();
                         let signalling = self.signalling.clone();
                         let scopes = self.config.scopes.clone();
                         connect_futs.push(async move {
-                            (from_id.clone(), WebRtcClient::connect(offer, ices, client_socket, signalling, from_id, scopes).await)
+                            WebRtcClient::connect(offer, ices, client_socket, signalling, request_id).await
                         });
                     }
                 }
 
-                Some((peer_id, result)) = connect_futs.next() => {
+                Some(result) = connect_futs.next() => {
                     match result {
                         Ok(client) => {
                             log::info!("[webrtc-server] Client {peer_id} connected");
-                            self.clients.insert(peer_id, client);
+                            self.clients.push(client);
                             log::info!("[webrtc-server] Active clients: {}", self.clients.len());
                         }
                         Err(e) => {

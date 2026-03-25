@@ -34,7 +34,6 @@ pub struct WebRtcClient {
     rtc: Rtc,
     socket: SyncUdpSocket,
     signalling: SignalingClient,
-    peer_id: String,
 }
 
 impl WebRtcClient {
@@ -43,8 +42,7 @@ impl WebRtcClient {
         gathered_ices: Vec<Candidate>,
         socket: SyncUdpSocket,
         signalling: SignalingClient,
-        peer_id: String,
-        scopes: Vec<String>,
+        request_id: String,
     ) -> Result<Self, WebRtcClientError> {
         let mut rtc = RtcConfig::new()
             .set_ice_lite(true)
@@ -63,7 +61,7 @@ impl WebRtcClient {
             .map_err(WebRtcClientError::Rtc)?;
 
         signalling
-            .send_answer(peer_id.clone(), answer.to_sdp_string(), scopes, peer_id.clone())
+            .send_answer(answer.to_sdp_string(), &request_id)
             .await
             .map_err(|e| WebRtcClientError::Signalling(format!("{e}")))?;
 
@@ -73,7 +71,6 @@ impl WebRtcClient {
             rtc,
             socket,
             signalling,
-            peer_id,
         };
 
         let mut buf = vec![0u8; 65536];
