@@ -237,7 +237,7 @@ impl WebRtc {
             return Ok(())
         }
 
-        self.is_running.store(true, std::sync::atomic::Ordering::SeqCst);
+        self.is_running.store(true, SeqCst);
         self.shared_context.set_current_id(current_user.peer_id()).await;
         self.shared_context.set_core_request(core_request.clone()).await;
         log::info!("Starting WebRTC server with my peer = {current_user:?}");

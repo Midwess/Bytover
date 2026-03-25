@@ -1,16 +1,21 @@
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use futures_util::stream::FuturesUnordered;
 use futures_util::StreamExt;
-use str0m::net::Transmit;
 use thiserror::Error;
 use tokio::net::UdpSocket;
-use tokio::sync::mpsc;
 
 use crate::webrtc::client::WebRtcClient;
 use crate::webrtc::ice::IceAgent;
 use crate::webrtc::signalling::SignalingClient;
 use crate::webrtc::socket::{SyncUdpSocket, SyncUdpSocketError};
+use shared::entities::finding_scope::FindingScope;
+use shared::entities::local_resource::LocalResource;
+use shared::entities::transfer_session::TransferProgress;
+use shared::errors::CoreError;
+use shared::shell::api::CoreRequest;
 
 #[derive(Debug, Error)]
 pub enum WebRtcServerError {
@@ -34,8 +39,13 @@ pub enum WebRtcServerError {
 
     #[error("Unknown peer: {0}")]
     UnknownPeer(String),
-}
 
+    #[error("Peer not found: {0}")]
+    PeerNotFound(String),
+
+    #[error("Client error: {0}")]
+    Client(String),
+}
 
 pub struct WebRtcServerConfig {
     pub bind_addr: SocketAddr,
@@ -52,6 +62,7 @@ pub struct WebRtcServer {
     signalling: SignalingClient,
     clients: Vec<WebRtcClient>,
     addr_to_peer: HashMap<SocketAddr, String>,
+    is_running: AtomicBool,
 }
 
 impl WebRtcServer {
@@ -66,7 +77,75 @@ impl WebRtcServer {
             signalling,
             clients: Default::default(),
             addr_to_peer: HashMap::new(),
+            is_running: AtomicBool::new(false),
         }
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.is_running.load(Ordering::SeqCst)
+    }
+
+    pub async fn cancel_session(
+        &self,
+        _peer_id: String,
+        _session_id: u64,
+    ) -> Result<(), WebRtcServerError> {
+        todo!()
+    }
+
+    pub async fn cancel_resource(
+        &self,
+        _peer_id: String,
+        _session_id: u64,
+        _resource_id: u64,
+    ) -> Result<(), WebRtcServerError> {
+        todo!()
+    }
+
+    pub async fn broadcast_cancel_session(
+        &self,
+        _session_id: u64,
+        _resource_id: Option<u64>,
+    ) -> Result<(), WebRtcServerError> {
+        todo!()
+    }
+
+    pub async fn start_peer_core_stream(
+        &self,
+        _peer_id: String,
+        _core_request: CoreRequest,
+    ) -> Result<(), WebRtcServerError> {
+        todo!()
+    }
+
+    pub async fn send_session_detail(
+        &self,
+        _peer_id: String,
+        _request_id: String,
+        _session_message: Option<schema::devlog::bitbridge::P2pTransferSessionMessage>,
+        _resources: Option<Vec<LocalResource>>,
+        _error: Option<CoreError>,
+    ) -> Result<(), WebRtcServerError> {
+        todo!()
+    }
+
+    pub async fn stream_resource_to_peer(
+        &self,
+        _peer_id: String,
+        _session_id: u64,
+        _transfer_id: u16,
+        _resource: LocalResource,
+    ) -> Result<(), WebRtcServerError> {
+        todo!()
+    }
+
+    pub async fn send_resource_notification(
+        &self,
+        _peer_id: String,
+        _session_id: u64,
+        _resource: LocalResource,
+    ) -> Result<(), WebRtcServerError> {
+        todo!()
     }
 
     pub async fn run(&mut self) -> Result<(), WebRtcServerError> {
@@ -76,6 +155,8 @@ impl WebRtcServer {
 
         self.signalling.start();
         log::info!("[webrtc-server] Signalling background task started");
+
+        self.is_running.store(true, Ordering::SeqCst);
 
         let mut ice_agent: Option<IceAgent> = None;
         let mut connect_futs: FuturesUnordered<_> = FuturesUnordered::new();
