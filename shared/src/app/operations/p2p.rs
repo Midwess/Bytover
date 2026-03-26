@@ -67,8 +67,6 @@ pub enum P2POperation {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum P2POperationOutput {
-    PeerConnected(Peer),
-    PeerDisconnected(),
     CancelSessionRequest {
         session_id: u64
     },

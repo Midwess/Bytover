@@ -66,12 +66,6 @@ impl AppCommand {
         let _ = self.run(P2POperation::stop()).await;
         while let Some(output) = start_p2p_server_stream.next().await {
             match output {
-                CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(peer)) => {
-                    log::info!(target: "nearby", "New peer connected: {}", peer.id);
-                    self.spawn(|it| async move {
-                        it.app().handle_peer_connection(peer).await;
-                    });
-                }
                 CoreOperationOutput::Error(error) => {
                     log::error!("Nearby server has been stopped: {error:?}, will restart in 3s...");
                     let _ = self.run(P2POperation::stop()).await;
@@ -101,10 +95,6 @@ impl AppCommand {
 
         while let Some(output) = stream.next().await {
             match output {
-                CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected()) => {
-                    log::info!("Peer disconnected: {}", peer.id);
-                    break;
-                }
                 CoreOperationOutput::P2P(P2POperationOutput::CancelSessionRequest { session_id, .. }) => {
                     self.notify_event(TransferEvent::TransferCanceled { session_id });
                 }

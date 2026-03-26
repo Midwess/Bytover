@@ -291,10 +291,6 @@ impl WebRtcPeer {
     pub async fn peer_disconnected(&self) {
         log::info!("Peer disconnected, will cancel all transfers");
         self.transfers_context.cancel_all_transfers().await;
-        let response = CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected {});
-        if let Some(core_request) = self.core_request() {
-            core_request.response(response).await;
-        }
     }
 
     pub async fn cancel_transfer(&self, session_id: u64) {

@@ -340,9 +340,7 @@ impl WebRtc {
 
                             let peer = Arc::new(peer);
 
-                            let peer_entity = peer.peer.clone();
                             context.add_peer(Arc::downgrade(&peer)).await;
-                            let _ = core_request.response(P2POperationOutput::PeerConnected(peer_entity)).await;
                             let result = peer.run_loop().await;
                             log::info!("Peer {peer_id} loop finished with result {result:?}");
                             context.remove_peer(&peer_id).await;
@@ -412,9 +410,7 @@ impl WebRtc {
                         };
 
                         let peer = Arc::new(peer);
-                        let peer_entity = peer.peer.clone();
                         context.add_peer(Arc::downgrade(&peer)).await;
-                        let _ = core_request.response(P2POperationOutput::PeerConnected(peer_entity)).await;
                         let result = peer.run_loop().await;
                         log::info!("Peer {peer_id} loop finished with result {result:?}");
                         context.remove_peer(&peer_id).await;
