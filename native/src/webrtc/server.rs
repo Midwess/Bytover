@@ -292,17 +292,6 @@ impl WebRtcServer {
                                 clients.insert(peer_id.clone(), client.clone());
                             }
 
-                            let peer_entity = client.peer_entity().await;
-                            if let Some(core_req) = self.core_request.get() {
-                                if let Some(ref peer) = peer_entity {
-                                    core_req
-                                        .response(CoreOperationOutput::P2P(
-                                            P2POperationOutput::PeerConnected(peer.clone()),
-                                        ))
-                                        .await;
-                                }
-                            }
-
                             let client_clone = client.clone();
                             let peer_id = client.peer_id().await.unwrap_or_default();
                             tokio::spawn(async move {

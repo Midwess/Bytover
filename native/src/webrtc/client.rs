@@ -315,8 +315,7 @@ impl WebRtcClient {
                 let is_alive = rtc.is_alive();
 
                 if !is_alive {
-                    self.peer_disconnected().await;
-                    return Ok(());
+                    return Ok::<(), WebRtcClientError>(());
                 }
 
                 let timeout: Instant = {
@@ -330,7 +329,6 @@ impl WebRtcClient {
                                 Event::IceConnectionStateChange(state) => {
                                     log::info!("[webrtc-client] ICE state: {:?}", state);
                                     if matches!(state, IceConnectionState::Disconnected) {
-                                        self.peer_disconnected().await;
                                         rtc.disconnect();
                                     }
                                 }
@@ -344,10 +342,6 @@ impl WebRtcClient {
                                                 self.process_message_packet(request_id, request).await;
                                             }
                                         }
-                                    } else if data.id == RELIABLE_DATA_CHANNEL_ID
-                                        || data.id == UNRELIABLE_DATA_CHANNEL_ID
-                                    {
-                                        self.process_data_packet(data.data).await;
                                     }
                                 }
                                 _ => {}
@@ -409,7 +403,6 @@ impl WebRtcClient {
             },
         }?;
 
-        self.peer_disconnected().await;
         Ok(())
     }
 
@@ -576,19 +569,6 @@ impl WebRtcClient {
                 }
             }
             _ => {}
-        }
-    }
-
-    pub async fn process_data_packet(&self, _data: Vec<u8>) {
-    }
-
-    pub async fn peer_disconnected(&self) {
-        log::info!("[webrtc-client] Peer disconnected, cancelling all transfers");
-        self.transfers_context.cancel_all_transfers().await;
-        if let Some(core_request) = self.core_request() {
-            core_request
-                .response(CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected {}))
-                .await;
         }
     }
 

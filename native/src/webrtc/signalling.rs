@@ -123,7 +123,7 @@ impl SignalingClient {
                     backoff = Duration::from_secs(1);
                     let (sink, mut stream) = ws_stream.split();
                     let mut sink = sink;
-                    let mut msg_tx = msg_tx;
+                    let mut msg_tx = msg_tx.clone();
 
                     loop {
                         tokio::select! {
