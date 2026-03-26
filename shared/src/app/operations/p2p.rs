@@ -16,7 +16,7 @@ use super::CoreOperation;
 pub enum P2POperation {
     StartNearbyServer(Peer),
     StopNearbyServer,
-    PeerEvents(String),
+    ConnectPeer(String),
     IsRunning,
     ViewSessionDetail {
         peer_id: String,

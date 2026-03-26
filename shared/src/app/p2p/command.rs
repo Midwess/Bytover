@@ -91,7 +91,7 @@ impl AppCommand {
     }
 
     pub async fn handle_peer_connection(&self, peer: Peer) {
-        let request = P2POperation::PeerEvents(peer.id.clone());
+        let request = P2POperation::ConnectPeer(peer.id.clone());
         let mut stream = self.stream_from_shell(request.into());
 
         while let Some(output) = stream.next().await {

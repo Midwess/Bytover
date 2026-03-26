@@ -1,8 +1,8 @@
 use shared::protocol::public_cloud::cloud_service::CloudService;
 use shared::protocol::rpc::app_server::AppServer;
 use shared::protocol::rpc::cloud_server::CloudServer;
-use shared::protocol::webrtc::webrtc::WebRtc;
 use shared::shell::executor::transfer::TransferNative;
+use shared::shell::executor::transfer::WebRtc;
 use std::sync::Arc;
 use tonic_web_wasm_client::Client;
 
@@ -13,7 +13,7 @@ pub struct TransferNativeImpl {
     pub auth_server: AppServer<Client>
 }
 
-#[ async_trait::async_trait(?Send)]
+#[async_trait::async_trait(?Send)]
 impl TransferNative<Client> for TransferNativeImpl {
     fn web_rtc(&self) -> &Arc<WebRtc> {
         &self.web_rtc

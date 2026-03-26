@@ -23,7 +23,7 @@ use shared::protocol::public_cloud::cloud_service::CloudService;
 use shared::protocol::rpc::app_server::AppServer;
 use shared::protocol::rpc::auth_provider::AuthProvider;
 use shared::protocol::rpc::cloud_server::CloudServer;
-use shared::protocol::webrtc::webrtc::WebRtc;
+use shared::shell::executor::transfer::WebRtc;
 use shared::repository::auth_session::AuthSessionRepository;
 use shared::repository::local_resource::LocalResourceRepository;
 use shared::repository::shelf::ShelfRepository;
@@ -174,11 +174,7 @@ impl DiContainer {
             return executor
         }
 
-        let web_rtc = Arc::new(WebRtc::new(
-            get_signalling_server_ws_url(),
-            self.get_local_resource_repository().await,
-            self.get_transfer_session_repository()
-        ));
+        let web_rtc = Arc::new(WebRtc::new());
         let cloud_service = CloudService {
             server: self.get_cloud_server(),
             active_session: Default::default(),
@@ -204,7 +200,11 @@ impl DiContainer {
                 cloud_server: self.get_cloud_server(),
                 auth_server: self.get_authentication_server()
             }),
-            p2p: Box::new(P2PNativeExecutorImpl { web_rtc })
+            p2p: Box::new(P2PNativeExecutorImpl {
+                web_rtc: OnceCell::from(web_rtc),
+                client: OnceCell::new(),
+                current_user: OnceCell::new(),
+            })
         };
 
         let _ = self.native_executor.set(executor);

@@ -111,4 +111,21 @@ impl DirectMessageChannel {
             self.response_streams.lock().await.remove(&request_id);
         })
     }
+
+    /// Receive an incoming packet and process it.
+    /// If it's a response, delivers it to the appropriate request's response channel.
+    /// Returns the decoded message body if it needs further processing (e.g., requests).
+    pub async fn receive_packet(&self, packet: Box<[u8]>) -> Result<Option<PeerMessageBody>, WebRtcErrors> {
+        let msg = PeerMessageBody::decode(&*packet)
+            .map_err(|e| WebRtcErrors::MessageChannelError(format!("decode error: {:?}", e)))?;
+
+        // If this is a response, deliver it to the appropriate channel
+        if msg.response.is_some() {
+            self.notify_response(msg.request_id.clone(), msg.response.unwrap()).await;
+            return Ok(None);
+        }
+
+        // It's a request or other message type, caller should handle it
+        Ok(Some(msg))
+    }
 }

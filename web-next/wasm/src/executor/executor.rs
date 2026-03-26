@@ -30,7 +30,7 @@ impl NativeExecutor {
             CoreOperation::Transfer(transfer) => self.transfer.handle(request, transfer).await.into(),
             CoreOperation::Internet(InternetOperation::Locate(geo_location)) => {
                 match self.internet_connection.locate(geo_location).await {
-                    Ok(net) => CoreOperationOutput::FindingScopes(net.finding_scopes()),
+                    Ok(net) => CoreOperationOutput::DeviceAliases(net.finding_scopes()),
                     Err(error) => CoreOperationOutput::Error(error)
                 }
             }
