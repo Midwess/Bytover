@@ -209,9 +209,12 @@ impl TransferProgress {
         self.bytes_per_second
     }
 
-    pub fn mark_received_by_peer(&mut self, peer: Peer) {
-        if !self.received_by_peers.iter().any(|p| p.id == peer.id) {
-            self.received_by_peers.push(ResourceReceivedPeer::from(&peer));
+    pub fn mark_received_by_peer_id(&mut self, peer_id: String) {
+        if !self.received_by_peers.iter().any(|p| p.id == peer_id) {
+            self.received_by_peers.push(ResourceReceivedPeer {
+                id: peer_id,
+                avatar_url: String::new(),
+            });
         }
     }
 

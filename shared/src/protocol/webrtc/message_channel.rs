@@ -35,7 +35,7 @@ impl DirectMessageChannel {
         .encode(&mut binary)?;
 
         let packet = binary.into_boxed_slice();
-        let _ = self.outbound_sender.send(packet).await;
+        let _ = self.outbound_sender.clone().send(packet).await;
 
         Ok(())
     }
@@ -61,6 +61,7 @@ impl DirectMessageChannel {
         let packet = bytes.into_boxed_slice();
 
         self.outbound_sender
+            .clone()
             .send(packet)
             .await
             .map_err(|e| WebRtcErrors::MessageChannelError(format!("{e:?}")))?;
@@ -88,6 +89,7 @@ impl DirectMessageChannel {
         let packet = bytes.into_boxed_slice();
 
         self.outbound_sender
+            .clone()
             .send(packet)
             .await
             .map_err(|e| WebRtcErrors::MessageChannelError(format!("{e:?}")))?;

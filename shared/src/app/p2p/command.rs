@@ -4,15 +4,12 @@ use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::dialog::DialogOperation;
-use crate::app::operations::internet::InternetOperation;
 use crate::app::operations::p2p::{P2POperation, P2POperationOutput};
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::operations::CoreOperationOutput;
 use crate::app::p2p::module::P2PEvent;
 use crate::app::transfer::module::TransferEvent;
-use crate::entities::device::DeviceInfo;
 use crate::entities::peer::Peer;
-use crate::entities::user::User;
 use crate::errors::CoreError;
 use crate::CoreOperation;
 use futures_util::StreamExt;
@@ -22,23 +19,21 @@ impl AppCommand {
     pub async fn restart_nearby(&self, auto_launch: bool) -> Result<(), CoreError> {
         self.run(P2POperation::stop()).await?;
         self.notify_event(P2PEvent::Launch { auto_launch });
-
         Ok(())
     }
 
-    pub async fn gen_peer(&self, user: Option<User>, device: DeviceInfo) -> Peer {
+    pub async fn gen_peer(&self, user: Option<crate::entities::user::User>, device: crate::entities::device::DeviceInfo) -> Peer {
         let peer_id = Uuid::now_v7().to_string();
-
         match user {
             Some(user) => Peer {
-                id: peer_id.clone(),
+                id: peer_id,
                 name: Some(user.name),
                 avatar_url: user.avatar,
                 email: Some(user.email),
                 device,
             },
             None => Peer {
-                id: peer_id.clone(),
+                id: peer_id,
                 name: Some(device.name.clone()),
                 avatar_url: self.run(RpcOperation::random_avatar()).await.unwrap_or_default(),
                 email: None,
@@ -62,9 +57,9 @@ impl AppCommand {
         };
 
         let peer = self.gen_peer(user, device).await;
-
         self.update_model(P2PEvent::UpdateMe { new_peer: peer.clone() });
         log::info!(target: "nearby", "Starting nearby server with peer {peer:?}");
+
         let start_p2p_server_request = P2POperation::StartNearbyServer(peer);
         let mut start_p2p_server_stream = self.stream_from_shell(start_p2p_server_request.into());
 
@@ -73,23 +68,13 @@ impl AppCommand {
             match output {
                 CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(peer)) => {
                     log::info!(target: "nearby", "New peer connected: {}", peer.id);
-
-                    self.notify_event(P2PEvent::UpdateNearbyPeers {
-                        new_peer: vec![peer.clone()],
-                        removed: vec![]
-                    });
-
-                    self.update_p2p_sessions_with_peer(peer.clone());
-
                     self.spawn(|it| async move {
                         it.app().handle_peer_connection(peer).await;
                     });
                 }
                 CoreOperationOutput::Error(error) => {
                     log::error!("Nearby server has been stopped: {error:?}, will restart in 3s...");
-                    self.notify_event(P2PEvent::ClearNearbyPeers);
                     let _ = self.run(P2POperation::stop()).await;
-
                     self.request_from_shell(CoreOperation::Delay(Duration::from_secs(3))).await;
                     self.notify_event(P2PEvent::Launch { auto_launch });
                     break;
@@ -99,8 +84,7 @@ impl AppCommand {
                     break;
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::NearbyServerStopped) => {
-                    log::info!(target: "nearby", "Nearby server stopped, stop server");
-                    self.notify_event(P2PEvent::ClearNearbyPeers);
+                    log::info!(target: "nearby", "Nearby server stopped");
                     break;
                 }
                 CoreOperationOutput::None => {}
@@ -119,47 +103,30 @@ impl AppCommand {
             match output {
                 CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected()) => {
                     log::info!("Peer disconnected: {}", peer.id);
-                    self.notify_event(P2PEvent::PeerDisconnected { peer_id: peer.id.clone() });
                     break;
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::CancelSessionRequest { session_id, .. }) => {
                     self.notify_event(TransferEvent::TransferCanceled { session_id });
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::ReceivedViewSessionRequest {
-                    peer_id,
-                    request_id,
-                    order_id,
-                    password
+                    peer_id, request_id, order_id, password
                 }) => {
                     self.notify_event(TransferEvent::ReceivedViewSessionRequest {
-                        peer_id,
-                        request_id,
-                        order_id,
-                        password
+                        peer_id, request_id, order_id, password
                     });
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::ReceivedDownloadRequest {
-                    peer_id,
-                    session_order_id,
-                    resource_order_id,
-                    transfer_id
+                    peer_id, session_order_id, resource_order_id, transfer_id
                 }) => {
                     self.notify_event(TransferEvent::ReceivedDownloadRequest {
-                        peer_id,
-                        session_order_id,
-                        resource_order_id,
-                        transfer_id
+                        peer_id, session_order_id, resource_order_id, transfer_id
                     });
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::ReceivedResourceNotification {
-                    session_order_id,
-                    resource,
-                    peer_id
+                    session_order_id, resource, peer_id
                 }) => {
                     self.update_model(TransferEvent::ResourceNotification {
-                        session_order_id,
-                        resource,
-                        peer_id
+                        session_order_id, resource, peer_id
                     });
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::NearbyServerStopped) => {
@@ -178,14 +145,5 @@ impl AppCommand {
                 }
             }
         }
-
-        self.notify_event(P2PEvent::UpdateNearbyPeers {
-            new_peer: vec![],
-            removed: vec![peer.clone()]
-        });
-    }
-
-    fn update_p2p_sessions_with_peer(&self, peer: Peer) {
-        self.notify_event(P2PEvent::PeerUpdated { peer });
     }
 }

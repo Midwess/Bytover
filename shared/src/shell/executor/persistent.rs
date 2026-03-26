@@ -117,35 +117,6 @@ pub trait NativePersistent: Send + Sync {
                 let result = self.local_resource_repository().get_resource_type(path).await?;
                 Ok(CoreOperationOutput::ResourceType(result))
             }
-            PersistentOperation::TransferSession(TransferSessionPersistentOperation::Save(mut session)) => {
-                // Reset back to disconnected state
-                session.owner_disconnected();
-                let session = self.transfer_session_repository().create(session).await?;
-                Ok(session.into())
-            }
-            PersistentOperation::TransferSession(TransferSessionPersistentOperation::GetAllReceivedSessions()) => {
-                let sessions = self.transfer_session_repository().find_all(None, None, None).await?;
-                log::info!("Found sessions: {:?}", sessions.len());
-                Ok(CoreOperationOutput::TransferSessions(sessions))
-            }
-            PersistentOperation::TransferSession(TransferSessionPersistentOperation::UpdateProgresses(order_id, progresses)) => {
-                let session = self.transfer_session_repository().update_progresses(order_id, progresses).await?;
-                Ok(match session {
-                    Some(session) => CoreOperationOutput::TransferSession(session),
-                    None => CoreOperationOutput::None
-                })
-            }
-            PersistentOperation::TransferSession(TransferSessionPersistentOperation::Remove(id)) => {
-                self.transfer_session_repository().delete_session(id).await?;
-                Ok(CoreOperationOutput::Bool(true))
-            }
-            PersistentOperation::TransferSession(TransferSessionPersistentOperation::UpdateResource { session_id, resource }) => {
-                let session = self.transfer_session_repository().update_resource(session_id, resource).await?;
-                Ok(match session {
-                    Some(session) => CoreOperationOutput::TransferSession(session),
-                    None => CoreOperationOutput::None
-                })
-            }
             PersistentOperation::TransferSession(TransferSessionPersistentOperation::GenerateResourcePath {
                 session_id,
                 resource_names

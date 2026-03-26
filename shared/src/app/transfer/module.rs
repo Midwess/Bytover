@@ -3,7 +3,6 @@ use crate::app::core::model_events::{ConnectionRecovered, TransferSessionModelEv
 use crate::app::modules::AppModule;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::dialog::{AlertDialog, DialogOperation};
-use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::persistent::TransferSessionPersistentOperation;
 use crate::app::view_models::cloud_session::CloudSession;
 use crate::app::view_models::receive_session::{ReceiveResourceViewModel, ReceiveSessionViewModel};
@@ -172,10 +171,7 @@ impl AppModule<BitBridge> for TransferModule {
             TransferEvent::Launch => Command::handle_result(|it| async move { it.app().load_transfer_sessions().await }),
             TransferEvent::Clear => {
                 model.transfer.sessions.clear();
-                Command::handle_result(|it| async move {
-                    let _ = it.app().run(TransferSessionPersistentOperation::clear_all()).await;
-                    Ok(())
-                })
+                Command::render()
             }
             TransferEvent::CancelTransfer { session_id, transfer_type } => {
                 let id = TransferSessionId {
@@ -335,34 +331,13 @@ impl AppModule<BitBridge> for TransferModule {
                     TransferSessionModelEvent::Update(id, TransferSessionUpdateEvent::ResourceUpdate(res)).into()
                 ));
 
-                for peer in model.p2p.peers.iter() {
-                    log::info!("Sending new resource notification to peer {}", peer.id);
-                    let res = resource.clone();
-                    let peer_id = peer.id.clone();
-                    commands.push(Command::handle_result(move |it| async move {
-                        it.app().run(P2POperation::send_resource_notification(peer_id, active_session_id, res)).await
-                    }));
-                }
-
                 Command::all(commands)
             }
             TransferEvent::ModelEvent(event) => {
                 match event {
                     TransferSessionModelEvent::Update(session_id, action) => {
-                        let should_persist = matches!(action, TransferSessionUpdateEvent::SessionDetailUpdated(_));
-
                         if let Some(session) = model.transfer.sessions.lookup_mut(&session_id) {
                             action.update(session);
-
-                            if should_persist {
-                                let session_clone = session.clone();
-                                model.transfer.sessions.sort_by(|a, b| b.order_id.cmp(&a.order_id));
-                                return Command::handle_result(|it| async move {
-                                    let _ = it.app().run(TransferSessionPersistentOperation::save(session_clone)).await;
-                                    Ok(())
-                                })
-                                .then(Command::render());
-                            }
                         }
                     }
                     TransferSessionModelEvent::Add(new) => {
@@ -451,7 +426,7 @@ impl AppModule<BitBridge> for TransferModule {
                     transfer_type: Some(TransferType::Receive)
                 };
 
-                let Some(mut session) = model.transfer.sessions.lookup_mut(&session_id) else {
+                let Some(session) = model.transfer.sessions.lookup_mut(&session_id) else {
                     log::info!("Session {:?} not found", session_id);
                     return Command::done()
                 };
@@ -516,16 +491,14 @@ impl AppModule<BitBridge> for TransferModule {
                     .lookup(&session_id)
                     .and_then(|s| s.resources.iter().find(|r| r.order_id == resource_order_id).cloned());
 
-                let peer = model.p2p.peers.iter().find(|p| p.id == peer_id).cloned();
-
                 Command::handle_result(move |it| async move {
-                    it.app().handle_download_request(peer, session_order_id, transfer_id, resource).await
+                    it.app().handle_download_request(peer_id, session_order_id, transfer_id, resource).await
                 })
             }
             TransferEvent::ResourceNotification {
                 session_order_id,
                 resource,
-                peer_id
+                peer_id: _
             } => {
                 let session_id = TransferSessionId {
                     order_id: Some(session_order_id.to_string()),
@@ -536,21 +509,6 @@ impl AppModule<BitBridge> for TransferModule {
                     log::warn!("Session {} not found for resource notification", session_order_id);
                     return Command::done();
                 };
-
-                let Some(peer) = model.p2p.peers.iter().find(|p| p.id == peer_id).cloned() else {
-                    log::warn!("Peer {} not found, ignoring resource notification", peer_id);
-                    return Command::done();
-                };
-
-                if !peer.is_owned(session) {
-                    log::warn!(
-                        "Peer {} is not owner of session {}, ignoring resource notification; current owner: {:?}",
-                        peer_id,
-                        session_order_id,
-                        session.target
-                    );
-                    return Command::done();
-                }
 
                 let needs_recovery = session.connection_error.is_some() || session.target.is_connection_failed();
                 let resource_order_id = resource.order_id;
