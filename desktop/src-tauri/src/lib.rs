@@ -794,7 +794,6 @@ pub async fn run() {
                     .init(Arc::new(PathResolverImpl::new(workdir_path).await), &*bridge)
                     .await;
                 process_event(EnvironmentEvent::AppLaunched {
-                    auto_launch_nearby: true,
                     allowed_nearby_anonymous: false
                 }, handle.clone()).await;
 

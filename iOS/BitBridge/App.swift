@@ -36,7 +36,7 @@ struct Main: App {
                 .environmentObject(core)
                 .preferredColorScheme(.dark)
                 .task {
-                    await core.update(AppEvent.environment(.appLaunched))
+                    await core.update(AppEvent.environment(.appLaunched(allowed_nearby_anonymous: false)))
                 }
         }
     }

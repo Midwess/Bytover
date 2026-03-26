@@ -16,9 +16,9 @@ use futures_util::StreamExt;
 use uuid::Uuid;
 
 impl AppCommand {
-    pub async fn restart_nearby(&self, auto_launch: bool) -> Result<(), CoreError> {
+    pub async fn restart_nearby(&self) -> Result<(), CoreError> {
         self.run(P2POperation::stop()).await?;
-        self.notify_event(P2PEvent::Launch { auto_launch });
+        self.notify_event(P2PEvent::Launch);
         Ok(())
     }
 
@@ -42,21 +42,21 @@ impl AppCommand {
         }
     }
 
-    pub async fn start_nearby_server(&self, auto_launch: bool) {
-        let user = RpcOperation::get_me().into_future(self.ctx()).await.ok();
+    pub async fn start_nearby_server(&self) -> Result<(), CoreError> {
+        let user = RpcOperation::get_me().into_future(self.ctx()).await?;
 
         let is_already_running = self.run(P2POperation::is_running()).await;
         if is_already_running.unwrap_or(false) {
             log::info!("Nearby server is already running");
-            return;
+            return Ok(());
         }
 
         let Some(device) = self.run(DeviceOperation::get_device_info()).await else {
             self.run(DialogOperation::toast("Device not found".to_string())).await;
-            return;
+            return Ok(());
         };
 
-        let peer = self.gen_peer(user, device).await;
+        let peer = self.gen_peer(Some(user), device).await;
         self.update_model(P2PEvent::UpdateMe { new_peer: peer.clone() });
         log::info!(target: "nearby", "Starting nearby server with peer {peer:?}");
 
@@ -70,7 +70,7 @@ impl AppCommand {
                     log::error!("Nearby server has been stopped: {error:?}, will restart in 3s...");
                     let _ = self.run(P2POperation::stop()).await;
                     self.request_from_shell(CoreOperation::Delay(Duration::from_secs(3))).await;
-                    self.notify_event(P2PEvent::Launch { auto_launch });
+                    self.notify_event(P2PEvent::Launch);
                     break;
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::AlreadyRunning) => {
@@ -86,7 +86,8 @@ impl AppCommand {
                     panic!("Unexpected output from nearby server, output: {output:?}");
                 }
             }
-        }
+        };
+        Ok(())
     }
 
     pub async fn handle_peer_connection(&self, peer: Peer) {

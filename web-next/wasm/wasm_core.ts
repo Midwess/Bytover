@@ -381,7 +381,7 @@ export class WasmCore {
             return;
         }
 
-        await this.update(new AppEventVariantEnvironment(new EnvironmentEventVariantAppLaunched(isTransferPage, true)))
+        await this.update(new AppEventVariantEnvironment(new EnvironmentEventVariantAppLaunched(true)))
     }
 
     public async launchNearby() {
@@ -390,7 +390,7 @@ export class WasmCore {
         }
 
         this.isNearbyEnabled.set(true)
-        await this.update(new AppEventVariantP2P(new P2PEventVariantLaunch(true)))
+        await this.update(new AppEventVariantP2P(new P2PEventVariantLaunch()))
     }
 
     public async update(event: AppEvent) {

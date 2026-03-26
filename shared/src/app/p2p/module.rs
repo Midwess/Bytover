@@ -22,7 +22,7 @@ pub struct P2PModule;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum P2PEvent {
-    Launch { auto_launch: bool },
+    Launch,
     UpdateMe { new_peer: Peer },
 }
 
@@ -37,10 +37,9 @@ impl AppModule<BitBridge> for P2PModule {
         _caps: &<BitBridge as App>::Capabilities
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
-            P2PEvent::Launch { auto_launch } => {
-                model.environment.auto_launch_nearby = auto_launch;
-                Command::new(|it| async move {
-                    it.app().start_nearby_server(auto_launch).await;
+            P2PEvent::Launch => {
+                Command::handle_result(|it| async move {
+                    it.app().start_nearby_server().await
                 })
                 .then_render()
             }

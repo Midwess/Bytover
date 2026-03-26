@@ -9,7 +9,6 @@ use crate::app::modules::AppModule;
 use crate::app::operations::dialog::DialogOperation;
 use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::rpc::RpcOperation;
-use crate::app::p2p::module::P2PEvent;
 use crate::CoreOperation;
 
 pub struct AuthenticationModule;
@@ -54,19 +53,10 @@ impl AppModule<BitBridge> for AuthenticationModule {
             }),
             AuthenticationEvent::SignOut => {
                 model.authentication.user.take();
-                if !model.environment.auto_launch_nearby || !model.environment.allowed_nearby_anonymous {
-                    return Command::new(|it| async move {
-                        let _ = it.app().run(P2POperation::stop()).await;
-                    })
-                    .then_render();
-                }
-
-                Command::handle_result(|ctx| async move {
-                    ctx.app().sign_out().await?;
-                    ctx.notify_shell(CoreOperation::Render);
-                    let _ = ctx.app().restart_nearby(true).await;
-                    Ok(())
+                Command::new(|it| async move {
+                    let _ = it.app().run(P2POperation::stop()).await;
                 })
+                .then_render()
             }
             AuthenticationEvent::OnRedirected { url } => {
                 if model.authentication.user.is_some() {
@@ -87,25 +77,12 @@ impl AppModule<BitBridge> for AuthenticationModule {
                     return Command::done();
                 }
 
-                if !model.environment.auto_launch_nearby {
-                    return Command::render()
-                }
-
                 Command::new(|ctx| async move {
                     let app = ctx.app();
-                    let _ = app.restart_nearby(true).await;
+                    let _ = app.restart_nearby().await;
                 })
             }
-            AuthenticationEvent::UnAuthorized => {
-                if !model.environment.auto_launch_nearby || !model.environment.allowed_nearby_anonymous {
-                    return Command::render();
-                }
-
-                Command::new(|ctx| async move {
-                    let app = ctx.app();
-                    app.notify_event(P2PEvent::Launch { auto_launch: true });
-                })
-            }
+            AuthenticationEvent::UnAuthorized => Command::render(),
             AuthenticationEvent::Feedback { email, message } => {
                 if let Some(message) = message.as_ref() {
                     if message.len() > 4024 {

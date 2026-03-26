@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use actix_web::{web, HttpRequest, HttpResponse};
 use actix_web::web::Bytes;
+use devlog_sdk::tcp::listener::find_tcp_listener;
 use prost::Message as ProstMessage;
 
 use crate::client::Client;
@@ -12,14 +13,10 @@ pub struct SignallingServer {
     client_manager: Arc<ClientManager>,
     turn_manager: Arc<TurnManager>,
     geoip_reader: Option<Arc<maxminddb::Reader<Vec<u8>>>>,
-    port: u16,
-    public_host: String,
 }
 
 impl SignallingServer {
     pub fn new(
-        port: u16,
-        public_host: String,
         turn_manager: Arc<TurnManager>,
     ) -> Self {
         let geoip_data = include_bytes!("../GeoLite2-Country.mmdb");
@@ -30,15 +27,16 @@ impl SignallingServer {
             client_manager: ClientManager::new(),
             turn_manager,
             geoip_reader,
-            port,
-            public_host,
         }
     }
 
     pub async fn run(self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let connection = find_tcp_listener(Some(3003)).await?;
+        let port = connection.port;
+        let public_host = connection.public_host.clone();
+        let std_listener = connection.listener.into_std()?;
+
         let geoip_reader = self.geoip_reader.clone();
-        let port = self.port;
-        let public_host = self.public_host.clone();
         let turn_manager_for_register = Arc::clone(&self.turn_manager);
         let client_manager_for_closure1 = Arc::clone(&self.client_manager);
         let client_manager_for_closure2 = Arc::clone(&self.client_manager);
@@ -90,10 +88,7 @@ impl SignallingServer {
                     }),
                 )
         })
-        .bind((
-            std::net::IpAddr::from(std::net::Ipv4Addr::new(0, 0, 0, 0)),
-            port,
-        ))?
+        .listen(std_listener)?
         .run();
 
         log::info!(
@@ -120,9 +115,6 @@ impl SignallingServer {
         use devlog_sdk::api_gateway::service::{
             GatewayRouteBuilder, GatewayRouteExpression, GatewayServiceBuilder,
         };
-        use devlog_sdk::tcp::listener::find_tcp_listener;
-
-        let _connection = find_tcp_listener(Some(port)).await?;
 
         let api_gateway =
             KongGatewayAdminClient::new(devlog_sdk::config::CONFIGS.kong.admin_url.clone());

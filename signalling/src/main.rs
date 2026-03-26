@@ -26,7 +26,7 @@ async fn main() {
     };
     let turn_manager = std::sync::Arc::new(turn_manager);
     let turn_registry = turn_manager.get_registry();
-    let signalling_server = SignallingServer::new(3003, "localhost".to_string(), Arc::clone(&turn_manager));
+    let signalling_server = SignallingServer::new(Arc::clone(&turn_manager));
     let locator_server = LocatorServer::new();
 
     tokio::select! {
