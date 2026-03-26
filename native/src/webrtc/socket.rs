@@ -96,13 +96,12 @@ impl SyncUdpSocket {
                             buf.truncate(size);
                             let _ = resp.send(Ok((buf, src)));
                         }
-                        Ok((size, src)) => {
-                            // Data from wrong address - route to correct queue
-                            buf.truncate(size);
-                            let idx = hash_addr(&src);
-                            if let Some(q) = recv_queues.get(idx) {
-                                let _ = q.try_send(RecvEntry { addr: src, resp });
-                            }
+                        Ok((_size, _src)) => {
+                            // Data from wrong address - just drop it
+                            let _ = resp.send(Err(std::io::Error::new(
+                                std::io::ErrorKind::UnexpectedEof,
+                                "Wrong address"
+                            ).into()));
                         }
                         Err(e) => {
                             let _ = resp.send(Err(e));

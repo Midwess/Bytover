@@ -1,12 +1,9 @@
 use crate::protocol::webrtc::errors::WebRtcErrors;
 use async_stream::stream;
 use futures::channel::mpsc;
-use futures::channel::mpsc::UnboundedSender;
 use futures::Stream;
 use futures_util::lock::Mutex;
 use futures_util::{SinkExt, StreamExt};
-use matchbox_protocol::PeerId;
-use matchbox_socket::Packet;
 use prost::Message;
 use schema::devlog::bitbridge::peer_message_body::Response;
 use schema::devlog::bitbridge::{peer_message_body, PeerMessageBody};
@@ -15,17 +12,15 @@ use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct DirectMessageChannel {
-    to_peer_id: PeerId,
     response_streams: Arc<Mutex<HashMap<String, mpsc::Sender<Response>>>>,
-    outbound_sender: UnboundedSender<(PeerId, Packet)>
+    outbound_sender: mpsc::Sender<Box<[u8]>>
 }
 
 impl DirectMessageChannel {
-    pub fn new(peer_id: PeerId, outbound_sender: UnboundedSender<(PeerId, Packet)>) -> Self {
+    pub fn new(outbound_sender: mpsc::Sender<Box<[u8]>>) -> Self {
         DirectMessageChannel {
             response_streams: Arc::new(Mutex::new(HashMap::new())),
             outbound_sender,
-            to_peer_id: peer_id
         }
     }
 
@@ -39,8 +34,8 @@ impl DirectMessageChannel {
         }
         .encode(&mut binary)?;
 
-        let packet = Packet::from(binary);
-        let _ = self.outbound_sender.unbounded_send((self.to_peer_id, packet));
+        let packet = binary.into_boxed_slice();
+        let _ = self.outbound_sender.send(packet).await;
 
         Ok(())
     }
@@ -63,10 +58,11 @@ impl DirectMessageChannel {
 
         let mut bytes = vec![];
         msg.encode(&mut bytes)?;
-        let packet = Packet::from(bytes);
+        let packet = bytes.into_boxed_slice();
 
         self.outbound_sender
-            .unbounded_send((self.to_peer_id, packet))
+            .send(packet)
+            .await
             .map_err(|e| WebRtcErrors::MessageChannelError(format!("{e:?}")))?;
 
         let (tx, mut rx) = mpsc::channel(1);
@@ -89,10 +85,11 @@ impl DirectMessageChannel {
 
         let mut bytes = vec![];
         msg.encode(&mut bytes)?;
-        let packet = Packet::from(bytes);
+        let packet = bytes.into_boxed_slice();
 
         self.outbound_sender
-            .unbounded_send((self.to_peer_id, packet))
+            .send(packet)
+            .await
             .map_err(|e| WebRtcErrors::MessageChannelError(format!("{e:?}")))?;
 
         Ok(request_id)

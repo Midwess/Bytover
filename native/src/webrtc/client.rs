@@ -3,14 +3,17 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use futures::channel::mpsc;
+use futures_util::StreamExt;
 use prost::Message;
 use str0m::change::SdpOffer;
-use str0m::channel::ChannelId;
+use str0m::channel::{ChannelConfig, ChannelId};
 use str0m::net::{Protocol, Receive};
 use str0m::{Candidate, Event, IceConnectionState, Input, Output, Rtc, RtcConfig};
+use str0m::rtp::RawPacket;
 use thiserror::Error;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
-use tokio::sync::{oneshot, Mutex, OnceCell, RwLock};
+use tokio::sync::{OnceCell, RwLock};
+use core_services::utils::yield_container::YieldContainer;
 use devlog_sdk::distributed_id::gen_id;
 use schema::devlog::bitbridge::peer_message_body::{Request, Response};
 use schema::devlog::bitbridge::*;
@@ -23,6 +26,8 @@ use shared::entities::local_resource::{LocalResource, LocalResourcePath, Resourc
 use shared::entities::peer::Peer;
 use shared::entities::transfer_session::TransferProgress;
 use shared::errors::CoreError;
+use shared::protocol::webrtc::errors::WebRtcErrors;
+use shared::protocol::webrtc::message_channel::DirectMessageChannel;
 use shared::protocol::webrtc::transfer::{TransferDelimiterShema, TransfersContext};
 use shared::repository::local_resource::LocalResourceRepository;
 use shared::repository::transfer_session::TransferSessionRepository;
@@ -32,16 +37,15 @@ use crate::webrtc::ice::IceAgent;
 use crate::webrtc::signalling::SignalingClient;
 use crate::webrtc::socket::{SyncUdpSocket, SyncUdpSocketError};
 
-const TOTAL_CHANNELS: usize = 4;
+const TOTAL_CHANNELS: usize = 3;
 
 const fn channel_id(raw: usize) -> ChannelId {
     unsafe { std::mem::transmute(raw) }
 }
 
-const MSG_CHANNEL_ID: ChannelId = channel_id(1);
-const RELIABLE_DATA_CHANNEL_ID: ChannelId = channel_id(2);
-const UNRELIABLE_DATA_CHANNEL_ID: ChannelId = channel_id(3);
-const UNORDERED_MSG_CHANNEL_ID: ChannelId = channel_id(4);
+const RELIABLE_DATA_CHANNEL_ID: ChannelId = channel_id(1);
+const UNRELIABLE_DATA_CHANNEL_ID: ChannelId = channel_id(2);
+const UNORDERED_MSG_CHANNEL_ID: ChannelId = channel_id(3);
 
 #[derive(Debug, Error)]
 pub enum WebRtcClientError {
@@ -97,8 +101,8 @@ pub enum WebRtcClientError {
     Shared(String),
 }
 
-impl From<shared::protocol::webrtc::errors::WebRtcErrors> for WebRtcClientError {
-    fn from(err: shared::protocol::webrtc::errors::WebRtcErrors) -> Self {
+impl From<WebRtcErrors> for WebRtcClientError {
+    fn from(err: WebRtcErrors) -> Self {
         WebRtcClientError::Shared(format!("{err}"))
     }
 }
@@ -110,29 +114,20 @@ impl From<WebRtcClientError> for CoreError {
 }
 
 pub struct WebRtcClient {
-    pub msg_tx: UnboundedSender<Vec<u8>>,
-    pub reliable_data_tx: UnboundedSender<Vec<u8>>,
-    pub unreliable_data_tx: UnboundedSender<Vec<u8>>,
-    pub unordered_msg_tx: UnboundedSender<Vec<u8>>,
+    reliable_data_tx: OnceCell<mpsc::Sender<Box<[u8]>>>,
+    unreliable_data_tx: OnceCell<mpsc::Sender<Box<[u8]>>>,
+
+    msg_channel: OnceCell<DirectMessageChannel>,
+
+    rtc: YieldContainer<Rtc>,
+    socket: SyncUdpSocket,
+    local_addr: SocketAddr,
 
     peer: RwLock<Option<Peer>>,
-    pending_responses: Mutex<HashMap<String, oneshot::Sender<Response>>>,
     transfers_context: TransfersContext,
-    inbound_data_tx: UnboundedSender<Vec<u8>>,
     core_request: OnceCell<CoreRequest>,
     resource_repo: Arc<dyn LocalResourceRepository>,
     transfer_session_repo: Arc<dyn TransferSessionRepository>,
-}
-
-pub struct WebRtcTransport {
-    rtc: Rtc,
-    socket: SyncUdpSocket,
-    signalling: SignalingClient,
-    local_addr: SocketAddr,
-    msg_rx: UnboundedReceiver<Vec<u8>>,
-    reliable_data_rx: UnboundedReceiver<Vec<u8>>,
-    unreliable_data_rx: UnboundedReceiver<Vec<u8>>,
-    unordered_msg_rx: UnboundedReceiver<Vec<u8>>,
 }
 
 impl WebRtcClient {
@@ -144,7 +139,7 @@ impl WebRtcClient {
         ice_agent: IceAgent,
         resource_repo: Arc<dyn LocalResourceRepository>,
         transfer_session_repo: Arc<dyn TransferSessionRepository>,
-    ) -> Result<(Arc<Self>, WebRtcTransport), WebRtcClientError> {
+    ) -> Result<Arc<Self>, WebRtcClientError> {
         let mut rtc = RtcConfig::new().build(Instant::now());
 
         let local_addr = socket.local_addr()?;
@@ -154,6 +149,26 @@ impl WebRtcClient {
         log::info!("[webrtc-client] Added host candidate: {local_addr}");
 
         ice_agent.gather_candidates(&mut rtc, local_addr).await;
+
+        let mut api = rtc.direct_api();
+        api.create_data_channel(ChannelConfig {
+            label: "reliable-data".into(),
+            ordered: true,
+            negotiated: Some(1),
+            ..Default::default()
+        });
+        api.create_data_channel(ChannelConfig {
+            label: "unreliable-data".into(),
+            ordered: false,
+            negotiated: Some(2),
+            ..Default::default()
+        });
+        api.create_data_channel(ChannelConfig {
+            label: "unordered-msg".into(),
+            ordered: false,
+            negotiated: Some(3),
+            ..Default::default()
+        });
 
         let offer = SdpOffer::from_sdp_string(&offer_message.sdp)
             .map_err(|e| WebRtcClientError::SdpParse(format!("{e}")))?;
@@ -172,79 +187,66 @@ impl WebRtcClient {
 
         log::info!("[webrtc-client] Answer sent, waiting for connection and all channels");
 
-        let (msg_tx, msg_rx) = unbounded_channel::<Vec<u8>>();
-        let (reliable_data_tx, reliable_data_rx) = unbounded_channel::<Vec<u8>>();
-        let (unreliable_data_tx, unreliable_data_rx) = unbounded_channel::<Vec<u8>>();
-        let (unordered_msg_tx, unordered_msg_rx) = unbounded_channel::<Vec<u8>>();
-        let (inbound_data_tx, _inbound_data_rx) = unbounded_channel::<Vec<u8>>();
-
         let mut channels_opened: usize = 0;
         let mut is_connected = false;
 
+        let socket = socket;
         let mut buf = vec![0u8; 2000];
         loop {
-            let timeout = match rtc.poll_output()? {
-                Output::Timeout(t) => t,
-                Output::Transmit(t) => {
-                    socket.send_to(&t.contents, t.destination).await?;
-                    continue;
-                }
-                Output::Event(e) => {
-                    match &e {
-                        Event::Connected => {
-                            log::info!("[webrtc-client] Connected");
-                            is_connected = true;
-                        }
-                        Event::ChannelOpen(_, label) => {
-                            channels_opened += 1;
-                            log::info!(
-                                "[webrtc-client] Channel {} opened (label: {})",
-                                channels_opened,
-                                label
-                            );
-                        }
-                        Event::IceConnectionStateChange(state) => {
-                            log::info!("[webrtc-client] ICE state: {:?}", state);
-                            if matches!(state, IceConnectionState::Disconnected) {
-                                return Err(WebRtcClientError::Signalling(
-                                    "Peer disconnected during setup".into(),
-                                ));
+            let timeout = {
+                let output = rtc.poll_output()?;
+                match output {
+                    Output::Timeout(t) => t,
+                    Output::Transmit(t) => {
+                        socket.send_to(&t.contents, t.destination).await?;
+                        continue;
+                    }
+                    Output::Event(e) => {
+                        match &e {
+                            Event::Connected => {
+                                log::info!("[webrtc-client] Connected");
+                                is_connected = true;
                             }
+                            Event::ChannelOpen(_, label) => {
+                                channels_opened += 1;
+                                log::info!(
+                                    "[webrtc-client] Channel {} opened (label: {})",
+                                    channels_opened,
+                                    label
+                                );
+                            }
+                            Event::IceConnectionStateChange(state) => {
+                                log::info!("[webrtc-client] ICE state: {:?}", state);
+                                if matches!(state, IceConnectionState::Disconnected) {
+                                    return Err(WebRtcClientError::Signalling(
+                                        "Peer disconnected during setup".into(),
+                                    ));
+                                }
+                            }
+                            _ => {}
                         }
-                        _ => {}
+
+                        if is_connected && channels_opened >= TOTAL_CHANNELS {
+                            log::info!("[webrtc-client] All channels open, ready");
+
+                            let client = Arc::new(Self {
+                                rtc: YieldContainer::new(rtc),
+                                socket,
+                                local_addr,
+                                unreliable_data_tx: Default::default(),
+                                reliable_data_tx: Default::default(),
+                                msg_channel: Default::default(),
+                                peer: RwLock::new(None),
+                                transfers_context: TransfersContext::new(),
+                                core_request: OnceCell::new(),
+                                resource_repo,
+                                transfer_session_repo,
+                            });
+
+                            return Ok(client);
+                        }
+                        continue;
                     }
-
-                    if is_connected && channels_opened >= TOTAL_CHANNELS {
-                        log::info!("[webrtc-client] All channels open, ready");
-
-                        let client = Arc::new(Self {
-                            msg_tx,
-                            reliable_data_tx,
-                            unreliable_data_tx,
-                            unordered_msg_tx,
-                            peer: RwLock::new(None),
-                            pending_responses: Mutex::new(HashMap::new()),
-                            transfers_context: TransfersContext::new(),
-                            inbound_data_tx,
-                            core_request: OnceCell::new(),
-                            resource_repo,
-                            transfer_session_repo,
-                        });
-
-                        let transport = WebRtcTransport {
-                            rtc,
-                            socket,
-                            signalling,
-                            local_addr,
-                            msg_rx,
-                            reliable_data_rx,
-                            unreliable_data_rx,
-                            unordered_msg_rx,
-                        };
-
-                        return Ok((client, transport));
-                    }
-                    continue;
                 }
             };
 
@@ -255,7 +257,9 @@ impl WebRtcClient {
             }
 
             tokio::select! {
-                result = socket.recv_any(&mut buf) => {
+                result = {
+                    socket.recv_any(&mut buf)
+                } => {
                     let (n, source) = result?;
                     let receive = Receive::new(Protocol::Udp, source, local_addr, &buf[..n])
                         .map_err(|e| WebRtcClientError::Signalling(format!("{e}")))?;
@@ -263,6 +267,109 @@ impl WebRtcClient {
                 }
                 _ = tokio::time::sleep(duration) => {
                     rtc.handle_input(Input::Timeout(Instant::now()))?;
+                }
+            }
+        }
+    }
+
+    pub async fn run(&self) -> Result<(), WebRtcClientError> {
+        let mut buf = vec![0u8; 2000];
+        let rtc = self.rtc.retrieve().await?;
+
+        let (msg_tx, mut msg_rx) = mpsc::channel::<Box<[u8]>>(64);
+        let (reliable_tx, mut reliable_data_rx) = mpsc::channel::<Box<[u8]>>(64);
+        let (unreliable_tx, mut unreliable_data_rx) = mpsc::channel::<Box<[u8]>>(64);
+
+        let _ = self.msg_channel.set(DirectMessageChannel::new(msg_tx));
+        let _ = self.reliable_data_tx.set(reliable_tx);
+        let _ = self.unreliable_data_tx.set(unreliable_tx);
+
+        loop {
+            let is_alive = {
+                let rtc = rtc.await;
+                rtc.is_alive()
+            };
+
+            if !is_alive {
+                self.peer_disconnected().await;
+                return Ok(());
+            }
+
+            let timeout = {
+                let mut rtc = rtc.await;
+                loop {
+                    match rtc.poll_output()? {
+                        Output::Timeout(t) => break t,
+                        Output::Transmit(t) => {
+                            self.socket.send_to(&t.contents, t.destination).await?;
+                        }
+                        Output::Event(e) => match e {
+                            Event::IceConnectionStateChange(state) => {
+                                log::info!("[webrtc-client] ICE state: {:?}", state);
+                                if matches!(state, IceConnectionState::Disconnected) {
+                                    self.peer_disconnected().await;
+                                    rtc.disconnect();
+                                }
+                            }
+                            Event::ChannelData(data) => {
+                                if data.id == UNORDERED_MSG_CHANNEL_ID {
+                                    if let Ok(msg) = PeerMessageBody::decode(&data.data[..]) {
+                                        let request_id = msg.request_id;
+                                        if let Some(response) = msg.response {
+                                            self.msg_channel().notify_response(request_id, response).await;
+                                        } else if let Some(request) = msg.request {
+                                            self.process_message_packet(request_id, request).await;
+                                        }
+                                    }
+                                } else if data.id == RELIABLE_DATA_CHANNEL_ID
+                                    || data.id == UNRELIABLE_DATA_CHANNEL_ID
+                                {
+                                    self.process_data_packet(data.data).await;
+                                }
+                            }
+                            _ => {}
+                        },
+                    }
+                }
+            };
+
+            let duration = timeout
+                .saturating_duration_since(Instant::now())
+                .max(Duration::from_millis(1));
+
+            tokio::select! {
+                result = {
+                    let socket = self.socket.await;
+                    socket.recv_any(&mut buf)
+                } => {
+                    let (n, source) = result?;
+                    let Ok(receive) = Receive::new(Protocol::Udp, source, self.local_addr, &buf[..n]) else {
+                        continue;
+                    };
+                    let mut rtc = rtc.await;
+                    rtc.handle_input(Input::Receive(Instant::now(), receive))?;
+                }
+                _ = tokio::time::sleep(duration) => {
+                    let mut rtc = rtc.await;
+                    rtc.handle_input(Input::Timeout(Instant::now()))?;
+                }
+                Some(data) = msg_rx.next() => {
+                    let mut rtc = rtc.await;
+                    if let Some(mut ch) = rtc.channel(UNORDERED_MSG_CHANNEL_ID) {
+                        ch.write(true, &data).ok();
+                    }
+                }
+                Some(data) = reliable_data_rx.next() => {
+                    let mut rtc = rtc.await;
+                    if let Some(mut ch) = rtc.channel(RELIABLE_DATA_CHANNEL_ID) {
+                        ch.write(true, &data).ok();
+                    }
+                }
+                Some(data) = unreliable_data_rx.next() => {
+                    let mut rtc = rtc.await;
+                    if let Some(mut ch) = rtc.channel(UNRELIABLE_DATA_CHANNEL_ID) {
+                        ch.write(true, &data).ok();
+                    }
                 }
             }
         }
@@ -277,7 +384,11 @@ impl WebRtcClient {
     }
 
     pub async fn peer_id(&self) -> Option<String> {
-        self.peer.read().await.as_ref().map(|p| p.id())
+        self.peer.read().await.as_ref().map(|p| p.id().to_string())
+    }
+
+    pub async fn peer_entity(&self) -> Option<Peer> {
+        self.peer.read().await.clone()
     }
 
     pub async fn introduce(&self, current_user: &Peer) -> Result<(), WebRtcClientError> {
@@ -320,81 +431,8 @@ impl WebRtcClient {
         Ok(())
     }
 
-    pub async fn send_msg_request(&self, request: Request) -> Result<Response, WebRtcClientError> {
-        let request_id = gen_id().await.to_string();
-        let msg = PeerMessageBody {
-            request: Some(request),
-            request_id: request_id.clone(),
-            ..Default::default()
-        };
-
-        let mut bytes = vec![];
-        msg.encode(&mut bytes)?;
-
-        let (tx, rx) = oneshot::channel();
-        self.pending_responses.lock().await.insert(request_id.clone(), tx);
-
-        self.msg_tx
-            .send(bytes)
-            .map_err(|e| WebRtcClientError::MessageChannel(format!("{e}")))?;
-
-        match tokio::time::timeout(Duration::from_secs(60), rx).await {
-            Ok(Ok(response)) => Ok(response),
-            Ok(Err(_)) => {
-                self.pending_responses.lock().await.remove(&request_id);
-                Err(WebRtcClientError::MessageChannel("Response channel dropped".into()))
-            }
-            Err(_) => {
-                self.pending_responses.lock().await.remove(&request_id);
-                Err(WebRtcClientError::Timeout)
-            }
-        }
-    }
-
-    pub async fn notify_msg(&self, request: Request) -> Result<String, WebRtcClientError> {
-        let request_id = gen_id().await.to_string();
-        let msg = PeerMessageBody {
-            request: Some(request),
-            request_id: request_id.clone(),
-            ..Default::default()
-        };
-
-        let mut bytes = vec![];
-        msg.encode(&mut bytes)?;
-
-        self.msg_tx
-            .send(bytes)
-            .map_err(|e| WebRtcClientError::MessageChannel(format!("{e}")))?;
-
-        Ok(request_id)
-    }
-
-    pub async fn send_msg_response(
-        &self,
-        request_id: String,
-        response: Response,
-    ) -> Result<(), WebRtcClientError> {
-        let msg = PeerMessageBody {
-            request_id,
-            response: Some(response),
-            ..Default::default()
-        };
-
-        let mut bytes = vec![];
-        msg.encode(&mut bytes)?;
-
-        self.msg_tx
-            .send(bytes)
-            .map_err(|e| WebRtcClientError::MessageChannel(format!("{e}")))?;
-
-        Ok(())
-    }
-
-    pub async fn notify_inbound_response(&self, request_id: String, response: Response) {
-        let tx = self.pending_responses.lock().await.remove(&request_id);
-        if let Some(tx) = tx {
-            let _ = tx.send(response);
-        }
+    pub fn msg_channel(&self) -> &DirectMessageChannel {
+        self.msg_channel.get().unwrap()
     }
 
     pub async fn process_message_packet(&self, request_id: String, msg: Request) {
@@ -409,7 +447,7 @@ impl WebRtcClient {
             }
             Request::ViewSessionRequest(req) => {
                 log::info!("[webrtc-client] Received view session request for order_id {}", req.order_id);
-                let peer_id = self.peer.read().await.as_ref().map(|p| p.id()).unwrap_or_default();
+                let peer_id = self.peer.read().await.as_ref().map(|p| p.id().to_string()).unwrap_or_default();
                 let response = CoreOperationOutput::P2P(P2POperationOutput::ReceivedViewSessionRequest {
                     peer_id,
                     request_id,
@@ -422,7 +460,7 @@ impl WebRtcClient {
                 }
             }
             Request::DownloadResourceRequest(req) => {
-                let peer_id = self.peer.read().await.as_ref().map(|p| p.id()).unwrap_or_default();
+                let peer_id = self.peer.read().await.as_ref().map(|p| p.id().to_string()).unwrap_or_default();
                 let response = CoreOperationOutput::P2P(P2POperationOutput::ReceivedDownloadRequest {
                     peer_id,
                     session_order_id: req.session_order_id,
@@ -472,7 +510,7 @@ impl WebRtcClient {
 
                     if let Some(core_request) = self.core_request() {
                         let peer_id =
-                            self.peer.read().await.as_ref().map(|p| p.id()).unwrap_or_default();
+                            self.peer.read().await.as_ref().map(|p| p.id().to_string()).unwrap_or_default();
                         let response =
                             CoreOperationOutput::P2P(P2POperationOutput::ReceivedResourceNotification {
                                 session_order_id,
@@ -484,7 +522,7 @@ impl WebRtcClient {
                 }
 
                 let _ = self
-                    .send_msg_response(request_id, Response::VoidResponse(VoidResponseMessage {}))
+                    .msg_channel().send_response(request_id, Response::VoidResponse(VoidResponseMessage {}))
                     .await;
             }
             Request::FecFeedback(_feedback) => {}
@@ -493,7 +531,6 @@ impl WebRtcClient {
     }
 
     pub async fn process_data_packet(&self, _data: Vec<u8>) {
-        // TODO: route to prefix channels when receiving_loop is implemented
     }
 
     pub async fn peer_disconnected(&self) {
@@ -511,7 +548,7 @@ impl WebRtcClient {
         let peer_id = self.peer.read().await.as_ref().map(|p| p.id()).unwrap_or_default();
         log::info!("[webrtc-client] Cancelling transfer session {session_id} to peer {peer_id}");
         let _ = self
-            .notify_msg(Request::CancelRequest(P2pCancelSessionRequest {
+            .msg_channel().notify(Request::CancelRequest(P2pCancelSessionRequest {
                 session_id,
                 resource_id: None,
             }))
@@ -523,8 +560,8 @@ impl WebRtcClient {
         log::info!(
             "[webrtc-client] Cancelling resource {resource_id} in session {session_id}"
         );
-        let _ = self
-            .notify_msg(Request::CancelRequest(P2pCancelSessionRequest {
+        let _ = self.msg_channel()
+            .notify(Request::CancelRequest(P2pCancelSessionRequest {
                 session_id,
                 resource_id: Some(resource_id),
             }))
@@ -606,26 +643,6 @@ impl WebRtcClient {
         Ok(())
     }
 
-    pub async fn request_resource_download(
-        &self,
-        _core_request: CoreRequest,
-        _session_order_id: u64,
-        _resource: LocalResource,
-        _progress: TransferProgress,
-    ) -> Result<TransferProgress, WebRtcClientError> {
-        todo!("request_resource_download requires receiving_loop")
-    }
-
-    pub async fn download_all_resources(
-        &self,
-        _core_request: CoreRequest,
-        _session_order_id: u64,
-        _session_resource: LocalResource,
-        _resources: Vec<LocalResource>,
-    ) -> Result<TransferProgress, WebRtcClientError> {
-        todo!("download_all_resources requires receiving_loop")
-    }
-
     pub async fn stream_resource(
         &self,
         _session_id: u64,
@@ -633,89 +650,5 @@ impl WebRtcClient {
         _resource: LocalResource,
     ) -> Result<(), WebRtcClientError> {
         todo!("stream_resource requires sending_loop")
-    }
-}
-
-impl WebRtcTransport {
-    pub async fn run(mut self, client: Arc<WebRtcClient>) -> Result<(), WebRtcClientError> {
-        let mut buf = vec![0u8; 2000];
-        loop {
-            if !self.rtc.is_alive() {
-                client.peer_disconnected().await;
-                return Ok(());
-            }
-
-            let timeout = loop {
-                match self.rtc.poll_output()? {
-                    Output::Timeout(t) => break t,
-                    Output::Transmit(t) => {
-                        self.socket.send_to(&t.contents, t.destination).await?;
-                    }
-                    Output::Event(e) => match e {
-                        Event::IceConnectionStateChange(state) => {
-                            log::info!("[webrtc-client] ICE state: {:?}", state);
-                            if matches!(state, IceConnectionState::Disconnected) {
-                                client.peer_disconnected().await;
-                                self.rtc.disconnect();
-                            }
-                        }
-                        Event::ChannelData(data) => {
-                            if data.id == MSG_CHANNEL_ID || data.id == UNORDERED_MSG_CHANNEL_ID {
-                                if let Ok(msg) = PeerMessageBody::decode(&data.data[..]) {
-                                    let request_id = msg.request_id;
-                                    if let Some(response) = msg.response {
-                                        client.notify_inbound_response(request_id, response).await;
-                                    } else if let Some(request) = msg.request {
-                                        client.process_message_packet(request_id, request).await;
-                                    }
-                                }
-                            } else if data.id == RELIABLE_DATA_CHANNEL_ID
-                                || data.id == UNRELIABLE_DATA_CHANNEL_ID
-                            {
-                                client.process_data_packet(data.data).await;
-                            }
-                        }
-                        _ => {}
-                    },
-                }
-            };
-
-            let duration = timeout
-                .saturating_duration_since(Instant::now())
-                .max(Duration::from_millis(1));
-
-            tokio::select! {
-                result = self.socket.recv_any(&mut buf) => {
-                    let (n, source) = result?;
-                    let Ok(receive) = Receive::new(Protocol::Udp, source, self.local_addr, &buf[..n]) else {
-                        continue;
-                    };
-                    self.rtc.handle_input(Input::Receive(Instant::now(), receive))?;
-                }
-                _ = tokio::time::sleep(duration) => {
-                    self.rtc.handle_input(Input::Timeout(Instant::now()))?;
-                }
-                Some(data) = self.msg_rx.recv() => {
-                    if let Some(mut ch) = self.rtc.channel(MSG_CHANNEL_ID) {
-                        ch.write(true, &data).ok();
-                    }
-                }
-                Some(data) = self.reliable_data_rx.recv() => {
-                    if let Some(mut ch) = self.rtc.channel(RELIABLE_DATA_CHANNEL_ID) {
-                        ch.write(true, &data).ok();
-                    }
-                }
-                Some(data) = self.unreliable_data_rx.recv() => {
-                    if let Some(mut ch) = self.rtc.channel(UNRELIABLE_DATA_CHANNEL_ID) {
-                        ch.write(true, &data).ok();
-                    }
-                }
-                Some(data) = self.unordered_msg_rx.recv() => {
-                    if let Some(mut ch) = self.rtc.channel(UNORDERED_MSG_CHANNEL_ID) {
-                        ch.write(true, &data).ok();
-                    }
-                }
-            }
-        }
     }
 }

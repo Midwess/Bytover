@@ -3,6 +3,7 @@ use crate::core_api_impl::net_stream::NetStreamImpl;
 use crate::native::executor::NativeExecutor;
 use crate::native::p2p::P2PNativeExecutorImpl;
 use crate::native::persistent::NativePersistentImpl;
+use crate::webrtc::server::{WebRtcServer, WebRtcServerConfig};
 use crate::native::rpc::NativeRpcImpl;
 use crate::native::transfer::TransferNativeImpl;
 use crate::network::grpc::RpcNetworkModuleImpl;
@@ -20,7 +21,7 @@ use shared::protocol::public_cloud::cloud_service::CloudService;
 use shared::protocol::rpc::app_server::AppServer;
 use shared::protocol::rpc::auth_provider::AuthProvider;
 use shared::protocol::rpc::cloud_server::CloudServer;
-use shared::protocol::webrtc::webrtc::WebRtc;
+use shared::shell::executor::transfer::WebRtc;
 use shared::repository::auth_session::AuthSessionRepository;
 use shared::repository::local_resource::LocalResourceRepository;
 use shared::repository::path_resolver::PathResolver;
@@ -28,6 +29,7 @@ use shared::repository::shelf::ShelfRepository;
 use shared::repository::transfer_session::TransferSessionRepository;
 use shared::shell::api::network::InternetConnection;
 use shared::shell::api::{CoreBridge, NetStream};
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::OnceCell;
@@ -170,11 +172,23 @@ impl DiContainer {
 
         let local_resource_repo = Arc::new(self.get_local_resource_repository());
         let transfer_session_repo = Arc::new(self.get_transfer_session_repository());
-        let web_rtc = Arc::new(WebRtc::new(
-            get_signalling_server_ws_url(),
+
+        // Create stub WebRtc for TransferNativeImpl
+        let web_rtc_stub = Arc::new(WebRtc::new());
+
+        // Create WebRtcServer for P2PNativeExecutorImpl
+        let web_rtc_config = WebRtcServerConfig {
+            bind_addr: "0.0.0.0:0".parse().unwrap(),
+            signalling_host: get_signalling_server_ws_url(),
+            signalling_port: 0, // Will be parsed from URL
+            signalling_ssl: false,
+        };
+        let web_rtc_server = Arc::new(WebRtcServer::new(
+            web_rtc_config,
             local_resource_repo.clone(),
             transfer_session_repo
         ));
+
         let cloud_service = CloudService {
             server: self.get_cloud_server(),
             active_session: Default::default(),
@@ -195,10 +209,10 @@ impl DiContainer {
                 device_alias_repository: Box::new(self.get_device_alias_repository())
             }),
             transfer: Box::new(TransferNativeImpl {
-                web_rtc: web_rtc.clone(),
+                web_rtc: web_rtc_stub.clone(),
                 cloud_service
             }),
-            p2p: Box::new(P2PNativeExecutorImpl { web_rtc })
+            p2p: Box::new(P2PNativeExecutorImpl { web_rtc: web_rtc_server })
         };
 
         let _ = self.native_executor.set(executor);

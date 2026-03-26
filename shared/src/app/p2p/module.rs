@@ -74,13 +74,11 @@ impl AppModule<BitBridge> for P2PModule {
             P2PEvent::AddFindingScope(scope_id) => {
                 model.p2p.finding_scopes.retain(|s| s != &scope_id);
                 model.p2p.finding_scopes.push(scope_id.clone());
-                let scopes = model.p2p.finding_scopes.clone();
-                Command::handle_result(|it| async move { it.app().run(P2POperation::update_finding_scopes(scopes)).await })
+                Command::render()
             }
             P2PEvent::RemoveFindingScope(scope_id) => {
                 model.p2p.finding_scopes.retain(|s| s != &scope_id);
-                let scopes = model.p2p.finding_scopes.clone();
-                Command::handle_result(|it| async move { it.app().run(P2POperation::update_finding_scopes(scopes)).await })
+                Command::render()
             }
             P2PEvent::PeerUpdated { mut peer } => {
                 if let Some(existing_peer) = model.p2p.peers.iter_mut().find(|p| p.id == peer.id) {

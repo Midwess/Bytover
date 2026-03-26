@@ -16,7 +16,6 @@ use super::CoreOperation;
 pub enum P2POperation {
     StartNearbyServer(Peer),
     StopNearbyServer,
-    UpdateFindingScopes(Vec<String>),
     PeerEvents(String),
     IsRunning,
     ViewSessionDetail {
@@ -106,10 +105,6 @@ impl Operation for P2POperation {
 }
 
 impl P2POperation {
-    pub fn update_finding_scopes(scopes: Vec<String>) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
-        Command::request_from_shell(CoreOperation::P2P(P2POperation::UpdateFindingScopes(scopes))).map(|it| it.result())
-    }
-
     pub fn stop() -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
         Command::request_from_shell(CoreOperation::P2P(P2POperation::StopNearbyServer)).map(|it| it.result())
     }

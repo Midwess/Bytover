@@ -16,6 +16,10 @@ use std::sync::Arc;
 pub struct WebRtc;
 
 impl WebRtc {
+    pub fn new() -> Self {
+        WebRtc
+    }
+
     pub async fn cancel_session(&self, _peer_id: String, _session_id: u64) -> Result<(), CoreError> {
         Ok(())
     }

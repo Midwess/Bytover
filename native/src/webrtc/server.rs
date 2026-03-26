@@ -11,17 +11,14 @@ use tokio::sync::{OnceCell, RwLock};
 
 use shared::app::operations::p2p::P2POperationOutput;
 use shared::app::operations::CoreOperationOutput;
-use shared::entities::finding_scope::FindingScope;
 use shared::entities::local_resource::LocalResource;
 use shared::entities::peer::Peer as PeerEntity;
-use shared::entities::transfer_session::TransferProgress;
 use shared::errors::CoreError;
-use shared::protocol::webrtc::errors::WebRtcErrors;
 use shared::repository::local_resource::LocalResourceRepository;
 use shared::repository::transfer_session::TransferSessionRepository;
 use shared::shell::api::CoreRequest;
 
-use crate::webrtc::client::{WebRtcClient, WebRtcClientError, WebRtcTransport};
+use crate::webrtc::client::{WebRtcClient, WebRtcClientError};
 use crate::webrtc::ice::IceAgent;
 use crate::webrtc::signalling::SignalingClient;
 use crate::webrtc::socket::{SyncUdpSocket, SyncUdpSocketError};
@@ -80,6 +77,7 @@ pub struct WebRtcServer {
     transfer_session_repo: Arc<dyn TransferSessionRepository>,
     current_user: OnceCell<PeerEntity>,
     core_request: OnceCell<CoreRequest>,
+    running: AtomicBool,
 }
 
 impl WebRtcServer {
@@ -101,7 +99,12 @@ impl WebRtcServer {
             transfer_session_repo,
             current_user: Default::default(),
             core_request: Default::default(),
+            running: AtomicBool::new(false),
         }
+    }
+
+    fn is_running(&self) -> bool {
+        self.running.load(Ordering::SeqCst)
     }
 
     async fn get_client(&self, peer_id: &str) -> Result<Arc<WebRtcClient>, WebRtcServerError> {
@@ -191,6 +194,8 @@ impl WebRtcServer {
             return Ok(());
         }
 
+        self.running.store(true, Ordering::SeqCst);
+
         let _ = self.core_request.set(core_request.clone());
         let _ = self.current_user.set(current_user.clone());
 
@@ -230,7 +235,7 @@ impl WebRtcServer {
                     if let Some(offer) = msg_offer {
                         if ice_agent.is_none() {
                             let config = self.signalling
-                                .fetch_relay_config(&current_user.id())
+                                .fetch_relay_config(&current_user.id().to_string())
                                 .await
                                 .map_err(|e| WebRtcServerError::Signalling(format!("{e}")))?;
                             log::info!(
@@ -260,8 +265,8 @@ impl WebRtcServer {
                             .await;
 
                             if result.is_ok() {
-                                let (client, transport) = result.unwrap();
-                                Some((client, transport, user))
+                                let client = result.unwrap();
+                                Some((client, user))
                             } else {
                                 None
                             }
@@ -271,7 +276,7 @@ impl WebRtcServer {
 
                 Some(result) = connect_futs.next() => {
                     match result {
-                        Some((client, transport, user)) => {
+                        Some((client, user)) => {
                             log::info!("[webrtc-server] Client connected, performing introduce");
 
                             if let Err(e) = client.introduce(&user).await {
@@ -287,7 +292,7 @@ impl WebRtcServer {
                                 clients.insert(peer_id.clone(), client.clone());
                             }
 
-                            let peer_entity = client.peer.read().await.clone();
+                            let peer_entity = client.peer_entity().await;
                             if let Some(core_req) = self.core_request.get() {
                                 if let Some(ref peer) = peer_entity {
                                     core_req
@@ -299,10 +304,12 @@ impl WebRtcServer {
                             }
 
                             let client_clone = client.clone();
+                            let peer_id = client.peer_id().await.unwrap_or_default();
                             tokio::spawn(async move {
-                                if let Err(e) = transport.run(client_clone).await {
-                                    log::error!("[webrtc-server] Client transport error: {e}");
+                                if let Err(e) = client_clone.run().await {
+                                    log::error!("[webrtc-server] Client run error: {e}");
                                 }
+                                log::info!("[webrtc-server] Client {peer_id} run loop ended");
                             });
 
                             log::info!("[webrtc-server] Active clients: {}", self.clients.read().await.len());
@@ -316,4 +323,3 @@ impl WebRtcServer {
         }
     }
 }
-
