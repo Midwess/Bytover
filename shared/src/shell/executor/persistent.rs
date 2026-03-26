@@ -142,12 +142,7 @@ pub trait NativePersistent: Send + Sync {
                 Ok(CoreOperationOutput::ZipDownloadPaths(result))
             }
             PersistentOperation::TransferSession(TransferSessionPersistentOperation::Clear) => {
-                let sessions = self.transfer_session_repository().find_all(None, None, None).await?;
-                for session in sessions {
-                    let result = self.transfer_session_repository().delete_session(session.id()).await;
-                    log::info!("Deleted session: {:?}", result);
-                }
-
+                // Transfer sessions are no longer persisted - nothing to clear
                 Ok(CoreOperationOutput::Bool(true))
             }
             PersistentOperation::User(_) => Err(CoreError::NotImplemented("User operations not implemented yet".to_string())),

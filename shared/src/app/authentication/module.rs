@@ -77,10 +77,7 @@ impl AppModule<BitBridge> for AuthenticationModule {
                     return Command::done();
                 }
 
-                Command::new(|ctx| async move {
-                    let app = ctx.app();
-                    let _ = app.restart_nearby().await;
-                })
+                Command::render()
             }
             AuthenticationEvent::UnAuthorized => Command::render(),
             AuthenticationEvent::Feedback { email, message } => {

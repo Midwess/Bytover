@@ -12,6 +12,7 @@ use schema::value::device::DeviceType;
 use schema::value::platform::Platform;
 use shared::app::authentication::module::AuthenticationEvent;
 use shared::app::environment::module::EnvironmentEvent;
+use shared::app::p2p::module::P2PEvent;
 use shared::app::operations::device::DeviceOperation;
 use shared::app::operations::dialog::DialogOperation;
 use shared::app::operations::webview::WebViewOperation;
@@ -574,6 +575,13 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
                     CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
                 }
             },
+            CoreOperation::LaunchNearbyServer => {
+                spawn(async move {
+                    let bridge = DiContainer::get_instance().core_bridge();
+                    bridge.notify(AppEvent::P2P(P2PEvent::Launch)).await;
+                });
+                CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
+            }
             operation => {
                 spawn(async move {
                     let bridge = DiContainer::get_instance().core_bridge();

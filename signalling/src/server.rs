@@ -31,7 +31,7 @@ impl SignallingServer {
     }
 
     pub async fn run(self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let connection = find_tcp_listener(Some(3003)).await?;
+        let connection = find_tcp_listener(Some(3000)).await?;
         let port = connection.port;
         let public_host = connection.public_host.clone();
         let std_listener = connection.listener.into_std()?;

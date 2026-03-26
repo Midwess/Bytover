@@ -49,7 +49,8 @@ pub enum CoreOperation {
     InitNativeExecutor,
     Notified(AppEvent),
     Dialog(DialogOperation),
-    Delay(Duration)
+    Delay(Duration),
+    LaunchNearbyServer,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, From, TryFrom, TryInto)]

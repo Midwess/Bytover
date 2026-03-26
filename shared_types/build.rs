@@ -8,7 +8,6 @@ use native::repository::path_resolver::{PathResolverMessage, PathResolverRespons
 use schema::devlog::bitbridge::peer_message_body::Response;
 use schema::devlog::bitbridge::view_session_detail_response::Result as ViewSessionDetailResponseResult;
 use schema::devlog::bitbridge::{PeerErrorsMessage, ResourceNotificationRequest};
-use schema::devlog::rpc_signalling::server::ScopeState;
 use schema::value::device::DeviceType;
 use schema::value::platform::Platform;
 use schema::value::static_resource::static_resource::Source;
@@ -34,7 +33,6 @@ use shared::app::shelf::module::{ResourceSelection, ShelfEvent, ShelfItemViewMod
 use shared::app::transfer::module::{TransferEvent, TransferModel};
 use shared::app::view_models::receive_session::ReceiveResourceViewModel;
 use shared::app::BitBridge;
-use shared::entities::finding_scope::FindingScope;
 use shared::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use shared::entities::session::{Session, SessionType};
 use shared::entities::target::{P2PConnectionState, TransferTarget};
@@ -79,8 +77,6 @@ fn main() {
     gen.register_type::<LocalResource>().unwrap();
     gen.register_type::<LocalResourcePath>().unwrap();
     gen.register_type::<ResourceSelection>().unwrap();
-    gen.register_type::<FindingScope>().unwrap();
-    gen.register_type::<ScopeState>().unwrap();
     gen.register_type::<GeoLocation>().unwrap();
     gen.register_type::<AlertDialog>().unwrap();
     gen.register_type::<MessageReason>().unwrap();

@@ -116,7 +116,7 @@ impl LocatorServer {
         self.setup_gateway(&address).await?;
 
         // Bind a std TcpListener for actix-web (actix requires std::net::TcpListener)
-        let std_listener = std::net::TcpListener::bind(format!("[::]:{}", address.port))?;
+        let std_listener = address.listener.into_std()?;
         std_listener.set_nonblocking(true)?;
 
         HttpServer::new(|| App::new().service(locate))

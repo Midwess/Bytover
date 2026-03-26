@@ -13,8 +13,8 @@ use core_services::utils::never_send::NeverSend;
 use core_services::utils::pool::reponse::PoolResponse;
 use core_services::utils::pool::request::PoolRequest;
 use idb::Database;
-use shared::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
-use shared::entities::transfer_session::{TransferProgress, TransferSession};
+use shared::entities::local_resource::{LocalResourcePath, ResourceType};
+use shared::entities::transfer_session::TransferSession;
 use shared::repository::errors::PersistenceError;
 use shared::repository::transfer_session::{TransferSessionId, TransferSessionRepository, ZipDownloadPaths};
 use std::collections::HashMap;
@@ -111,53 +111,6 @@ impl Repository<TransferSession, TransferSessionId> for TransferSessionRepositor
 
 #[async_trait::async_trait(?Send)]
 impl TransferSessionRepository for TransferSessionRepositoryImpl {
-    async fn update_progresses(
-        &self,
-        order_id: u64,
-        progresses: Vec<TransferProgress>
-    ) -> Result<Option<TransferSession>, PersistenceError> {
-        let id = TransferSessionId {
-            order_id: Some(order_id.to_string()),
-            ..Default::default()
-        };
-
-        let session = IdbRepository::<TransferSession, IdbIdWrapper<TransferSessionId>>::find_one(self, &IdbIdWrapper(id)).await?;
-
-        if let Some(session) = session {
-            let mut session = session;
-            session.progress = progresses;
-            let result = IdbRepository::<TransferSession, IdbIdWrapper<TransferSessionId>>::update_one(self, session).await?;
-            Ok(Some(result))
-        } else {
-            Ok(None)
-        }
-    }
-
-    async fn update_resource(
-        &self,
-        session_id: TransferSessionId,
-        resource: LocalResource
-    ) -> Result<Option<TransferSession>, PersistenceError> {
-        log::info!("update_resource of session: {:?}", session_id);
-        let session =
-            IdbRepository::<TransferSession, IdbIdWrapper<TransferSessionId>>::find_one(self, &IdbIdWrapper(session_id.clone()))
-                .await?;
-
-        if let Some(mut session) = session {
-            session.replace_resource(resource);
-            let result = IdbRepository::<TransferSession, IdbIdWrapper<TransferSessionId>>::update_one(self, session).await?;
-            Ok(Some(result))
-        } else {
-            Ok(None)
-        }
-    }
-
-    async fn delete_session(&self, session_id: TransferSessionId) -> Result<(), PersistenceError> {
-        IdbRepository::<TransferSession, IdbIdWrapper<TransferSessionId>>::delete_one(self, &IdbIdWrapper(session_id)).await?;
-
-        Ok(())
-    }
-
     async fn generate_resource_saved_paths(
         &self,
         session_order_id: u64,
