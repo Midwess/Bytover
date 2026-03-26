@@ -8,7 +8,7 @@ use schema::devlog::rpc_signalling::server::{
 use std::time::Duration;
 use thiserror::Error;
 use tokio::net::TcpStream;
-use tokio::sync::{mpsc, Mutex, OnceCell};
+use tokio::sync::{mpsc, OnceCell};
 use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
 use core_services::utils::yield_container::{YieldContainer, YieldError};
 
@@ -121,8 +121,48 @@ impl SignalingClient {
                 Ok((ws_stream, _)) => {
                     log::info!("[signalling] Connected");
                     backoff = Duration::from_secs(1);
-                    let (sink, stream) = ws_stream.split();
-                    Self::read_messages(stream, sink, &mut transfer_rx, &msg_tx).await;
+                    let (sink, mut stream) = ws_stream.split();
+                    let mut sink = sink;
+                    let mut msg_tx = msg_tx;
+
+                    loop {
+                        tokio::select! {
+                            msg = stream.next() => {
+                                match msg {
+                                    Some(Ok(tokio_tungstenite::tungstenite::Message::Binary(data))) => {
+                                        match Message::decode(data) {
+                                            Ok(m) => {
+                                                if msg_tx.send(Ok(m)).await.is_err() {
+                                                    break;
+                                                }
+                                            }
+                                            Err(e) => {
+                                                let _ = msg_tx.send(Err(SignallingError::DecodeFailed(e))).await;
+                                            }
+                                        }
+                                    }
+                                    Some(Ok(tokio_tungstenite::tungstenite::Message::Close(_))) | None => {
+                                        break;
+                                    }
+                                    Some(Ok(_)) => {}
+                                    Some(Err(e)) => {
+                                        log::warn!("[signalling] Stream error: {e}");
+                                        break;
+                                    }
+                                }
+                            }
+                            data = transfer_rx.recv() => {
+                                match data {
+                                    Some(buf) => {
+                                        if sink.send(tokio_tungstenite::tungstenite::Message::Binary(buf.into())).await.is_err() {
+                                            break;
+                                        }
+                                    }
+                                    None => break,
+                                }
+                            }
+                        }
+                    }
                     log::info!("[signalling] Connection closed, will reconnect");
                 }
                 Err(e) => {
@@ -134,59 +174,10 @@ impl SignalingClient {
                 _ = tokio::time::sleep(backoff) => {
                     backoff = (backoff * 2).min(max_backoff);
                 }
-                _ = transfer_rx.recv() => {
-                    break;
-                }
             }
         }
 
         log::info!("[signalling] Run loop ended");
-    }
-
-    async fn read_messages(
-        mut stream: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
-        mut sink: SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, tokio_tungstenite::tungstenite::Message>,
-        transfer_rx: &mut mpsc::Receiver<Vec<u8>>,
-        msg_tx: &mpsc::Sender<Result<Message, SignallingError>>,
-    ) {
-        loop {
-            tokio::select! {
-                msg = stream.next() => {
-                    match msg {
-                        Some(Ok(tokio_tungstenite::tungstenite::Message::Binary(data))) => {
-                            match Message::decode(data) {
-                                Ok(m) => {
-                                    if msg_tx.send(Ok(m)).await.is_err() {
-                                        break;
-                                    }
-                                }
-                                Err(e) => {
-                                    let _ = msg_tx.send(Err(SignallingError::DecodeFailed(e))).await;
-                                }
-                            }
-                        }
-                        Some(Ok(tokio_tungstenite::tungstenite::Message::Close(_))) | None => {
-                            break;
-                        }
-                        Some(Ok(_)) => {}
-                        Some(Err(e)) => {
-                            log::warn!("[signalling] Stream error: {e}");
-                            break;
-                        }
-                    }
-                }
-                data = transfer_rx.recv() => {
-                    match data {
-                        Some(buf) => {
-                            if sink.send(tokio_tungstenite::tungstenite::Message::Binary(buf.into())).await.is_err() {
-                                break;
-                            }
-                        }
-                        None => break,
-                    }
-                }
-            }
-        }
     }
 
     pub async fn next(&self) -> Result<Message, SignallingError> {
