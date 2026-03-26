@@ -1,6 +1,8 @@
 pub mod errors;
-mod fec;
+pub mod fec;
 pub mod message_channel;
+
+pub use matchbox_protocol::PeerId;
 // pub mod peer;
 // pub mod quad_channel;
 // pub mod signalling;

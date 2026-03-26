@@ -330,7 +330,6 @@ impl<T> RingBuffer<T> {
 
 #[allow(dead_code)]
 pub struct FecSender {
-    pub peer_id: PeerId,
     pub block_id: u32,
     pub encoders: HashMap<(usize, usize), ReedSolomon>,
 
@@ -351,7 +350,7 @@ pub struct FecSender {
 }
 
 impl FecSender {
-    pub fn new(peer_id: PeerId, window_size: usize) -> Self {
+    pub fn new(window_size: usize) -> Self {
         let initial_ratio = 0.0;
         let buffer_pool_size = DATA_SHARDS_DEFAULT + MAX_PARITY_SHARDS;
         let shard_buffer_pool = (0..buffer_pool_size).map(|_| Vec::with_capacity(CHUNK_SIZE)).collect();
@@ -359,7 +358,6 @@ impl FecSender {
         Self {
             rtt_estimator: RttEstimator::new(),
             encoders: HashMap::new(),
-            peer_id,
             block_id: 0,
             data_shards: DATA_SHARDS_DEFAULT,
             parity_ratio: initial_ratio,

@@ -359,6 +359,7 @@ impl WebRtcPeer {
         Ok(())
     }
 
+    #[deprecated(note = "Use WebRtcClient::run with sending_loop spawned internally instead")]
     pub async fn sending_loop(&self) -> Result<(), WebRtcErrors> {
         let mut fec_sender = FecSender::new(self.peer.peer_id(), 1024);
         let mut feedback_receiver = self.transfer_feedback_receiver.retrieve().await?;

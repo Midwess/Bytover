@@ -1,27 +1,21 @@
+use std::sync::{Arc, OnceLock};
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
 use prost::Message as ProstMessage;
 use schema::devlog::rpc_signalling::server::{
     AnswerMessage, IceConfig, Message,
 };
-use std::ops::Deref;
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use thiserror::Error;
 use tokio::net::TcpStream;
-use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
-use tokio_tungstenite::tungstenite;
+use tokio::sync::{mpsc, Mutex, OnceCell};
 use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
-
-pub type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
-pub type SignallingSink = SplitSink<WsStream, tungstenite::Message>;
-pub type SignallingStream = SplitStream<WsStream>;
+use core_services::utils::yield_container::{YieldContainer, YieldError};
 
 #[derive(Debug, Error)]
 pub enum SignallingError {
     #[error("WebSocket connection failed: {0}")]
-    ConnectionFailed(#[from] tungstenite::Error),
+    ConnectionFailed(#[from] tokio_tungstenite::tungstenite::Error),
 
     #[error("Signaling protocol error: {0}")]
     ProtocolError(String),
@@ -37,28 +31,28 @@ pub enum SignallingError {
 
     #[error("HTTP request failed: {0}")]
     HttpFailed(String),
+
+    #[error("Yield error: {0}")]
+    YieldError(#[from] YieldError),
 }
 
+#[derive(Clone)]
 pub struct SignalingClient {
     host: String,
     port: u16,
     ssl: bool,
-    sink: Arc<Mutex<Option<SignallingSink>>>,
-    msg_rx: Arc<Mutex<Option<mpsc::Receiver<Result<Message, SignallingError>>>>>,
-    shutdown_tx: Arc<tokio::sync::watch::Sender<bool>>,
+    msg_rx: Arc<OnceCell<YieldContainer<mpsc::Receiver<Result<Message, SignallingError>>>>>,
+    msg_transfer_tx: Arc<OnceCell<mpsc::Sender<Vec<u8>>>>,
 }
 
 impl SignalingClient {
     pub fn new(host: String, port: u16, ssl: bool) -> Self {
-        let (shutdown_tx, _) = tokio::sync::watch::channel(false);
-        let (msg_tx, msg_rx) = mpsc::channel(128);
         Self {
             host,
             port,
             ssl,
-            sink: Arc::new(Mutex::new(None)),
-            msg_rx: Arc::new(Mutex::new(Some(msg_rx))),
-            shutdown_tx: Arc::new(shutdown_tx),
+            msg_rx: Default::default(),
+            msg_transfer_tx: Default::default(),
         }
     }
 
@@ -102,53 +96,33 @@ impl SignalingClient {
 
     pub fn start(&self) {
         let url = self.url();
-        let shutdown_rx = Arc::clone(&self.shutdown_tx).subscribe();
-        let sink = Arc::clone(&self.sink);
-        let msg_rx = Arc::clone(&self.msg_rx);
-        let msg_tx = {
-            let (tx, new_rx) = mpsc::channel(128);
-            let mut guard = msg_rx.lock().unwrap();
-            *guard = Some(new_rx);
-            tx
-        };
+        let (tx, new_rx) = mpsc::channel(128);
+        let (transfer_tx, transfer_rx) = mpsc::channel(128);
+        let _ = self.msg_rx.set(YieldContainer::new(new_rx));
+        let _ = self.msg_transfer_tx.set(transfer_tx);
 
         tokio::spawn(async move {
-            Self::run_loop(url, shutdown_rx, sink, msg_rx, msg_tx).await;
+            Self::run_loop(url, transfer_rx, tx).await;
         });
     }
 
     async fn run_loop(
         url: String,
-        mut shutdown_rx: tokio::sync::watch::Receiver<bool>,
-        sink: Arc<Mutex<Option<SignallingSink>>>,
-        msg_rx: Arc<Mutex<Option<mpsc::Receiver<Result<Message, SignallingError>>>>>,
+        mut transfer_rx: mpsc::Receiver<Vec<u8>>,
         msg_tx: mpsc::Sender<Result<Message, SignallingError>>,
     ) {
         let mut backoff = Duration::from_secs(1);
         let max_backoff = Duration::from_secs(30);
 
         loop {
-            tokio::select! {
-                _ = shutdown_rx.changed() => {
-                    if *shutdown_rx.borrow() {
-                        log::info!("[signalling] Shutdown signal received");
-                        break;
-                    }
-                }
-            }
-
             log::info!("[signalling] Connecting to {}", url);
 
             match connect_async(&url).await {
                 Ok((ws_stream, _)) => {
                     log::info!("[signalling] Connected");
                     backoff = Duration::from_secs(1);
-
-                    let (write, read) = ws_stream.split();
-                    *sink.lock().unwrap() = Some(write);
-
-                    Self::read_messages(read, &msg_tx, &sink).await;
-                    *sink.lock().unwrap() = None;
+                    let (sink, stream) = ws_stream.split();
+                    Self::read_messages(stream, sink, &mut transfer_rx, &msg_tx).await;
                     log::info!("[signalling] Connection closed, will reconnect");
                 }
                 Err(e) => {
@@ -160,10 +134,8 @@ impl SignalingClient {
                 _ = tokio::time::sleep(backoff) => {
                     backoff = (backoff * 2).min(max_backoff);
                 }
-                _ = shutdown_rx.changed() => {
-                    if *shutdown_rx.borrow() {
-                        break;
-                    }
+                _ = transfer_rx.recv() => {
+                    break;
                 }
             }
         }
@@ -172,15 +144,16 @@ impl SignalingClient {
     }
 
     async fn read_messages(
-        mut stream: SignallingStream,
+        mut stream: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
+        mut sink: SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, tokio_tungstenite::tungstenite::Message>,
+        transfer_rx: &mut mpsc::Receiver<Vec<u8>>,
         msg_tx: &mpsc::Sender<Result<Message, SignallingError>>,
-        _sink: &Arc<Mutex<Option<SignallingSink>>>,
     ) {
         loop {
             tokio::select! {
                 msg = stream.next() => {
                     match msg {
-                        Some(Ok(tungstenite::Message::Binary(data))) => {
+                        Some(Ok(tokio_tungstenite::tungstenite::Message::Binary(data))) => {
                             match Message::decode(data) {
                                 Ok(m) => {
                                     if msg_tx.send(Ok(m)).await.is_err() {
@@ -192,7 +165,7 @@ impl SignalingClient {
                                 }
                             }
                         }
-                        Some(Ok(tungstenite::Message::Close(_))) | None => {
+                        Some(Ok(tokio_tungstenite::tungstenite::Message::Close(_))) | None => {
                             break;
                         }
                         Some(Ok(_)) => {}
@@ -202,14 +175,24 @@ impl SignalingClient {
                         }
                     }
                 }
+                data = transfer_rx.recv() => {
+                    match data {
+                        Some(buf) => {
+                            if sink.send(tokio_tungstenite::tungstenite::Message::Binary(buf.into())).await.is_err() {
+                                break;
+                            }
+                        }
+                        None => break,
+                    }
+                }
             }
         }
     }
 
     pub async fn next(&self) -> Result<Message, SignallingError> {
-        let mut rx_guard = self.msg_rx.lock().unwrap();
-        let rx = rx_guard.as_mut().ok_or(SignallingError::NotConnected)?;
-        rx.recv().await.ok_or(SignallingError::Stopped)?
+        let msg_rx = self.msg_rx.get().ok_or(SignallingError::NotConnected)?;
+        let mut msg_rx = msg_rx.retrieve().await?;
+        msg_rx.recv().await.ok_or(SignallingError::Stopped)?
     }
 
     pub async fn send_answer(
@@ -226,20 +209,12 @@ impl SignalingClient {
     }
 
     async fn send_message(&self, msg: &Message) -> Result<(), SignallingError> {
+        let tx = self.msg_transfer_tx.get().ok_or(SignallingError::NotConnected)?;
         let mut buf = Vec::new();
         msg.encode(&mut buf).map_err(|e| {
             SignallingError::ProtocolError(format!("Failed to encode message: {e}"))
         })?;
-
-        let mut sink_guard = self.sink.lock().unwrap();
-        let mut sink = sink_guard.take().ok_or(SignallingError::NotConnected)?;
-        drop(sink_guard);
-
-        sink.send(tungstenite::Message::Binary(buf.into())).await?;
-
-        let mut guard = self.sink.lock().unwrap();
-        *guard = Some(sink);
-
+        tx.send(buf).await.map_err(|_| SignallingError::NotConnected)?;
         Ok(())
     }
 
@@ -248,21 +223,3 @@ impl SignalingClient {
     }
 }
 
-impl Clone for SignalingClient {
-    fn clone(&self) -> Self {
-        Self {
-            host: self.host.clone(),
-            port: self.port,
-            ssl: self.ssl,
-            sink: Arc::clone(&self.sink),
-            msg_rx: Arc::clone(&self.msg_rx),
-            shutdown_tx: Arc::clone(&self.shutdown_tx),
-        }
-    }
-}
-
-impl Drop for SignalingClient {
-    fn drop(&mut self) {
-        let _ = self.shutdown_tx.send(true);
-    }
-}

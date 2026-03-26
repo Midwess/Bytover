@@ -72,7 +72,7 @@ async fn test_fec_transfer_100mb_with_loss() {
     let test_data = generate_test_data(TEST_DATA_SIZE);
     let peer_id: PeerId = uuid::Uuid::new_v4().into();
 
-    let mut fec_sender = FecSender::new(peer_id, 4096);
+    let mut fec_sender = FecSender::new(4096);
     fec_sender.set_rtt(TEST_RTT_MS);
 
     let mut fec_receiver = FecReceiver::with_window_size(2048);
@@ -334,7 +334,7 @@ async fn test_false_retransmission_with_latency() {
     let test_data = generate_test_data(DATA_SIZE);
     let peer_id: PeerId = uuid::Uuid::new_v4().into();
 
-    let mut fec_sender = FecSender::new(peer_id, 4096);
+    let mut fec_sender = FecSender::new(4096);
     // RTT < 250ms means parity = 0 (no FEC)
     fec_sender.set_rtt(30);
 
@@ -561,7 +561,7 @@ async fn test_extreme_false_retransmission() {
     let test_data = generate_test_data(DATA_SIZE);
     let peer_id: PeerId = uuid::Uuid::new_v4().into();
 
-    let mut fec_sender = FecSender::new(peer_id, 4096);
+    let mut fec_sender = FecSender::new(4096);
     // RTT < 250ms means parity = 0 (no FEC)
     fec_sender.set_rtt(30);
 
@@ -791,7 +791,7 @@ async fn test_threshold_with_multiple_configs() {
         let test_data = generate_test_data(data_size);
         let peer_id: PeerId = uuid::Uuid::new_v4().into();
 
-        let mut fec_sender = FecSender::new(peer_id, 4096);
+        let mut fec_sender = FecSender::new(4096);
         fec_sender.set_rtt(config.rtt_ms);
 
         let mut fec_receiver = FecReceiver::with_window_size(2048);

@@ -19,13 +19,10 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 Ok(shared::app::operations::CoreOperationOutput::None)
             }
             shared::app::operations::p2p::P2POperation::StartNearbyServer(peer) => {
-                let web_rtc = self.web_rtc.clone();
-                spawn(async move {
-                    if let Err(e) = web_rtc.start(request.clone(), peer).await {
-                        log::error!("Failed to start nearby server: {e:?}");
-                        request.response(shared::errors::CoreError::from(e)).await;
-                    }
-                });
+                if let Err(e) = self.web_rtc.start(request.clone(), peer).await {
+                    log::error!("Failed to start nearby server: {e:?}");
+                    request.response(shared::errors::CoreError::from(e)).await;
+                }
                 Ok(shared::app::operations::CoreOperationOutput::None)
             }
             shared::app::operations::p2p::P2POperation::SendSessionDetail {

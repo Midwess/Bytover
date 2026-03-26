@@ -79,7 +79,7 @@ async fn test_protocol_sync_100mb_random_loss() {
     let test_data = generate_test_data(TEST_DATA_SIZE);
     let peer_id: PeerId = uuid::Uuid::new_v4().into();
 
-    let mut fec_sender = FecSender::new(peer_id, 4096);
+    let mut fec_sender = FecSender::new(4096);
     fec_sender.set_rtt(TEST_RTT_MS);
 
     let mut fec_receiver = FecReceiver::with_window_size(4096);
