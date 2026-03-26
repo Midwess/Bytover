@@ -154,7 +154,7 @@ impl WebRtcClient {
     ) -> Result<Arc<Self>, WebRtcClientError> {
         let mut rtc = RtcConfig::new().build(Instant::now());
 
-        let local_addr = socket.local_addr()?;
+        let local_addr = socket.local_addr().await?;
         let host_candidate = Candidate::host(local_addr, "udp")
             .map_err(|e| WebRtcClientError::Signalling(format!("{e}")))?;
         rtc.add_local_candidate(host_candidate);

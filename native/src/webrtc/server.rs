@@ -103,7 +103,7 @@ impl WebRtcServer {
         }
     }
 
-    fn is_running(&self) -> bool {
+    pub fn is_running(&self) -> bool {
         self.running.load(Ordering::SeqCst)
     }
 
@@ -196,7 +196,12 @@ impl WebRtcServer {
         Ok(())
     }
 
-    pub async fn start(&self, core_request: CoreRequest, current_user: PeerEntity) -> Result<(), WebRtcServerError> {
+    pub fn stop(&self) -> Result<(), WebRtcServerError> {
+        self.running.store(false, Ordering::SeqCst);
+        Ok(())
+    }
+
+     pub async fn start(&self, core_request: CoreRequest, current_user: PeerEntity) -> Result<(), WebRtcServerError> {
         if self.is_running() {
             log::info!("[webrtc-server] Already running");
             core_request
@@ -213,7 +218,7 @@ impl WebRtcServer {
         log::info!("[webrtc-server] Starting with peer = {:?}", current_user.id());
 
         let socket = SyncUdpSocket::new(UdpSocket::bind(self.config.bind_addr).await?);
-        let local_addr = socket.local_addr()?;
+        let local_addr = socket.local_addr().await?;
         log::info!("[webrtc-server] UDP socket bound on {local_addr}");
 
         self.signalling.start();
@@ -227,6 +232,11 @@ impl WebRtcServer {
         let server = Arc::new(self.clone());
 
         loop {
+            if !self.is_running() {
+                log::info!("[webrtc-server] Stopped");
+                return Ok(());
+            }
+
             tokio::select! {
                 msg = self.signalling.next() => {
                     let msg = match msg {

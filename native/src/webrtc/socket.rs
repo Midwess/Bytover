@@ -148,8 +148,8 @@ impl SyncUdpSocket {
         }
     }
 
-    pub fn local_addr(&self) -> Result<SocketAddr, SyncUdpSocketError> {
-        Ok(self.inner.blocking_lock().local_addr()?)
+    pub async fn local_addr(&self) -> Result<SocketAddr, SyncUdpSocketError> {
+        Ok(self.inner.lock().await.local_addr()?)
     }
 }
 

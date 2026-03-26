@@ -55,7 +55,7 @@ impl DiContainer {
                 core_bridge: OnceCell::new(),
                 native_executor: OnceCell::new(),
                 db: OnceCell::new(),
-                rpc_connection: RpcNetworkModuleImpl::new(get_gateway_grpc_url(), GATEWAY_HOST.unwrap().to_string()),
+                rpc_connection: RpcNetworkModuleImpl::new(get_gateway_grpc_url(), GATEWAY_HOST.unwrap_or("localhost").to_string()),
                 cloud_server: OnceCell::new()
             };
 
