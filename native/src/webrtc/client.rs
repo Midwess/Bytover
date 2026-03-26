@@ -12,7 +12,7 @@ use str0m::net::{Protocol, Receive};
 use str0m::{Candidate, Event, IceConnectionState, Input, Output, Rtc, RtcConfig};
 use str0m::rtp::RawPacket;
 use thiserror::Error;
-use tokio::sync::{OnceCell, RwLock};
+use tokio::sync::OnceCell;
 use core_services::utils::yield_container::YieldContainer;
 use devlog_sdk::distributed_id::gen_id;
 use schema::devlog::bitbridge::peer_message_body::{Request, Response};
@@ -123,7 +123,7 @@ pub struct WebRtcClient {
     socket: SyncUdpSocket,
     local_addr: SocketAddr,
 
-    peer: RwLock<Option<Peer>>,
+    peer: OnceCell<Peer>,
     transfers_context: TransfersContext,
     core_request: OnceCell<CoreRequest>,
     resource_repo: Arc<dyn LocalResourceRepository>,
@@ -236,7 +236,7 @@ impl WebRtcClient {
                                 unreliable_data_tx: Default::default(),
                                 reliable_data_tx: Default::default(),
                                 msg_channel: Default::default(),
-                                peer: RwLock::new(None),
+                                peer: OnceCell::new(),
                                 transfers_context: TransfersContext::new(),
                                 core_request: OnceCell::new(),
                                 resource_repo,
@@ -384,11 +384,11 @@ impl WebRtcClient {
     }
 
     pub async fn peer_id(&self) -> Option<String> {
-        self.peer.read().await.as_ref().map(|p| p.id().to_string())
+        self.peer.get().map(|p| p.id().to_string())
     }
 
     pub async fn peer_entity(&self) -> Option<Peer> {
-        self.peer.read().await.clone()
+        self.peer.get().cloned()
     }
 
     pub async fn introduce(&self, current_user: &Peer) -> Result<(), WebRtcClientError> {
@@ -405,7 +405,7 @@ impl WebRtcClient {
             Response::IntroduceResponse(resp) => {
                 let peer: Peer = resp.peer.into();
                 log::info!("[webrtc-client] Received introduce response from {:?}", peer.id());
-                *self.peer.write().await = Some(peer);
+                self.peer.set(peer).unwrap();
                 Ok(())
             }
             _ => Err(WebRtcClientError::FailedToIntroducePeer),
@@ -427,7 +427,7 @@ impl WebRtcClient {
         self.send_msg_response(request_id, response).await?;
 
         let peer: Peer = msg.mine.into();
-        *self.peer.write().await = Some(peer);
+        self.peer.set(peer).unwrap();
         Ok(())
     }
 
@@ -447,7 +447,7 @@ impl WebRtcClient {
             }
             Request::ViewSessionRequest(req) => {
                 log::info!("[webrtc-client] Received view session request for order_id {}", req.order_id);
-                let peer_id = self.peer.read().await.as_ref().map(|p| p.id().to_string()).unwrap_or_default();
+                let peer_id = self.peer.get().map(|p| p.id().to_string()).unwrap_or_default();
                 let response = CoreOperationOutput::P2P(P2POperationOutput::ReceivedViewSessionRequest {
                     peer_id,
                     request_id,
@@ -460,7 +460,7 @@ impl WebRtcClient {
                 }
             }
             Request::DownloadResourceRequest(req) => {
-                let peer_id = self.peer.read().await.as_ref().map(|p| p.id().to_string()).unwrap_or_default();
+                let peer_id = self.peer.get().map(|p| p.id().to_string()).unwrap_or_default();
                 let response = CoreOperationOutput::P2P(P2POperationOutput::ReceivedDownloadRequest {
                     peer_id,
                     session_order_id: req.session_order_id,
@@ -510,7 +510,7 @@ impl WebRtcClient {
 
                     if let Some(core_request) = self.core_request() {
                         let peer_id =
-                            self.peer.read().await.as_ref().map(|p| p.id().to_string()).unwrap_or_default();
+                            self.peer.get().map(|p| p.id().to_string()).unwrap_or_default();
                         let response =
                             CoreOperationOutput::P2P(P2POperationOutput::ReceivedResourceNotification {
                                 session_order_id,
@@ -545,7 +545,7 @@ impl WebRtcClient {
 
     pub async fn cancel_transfer(&self, session_id: u64) {
         self.transfers_context.cancel_transfer(session_id).await;
-        let peer_id = self.peer.read().await.as_ref().map(|p| p.id()).unwrap_or_default();
+        let peer_id = self.peer.get().map(|p| p.id()).unwrap_or_default();
         log::info!("[webrtc-client] Cancelling transfer session {session_id} to peer {peer_id}");
         let _ = self
             .msg_channel().notify(Request::CancelRequest(P2pCancelSessionRequest {
