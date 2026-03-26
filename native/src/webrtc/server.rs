@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use futures_util::stream::FuturesUnordered;
 use futures_util::StreamExt;
 use thiserror::Error;
 use tokio::net::UdpSocket;
-use tokio::sync::{OnceCell, RwLock};
+use tokio::sync::{Mutex, OnceCell, RwLock};
 
 use shared::app::operations::p2p::P2POperationOutput;
 use shared::app::operations::CoreOperationOutput;
@@ -72,7 +72,7 @@ pub struct WebRtcServerConfig {
 pub struct WebRtcServer {
     config: WebRtcServerConfig,
     signalling: SignalingClient,
-    clients: RwLock<HashMap<String, Arc<WebRtcClient>>>,
+    clients: Mutex<HashMap<String, Weak<WebRtcClient>>>,
     resource_repo: Arc<dyn LocalResourceRepository>,
     transfer_session_repo: Arc<dyn TransferSessionRepository>,
     current_user: OnceCell<PeerEntity>,
@@ -94,7 +94,7 @@ impl WebRtcServer {
         Self {
             config,
             signalling,
-            clients: RwLock::new(HashMap::new()),
+            clients: Mutex::new(HashMap::new()),
             resource_repo,
             transfer_session_repo,
             current_user: Default::default(),
@@ -108,11 +108,18 @@ impl WebRtcServer {
     }
 
     async fn get_client(&self, peer_id: &str) -> Result<Arc<WebRtcClient>, WebRtcServerError> {
-        let clients = self.clients.read().await;
-        clients
+        let mut clients = self.clients.lock().await;
+        let result = clients
             .get(peer_id)
             .cloned()
-            .ok_or_else(|| WebRtcServerError::PeerNotFound(peer_id.to_string()))
+            .and_then(|client| client.upgrade())
+            .ok_or_else(|| WebRtcServerError::PeerNotFound(peer_id.to_string()));
+
+        if result.is_err() {
+            clients.remove(peer_id);
+        }
+
+        result
     }
 
     pub async fn cancel_session(&self, peer_id: String, session_id: u64) -> Result<(), WebRtcServerError> {
@@ -126,8 +133,12 @@ impl WebRtcServer {
         session_id: u64,
         resource_id: Option<u64>,
     ) -> Result<(), WebRtcServerError> {
-        let clients = self.clients.read().await;
+        let clients = self.clients.lock().await;
         for client in clients.values() {
+            let Some(client) = client.upgrade() else {
+                continue;
+            };
+
             if let Some(resource_id) = resource_id {
                 client.cancel_resource_transfer(session_id, resource_id).await;
             } else {
@@ -287,21 +298,17 @@ impl WebRtcServer {
                             let peer_id = client.peer_id().await.unwrap_or_default();
                             log::info!("[webrtc-server] Client introduced as {peer_id}, registering");
 
-                            {
-                                let mut clients = self.clients.write().await;
-                                clients.insert(peer_id.clone(), client.clone());
-                            }
+                            self.clients.lock().await.insert(peer_id.clone(), Arc::downgrade(&client));
 
-                            let client_clone = client.clone();
                             let peer_id = client.peer_id().await.unwrap_or_default();
                             tokio::spawn(async move {
-                                if let Err(e) = client_clone.run().await {
+                                if let Err(e) = client.run().await {
                                     log::error!("[webrtc-server] Client run error: {e}");
                                 }
                                 log::info!("[webrtc-server] Client {peer_id} run loop ended");
                             });
 
-                            log::info!("[webrtc-server] Active clients: {}", self.clients.read().await.len());
+                            log::info!("[webrtc-server] Active clients: {}", self.clients.lock().await.len());
                         }
                         None => {
                             log::error!("[webrtc-server] Client connection failed");

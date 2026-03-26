@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use shared::shell::executor::p2p::P2PNativeExecutor;
 use n0_future::task::spawn;
-
+use shared::app::operations::p2p::P2POperationOutput;
 use crate::webrtc::server::WebRtcServer;
 
 pub struct P2PNativeExecutorImpl {
@@ -23,7 +23,7 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                     log::error!("Failed to start nearby server: {e:?}");
                     request.response(shared::errors::CoreError::from(e)).await;
                 }
-                Ok(shared::app::operations::CoreOperationOutput::None)
+                Ok(P2POperationOutput::NearbyServerStopped.into())
             }
             shared::app::operations::p2p::P2POperation::SendSessionDetail {
                 peer_id,
