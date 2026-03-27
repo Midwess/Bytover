@@ -16,7 +16,10 @@ use super::CoreOperation;
 pub enum P2POperation {
     StartNearbyServer(Peer),
     StopNearbyServer,
-    ConnectPeer(String),
+    ConnectPeer {
+        signalling_key: String,
+        current_user: Peer
+    },
     IsRunning,
     ViewSessionDetail {
         peer_id: String,
@@ -62,7 +65,7 @@ pub enum P2POperation {
         peer_id: String,
         session_id: u64,
         resource: LocalResource
-    }
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -95,7 +98,8 @@ pub enum P2POperationOutput {
         session_order_id: u64,
         resource: LocalResource,
         peer_id: String
-    }
+    },
+    PeerConnected(Peer)
 }
 
 impl Operation for P2POperation {
@@ -196,6 +200,21 @@ impl P2POperation {
             resource_id
         }))
         .map(|it| it.result())
+    }
+
+    pub fn connect(
+        signalling_key: String,
+        current_user: Peer
+    ) -> AppRequestBuilder<impl Future<Output = Result<Peer, CoreError>>> {
+        Command::request_from_shell(CoreOperation::P2P(P2POperation::ConnectPeer {
+            signalling_key,
+            current_user
+        }))
+        .map(|it| match it {
+            super::CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(peer)) => Ok(peer),
+            super::CoreOperationOutput::Error(e) => Err(e),
+            _ => Err(CoreError::BadRequest("Unexpected response from ConnectPeer".into()))
+        })
     }
 
     pub fn send_resource_notification(

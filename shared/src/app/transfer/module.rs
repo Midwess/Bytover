@@ -9,7 +9,8 @@ use crate::app::view_models::receive_session::{ReceiveResourceViewModel, Receive
 use crate::app::view_models::selected_resource::SelectedResourceViewModel;
 use crate::app::{AppModel, BitBridge};
 use crate::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
-use crate::entities::target::TransferTarget;
+use crate::entities::peer::Peer;
+use crate::entities::target::{P2PConnectionState, TransferTarget};
 use crate::entities::transfer_method::TransferMethodSelection;
 use crate::entities::transfer_session::{TransferSession, TransferSessionStatus, TransferStatus, TransferType};
 use crate::repository::transfer_session::TransferSessionId;
@@ -72,12 +73,6 @@ pub struct TransferModule;
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum TransferEvent {
     Launch,
-    OpenSession {
-        session_id: u64
-    },
-    DeleteSession {
-        session_id: u64
-    },
     StartPublicTransfer {
         shelf_id: u64,
         password: Option<String>,
@@ -149,6 +144,15 @@ pub enum TransferEvent {
         resource: LocalResource
     },
 
+    UpdateConnectionState {
+        session_id: u64,
+        state: P2PConnectionState
+    },
+    PeerConnected {
+        session_id: u64,
+        peer: Peer
+    },
+
     #[serde(skip)]
     ModelEvent(TransferSessionModelEvent)
 }
@@ -203,26 +207,8 @@ impl AppModule<BitBridge> for TransferModule {
                     }
 
                     let _ = it.app().cancel_resource_transfer(&session, None).await;
-                    it.app().delete_session(&session).await
+                    it.app().cancel_session(&session).await
                 })
-            }
-            TransferEvent::DeleteSession { session_id } => {
-                let id = TransferSessionId {
-                    order_id: Some(session_id.to_string()),
-                    ..Default::default()
-                };
-
-                let Some(session) = model.transfer.sessions.lookup(&id).cloned() else {
-                    return Command::done();
-                };
-
-                if !session.is_completed() {
-                    return Command::new(|it| async move {
-                        DialogOperation::toast("Session is still in progress".to_string()).into_future(it.clone()).await;
-                    });
-                }
-
-                Command::handle_result(|it| async move { it.app().delete_session(&session).await })
             }
             TransferEvent::TransferCanceled { session_id, .. } => {
                 let id = TransferSessionId {
@@ -236,7 +222,7 @@ impl AppModule<BitBridge> for TransferModule {
                 session.cancel();
 
                 let session = session.clone();
-                Command::handle_result(|it| async move { it.app().delete_session(&session).await })
+                Command::handle_result(|it| async move { it.app().cancel_session(&session).await })
             }
             TransferEvent::StartPublicTransfer {
                 shelf_id,
@@ -329,6 +315,29 @@ impl AppModule<BitBridge> for TransferModule {
 
                 Command::all(commands)
             }
+            TransferEvent::UpdateConnectionState { session_id, state } => {
+                let session_id_key = TransferSessionId {
+                    order_id: Some(session_id.to_string()),
+                    transfer_type: Some(TransferType::Receive)
+                };
+                if let Some(session) = model.transfer.sessions.lookup_mut(&session_id_key) {
+                    session.target.set_connection_state(state);
+                }
+                Command::render()
+            }
+            TransferEvent::PeerConnected { session_id, peer } => {
+                let session_id_key = TransferSessionId {
+                    order_id: Some(session_id.to_string()),
+                    transfer_type: Some(TransferType::Receive)
+                };
+                if let Some(session) = model.transfer.sessions.lookup_mut(&session_id_key) {
+                    if let TransferTarget::P2P { from_peer, connection_state, .. } = &mut session.target {
+                        *from_peer = Some(peer);
+                        *connection_state = P2PConnectionState::Connected;
+                    }
+                }
+                Command::render()
+            }
             TransferEvent::ModelEvent(event) => {
                 match event {
                     TransferSessionModelEvent::Update(session_id, action) => {
@@ -372,26 +381,6 @@ impl AppModule<BitBridge> for TransferModule {
                 let resource_path = resource.path.clone();
                 Command::new(move |it| async move {
                     let _ = DeviceOperation::open(resource_path).into_future(it.clone()).await;
-                })
-            }
-            TransferEvent::OpenSession { session_id } => {
-                let Some(session) = model.transfer.sessions.iter().find(|it| it.order_id == session_id) else {
-                    return Command::done();
-                };
-
-                if matches!(session.transfer_type, TransferType::Send { .. }) {
-                    return Command::done();
-                }
-
-                if !session.is_completed() {
-                    return Command::new(|it| async move {
-                        DialogOperation::toast("Session is not completed".to_string()).into_future(it.clone()).await;
-                    });
-                }
-
-                let session_id = session.order_id;
-                Command::new(|it| async move {
-                    let _ = DeviceOperation::open_session(session_id).into_future(it.clone()).await;
                 })
             }
             TransferEvent::FindSession { mut keywords } => {

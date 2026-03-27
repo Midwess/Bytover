@@ -1,6 +1,7 @@
 use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
 use crate::app::core::model_events::{PeerReceivedEvent, SessionLoadError, TransferSessionModelEvent};
+use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::dialog::{DialogOperation, MessageReason};
 use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::persistent::TransferSessionPersistentOperation;
@@ -35,7 +36,7 @@ impl AppCommand {
         Ok(())
     }
 
-    pub async fn delete_session(&self, transfer_session: &TransferSession) -> Result<(), CoreError> {
+    pub async fn cancel_session(&self, transfer_session: &TransferSession) -> Result<(), CoreError> {
         log::info!("Cancelling transfer: {:?}", transfer_session.order_id);
 
         let _ = self
@@ -156,20 +157,53 @@ impl AppCommand {
         };
 
         let should_auto_view = matches!(session.transfer_type, TransferType::Receive);
-        let auto_view_event = if should_auto_view {
-            Some(TransferEvent::ViewSession {
-                password: session.password.clone(),
-                session_id: session.order_id,
-                transfer_type: TransferType::Receive
-            })
+        let is_p2p = session.target.is_peer();
+        let signalling_key = if let TransferTarget::P2P { ref signalling_key, .. } = session.target {
+            signalling_key.clone()
         } else {
             None
         };
+        let session_order_id = session.order_id;
+        let password = session.password.clone();
 
         self.update_model(TransferSessionModelEvent::Add(session));
 
-        if let Some(event) = auto_view_event {
-            self.update_model(event);
+        if is_p2p {
+            if let Some(key) = signalling_key {
+                self.update_model(TransferEvent::UpdateConnectionState {
+                    session_id: session_order_id,
+                    state: P2PConnectionState::Connecting
+                });
+
+                let device = self.run(DeviceOperation::get_device_info()).await;
+                let user = RpcOperation::get_me().into_future(self.ctx()).await.ok();
+                let current_user = self.gen_peer(user, device.unwrap()).await;
+
+                match self.run(P2POperation::connect(key, current_user)).await {
+                    Ok(peer) => {
+                        self.update_model(TransferEvent::PeerConnected {
+                            session_id: session_order_id,
+                            peer
+                        });
+                    }
+                    Err(e) => {
+                        log::error!("Failed to connect to peer: {e:?}");
+                        self.update_model(TransferEvent::UpdateConnectionState {
+                            session_id: session_order_id,
+                            state: P2PConnectionState::Failed(e.to_string())
+                        });
+                        return Ok(());
+                    }
+                }
+            }
+        }
+
+        if should_auto_view {
+            self.update_model(TransferEvent::ViewSession {
+                password,
+                session_id: session_order_id,
+                transfer_type: TransferType::Receive
+            });
         }
 
         Ok(())

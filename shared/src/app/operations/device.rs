@@ -56,10 +56,6 @@ impl DeviceOperation {
         })
     }
 
-    pub fn open_session(session_id: u64) -> AppRequestBuilder<impl Future<Output = ()>> {
-        AppCommand::request_from_shell(DeviceOperation::OpenSession(session_id)).map(|_it| ())
-    }
-
     pub fn open(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = ()>> {
         AppCommand::request_from_shell(DeviceOperation::Open(path)).map(|_it| ())
     }

@@ -5,7 +5,8 @@
 //! ## Architecture
 //!
 //! WASM acts as a P2P client (receiver) - it connects to a single peer.
-//! When `ConnectPeer(peer_id)` is called, it initiates a WebRTC connection.
+//! When `ConnectPeer { signalling_key, current_user }` is called, it connects to the
+//! signalling server, runs the client loop, introduces the current user, and returns `PeerConnected`.
 //! The client instance is stored in a `OnceCell` since there's only one connection.
 //!
 //! ## Operations
@@ -23,7 +24,7 @@ use thiserror::Error;
 
 use shared::shell::executor::p2p::P2PNativeExecutor;
 use shared::shell::api::CoreRequest;
-use shared::app::operations::p2p::P2POperation;
+use shared::app::operations::p2p::{P2POperation, P2POperationOutput};
 use shared::app::operations::CoreOperationOutput;
 use shared::entities::peer::Peer as PeerEntity;
 use shared::shell::executor::transfer::WebRtc;
@@ -120,11 +121,10 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
         match effect {
             // === Connection Management ===
 
-            P2POperation::ConnectPeer(peer_id) => {
-                log::info!("ConnectPeer called for WASM to peer {}", peer_id);
+            P2POperation::ConnectPeer { signalling_key, current_user } => {
+                log::info!("ConnectPeer called for WASM with key {}", signalling_key);
 
                 if self.client.get().is_some() {
-                    log::warn!("Already connected to a peer, ignoring ConnectPeer for {}", peer_id);
                     return Err(P2PError::AlreadyConnected.into());
                 }
 
@@ -133,9 +133,9 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 let transfer_repo = di.get_transfer_session_repository();
 
                 let client = WebRtcClient::connect(
-                    SignalingClient::new("http://localhost:3000"),
+                    SignalingClient::new(&signalling_key),
                     IceAgent::new(),
-                    &peer_id,
+                    &signalling_key,
                     resource_repo,
                     transfer_repo,
                 )
@@ -151,7 +151,15 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                     }
                 });
 
-                Ok(CoreOperationOutput::None)
+                client.introduce(&current_user).await
+                    .map_err(|e| P2PError::WebRtc(e.to_string()))?;
+
+                let peer = client.peer_entity()
+                    .ok_or_else(|| P2PError::WebRtc("Peer not set after introduce".into()))?;
+
+                self.set_current_user(current_user).ok();
+
+                Ok(CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(peer)))
             }
 
             P2POperation::IsRunning => {

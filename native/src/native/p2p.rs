@@ -14,9 +14,9 @@ pub struct P2PNativeExecutorImpl {
 impl P2PNativeExecutor for P2PNativeExecutorImpl {
     async fn handle(&self, request: shared::shell::api::CoreRequest, effect: shared::app::operations::p2p::P2POperation) -> Result<CoreOperationOutput, shared::errors::CoreError> {
         match effect {
-            shared::app::operations::p2p::P2POperation::ConnectPeer(peer_id) => {
+            shared::app::operations::p2p::P2POperation::ConnectPeer { signalling_key, current_user } => {
                 let web_rtc = self.web_rtc.clone();
-                web_rtc.start_peer_core_stream(peer_id, request).await?;
+                web_rtc.start_peer_core_stream(signalling_key, request).await?;
                 Ok(CoreOperationOutput::None)
             }
             shared::app::operations::p2p::P2POperation::StartNearbyServer(peer) => {

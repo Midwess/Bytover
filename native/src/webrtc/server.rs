@@ -215,7 +215,7 @@ impl WebRtcServer {
         let _ = self.core_request.set(core_request.clone());
         let _ = self.current_user.set(current_user.clone());
 
-        log::info!("[webrtc-server] Starting with peer = {:?}", current_user.id());
+        log::info!("[webrtc-server] Starting with peer = {:?}", current_user.id);
 
         let socket = SyncUdpSocket::new(UdpSocket::bind(self.config.bind_addr).await?);
         let local_addr = socket.local_addr().await?;
@@ -256,7 +256,7 @@ impl WebRtcServer {
                     if let Some(offer) = msg_offer {
                         if ice_agent.is_none() {
                             let config = self.signalling
-                                .fetch_relay_config(&current_user.id().to_string())
+                                .fetch_relay_config(&current_user.id)
                                 .await
                                 .map_err(|e| WebRtcServerError::Signalling(format!("{e}")))?;
                             log::info!(

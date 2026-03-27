@@ -278,7 +278,8 @@ impl TransferSession {
             transfer_type,
             target: TransferTarget::P2P {
                 from_peer: None,
-                connection_state: P2PConnectionState::NotConnected
+                connection_state: P2PConnectionState::NotConnected,
+                signalling_key: None
             },
             from_user: User {
                 id: 0,
