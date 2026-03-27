@@ -381,7 +381,7 @@ impl TransferSession {
         if !peer.is_owned(self) {
             log::warn!(
                 "Peer {} is not owner of session {}, ignoring resource",
-                peer.id(),
+                peer.id,
                 self.order_id
             );
             return false;
@@ -450,7 +450,7 @@ impl TransferSession {
 
     pub fn peer_id(&self) -> Option<String> {
         match &self.target {
-            TransferTarget::P2P { from_peer, .. } => from_peer.as_ref().map(|p| p.id().to_string()),
+            TransferTarget::P2P { from_peer, .. } => from_peer.as_ref().map(|p| p.id.clone()),
             _ => None
         }
     }

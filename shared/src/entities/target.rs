@@ -87,7 +87,7 @@ impl TransferTarget {
     pub fn id(&self) -> String {
         match self {
             TransferTarget::P2P { from_peer, .. } => {
-                from_peer.as_ref().map(|p| p.id().to_string()).unwrap_or_else(|| "unknown".to_string())
+                from_peer.as_ref().map(|p| p.id.clone()).unwrap_or_else(|| "unknown".to_string())
             }
             TransferTarget::Internet { .. } => "public".to_string()
         }

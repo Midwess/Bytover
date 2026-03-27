@@ -150,7 +150,7 @@ impl WebRtcClient {
     }
 
     pub fn peer_id(&self) -> Option<String> {
-        self.peer.get().map(|p| p.id().to_string())
+        self.peer.get().map(|p| p.id.clone())
     }
 
     pub fn peer_entity(&self) -> Option<PeerEntity> {
@@ -166,7 +166,7 @@ impl WebRtcClient {
 
         let introduce_request = schema::devlog::bitbridge::IntroduceRequestMessage {
             mine: schema::devlog::bitbridge::PeerMessage {
-                peer_id: current_user.id().to_string(),
+                peer_id: current_user.id.clone(),
                 name: current_user.name.clone(),
                 avatar_url: current_user.avatar_url.clone(),
                 device: current_user.device.clone().into(),
@@ -222,7 +222,7 @@ impl WebRtcClient {
 
         let response = schema::devlog::bitbridge::IntroduceResponseMessage {
             peer: schema::devlog::bitbridge::PeerMessage {
-                peer_id: current_user.id().to_string(),
+                peer_id: current_user.id.clone(),
                 name: current_user.name.clone(),
                 avatar_url: current_user.avatar_url.clone(),
                 device: current_user.device.clone().into(),

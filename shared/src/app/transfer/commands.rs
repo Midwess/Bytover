@@ -670,7 +670,7 @@ impl AppCommand {
                     return Ok(());
                 }
 
-                let peer_id = from_peer.as_ref().unwrap().id().to_string();
+                let peer_id = from_peer.as_ref().unwrap().id.clone();
                 self.request_session_detail(peer_id, session_id, session.order_id, password).await
             }
             TransferTarget::Internet { .. } => self.view_public_session(session, password).await

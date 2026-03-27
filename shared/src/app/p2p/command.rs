@@ -13,7 +13,6 @@ use crate::entities::peer::Peer;
 use crate::errors::CoreError;
 use crate::CoreOperation;
 use futures_util::StreamExt;
-use uuid::Uuid;
 
 impl AppCommand {
     pub async fn restart_nearby(&self) -> Result<(), CoreError> {
@@ -23,7 +22,7 @@ impl AppCommand {
     }
 
     pub async fn gen_peer(&self, user: Option<crate::entities::user::User>, device: crate::entities::device::DeviceInfo) -> Peer {
-        let peer_id = Uuid::now_v7().to_string();
+        let peer_id = Peer::compute_id(&device.unique_id, user.as_ref().map(|u| u.id).unwrap_or(0));
         match user {
             Some(user) => Peer {
                 id: peer_id,

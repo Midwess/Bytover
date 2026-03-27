@@ -632,7 +632,7 @@ impl AppModule<BitBridge> for TransferModule {
                 let (sender_id, sender_avatar, sender_name, sender_description, alias, access_url, password, is_required_password) =
                     match &it.target {
                         TransferTarget::P2P { from_peer, .. } => {
-                            let sender_id = from_peer.as_ref().map(|p| p.id().to_string()).unwrap_or_else(|| from_user.id.to_string());
+                            let sender_id = from_peer.as_ref().map(|p| p.id.clone()).unwrap_or_else(|| from_user.id.to_string());
                             let alias = if !it.alias.is_empty() { Some(it.alias.clone()) } else { None };
                             (
                                 sender_id,

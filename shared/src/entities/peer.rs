@@ -1,4 +1,3 @@
-use matchbox_protocol::PeerId;
 use schema::devlog::bitbridge::PeerMessage;
 use serde::{Deserialize, Serialize};
 
@@ -33,12 +32,8 @@ pub struct Peer {
 }
 
 impl Peer {
-    pub fn id(&self) -> uuid::Uuid {
-        self.id.clone().parse().unwrap_or_default()
-    }
-
-    pub fn peer_id(&self) -> PeerId {
-        self.id().into()
+    pub fn compute_id(device_unique_id: &str, user_id: u64) -> String {
+        format!("{device_unique_id}:{user_id}")
     }
 
     pub fn is_owned(&self, session: &TransferSession) -> bool {
