@@ -146,16 +146,19 @@ async fn remove_resource(shelf_id: String, resource_id: String, app_handle: AppH
 #[tauri::command]
 async fn delete_receive_session(session_id: String, app_handle: AppHandle) {
     let session_id = session_id.parse::<u64>().unwrap_or_default();
-    process_event(TransferEvent::DeleteSession {
+    process_event(TransferEvent::CancelTransfer {
         session_id,
+        transfer_type: TransferType::Receive
     }, app_handle).await;
 }
 
 #[tauri::command]
 async fn open_session(session_id: String, app_handle: AppHandle) {
     let session_id = session_id.parse::<u64>().unwrap_or_default();
-    process_event(TransferEvent::OpenSession {
-        session_id
+    process_event(TransferEvent::ViewSession {
+        session_id,
+        password: None,
+        transfer_type: TransferType::Receive
     }, app_handle).await;
 }
 

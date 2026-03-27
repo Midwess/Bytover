@@ -26,19 +26,6 @@ export class Core {
 
     isLaunched = false;
 
-    useNearbyListState() {
-        const [state, setState] = useState(this.p2pState.get()?.peers ?? []);
-        useEffect(() => {
-            return this.p2pState.subscribe((newState) => {
-                if (state.length != newState?.peers.length) {
-                    setState(newState?.peers || [])
-                }
-            })
-        }, [state.length]);
-
-        return state
-    }
-
     public useMyPeer() {
         const [myPeer, setMyPeer] = useState<PeerViewModel | undefined>(undefined)
 
@@ -78,18 +65,17 @@ export class Core {
     }
 
     public useNearbySessionsList() {
-        const [sessions, setSessions] = useState(this.transferState.get()?.received_sessions ?? []);
+        const [sessions, setSessions] = useState<ReceiveSessionViewModel[]>(this.transferState.get()?.received_session ? [this.transferState.get()!.received_session!] : []);
         useEffect(() => {
             return this.transferState.subscribe((transferState) => {
-                console.log(transferState?.received_sessions.length, sessions.length, "sessions")
-                if ((transferState?.received_sessions?.length ?? 0) !== sessions.length) {
+                const received = transferState?.received_session ? [transferState.received_session] : [];
+                console.log(received.length, sessions.length, "sessions")
+                if (received.length !== sessions.length) {
                     console.log("update sessions")
-                    setSessions(
-                        transferState?.received_sessions ?? []
-                    )
+                    setSessions(received)
                 }
             })
-        }, [sessions.length])
+        }, [sessions.length]);
 
         return sessions
     }
@@ -97,12 +83,12 @@ export class Core {
     public useSession(id: string) {
         const [session, setSession] = useState<ReceiveSessionViewModel | undefined>(() => {
             const transferState = this.transferState.get()
-            return transferState?.received_sessions?.find(it => it.id === id)
+            return transferState?.received_session?.id === id ? transferState.received_session : undefined
         })
 
         useEffect(() => {
             return this.transferState.subscribe((transferState) => {
-                const foundSession = transferState?.received_sessions?.find(it => it.id === id)
+                const foundSession = transferState?.received_session?.id === id ? transferState.received_session : undefined
 
                 if (!isEqual(session, foundSession)) {
                     setSession(foundSession)
@@ -139,7 +125,7 @@ export class Core {
                     setShelf(found)
                 }
             })
-        }, [shelfId, shelf])
+        }, [shelfId, shelf]);
 
         return shelf
     }
@@ -155,7 +141,7 @@ export class Core {
                     setResources(shelfResources)
                 }
             })
-        }, [shelfId, resources])
+        }, [shelfId, resources]);
 
         return resources
     }
@@ -170,7 +156,7 @@ export class Core {
                     setSession(found)
                 }
             })
-        }, [shelfId, session])
+        }, [shelfId, session]);
 
         return session
     }
@@ -185,7 +171,7 @@ export class Core {
                     setSession(found)
                 }
             })
-        }, [shelfId, session])
+        }, [shelfId, session]);
 
         return session
     }
@@ -195,17 +181,15 @@ export class Core {
 
         useEffect(() => {
             return this.transferState.subscribe((transferState) => {
-                if (!transferState) return
+                if (!transferState?.received_session) return
 
-                const foundResource = transferState.received_sessions?.flatMap(session =>
-                    session.resources
-                ).find(r => BigInt(r.model.order_id) === id)
+                const foundResource = transferState.received_session.resources.find(r => BigInt(r.model.order_id) === id)
 
                 if (foundResource && !isEqual(resource, foundResource)) {
                     setResource(foundResource)
                 }
             })
-        }, [id, resource])
+        }, [id, resource]);
 
         return resource
     }
@@ -215,9 +199,8 @@ export class Core {
 
         useEffect(() => {
             return this.p2pState.subscribe((value) => {
-                let peer = value?.peers?.find((it) => {
-                    return it.id === peerId
-                })
+                if (!value) return
+                const peer = value.me?.id === peerId ? value.me ?? undefined : undefined
 
                 if (!isEqual(peer, currentPeer)) {
                     setPeer(peer)
@@ -232,7 +215,7 @@ export class Core {
         const [state, setState] = useState(this.transferState.get());
         useEffect(() => {
             return this.transferState.subscribe(setState)
-        }, [])
+        }, []);
 
         return state
     }

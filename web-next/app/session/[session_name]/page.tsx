@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams } from "next/navigation";
 import {
     AppEventVariantTransfer,
