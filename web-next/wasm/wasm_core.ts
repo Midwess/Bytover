@@ -99,18 +99,32 @@ export class WasmCore {
         this.autoDownloadedResources.add(`${sessionId}_${orderId}`)
     }
 
-    public useSelectedSession() {
-        const [selectedSession, setSelectedSession] = useState<ReceiveSessionViewModel | undefined>()
+    public useReceivedSession() {
+        const [session, setSession] = useState<ReceiveSessionViewModel | undefined>()
 
         useEffect(() => {
             return this.transferState.subscribe((transferState) => {
-                if (!isEqual(selectedSession, transferState?.selected_session)) {
-                    setSelectedSession(transferState?.selected_session ?? undefined)
+                if (!isEqual(session, transferState?.received_session)) {
+                    setSession(transferState?.received_session ?? undefined)
                 }
             })
-        }, [selectedSession])
+        }, [session])
 
-        return selectedSession
+        return session
+    }
+
+    public useReceivedCloudSession() {
+        const [session, setSession] = useState<ReceiveSessionViewModel | undefined>()
+
+        useEffect(() => {
+            return this.transferState.subscribe((transferState) => {
+                if (!isEqual(session, transferState?.received_cloud_session)) {
+                    setSession(transferState?.received_cloud_session ?? undefined)
+                }
+            })
+        }, [session])
+
+        return session
     }
 
     public useMyPeer() {
@@ -132,11 +146,14 @@ export class WasmCore {
 
         useEffect(() => {
             return this.transferState.subscribe((transferState) => {
-                const foundSession = transferState?.received_sessions?.find(it => it.id === id) ||
-                    transferState?.received_cloud_sessions?.find((it) => it.id === id)
+                const rs = transferState?.received_session
+                const cs = transferState?.received_cloud_session
+                const found = (rs && (rs.id === id || rs.alias === id)) ? rs
+                    : (cs && (cs.id === id || cs.alias === id)) ? cs
+                    : undefined
 
-                if (!isEqual(session, foundSession)) {
-                    setSession(foundSession)
+                if (!isEqual(session, found)) {
+                    setSession(found)
                 }
             })
         }, [id, session])
@@ -151,9 +168,8 @@ export class WasmCore {
             return this.transferState.subscribe((transferState) => {
                 if (!transferState) return
 
-                const foundResource = isCloud ?
-                    transferState.received_cloud_sessions?.flatMap(session => session.resources).find(r => r.model.order_id === id)
-                    : transferState.received_sessions?.flatMap(session => session.resources).find(r => r.model.order_id === id)
+                const session = isCloud ? transferState.received_cloud_session : transferState.received_session
+                const foundResource = session?.resources?.find(r => r.model.order_id === id)
 
                 if (!isEqual(resource, foundResource)) {
                     setResource(foundResource)
@@ -250,16 +266,8 @@ export class WasmCore {
     }
 
     public useCloudSessionsList() {
-        const [clouds, setClouds] = useState(this.transferState.get()?.received_cloud_sessions ?? []);
-        useEffect(() => {
-            return this.transferState.subscribe((transferState) => {
-                if (transferState?.received_cloud_sessions?.length != clouds.length) {
-                    setClouds(transferState?.received_cloud_sessions ?? [])
-                }
-            })
-        }, [clouds.length])
-
-        return clouds
+        const session = this.useReceivedCloudSession()
+        return session ? [session] : []
     }
 
     public useP2PSession(shelfId: string | undefined) {
@@ -299,36 +307,8 @@ export class WasmCore {
     }
 
     public useNearbySessionsList() {
-        const [sessions, setSessions] = useState(this.transferState.get()?.received_sessions ?? []);
-        useEffect(() => {
-            return this.transferState.subscribe((transferState) => {
-                setSessions(transferState?.received_sessions ?? [])
-            })
-        }, [])
-
-        return sessions
-    }
-
-    public useAllSessionsList() {
-        const [sessions, setSessions] = useState(this.transferState.get()?.all_sessions ?? []);
-        useEffect(() => {
-            return this.transferState.subscribe((transferState) => {
-                setSessions(transferState?.all_sessions ?? [])
-            })
-        }, [])
-
-        return sessions
-    }
-
-    public useSearchSessionsList() {
-        const [sessions, setSessions] = useState(this.transferState.get()?.search_sessions ?? []);
-        useEffect(() => {
-            return this.transferState.subscribe((transferState) => {
-                setSessions(transferState?.search_sessions ?? [])
-            })
-        }, [])
-
-        return sessions
+        const session = this.useReceivedSession()
+        return session ? [session] : []
     }
 
     public useNearbyState() {

@@ -24,8 +24,6 @@ use std::collections::HashMap;
 pub struct TransferModel {
     selected_method: TransferMethodSelection,
     pub sessions: Vec<TransferSession>,
-    keywords: String,
-    pub selected_receive_session_id: Option<u64>
 }
 
 impl TransferModel {
@@ -61,14 +59,12 @@ impl TransferModel {
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct TransferViewModel {
     transfer_method: TransferMethodSelection,
-    received_sessions: Vec<ReceiveSessionViewModel>,
-    received_cloud_sessions: Vec<ReceiveSessionViewModel>,
+    pub received_session: Option<ReceiveSessionViewModel>,
+    pub received_cloud_session: Option<ReceiveSessionViewModel>,
     cloud_sessions: Vec<CloudSession>,
     p2p_sessions: Vec<CloudSession>,
-    selected_session: Option<ReceiveSessionViewModel>,
     pub total_p2p_receive_progress: Option<f64>,
-    pub search_sessions: Vec<ReceiveSessionViewModel>,
-    pub all_sessions: Vec<ReceiveSessionViewModel>
+    pub is_loading: bool,
 }
 
 pub struct TransferModule;
@@ -408,16 +404,6 @@ impl AppModule<BitBridge> for TransferModule {
                     keywords = query;
                 }
 
-                model.transfer.keywords = keywords.clone();
-                if model
-                    .transfer
-                    .sessions
-                    .iter()
-                    .any(|it| matches!(it.transfer_type, TransferType::Receive) && it.is_keyword_match(&keywords))
-                {
-                    return Command::render();
-                }
-
                 Command::handle_result(|it| async move { it.app().find_transfer_session(keywords).await }).then_render()
             }
             TransferEvent::ViewSession { password, session_id, .. } => {
@@ -430,8 +416,6 @@ impl AppModule<BitBridge> for TransferModule {
                     log::info!("Session {:?} not found", session_id);
                     return Command::done()
                 };
-
-                model.transfer.selected_receive_session_id = Some(session.order_id);
 
                 if session.target.is_connection_failed() {
                     session.owner_disconnected();
@@ -779,11 +763,8 @@ impl AppModule<BitBridge> for TransferModule {
             })
             .collect();
 
-        let keywords = &model.transfer.keywords;
-
-        // all_sessions: all receive sessions (not filtered by keywords)
-        let mut all_sessions = all_receive_sessions;
-        all_sessions.sort_by(|a, b| {
+        let mut sorted = all_receive_sessions;
+        sorted.sort_by(|a, b| {
             match (a.is_scope_online, b.is_scope_online) {
                 (true, false) => std::cmp::Ordering::Less,
                 (false, true) => std::cmp::Ordering::Greater,
@@ -791,58 +772,21 @@ impl AppModule<BitBridge> for TransferModule {
             }
         });
 
-        // search_sessions: filter from all_sessions based on keyword match
-        let search_sessions: Vec<_> = if keywords.trim().is_empty() {
-            vec![]
-        } else {
-            all_sessions
-                .iter()
-                .filter(|it| {
-                    it.alias.as_ref().map(|a| a.to_lowercase().contains(&keywords.to_lowercase())).unwrap_or(false) ||
-                    it.sender_name.to_lowercase().contains(&keywords.to_lowercase()) ||
-                    it.sender_description.to_lowercase().contains(&keywords.to_lowercase())
-                })
-                .cloned()
-                .collect()
-        };
+        let received_session = sorted.iter().find(|s| !s.is_cloud).cloned();
+        let received_cloud_session = sorted.iter().find(|s| s.is_cloud).cloned();
 
-        let received_cloud_sessions: Vec<_> = all_sessions.iter().filter(|it| it.is_cloud).cloned().collect();
-        let mut received_sessions: Vec<_> = all_sessions.iter().filter(|it| !it.is_cloud).cloned().collect();
+        let is_loading = received_session.as_ref().map(|s| s.is_loading).unwrap_or(false)
+            || received_cloud_session.as_ref().map(|s| s.is_loading).unwrap_or(false);
 
-        // Sort P2P sessions: online ones first
-        received_sessions.sort_by(|a, b| match (a.is_scope_online, b.is_scope_online) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => std::cmp::Ordering::Equal
-        });
-
-        let selected_session = model.transfer.selected_receive_session_id.and_then(|selected_id| {
-            received_sessions
-                .iter()
-                .chain(received_cloud_sessions.iter())
-                .find(|s| s.id == selected_id.to_string())
-                .cloned()
-        });
-
-        let total_p2p_receive_progress = {
-            let active_sessions: Vec<_> = received_sessions
-                .iter()
-                .filter(|s| s.progress > 0.0 && !s.is_completed)
-                .collect();
-
-            if active_sessions.is_empty() {
-                None
-            } else {
-                let sum: f64 = active_sessions.iter().map(|s| s.progress).sum();
-                Some(sum / active_sessions.len() as f64)
-            }
-        };
+        let total_p2p_receive_progress = received_session.as_ref()
+            .filter(|s| s.progress > 0.0 && !s.is_completed)
+            .map(|s| s.progress);
 
         Self::ViewModel {
             transfer_method: model.transfer.selected_method.clone(),
-            received_sessions,
-            received_cloud_sessions,
-            selected_session,
+            received_session,
+            received_cloud_session,
+            is_loading,
             cloud_sessions: model
                 .transfer
                 .sessions
@@ -914,8 +858,6 @@ impl AppModule<BitBridge> for TransferModule {
                 })
                 .collect(),
             total_p2p_receive_progress,
-            search_sessions,
-            all_sessions
         }
     }
 }

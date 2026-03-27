@@ -36,7 +36,7 @@ struct ImageReceiveResourceView: View {
             }
         }
         .onReceive(core.transfer, perform: { value in
-            guard let itemValue = value!.received_sessions.first(where: { item in item.id == session_id})?.image_resources.first(where: { resource in resource.model.order_id == localResource.model.order_id}) else {
+            guard let itemValue = value?.received_session.flatMap({ s in s.id == session_id ? s : nil })?.image_resources.first(where: { resource in resource.model.order_id == localResource.model.order_id}) else {
                 return
             }
 
@@ -76,7 +76,7 @@ struct VideoReceiveResourceView: View {
         }
         .frame(width: width, height: height)
         .onAppearAndReceive(core.transfer, perform: { value in
-            guard let itemValue = value!.received_sessions.first(where: { item in item.id == session_id})?.video_resources.first(where: { resource in resource.model.order_id == localResource.model.order_id}) else {
+            guard let itemValue = value?.received_session.flatMap({ s in s.id == session_id ? s : nil })?.video_resources.first(where: { resource in resource.model.order_id == localResource.model.order_id}) else {
                 return
             }
 
@@ -145,7 +145,7 @@ struct FileReceiveResourceView: View {
             )
         }
         .onAppearAndReceive(core.transfer, perform: { value in
-            guard let itemValue = value!.received_sessions.first(where: { item in item.id == sessionId})?.file_resources.first(where: { resource in resource.model.order_id == localResource.model.order_id}) else {
+            guard let itemValue = value?.received_session.flatMap({ s in s.id == sessionId ? s : nil })?.file_resources.first(where: { resource in resource.model.order_id == localResource.model.order_id}) else {
                 return
             }
 
@@ -222,8 +222,7 @@ struct ReceiveSessionBodyView: View {
             Divider()
         }
         .onReceive(self.core.transfer, perform: { value in
-            guard let receivedSession = value!.received_sessions.first(
-                where: {session in session.id == self.session.id}) else {
+            guard let receivedSession = value?.received_session, receivedSession.id == self.session.id else {
                 return
             }
 
@@ -293,8 +292,7 @@ struct ReceiveSessionHeaderView: View {
             }
         }
         .onReceive(self.core.transfer, perform: { value in
-            guard let receivedSession = value!.received_sessions.first(
-                where: {session in session.id == self.session.id}) else {
+            guard let receivedSession = value?.received_session, receivedSession.id == self.session.id else {
                 return
             }
 

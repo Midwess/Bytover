@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import {
     AppEventVariantTransfer,
@@ -89,25 +89,13 @@ export default function SessionPage() {
         }
     }, [coreReady, coreCompatible]);
 
-    const searchSessions = core.useSearchSessionsList();
-    const allSessions = core.useAllSessionsList();
-    const selectedSession = core.useSelectedSession();
+    const session = core.useSession(sessionName);
 
     useEffect(() => {
         if (coreReady && sessionName) {
             core.update(new AppEventVariantTransfer(new TransferEventVariantFindSession(sessionName)));
         }
     }, [coreReady, sessionName]);
-
-    const targetSessionFromList = useMemo(() => {
-        return searchSessions.find(s => s.alias === sessionName) ||
-            allSessions.find(s => s.alias === sessionName);
-    }, [searchSessions, allSessions, sessionName]);
-
-    const session = useMemo(() => {
-        if (selectedSession?.alias === sessionName) return selectedSession;
-        return targetSessionFromList;
-    }, [selectedSession, targetSessionFromList, sessionName]);
 
     const isLoading = session?.is_loading;
 
