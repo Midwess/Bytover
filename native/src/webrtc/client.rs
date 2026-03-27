@@ -43,7 +43,7 @@ use crate::webrtc::ice::IceAgent;
 use crate::webrtc::signalling::SignalingClient;
 use crate::webrtc::socket::{SyncUdpSocket, SyncUdpSocketError};
 
-const TOTAL_CHANNELS: usize = 3;
+const TOTAL_CHANNELS: usize = 4;
 
 const fn channel_id(raw: usize) -> ChannelId {
     unsafe { std::mem::transmute(raw) }
@@ -52,6 +52,7 @@ const fn channel_id(raw: usize) -> ChannelId {
 const RELIABLE_DATA_CHANNEL_ID: ChannelId = channel_id(1);
 const UNRELIABLE_DATA_CHANNEL_ID: ChannelId = channel_id(2);
 const UNORDERED_MSG_CHANNEL_ID: ChannelId = channel_id(3);
+const ORDERED_MSG_CHANNEL_ID: ChannelId = channel_id(4);
 
 #[derive(Debug, Error)]
 pub enum WebRtcClientError {
@@ -127,6 +128,7 @@ pub struct WebRtcClient {
     unreliable_data_tx: OnceCell<mpsc::Sender<Box<[u8]>>>,
 
     msg_channel: OnceCell<DirectMessageChannel>,
+    unordered_msg_channel: OnceCell<DirectMessageChannel>,
 
     rtc: YieldContainer<Rtc>,
     socket: SyncUdpSocket,
@@ -179,6 +181,12 @@ impl WebRtcClient {
             label: "unordered-msg".into(),
             ordered: false,
             negotiated: Some(3),
+            ..Default::default()
+        });
+        api.create_data_channel(ChannelConfig {
+            label: "ordered-msg".into(),
+            ordered: true,
+            negotiated: Some(4),
             ..Default::default()
         });
 
@@ -248,6 +256,7 @@ impl WebRtcClient {
                                 unreliable_data_tx: Default::default(),
                                 reliable_data_tx: Default::default(),
                                 msg_channel: Default::default(),
+                                unordered_msg_channel: Default::default(),
                                 peer: OnceCell::new(),
                                 transfers_context: TransfersContext::new(),
                                 core_request: OnceCell::new(),
@@ -290,13 +299,15 @@ impl WebRtcClient {
         let mut buf = vec![0u8; 2000];
         let mut rtc = self.rtc.retrieve().await?;
 
-        let (msg_tx, mut msg_rx) = mpsc::channel::<Box<[u8]>>(64);
+        let (ordered_msg_tx, mut ordered_msg_rx) = mpsc::channel::<Box<[u8]>>(64);
+        let (unordered_msg_tx, mut unordered_msg_rx) = mpsc::channel::<Box<[u8]>>(64);
         let (reliable_tx, mut reliable_data_rx) = mpsc::channel::<Box<[u8]>>(64);
         let (unreliable_tx, mut unreliable_data_rx) = mpsc::channel::<Box<[u8]>>(64);
         let (outbound_tx, outbound_rx) = mpsc::channel::<(u16, Box<[u8]>, bool)>(64);
         let (feedback_tx, feedback_rx) = mpsc::unbounded::<Feedback>();
 
-        let _ = self.msg_channel.set(DirectMessageChannel::new(msg_tx));
+        let _ = self.msg_channel.set(DirectMessageChannel::new(ordered_msg_tx));
+        let _ = self.unordered_msg_channel.set(DirectMessageChannel::new(unordered_msg_tx));
         let _ = self.reliable_data_tx.set(reliable_tx);
         let _ = self.unreliable_data_tx.set(unreliable_tx);
         let _ = self.outbound_packet_sender.set(outbound_tx);
@@ -333,13 +344,28 @@ impl WebRtcClient {
                                     }
                                 }
                                 Event::ChannelData(data) => {
-                                    if data.id == UNORDERED_MSG_CHANNEL_ID {
+                                    if data.id == ORDERED_MSG_CHANNEL_ID {
                                         if let Ok(msg) = PeerMessageBody::decode(&data.data[..]) {
                                             let request_id = msg.request_id;
                                             if let Some(response) = msg.response {
                                                 self.msg_channel().notify_response(request_id, response).await;
                                             } else if let Some(request) = msg.request {
                                                 self.process_message_packet(request_id, request).await;
+                                            }
+                                        }
+                                    } else if data.id == UNORDERED_MSG_CHANNEL_ID {
+                                        if let Ok(msg) = PeerMessageBody::decode(&data.data[..]) {
+                                            if let Some(Request::FecFeedback(feedback)) = msg.request {
+                                                if let (Some(sender), Some(inner)) = (self.transfer_feedback_sender.get(), feedback.feedback) {
+                                                    match inner {
+                                                        fec_feedback::Feedback::Network(stats) => {
+                                                            let _ = sender.unbounded_send(Feedback::Network(stats));
+                                                        }
+                                                        fec_feedback::Feedback::Missing(blocks) => {
+                                                            let _ = sender.unbounded_send(Feedback::Missing(blocks));
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -369,8 +395,12 @@ impl WebRtcClient {
 
                     rtc.handle_input(Input::Timeout(Instant::now()))?;
                 }
-                Some(data) = msg_rx.next() => {
-
+                Some(data) = ordered_msg_rx.next() => {
+                    if let Some(mut ch) = rtc.channel(ORDERED_MSG_CHANNEL_ID) {
+                        ch.write(true, &data).ok();
+                    }
+                }
+                Some(data) = unordered_msg_rx.next() => {
                     if let Some(mut ch) = rtc.channel(UNORDERED_MSG_CHANNEL_ID) {
                         ch.write(true, &data).ok();
                     }
@@ -466,6 +496,10 @@ impl WebRtcClient {
         self.msg_channel.get().unwrap()
     }
 
+    pub fn unordered_msg_channel(&self) -> &DirectMessageChannel {
+        self.unordered_msg_channel.get().unwrap()
+    }
+
     pub async fn process_message_packet(&self, request_id: String, msg: Request) {
         match msg {
             Request::CancelRequest(request) => {
@@ -555,18 +589,6 @@ impl WebRtcClient {
                 let _ = self
                     .msg_channel().send_response(request_id, Response::VoidResponse(VoidResponseMessage {}))
                     .await;
-            }
-            Request::FecFeedback(feedback) => {
-                if let (Some(sender), Some(inner)) = (self.transfer_feedback_sender.get(), feedback.feedback) {
-                    match inner {
-                        fec_feedback::Feedback::Network(stats) => {
-                            let _ = sender.unbounded_send(Feedback::Network(stats));
-                        }
-                        fec_feedback::Feedback::Missing(blocks) => {
-                            let _ = sender.unbounded_send(Feedback::Missing(blocks));
-                        }
-                    }
-                }
             }
             _ => {}
         }

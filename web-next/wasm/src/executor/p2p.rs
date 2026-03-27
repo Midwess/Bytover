@@ -29,6 +29,8 @@ use shared::entities::peer::Peer as PeerEntity;
 use shared::shell::executor::transfer::WebRtc;
 
 use crate::webrtc::client::WebRtcClient;
+use crate::webrtc::ice::IceAgent;
+use crate::webrtc::signaling::SignalingClient;
 use crate::di_container::DiContainer;
 
 /// P2P Executor Implementation for WASM
@@ -131,7 +133,8 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 let transfer_repo = di.get_transfer_session_repository();
 
                 let client = WebRtcClient::connect(
-                    "http://localhost:3000",
+                    SignalingClient::new("http://localhost:3000"),
+                    IceAgent::new(),
                     &peer_id,
                     resource_repo,
                     transfer_repo,
