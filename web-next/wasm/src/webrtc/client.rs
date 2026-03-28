@@ -81,6 +81,7 @@ impl WebRtcClient {
 
         api.setup_channel_handlers(reliable_channel.clone(), data_inbound_tx.clone())?;
         api.setup_channel_handlers(unreliable_channel.clone(), data_inbound_tx)?;
+        api.setup_channel_handlers(unordered_channel.clone(), msg_inbound_tx.clone())?;
         api.setup_channel_handlers(ordered_channel.clone(), msg_inbound_tx)?;
 
         api.create_offer_and_set_local(&connection).await?;

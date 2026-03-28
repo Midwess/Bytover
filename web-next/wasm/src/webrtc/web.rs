@@ -253,11 +253,15 @@ impl WebRtcApi {
     }
 
     pub async fn wait_for_channel_open(&self, channel: Arc<RtcDataChannelWrapper>) -> Result<(), WebError> {
+        if channel.0.ready_state() == web_sys::RtcDataChannelState::Open {
+            return Ok(());
+        }
+
         let (tx, mut rx) = mpsc::channel::<()>(1);
         let onopen = Closure::wrap(Box::new(move || {
             let _ = tx.clone().try_send(());
         }) as Box<dyn FnMut()>);
-        channel.clone().set_onopen(Some(onopen.as_ref().unchecked_ref()));
+        channel.0.set_onopen(Some(onopen.as_ref().unchecked_ref()));
         onopen.forget();
         rx.next().await;
         Ok(())

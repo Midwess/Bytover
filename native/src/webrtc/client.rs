@@ -152,6 +152,7 @@ impl WebRtcClient {
     ) -> Result<Arc<Self>, WebRtcClientError> {
         let mut rtc = RtcConfig::new().build(Instant::now());
 
+        log::info!("Received offer {offer_message:?}");
         let local_addr = socket.local_addr().await?;
         if !local_addr.ip().is_unspecified() {
             let host_candidate = Candidate::host(local_addr, "udp").map_err(|e| WebRtcClientError::Signalling(format!("{e}")))?;
@@ -192,8 +193,7 @@ impl WebRtcClient {
             ..Default::default()
         });
 
-        let sanitized_sdp = crate::webrtc::utils::sanitize_sdp(&offer_message.sdp);
-        let offer = SdpOffer::from_sdp_string(&sanitized_sdp).map_err(|e| WebRtcClientError::SdpParse(format!("{e}")))?;
+        let offer = SdpOffer::from_sdp_string(&offer_message.sdp).map_err(|e| WebRtcClientError::SdpParse(format!("{e}")))?;
 
         let answer = rtc.sdp_api().accept_offer(offer).map_err(WebRtcClientError::Rtc)?;
 

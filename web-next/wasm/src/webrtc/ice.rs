@@ -31,7 +31,7 @@ impl IceCandidateTracker {
     }
 
     fn has_sufficient_candidates(&self) -> bool {
-        (self.host_candidates > 0 || self.srflx_candidates > 0 || self.relay_candidates > 0) && self.prflx_candidates > 0
+        self.host_candidates > 0 || self.srflx_candidates > 0 || self.relay_candidates > 0
     }
 }
 

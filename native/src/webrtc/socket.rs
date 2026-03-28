@@ -2,7 +2,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::net::UdpSocket;
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::{mpsc, oneshot};
 
 #[derive(Debug, Error)]
 pub enum SyncUdpSocketError {
@@ -34,7 +34,7 @@ fn map_to_v6(addr: SocketAddr) -> SocketAddr {
 
 #[derive(Clone)]
 pub struct SyncUdpSocket {
-    inner: Arc<Mutex<UdpSocket>>,
+    inner: Arc<UdpSocket>,
     send_tx: mpsc::Sender<SendEntry>,
     recv_tx: mpsc::Sender<RecvEntry>
 }
@@ -44,7 +44,7 @@ impl SyncUdpSocket {
         let is_v6 = socket.local_addr().map(|a| a.is_ipv6()).unwrap_or(false);
         let (send_tx, send_rx) = mpsc::channel(2048);
         let (recv_tx, recv_rx) = mpsc::channel(2048);
-        let inner = Arc::new(Mutex::new(socket));
+        let inner = Arc::new(socket);
         let socket_ref = inner.clone();
 
         tokio::spawn(Self::poll_loop(socket_ref, send_rx, recv_rx, is_v6));
@@ -53,7 +53,7 @@ impl SyncUdpSocket {
     }
 
     async fn poll_loop(
-        socket: Arc<Mutex<UdpSocket>>,
+        socket: Arc<UdpSocket>,
         mut send_rx: mpsc::Receiver<SendEntry>,
         mut recv_rx: mpsc::Receiver<RecvEntry>,
         is_v6: bool
@@ -62,15 +62,13 @@ impl SyncUdpSocket {
             tokio::select! {
                 Some(entry) = send_rx.recv() => {
                     let target = if is_v6 { map_to_v6(entry.target) } else { entry.target };
-                    let sock = socket.lock().await;
-                    let result = sock.send_to(&entry.buf, target).await;
+                    let result = socket.send_to(&entry.buf, target).await;
                     let _ = entry.resp.send(result);
                 }
                 Some(entry) = recv_rx.recv() => {
                     let expected = if is_v6 { map_to_v6(entry.addr) } else { entry.addr };
                     let mut buf = vec![0u8; 65535];
-                    let sock = socket.lock().await;
-                    match sock.recv_from(&mut buf).await {
+                    match socket.recv_from(&mut buf).await {
                         Ok((size, src)) if src == expected || src == entry.addr => {
                             buf.truncate(size);
                             let _ = entry.resp.send(Ok((buf, src)));
@@ -110,19 +108,15 @@ impl SyncUdpSocket {
     }
 
     pub async fn recv_any(&self, buf: &mut [u8]) -> Result<(usize, SocketAddr), SyncUdpSocketError> {
-        let sock = self.inner.lock().await;
-        Ok(sock.recv_from(buf).await?)
+        Ok(self.inner.recv_from(buf).await?)
     }
 
     pub fn local_addr_sync(&self) -> Result<SocketAddr, SyncUdpSocketError> {
-        match self.inner.try_lock() {
-            Ok(socket) => Ok(socket.local_addr()?),
-            Err(_) => Err(std::io::Error::new(std::io::ErrorKind::WouldBlock, "socket locked").into())
-        }
+        Ok(self.inner.local_addr()?)
     }
 
     pub async fn local_addr(&self) -> Result<SocketAddr, SyncUdpSocketError> {
-        Ok(self.inner.lock().await.local_addr()?)
+        Ok(self.inner.local_addr()?)
     }
 }
 
