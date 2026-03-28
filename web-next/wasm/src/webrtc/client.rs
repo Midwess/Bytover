@@ -102,6 +102,7 @@ impl WebRtcClient {
 
         let answer_sdp = signaling.send_offer(peer_id, &local_sdp).await?;
 
+        log::info!("Got answer from remote peer {answer_sdp:?}");
         api.set_remote_description(&connection, &answer_sdp).await?;
 
         let client = Arc::new(WebRtcClient {

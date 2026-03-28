@@ -184,7 +184,7 @@ impl DiContainer {
         let web_rtc_stub = Arc::new(WebRtc::new());
 
         let web_rtc_config = WebRtcServerConfig {
-            bind_addr: "0.0.0.0:0".parse().unwrap(),
+            bind_addr: "[::]:0".parse().unwrap(),
         };
         let web_rtc_server = WebRtcServer::new(
             web_rtc_config,

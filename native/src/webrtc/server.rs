@@ -7,7 +7,8 @@ use futures_util::stream::FuturesUnordered;
 use futures_util::StreamExt;
 use thiserror::Error;
 use tokio::net::UdpSocket;
-use tokio::sync::{Mutex, OnceCell, RwLock};
+use tokio::sync::{Mutex, OnceCell};
+use socket2::{Domain, Protocol, Socket, Type};
 
 use shared::app::operations::p2p::P2POperationOutput;
 use shared::app::operations::CoreOperationOutput;
@@ -75,6 +76,7 @@ pub struct WebRtcServer {
     current_user: OnceCell<PeerEntity>,
     core_request: OnceCell<CoreRequest>,
     running: AtomicBool,
+    ice_agent: OnceCell<Arc<IceAgent>>,
 }
 
 impl WebRtcServer {
@@ -93,6 +95,7 @@ impl WebRtcServer {
             current_user: Default::default(),
             core_request: Default::default(),
             running: AtomicBool::new(false),
+            ice_agent: OnceCell::new(),
         })
     }
 
@@ -198,7 +201,15 @@ impl WebRtcServer {
 
         log::info!("[webrtc-server] Starting with peer = {:?}", current_user.id);
 
-        let socket = SyncUdpSocket::new(UdpSocket::bind(self.config.bind_addr).await?);
+        let socket = if self.config.bind_addr.is_ipv6() {
+            let socket = Socket::new(Domain::IPV6, Type::DGRAM, Some(Protocol::UDP))?;
+            socket.set_only_v6(false)?;
+            socket.bind(&self.config.bind_addr.into())?;
+            UdpSocket::from_std(socket.into())?
+        } else {
+            UdpSocket::bind(self.config.bind_addr).await?
+        };
+        let socket = SyncUdpSocket::new(socket);
         let local_addr = socket.local_addr().await?;
         log::info!("[webrtc-server] UDP socket bound on {local_addr}");
 
@@ -209,7 +220,8 @@ impl WebRtcServer {
         self.signalling.start(key.clone()).await;
         log::info!("[webrtc-server] Signalling background task started");
 
-        let mut ice_agent: Option<IceAgent> = None;
+        // ice_agent is now managed as a singleton in `self.ice_agent`
+
         let mut connect_futs: FuturesUnordered<_> = FuturesUnordered::new();
         let resource_repo = self.resource_repo.clone();
         let transfer_session_repo = self.transfer_session_repo.clone();
@@ -218,7 +230,6 @@ impl WebRtcServer {
 
         loop {
             if !self.is_running() {
-                log::info!("[webrtc-server] Stopped");
                 return Ok(());
             }
 
@@ -239,7 +250,7 @@ impl WebRtcServer {
                     let msg_offer = msg.offer;
 
                     if let Some(offer) = msg_offer {
-                        if ice_agent.is_none() {
+                        if self.ice_agent.get().is_none() {
                             let config = self.signalling
                                 .fetch_relay_config(&key)
                                 .await
@@ -248,21 +259,25 @@ impl WebRtcServer {
                                 "[webrtc-server] IceAgent created with {} STUN URLs",
                                 config.urls.len()
                             );
-                            ice_agent = Some(IceAgent::new(config));
+                            let agent = Arc::new(IceAgent::new(config).await.map_err(|e| WebRtcServerError::Signalling(format!("{e}")))?);
+                            agent.start_background_gathering();
+                            let _ = self.ice_agent.set(agent);
                         }
-                        let agent = ice_agent.as_ref().unwrap().clone();
+                        let agent = self.ice_agent.get().unwrap().clone();
                         let client_socket = socket.clone();
                         let user = current_user.clone();
                         let repo = resource_repo.clone();
                         let session_repo = transfer_session_repo.clone();
                         let srv = server.clone();
+                        let rid = request_id.clone();
+                        let off = offer.clone();
 
                         connect_futs.push(async move {
                             let result = WebRtcClient::connect(
-                                offer,
+                                off,
                                 client_socket,
                                 &srv.signalling,
-                                request_id,
+                                rid,
                                 agent,
                                 repo,
                                 session_repo,

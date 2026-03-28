@@ -6191,6 +6191,8 @@ dependencies = [
  "tonic 0.13.1",
  "uniffi",
  "url",
+ "webrtc-ice",
+ "webrtc-mdns",
 ]
 
 [[package]]

@@ -1,5 +1,4 @@
-use std::hash::{Hash, Hasher};
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::net::UdpSocket;
@@ -15,127 +14,97 @@ pub enum SyncUdpSocketError {
     Io(#[from] std::io::Error),
 }
 
-const QUEUE_SIZE: usize = 2048;
-const NUM_QUEUES: usize = 16;
-
-/// Queue entry for outgoing packets
-struct QueueEntry {
+struct SendEntry {
     buf: Vec<u8>,
     target: SocketAddr,
     resp: oneshot::Sender<std::io::Result<usize>>,
 }
 
-/// Queue entry for incoming packet requests (waiting on a specific address)
 struct RecvEntry {
     addr: SocketAddr,
     resp: oneshot::Sender<std::io::Result<(Vec<u8>, SocketAddr)>>,
 }
 
-fn hash_addr(addr: &SocketAddr) -> usize {
-    let mut h = std::collections::hash_map::DefaultHasher::new();
-    addr.hash(&mut h);
-    (h.finish() % NUM_QUEUES as u64) as usize
+fn map_to_v6(addr: SocketAddr) -> SocketAddr {
+    match addr {
+        SocketAddr::V4(v4) => SocketAddr::new(IpAddr::V6(v4.ip().to_ipv6_mapped()), v4.port()),
+        v6 => v6,
+    }
 }
 
 #[derive(Clone)]
 pub struct SyncUdpSocket {
     inner: Arc<Mutex<UdpSocket>>,
-    queues: Arc<Vec<Mutex<mpsc::Sender<QueueEntry>>>>,
-    recv_queues: Arc<Vec<Mutex<mpsc::Sender<RecvEntry>>>>,
+    send_tx: mpsc::Sender<SendEntry>,
+    recv_tx: mpsc::Sender<RecvEntry>,
 }
 
 impl SyncUdpSocket {
     pub fn new(socket: UdpSocket) -> Self {
-        let (txs, rxs): (Vec<_>, Vec<_>) = (0..NUM_QUEUES)
-            .map(|_| mpsc::channel(QUEUE_SIZE))
-            .unzip();
-        let (recv_txs, recv_rxs): (Vec<_>, Vec<_>) = (0..NUM_QUEUES)
-            .map(|_| mpsc::channel(QUEUE_SIZE))
-            .unzip();
-
+        let is_v6 = socket.local_addr().map(|a| a.is_ipv6()).unwrap_or(false);
+        let (send_tx, send_rx) = mpsc::channel(2048);
+        let (recv_tx, recv_rx) = mpsc::channel(2048);
         let inner = Arc::new(Mutex::new(socket));
-        let socket_clone = inner.clone();
+        let socket_ref = inner.clone();
 
-        // Spawn background task to poll all queues forever
-        tokio::spawn(async move {
-            Self::poll_loop(socket_clone, rxs, recv_rxs).await;
-        });
+        tokio::spawn(Self::poll_loop(socket_ref, send_rx, recv_rx, is_v6));
 
-        Self {
-            inner,
-            queues: Arc::new(txs.into_iter().map(Mutex::new).collect()),
-            recv_queues: Arc::new(recv_txs.into_iter().map(Mutex::new).collect()),
-        }
+        Self { inner, send_tx, recv_tx }
     }
 
-    /// Background task that polls all queues forever
     async fn poll_loop(
         socket: Arc<Mutex<UdpSocket>>,
-        mut queues: Vec<mpsc::Receiver<QueueEntry>>,
-        mut recv_queues: Vec<mpsc::Receiver<RecvEntry>>,
+        mut send_rx: mpsc::Receiver<SendEntry>,
+        mut recv_rx: mpsc::Receiver<RecvEntry>,
+        is_v6: bool,
     ) {
         loop {
-            // Poll each send queue
-            for queue in queues.iter_mut() {
-                while let Ok(entry) = queue.try_recv() {
-                    let QueueEntry { buf, target, resp } = entry;
+            tokio::select! {
+                Some(entry) = send_rx.recv() => {
+                    let target = if is_v6 { map_to_v6(entry.target) } else { entry.target };
                     let sock = socket.lock().await;
-                    let result = sock.send_to(&buf, target).await;
-                    let _ = resp.send(result);
+                    let result = sock.send_to(&entry.buf, target).await;
+                    let _ = entry.resp.send(result);
                 }
-            }
-
-            // Poll each recv queue
-            for queue in recv_queues.iter_mut() {
-                while let Ok(entry) = queue.try_recv() {
-                    let RecvEntry { addr, resp } = entry;
+                Some(entry) = recv_rx.recv() => {
+                    let expected = if is_v6 { map_to_v6(entry.addr) } else { entry.addr };
                     let mut buf = vec![0u8; 65535];
                     let sock = socket.lock().await;
                     match sock.recv_from(&mut buf).await {
-                        Ok((size, src)) if src == addr => {
+                        Ok((size, src)) if src == expected || src == entry.addr => {
                             buf.truncate(size);
-                            let _ = resp.send(Ok((buf, src)));
+                            let _ = entry.resp.send(Ok((buf, src)));
                         }
-                        Ok((_size, _src)) => {
-                            // Data from wrong address - just drop it
-                            let _ = resp.send(Err(std::io::Error::new(
+                        Ok(_) => {
+                            let _ = entry.resp.send(Err(std::io::Error::new(
                                 std::io::ErrorKind::UnexpectedEof,
-                                "Wrong address"
-                            ).into()));
+                                "Wrong address",
+                            )));
                         }
                         Err(e) => {
-                            let _ = resp.send(Err(e));
+                            let _ = entry.resp.send(Err(e));
                         }
                     }
                 }
+                else => break,
             }
-
-            // Yield to avoid busy-spinning
-            tokio::task::yield_now().await;
         }
     }
 
     pub async fn send_to(&self, buf: &[u8], target: SocketAddr) -> Result<usize, SyncUdpSocketError> {
         let (resp_tx, resp_rx) = oneshot::channel();
-        let entry = QueueEntry { buf: buf.to_vec(), target, resp: resp_tx };
-        let idx = hash_addr(&target);
-        let queue = self.queues[idx].lock().await;
-        queue.send(entry).await.map_err(|_| SyncUdpSocketError::QueueClosed)?;
+        let entry = SendEntry { buf: buf.to_vec(), target, resp: resp_tx };
+        self.send_tx.send(entry).await.map_err(|_| SyncUdpSocketError::QueueClosed)?;
         Ok(resp_rx.await.map_err(|_| SyncUdpSocketError::SenderDropped)??)
     }
 
-    /// Wait for a packet from the specified address
     pub async fn recv_from(&self, addr: SocketAddr) -> Result<(Vec<u8>, SocketAddr), SyncUdpSocketError> {
         let (resp_tx, resp_rx) = oneshot::channel();
         let entry = RecvEntry { addr, resp: resp_tx };
-        let idx = hash_addr(&addr);
-        let queue = self.recv_queues[idx].lock().await;
-        queue.send(entry).await.map_err(|_| SyncUdpSocketError::QueueClosed)?;
+        self.recv_tx.send(entry).await.map_err(|_| SyncUdpSocketError::QueueClosed)?;
         Ok(resp_rx.await.map_err(|_| SyncUdpSocketError::SenderDropped)??)
     }
 
-    /// Receive any incoming packet into `buf`, returning `(bytes_read, source_addr)`.
-    /// Unlike `recv_from`, this does not filter by address — suitable for ICE negotiation.
     pub async fn recv_any(&self, buf: &mut [u8]) -> Result<(usize, SocketAddr), SyncUdpSocketError> {
         let sock = self.inner.lock().await;
         Ok(sock.recv_from(buf).await?)

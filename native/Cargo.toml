@@ -48,6 +48,8 @@ thiserror.workspace = true
 rand.workspace = true
 tokio-tungstenite.workspace = true
 socket2.workspace = true
+webrtc-ice = "0.17.1"
+webrtc-mdns = "0.17.1"
 
 [target.uniffi-bindgen.dependencies]
 uniffi = { workspace = true }

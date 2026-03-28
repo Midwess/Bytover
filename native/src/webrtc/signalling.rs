@@ -1,5 +1,4 @@
-use std::sync::{Arc, OnceLock};
-use futures_util::stream::{SplitSink, SplitStream};
+use std::sync::Arc;
 use futures_util::{SinkExt, StreamExt};
 use prost::Message as ProstMessage;
 use schema::devlog::rpc_signalling::server::{
@@ -7,12 +6,11 @@ use schema::devlog::rpc_signalling::server::{
 };
 use std::time::Duration;
 use thiserror::Error;
-use tokio::net::TcpStream;
 use tokio::spawn;
 use tokio::sync::{mpsc, Mutex, OnceCell};
 use tokio::task::JoinHandle;
-use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
-use core_services::utils::yield_container::{YieldContainer, YieldError};
+use tokio_tungstenite::connect_async;
+use core_services::utils::yield_container::YieldError;
 
 #[derive(Debug, Error)]
 pub enum SignallingError {
@@ -114,6 +112,8 @@ impl SignalingClient {
                     let mut sink = sink;
                     let mut msg_tx = msg_tx.clone();
 
+                    let mut ping_interval = tokio::time::interval(Duration::from_secs(30));
+
                     loop {
                         tokio::select! {
                             msg = stream.next() => {
@@ -121,7 +121,6 @@ impl SignalingClient {
                                     Some(Ok(tokio_tungstenite::tungstenite::Message::Binary(data))) => {
                                         match Message::decode(data) {
                                             Ok(m) => {
-                                                log::info!("[signalling] Received message: {m:?}");
                                                 if msg_tx.send(Ok(m)).await.is_err() {
                                                     break;
                                                 }
@@ -131,6 +130,12 @@ impl SignalingClient {
                                             }
                                         }
                                     }
+                                    Some(Ok(tokio_tungstenite::tungstenite::Message::Ping(data))) => {
+                                        if sink.send(tokio_tungstenite::tungstenite::Message::Pong(data)).await.is_err() {
+                                            break;
+                                        }
+                                    }
+                                    Some(Ok(tokio_tungstenite::tungstenite::Message::Pong(_))) => {}
                                     Some(Ok(tokio_tungstenite::tungstenite::Message::Close(_))) | None => {
                                         break;
                                     }
@@ -149,6 +154,11 @@ impl SignalingClient {
                                         }
                                     }
                                     None => break,
+                                }
+                            }
+                            _ = ping_interval.tick() => {
+                                if sink.send(tokio_tungstenite::tungstenite::Message::Ping(vec![].into())).await.is_err() {
+                                    break;
                                 }
                             }
                         }

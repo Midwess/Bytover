@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -13,21 +12,21 @@ use str0m::change::SdpOffer;
 use str0m::channel::{ChannelConfig, ChannelId};
 use str0m::net::{Protocol, Receive};
 use str0m::{Candidate, Event, IceConnectionState, Input, Output, Rtc, RtcConfig};
-use str0m::rtp::RawPacket;
+// Removed unused RawPacket
 use thiserror::Error;
-use tokio::sync::{OnceCell, watch};
+use tokio::sync::OnceCell;
 use core_services::utils::yield_container::{YieldContainer, YieldError};
-use devlog_sdk::distributed_id::gen_id;
+// Removed unused gen_id
 use schema::devlog::bitbridge::peer_message_body::{Request, Response};
 use schema::devlog::bitbridge::*;
 use schema::devlog::rpc_signalling::server::OfferMessage;
 
 use shared::app::operations::p2p::P2POperationOutput;
-use shared::app::operations::transfer::TransferOperationOutput;
+// Removed unused TransferOperationOutput
 use shared::app::operations::CoreOperationOutput;
 use shared::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use shared::entities::peer::Peer;
-use shared::entities::transfer_session::TransferProgress;
+// Removed unused TransferProgress
 use shared::errors::CoreError;
 use shared::protocol::webrtc::errors::WebRtcErrors;
 use shared::protocol::webrtc::message_channel::DirectMessageChannel;
@@ -40,7 +39,7 @@ use shared::shell::api::CoreRequest;
 use schema::devlog::bitbridge::fec_feedback::Feedback;
 
 use crate::webrtc::ice::IceAgent;
-use crate::webrtc::signalling::SignalingClient;
+// Removed unused SignalingClient
 use crate::webrtc::socket::{SyncUdpSocket, SyncUdpSocketError};
 
 const TOTAL_CHANNELS: usize = 4;
@@ -158,7 +157,7 @@ impl WebRtcClient {
         socket: SyncUdpSocket,
         signalling: &crate::webrtc::signalling::SignalingClient,
         request_id: String,
-        ice_agent: IceAgent,
+        ice_agent: Arc<IceAgent>,
         resource_repo: Arc<dyn LocalResourceRepository>,
         transfer_session_repo: Arc<dyn TransferSessionRepository>,
     ) -> Result<Arc<Self>, WebRtcClientError> {
@@ -174,7 +173,8 @@ impl WebRtcClient {
             log::warn!("[webrtc-client] Bound to unspecified IP ({local_addr}), skipping host candidate. Relying on STUN.");
         }
 
-        ice_agent.gather_candidates(&mut rtc, local_addr).await;
+        ice_agent.gather_candidates(&mut rtc).await
+            .map_err(|e| WebRtcClientError::Signalling(format!("{e}")))?;
 
         let mut api = rtc.direct_api();
         api.create_data_channel(ChannelConfig {
@@ -202,7 +202,8 @@ impl WebRtcClient {
             ..Default::default()
         });
 
-        let offer = SdpOffer::from_sdp_string(&offer_message.sdp)
+        let sanitized_sdp = crate::webrtc::utils::sanitize_sdp(&offer_message.sdp);
+        let offer = SdpOffer::from_sdp_string(&sanitized_sdp)
             .map_err(|e| WebRtcClientError::SdpParse(format!("{e}")))?;
 
         let answer = rtc
@@ -210,7 +211,7 @@ impl WebRtcClient {
             .accept_offer(offer)
             .map_err(WebRtcClientError::Rtc)?;
 
-        log::info!("[webrtc-client] SDP answer created with all local candidates");
+        log::info!("[webrtc-client] SDP answer created with all local candidates {:?}", answer);
 
         signalling
             .send_answer(answer.to_sdp_string(), &request_id)
@@ -230,13 +231,16 @@ impl WebRtcClient {
                 match output {
                     Output::Timeout(t) => t,
                     Output::Transmit(t) => {
-                        socket.send_to(&t.contents, t.destination).await?;
+                        log::info!("Sending data {:?}", t.destination);
+                        if let Err(e) = socket.send_to(&t.contents, t.destination).await {
+                            log::warn!("[webrtc-client] Failed to send to {}: {}", t.destination, e);
+                        }
+
                         continue;
                     }
                     Output::Event(e) => {
                         match &e {
                             Event::Connected => {
-                                log::info!("[webrtc-client] Connected");
                                 is_connected = true;
                             }
                             Event::ChannelOpen(_, label) => {
@@ -295,7 +299,13 @@ impl WebRtcClient {
                 result = {
                     socket.recv_any(&mut buf)
                 } => {
-                    let (n, source) = result?;
+                    let (n, source) = match result {
+                        Ok(res) => res,
+                        Err(e) => {
+                            log::warn!("[webrtc-client] Socket receive error: {}", e);
+                            continue;
+                        }
+                    };
                     let receive = Receive::new(Protocol::Udp, source, local_addr, &buf[..n])
                         .map_err(|e| WebRtcClientError::Signalling(format!("{e}")))?;
                     rtc.handle_input(Input::Receive(Instant::now(), receive))?;
@@ -346,7 +356,9 @@ impl WebRtcClient {
                         match rtc.poll_output()? {
                             Output::Timeout(t) => break t,
                             Output::Transmit(t) => {
-                                self.socket.send_to(&t.contents, t.destination).await?;
+                                if let Err(e) = self.socket.send_to(&t.contents, t.destination).await {
+                                    log::warn!("[webrtc-client] Failed to send to {}: {}", t.destination, e);
+                                }
                             }
                             Output::Event(e) => match e {
                                 Event::IceConnectionStateChange(state) => {
@@ -396,7 +408,13 @@ impl WebRtcClient {
                 result = {
                     self.socket.recv_any(&mut buf)
                 } => {
-                    let (n, source) = result?;
+                    let (n, source) = match result {
+                        Ok(res) => res,
+                        Err(e) => {
+                            log::warn!("[webrtc-client] Socket receive error: {}", e);
+                            continue;
+                        }
+                    };
                     let Ok(receive) = Receive::new(Protocol::Udp, source, self.local_addr, &buf[..n]) else {
                         continue;
                     };
@@ -429,10 +447,8 @@ impl WebRtcClient {
                     }
                 }
             }
-            };
-
-            Ok(())
-        };
+        }
+    };
 
         tokio::select! {
             result = run_loop => {

@@ -91,6 +91,8 @@ impl Client {
     }
 
     pub async fn run(self: Arc<Self>, mut msg_stream: actix_ws::MessageStream) {
+        let mut ping_interval = tokio::time::interval(Duration::from_secs(30));
+
         loop {
             tokio::select! {
                 biased;
@@ -126,6 +128,13 @@ impl Client {
                         }
                         None => break,
                         _ => {}
+                    }
+                }
+                _ = ping_interval.tick() => {
+                    let mut session = self.ws_session.lock().await;
+                    if session.ping(b"").await.is_err() {
+                        log::warn!("Client {} ping failed, disconnecting", self.key);
+                        break;
                     }
                 }
             }

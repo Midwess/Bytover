@@ -35,28 +35,16 @@ impl SignalingClient {
         prost::Message::encode(&offer_msg, &mut encoded)
             .map_err(|e| SignalingError::Encoding(e.to_string()))?;
 
-        let response = HttpClient::new()
+        let (status, _headers, bytes) = HttpClient::new()
             .method("POST")
             .url(&url)
             .header("Content-Type", "application/octet-stream")
             .body_bytes(encoded)
             .fetch()
             .map_err(|e| SignalingError::Network(format!("{:?}", e)))?
-            .send()
+            .bytes()
             .await
             .map_err(|e| SignalingError::Network(format!("{:?}", e)))?;
-
-        let status = response.status();
-
-        let array_buffer: js_sys::ArrayBuffer = JsFuture::from(
-            response.array_buffer().map_err(|e| SignalingError::Network(format!("{:?}", e)))?,
-        )
-        .await
-        .map_err(|e| SignalingError::Network(format!("{:?}", e)))?
-        .dyn_into()
-        .map_err(|e| SignalingError::Network(format!("{:?}", e)))?;
-
-        let bytes = Uint8Array::new(&array_buffer).to_vec();
 
         if status != 200 {
             return Err(SignalingError::Server(
