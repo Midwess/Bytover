@@ -116,10 +116,10 @@ fn parse_stun_url(url: &str) -> Option<SocketAddr> {
 }
 
 async fn stun_binding(
-    local_addr: SocketAddr,
+    _local_addr: SocketAddr,
     stun_server: SocketAddr,
 ) -> Result<SocketAddr, IceError> {
-    let socket = UdpSocket::bind(local_addr).await?;
+    let socket = UdpSocket::bind("0.0.0.0:0").await?;
 
     let tid: [u8; 12] = rand::random::<[u8; 12]>();
 

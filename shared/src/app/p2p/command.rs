@@ -15,17 +15,11 @@ use futures_util::StreamExt;
 
 
 impl AppCommand {
-    pub async fn restart_nearby(&self) -> Result<(), CoreError> {
-        self.run(P2POperation::stop()).await?;
-        self.notify_event(P2PEvent::Launch);
-        Ok(())
-    }
-
     pub async fn gen_peer(&self, _user: Option<crate::entities::user::User>, device: crate::entities::device::DeviceInfo) -> Peer {
         self.run(RpcOperation::gen_peer(device)).await.unwrap()
     }
 
-    pub async fn start_nearby_server(&self) -> Result<(), CoreError> {
+    pub async fn start_nearby_server(&self, current_peer: Option<Peer>) -> Result<(), CoreError> {
         let user = RpcOperation::get_me().into_future(self.ctx()).await?;
 
         let is_already_running = self.run(P2POperation::is_running()).await;
@@ -39,8 +33,14 @@ impl AppCommand {
             return Ok(());
         };
 
-        let peer = self.gen_peer(Some(user), device).await;
-        self.update_model(P2PEvent::UpdateMe { new_peer: peer.clone() });
+        let peer = if let Some(peer) = current_peer {
+            peer
+        } else {
+            let peer = self.gen_peer(Some(user), device).await;
+            self.update_model(P2PEvent::UpdateMe { new_peer: peer.clone() });
+            peer
+        };
+
         log::info!(target: "nearby", "Starting nearby server with peer {peer:?}");
 
         let start_p2p_server_request = P2POperation::StartNearbyServer(peer);
@@ -53,6 +53,7 @@ impl AppCommand {
                     log::error!("Nearby server has been stopped: {error:?}, will restart in 3s...");
                     let _ = self.run(P2POperation::stop()).await;
                     self.request_from_shell(CoreOperation::Delay(Duration::from_secs(3))).await;
+                    self.notify_event(P2PEvent::SetLaunched(false));
                     self.notify_event(P2PEvent::Launch);
                     break;
                 }

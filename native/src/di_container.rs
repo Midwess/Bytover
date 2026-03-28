@@ -186,12 +186,12 @@ impl DiContainer {
         let web_rtc_config = WebRtcServerConfig {
             bind_addr: "0.0.0.0:0".parse().unwrap(),
         };
-        let web_rtc_server = Arc::new(WebRtcServer::new(
+        let web_rtc_server = WebRtcServer::new(
             web_rtc_config,
             self.get_signalling_client(),
             local_resource_repo.clone(),
             transfer_session_repo
-        ));
+        );
 
         let cloud_service = CloudService {
             server: self.get_cloud_server(),

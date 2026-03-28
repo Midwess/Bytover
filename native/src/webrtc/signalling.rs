@@ -62,7 +62,7 @@ impl SignalingClient {
         let url = format!("{}/relay/{}", self.http_url, key);
         let response = reqwest::get(&url)
             .await
-            .map_err(|e| SignallingError::HttpFailed(format!("{e}")))?;
+            .map_err(|e| SignallingError::HttpFailed(format!("{e:?}")))?;
 
         if !response.status().is_success() {
             return Err(SignallingError::HttpFailed(
@@ -121,6 +121,7 @@ impl SignalingClient {
                                     Some(Ok(tokio_tungstenite::tungstenite::Message::Binary(data))) => {
                                         match Message::decode(data) {
                                             Ok(m) => {
+                                                log::info!("[signalling] Received message: {m:?}");
                                                 if msg_tx.send(Ok(m)).await.is_err() {
                                                     break;
                                                 }
@@ -213,4 +214,3 @@ impl Drop for SignalingClient {
         });
     }
 }
-

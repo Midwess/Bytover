@@ -28,6 +28,7 @@ impl ClientManager {
 
     pub async fn get(&self, key: &str) -> Option<Arc<Client>> {
         let clients = self.clients.lock().await;
+        log::info!("Client list {:?}", clients.keys());
         clients.get(key).and_then(|w| w.upgrade())
     }
 }

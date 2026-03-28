@@ -83,8 +83,8 @@ impl WebRtcServer {
         signalling: SignalingClient,
         resource_repo: Arc<dyn LocalResourceRepository>,
         transfer_session_repo: Arc<dyn TransferSessionRepository>,
-    ) -> Self {
-        Self {
+    ) -> Arc<Self> {
+        Arc::new(Self {
             config,
             signalling,
             clients: Mutex::new(HashMap::new()),
@@ -93,7 +93,7 @@ impl WebRtcServer {
             current_user: Default::default(),
             core_request: Default::default(),
             running: AtomicBool::new(false),
-        }
+        })
     }
 
     pub fn is_running(&self) -> bool {
@@ -184,7 +184,7 @@ impl WebRtcServer {
         Ok(())
     }
 
-    pub async fn start(&self, core_request: CoreRequest, current_user: PeerEntity) -> Result<(), WebRtcServerError> {
+    pub async fn start(self: &Arc<Self>, core_request: CoreRequest, current_user: PeerEntity) -> Result<(), WebRtcServerError> {
         if self.is_running() {
             log::info!("[webrtc-server] Already running");
             core_request.response(CoreOperationOutput::P2P(P2POperationOutput::AlreadyRunning)).await;
@@ -206,7 +206,7 @@ impl WebRtcServer {
             return Err(WebRtcServerError::Signalling(format!("No signalling id for peer {}", current_user.id)))
         };
 
-        self.signalling.start(key).await;
+        self.signalling.start(key.clone()).await;
         log::info!("[webrtc-server] Signalling background task started");
 
         let mut ice_agent: Option<IceAgent> = None;
@@ -214,7 +214,7 @@ impl WebRtcServer {
         let resource_repo = self.resource_repo.clone();
         let transfer_session_repo = self.transfer_session_repo.clone();
         let current_user = current_user.clone();
-        let server = Arc::new(self.clone());
+        let server = self.clone();
 
         loop {
             if !self.is_running() {
@@ -241,7 +241,7 @@ impl WebRtcServer {
                     if let Some(offer) = msg_offer {
                         if ice_agent.is_none() {
                             let config = self.signalling
-                                .fetch_relay_config(&current_user.id)
+                                .fetch_relay_config(&key)
                                 .await
                                 .map_err(|e| WebRtcServerError::Signalling(format!("{e}")))?;
                             log::info!(
@@ -252,7 +252,6 @@ impl WebRtcServer {
                         }
                         let agent = ice_agent.as_ref().unwrap().clone();
                         let client_socket = socket.clone();
-                        let signalling = self.signalling.clone();
                         let user = current_user.clone();
                         let repo = resource_repo.clone();
                         let session_repo = transfer_session_repo.clone();
@@ -262,13 +261,15 @@ impl WebRtcServer {
                             let result = WebRtcClient::connect(
                                 offer,
                                 client_socket,
-                                signalling,
+                                &srv.signalling,
                                 request_id,
                                 agent,
                                 repo,
                                 session_repo,
                             )
                             .await;
+
+                            log::info!("[webrtc-server] Client connection result {:?}", result);
 
                             if result.is_ok() {
                                 let client = result.unwrap();
@@ -306,7 +307,7 @@ impl WebRtcServer {
                             log::info!("[webrtc-server] Active clients: {}", self.clients.lock().await.len());
                         }
                         None => {
-                            log::error!("[webrtc-server] Client connection failed");
+                            continue;
                         }
                     }
                 }

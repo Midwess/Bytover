@@ -144,11 +144,19 @@ pub struct WebRtcClient {
     transfer_feedback_sender: OnceCell<mpsc::UnboundedSender<Feedback>>,
 }
 
+impl std::fmt::Debug for WebRtcClient {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WebRtcClient")
+            .field("peer", &self.peer.get())
+            .finish()
+    }
+}
+
 impl WebRtcClient {
     pub async fn connect(
         offer_message: OfferMessage,
         socket: SyncUdpSocket,
-        signalling: SignalingClient,
+        signalling: &crate::webrtc::signalling::SignalingClient,
         request_id: String,
         ice_agent: IceAgent,
         resource_repo: Arc<dyn LocalResourceRepository>,
@@ -157,10 +165,14 @@ impl WebRtcClient {
         let mut rtc = RtcConfig::new().build(Instant::now());
 
         let local_addr = socket.local_addr().await?;
-        let host_candidate = Candidate::host(local_addr, "udp")
-            .map_err(|e| WebRtcClientError::Signalling(format!("{e}")))?;
-        rtc.add_local_candidate(host_candidate);
-        log::info!("[webrtc-client] Added host candidate: {local_addr}");
+        if !local_addr.ip().is_unspecified() {
+            let host_candidate = Candidate::host(local_addr, "udp")
+                .map_err(|e| WebRtcClientError::Signalling(format!("{e}")))?;
+            rtc.add_local_candidate(host_candidate);
+            log::info!("[webrtc-client] Added host candidate: {local_addr}");
+        } else {
+            log::warn!("[webrtc-client] Bound to unspecified IP ({local_addr}), skipping host candidate. Relying on STUN.");
+        }
 
         ice_agent.gather_candidates(&mut rtc, local_addr).await;
 
