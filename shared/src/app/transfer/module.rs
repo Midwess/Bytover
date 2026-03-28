@@ -286,13 +286,18 @@ impl AppModule<BitBridge> for TransferModule {
                     });
                 };
 
-                let Some(_me) = model.p2p.me.clone() else {
+                let Some(me) = model.p2p.me.clone() else {
                     log::info!("Nearby service not available");
                     return Command::done()
                 };
 
+                let Some(signalling_key) = me.signalling_id.clone() else {
+                    log::warn!("Missing signalling block");
+                    return Command::done()
+                };
+
                 Command::handle_result(move |it| async move {
-                    it.app().start_p2p_transfer(selected_resources, password, user, shelf_id, shelf_name).await
+                    it.app().start_p2p_transfer(selected_resources, password, user, shelf_id, shelf_name, signalling_key).await
                 })
             }
             TransferEvent::NewTransferResource { shelf_id, resource } => {

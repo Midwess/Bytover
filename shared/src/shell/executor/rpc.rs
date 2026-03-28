@@ -36,17 +36,17 @@ where
                 self.app_server().feedback(email, message).await?;
                 Ok(CoreOperationOutput::None)
             }
-            RpcOperation::RandomAvatar => {
-                let avatar = self.app_server().random_avatar().await?;
-                Ok(CoreOperationOutput::String(avatar))
-            }
-            RpcOperation::CreateP2PSession { alias } => {
-                let p2p_session = self.app_server().create_device_session(alias).await?;
+            RpcOperation::CreateP2PSession { alias, signalling_key } => {
+                let p2p_session = self.app_server().create_device_session(alias, signalling_key).await?;
                 Ok(CoreOperationOutput::P2PSession(p2p_session))
             }
             RpcOperation::GetDeviceAliases => {
                 let aliases = self.app_server().get_device_aliases().await?;
                 Ok(CoreOperationOutput::DeviceAliases(aliases))
+            }
+            RpcOperation::GenPeer { device } => {
+                let peer = self.app_server().gen_peer(device).await?;
+                Ok(CoreOperationOutput::Rpc(RpcOperationOutput::GenPeer(peer)))
             }
         }
     }

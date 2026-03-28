@@ -128,17 +128,6 @@ where
             .ok_or_else(|| RpcErrors::BadRequest(format!("User {} not found", user_id)))
     }
 
-    pub async fn random_avatar(&self) -> Result<String, RpcErrors> {
-        let req = GenerateRandomAvatarRequest {
-            app_name: Some("BitBridge".to_owned())
-        };
-
-        let channel = self.rpc_module.connect().await?;
-        let mut client = ApplicationServiceClient::new(channel);
-        let avatar = client.get_avatar(req).await?;
-        Ok(avatar.into_inner().avatar.unwrap_or_default())
-    }
-
     pub async fn feedback(&self, email: String, message: String) -> Result<(), RpcErrors> {
         let request = AppFeedbackRequest {
             app_name: "BitBridge".to_string(),
@@ -153,9 +142,9 @@ where
         Ok(())
     }
 
-    pub async fn create_device_session(&self, alias: String) -> Result<schema::devlog::bitbridge::P2pSession, RpcErrors> {
+    pub async fn create_device_session(&self, alias: String, signalling_key: String) -> Result<schema::devlog::bitbridge::P2pSession, RpcErrors> {
         let channel = self.rpc_module.connect().await?;
-        let req = CreateDeviceSessionRequest { alias };
+        let req = CreateDeviceSessionRequest { alias, signalling_key };
         let mut request = Request::new(req);
 
         self.auth_provider.with_auth(&mut request).await?;
@@ -187,5 +176,30 @@ where
         let mut client = P2pOrchestrationServiceClient::new(channel);
         let response = client.find_session(request).await?;
         Ok(response.into_inner().session)
+    }
+
+    pub async fn gen_peer(&self, device: crate::entities::device::DeviceInfo) -> Result<crate::entities::peer::Peer, RpcErrors> {
+        let channel = self.rpc_module.connect().await?;
+        let device_msg = schema::value::device::RegisteringDevice {
+            platform: device.platform as i32,
+            device_name: device.name.clone(),
+            device_unique_key: device.unique_id.clone(),
+            device_type: schema::value::device::DeviceType::OtherLaptop as i32, // Or a better default
+            url: "".to_string(), // Client may not have the true URL here, or it can be a default empty string
+        };
+
+        let req = schema::devlog::bitbridge::GenPeerRequest { device: device_msg };
+        let mut request = Request::new(req);
+
+        // Include auth token if available, so backend can extract user
+        let _ = self.auth_provider.with_auth(&mut request).await;
+
+        let mut client = P2pOrchestrationServiceClient::new(channel);
+        let response = client.gen_peer(request).await?.into_inner();
+        
+        let mut peer = crate::entities::peer::Peer::from(response.peer);
+        peer.signalling_id = response.signalling_id;
+        
+        Ok(peer)
     }
 }

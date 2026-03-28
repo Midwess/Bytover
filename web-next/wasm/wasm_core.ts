@@ -24,14 +24,12 @@ import {
     CoreOperationVariantRender,
     CoreOperationVariantTransfer,
     CoreOperationVariantInternet,
-    CoreOperationVariantP2P,
     CoreOperationVariantNotified,
     CoreOperationVariantDialog,
     AppEventVariantEnvironment,
     EnvironmentEventVariantAppLaunched,
     AuthenticationViewModel,
     EnvironmentViewModel,
-    P2PViewModel,
     TransferViewModel,
     ResourceSelection,
     LocalResourcePathVariantPlatformIdentifier,
@@ -39,7 +37,6 @@ import {
     DialogOperationVariantToast,
     DialogOperationVariantMessage,
     ReceiveSessionViewModel,
-    PeerViewModel,
     LocalResourcePath,
     SelectedResourceViewModel,
     ShelfViewModel,
@@ -51,9 +48,7 @@ import {
     CoreOperationOutputVariantBool,
     MessageReason,
     ReceiveResourceViewModel,
-    WebViewOperationVariantOpenUrl,
-    P2PEventVariantLaunch,
-    AppEventVariantP2P,
+    WebViewOperationVariantOpenUrl, CoreOperationVariantP2P,
 } from 'shared_types/types/shared_types'
 import { BincodeDeserializer } from "shared_types/bincode/bincodeDeserializer";
 import { BincodeSerializer } from "shared_types/bincode/bincodeSerializer";
@@ -66,7 +61,7 @@ import init_core, {
     view
 } from "core_wasm"
 import { process_event, handle_response } from "core_wasm";
-import BPromise, { delay } from 'bluebird'
+import BPromise from 'bluebird'
 import { Observable } from "@/utils/observable";
 import { useEffect, useState } from "react";
 import { FileMetadata, FolderStructure } from "@/hooks/use-file-upload";
@@ -78,10 +73,8 @@ export class WasmCore {
     // We should recommend user to download the app instead.
     isCoreCompatible: Observable<boolean> = new Observable(true)
     isCoreReady: Observable<boolean> = new Observable(false)
-    isNearbyEnabled: Observable<boolean> = new Observable(false)
     authenticationState: Observable<AuthenticationViewModel> = new Observable()
     environmentState: Observable<EnvironmentViewModel> = new Observable()
-    nearbyState: Observable<P2PViewModel> = new Observable()
     transferState: Observable<TransferViewModel> = new Observable()
     shelfState: Observable<ShelfViewModel> = new Observable()
 
@@ -99,20 +92,6 @@ export class WasmCore {
         this.autoDownloadedResources.add(`${sessionId}_${orderId}`)
     }
 
-    public useReceivedSession() {
-        const [session, setSession] = useState<ReceiveSessionViewModel | undefined>()
-
-        useEffect(() => {
-            return this.transferState.subscribe((transferState) => {
-                if (!isEqual(session, transferState?.received_session)) {
-                    setSession(transferState?.received_session ?? undefined)
-                }
-            })
-        }, [session])
-
-        return session
-    }
-
     public useReceivedCloudSession() {
         const [session, setSession] = useState<ReceiveSessionViewModel | undefined>()
 
@@ -125,20 +104,6 @@ export class WasmCore {
         }, [session])
 
         return session
-    }
-
-    public useMyPeer() {
-        const [myPeer, setMyPeer] = useState<PeerViewModel | undefined>(undefined)
-
-        useEffect(() => {
-            return this.nearbyState.subscribe((nearbyState) => {
-                if (!isEqual(myPeer, nearbyState?.me)) {
-                    setMyPeer(nearbyState?.me || undefined)
-                }
-            })
-        }, [myPeer]);
-
-        return myPeer
     }
 
     public useSession(id: String) {
@@ -306,20 +271,6 @@ export class WasmCore {
         return session;
     }
 
-    public useNearbySessionsList() {
-        const session = this.useReceivedSession()
-        return session ? [session] : []
-    }
-
-    public useNearbyState() {
-        const [state, setState] = useState(this.nearbyState.get());
-        useEffect(() => {
-            return this.nearbyState.subscribe(setState)
-        }, []);
-
-        return state
-    }
-
     public useAuthenticationState() {
         const [state, setState] = useState(this.authenticationState.get());
         useEffect(() => {
@@ -352,8 +303,6 @@ export class WasmCore {
     }
 
     public async launch() {
-        const isTransferPage = typeof window !== 'undefined' && window.location.pathname.startsWith('/transfer')
-        this.isNearbyEnabled.set(isTransferPage)
         await init_core();
         const isCompatible = await is_compatible()
         if (!isCompatible) {
@@ -362,15 +311,6 @@ export class WasmCore {
         }
 
         await this.update(new AppEventVariantEnvironment(new EnvironmentEventVariantAppLaunched(true)))
-    }
-
-    public async launchNearby() {
-        if (this.isNearbyEnabled.get()) {
-            return;
-        }
-
-        this.isNearbyEnabled.set(true)
-        await this.update(new AppEventVariantP2P(new P2PEventVariantLaunch()))
     }
 
     public async update(event: AppEvent) {
@@ -466,7 +406,6 @@ export class WasmCore {
                 return await execute(request_id, serialize(coreOperation)) || new Uint8Array();
             }
             case CoreOperationVariantP2P: {
-                let op = coreOperation as CoreOperationVariantP2P;
                 return await execute(request_id, serialize(coreOperation)) || new Uint8Array()
             }
             case CoreOperationVariantNotified: {
@@ -559,7 +498,6 @@ export class WasmCore {
 
         this.environmentState.set(viewModel.environment!)
         this.authenticationState.set(viewModel.authentication!)
-        this.nearbyState.set(viewModel.p2p!)
         this.transferState.set(viewModel.transfer!)
         this.shelfState.set(viewModel.shelf!)
     }

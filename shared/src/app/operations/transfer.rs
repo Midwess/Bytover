@@ -14,7 +14,7 @@ pub enum TransferOperation {
     CreateCloudSession(TransferSession),
     SendSession(TransferSession),
     CancelSession(Option<String>, u64),
-    FindPublicSession {
+    FindSession {
         alias: String
     },
     SubscribeToPublicSessionTransferProgress {
@@ -61,6 +61,6 @@ impl TransferOperation {
     pub fn find_transfer_session(
         alias: String
     ) -> AppRequestBuilder<impl Future<Output = Result<Option<TransferSession>, CoreError>>> {
-        AppCommand::request_from_shell(TransferOperation::FindPublicSession { alias }).map(|it| it.result_option())
+        AppCommand::request_from_shell(TransferOperation::FindSession { alias }).map(|it| it.result_option())
     }
 }

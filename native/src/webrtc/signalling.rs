@@ -8,7 +8,9 @@ use schema::devlog::rpc_signalling::server::{
 use std::time::Duration;
 use thiserror::Error;
 use tokio::net::TcpStream;
-use tokio::sync::{mpsc, OnceCell};
+use tokio::spawn;
+use tokio::sync::{mpsc, Mutex, OnceCell};
+use tokio::task::JoinHandle;
 use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
 use core_services::utils::yield_container::{YieldContainer, YieldError};
 
@@ -38,44 +40,26 @@ pub enum SignallingError {
 
 #[derive(Clone)]
 pub struct SignalingClient {
-    host: String,
-    port: u16,
-    ssl: bool,
-    msg_rx: Arc<OnceCell<YieldContainer<mpsc::Receiver<Result<Message, SignallingError>>>>>,
+    ws_url: String,
+    http_url: String,
+    msg_rx: Arc<OnceCell<Mutex<mpsc::Receiver<Result<Message, SignallingError>>>>>,
     msg_transfer_tx: Arc<OnceCell<mpsc::Sender<Vec<u8>>>>,
+    run_handle: Arc<Mutex<Option<JoinHandle<()>>>>
 }
 
 impl SignalingClient {
-    pub fn new(host: String, port: u16, ssl: bool) -> Self {
+    pub fn new(ws_url: String, http_url: String) -> Self {
         Self {
-            host,
-            port,
-            ssl,
+            ws_url,
+            http_url,
             msg_rx: Default::default(),
             msg_transfer_tx: Default::default(),
+            run_handle: Default::default()
         }
     }
 
-    fn url(&self) -> String {
-        format!(
-            "{}://{}:{}",
-            if self.ssl { "wss" } else { "ws" },
-            self.host,
-            self.port
-        )
-    }
-
-    fn http_url(&self) -> String {
-        format!(
-            "{}://{}:{}",
-            if self.ssl { "https" } else { "http" },
-            self.host,
-            self.port
-        )
-    }
-
     pub async fn fetch_relay_config(&self, key: &str) -> Result<IceConfig, SignallingError> {
-        let url = format!("{}/relay/{}", self.http_url(), key);
+        let url = format!("{}/relay/{}", self.http_url, key);
         let response = reqwest::get(&url)
             .await
             .map_err(|e| SignallingError::HttpFailed(format!("{e}")))?;
@@ -94,16 +78,21 @@ impl SignalingClient {
         IceConfig::decode(&bytes[..]).map_err(SignallingError::from)
     }
 
-    pub fn start(&self) {
-        let url = self.url();
+    pub async fn start(&self, key: String) {
+        if self.run_handle.lock().await.is_some() {
+            log::warn!("[signalling] Already running");
+            return;
+        }
+
+        let url = format!("{}/server/{}", self.ws_url, key);
         let (tx, new_rx) = mpsc::channel(128);
         let (transfer_tx, transfer_rx) = mpsc::channel(128);
-        let _ = self.msg_rx.set(YieldContainer::new(new_rx));
+        let _ = self.msg_rx.set(Mutex::new(new_rx));
         let _ = self.msg_transfer_tx.set(transfer_tx);
 
-        tokio::spawn(async move {
+        self.run_handle.lock().await.replace(tokio::spawn(async move {
             Self::run_loop(url, transfer_rx, tx).await;
-        });
+        }));
     }
 
     async fn run_loop(
@@ -182,7 +171,7 @@ impl SignalingClient {
 
     pub async fn next(&self) -> Result<Message, SignallingError> {
         let msg_rx = self.msg_rx.get().ok_or(SignallingError::NotConnected)?;
-        let mut msg_rx = msg_rx.retrieve().await?;
+        let mut msg_rx = msg_rx.lock().await;
         msg_rx.recv().await.ok_or(SignallingError::Stopped)?
     }
 
@@ -211,6 +200,17 @@ impl SignalingClient {
 
     pub fn decode_message(data: &[u8]) -> Result<Message, SignallingError> {
         Message::decode(data).map_err(SignallingError::from)
+    }
+}
+
+impl Drop for SignalingClient {
+    fn drop(&mut self) {
+        let handle = self.run_handle.clone();
+        spawn(async move {
+            if let Some(handle) = handle.lock().await.take() {
+                handle.abort();
+            }
+        });
     }
 }
 

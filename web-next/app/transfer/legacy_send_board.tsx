@@ -29,12 +29,6 @@ export default function SessionPage() {
     const coreCompatible = core.useIsCoreCompatible();
     const findSessionFailedMessage = core.useMessage(new MessageReasonVariantFailedToFindPublicSession())
 
-    useEffect(() => {
-        if (coreReady && coreCompatible) {
-            core.launchNearby();
-        }
-    }, [coreReady, coreCompatible]);
-
     const session = core.useSession(sessionName);
 
     useEffect(() => {

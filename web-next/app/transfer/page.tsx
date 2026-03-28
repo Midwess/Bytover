@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Suspense } from "react";
+import { Suspense } from "react";
 import SendBoard from "./send_board";
 import core from '@/wasm/wasm_core';
 import Header from "@/components/web/header";
@@ -13,12 +13,6 @@ import { motion } from "motion/react";
 function TransferBoardContent() {
     const coreReady = core.useCoreReady();
     const coreCompatible = core.useIsCoreCompatible();
-
-    React.useEffect(() => {
-        if (coreReady && coreCompatible) {
-            core.launchNearby()
-        }
-    }, [coreReady, coreCompatible]);
 
     if (!coreCompatible) {
         return (

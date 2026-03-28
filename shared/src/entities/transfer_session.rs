@@ -255,7 +255,6 @@ impl TransferSession {
         mut resources: Vec<LocalResource>,
         password: Option<String>,
         signalling_key: String,
-        _scope: String,
         alias: String,
         access_url: String,
         id: u64,
@@ -279,7 +278,7 @@ impl TransferSession {
             target: TransferTarget::P2P {
                 from_peer: None,
                 connection_state: P2PConnectionState::NotConnected,
-                signalling_key: None
+                signalling_key: Some(signalling_key),
             },
             from_user: User {
                 id: 0,
@@ -376,20 +375,6 @@ impl TransferSession {
                 ..
             }
         )
-    }
-
-    pub fn add_resource_from_peer(&mut self, resource: LocalResource, peer: &Peer) -> bool {
-        if !peer.is_owned(self) {
-            log::warn!(
-                "Peer {} is not owner of session {}, ignoring resource",
-                peer.id,
-                self.order_id
-            );
-            return false;
-        }
-
-        self.add_resource(resource);
-        true
     }
 
     pub fn from_public_overview(

@@ -1,4 +1,4 @@
-use crate::config::{get_gateway_grpc_url, get_locator_url, get_signalling_server_ws_url, GATEWAY_HOST};
+use crate::config::{get_gateway_grpc_url, get_locator_url, get_signalling_server_ws_url, get_signalling_server_http_url, GATEWAY_HOST};
 use crate::core_api_impl::net_stream::NetStreamImpl;
 use crate::native::executor::NativeExecutor;
 use crate::native::p2p::P2PNativeExecutorImpl;
@@ -13,6 +13,7 @@ use crate::repository::local_resource::LocalResourceRepositoryImpl;
 use crate::repository::shelf::ShelfRepositoryImpl;
 use crate::repository::transfer_session::TransferSessionRepositoryImpl;
 use crate::repository::RedbPoolProvider;
+use crate::webrtc::signalling::SignalingClient;
 use core_services::utils::pool::allocator::{PoolAllocator, PoolBuilder, PoolResourceProvider};
 use core_services::utils::pool::request::PoolRequestBuilder;
 use devlog_sdk::distributed_id::init_scoped_id_generator;
@@ -165,6 +166,13 @@ impl DiContainer {
         *self.core_bridge.get().unwrap()
     }
 
+    pub fn get_signalling_client(&self) -> SignalingClient {
+        SignalingClient::new(
+            get_signalling_server_ws_url(),
+            get_signalling_server_http_url(),
+        )
+    }
+
     pub fn get_native_executor(&'static self) -> &'static NativeExecutor {
         if let Some(executor) = self.native_executor.get() {
             return executor
@@ -173,18 +181,14 @@ impl DiContainer {
         let local_resource_repo = Arc::new(self.get_local_resource_repository());
         let transfer_session_repo = Arc::new(self.get_transfer_session_repository());
 
-        // Create stub WebRtc for TransferNativeImpl
         let web_rtc_stub = Arc::new(WebRtc::new());
 
-        // Create WebRtcServer for P2PNativeExecutorImpl
         let web_rtc_config = WebRtcServerConfig {
             bind_addr: "0.0.0.0:0".parse().unwrap(),
-            signalling_host: get_signalling_server_ws_url(),
-            signalling_port: 0, // Will be parsed from URL
-            signalling_ssl: false,
         };
         let web_rtc_server = Arc::new(WebRtcServer::new(
             web_rtc_config,
+            self.get_signalling_client(),
             local_resource_repo.clone(),
             transfer_session_repo
         ));

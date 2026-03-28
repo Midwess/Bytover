@@ -6,17 +6,22 @@ use wasm_bindgen_futures::JsFuture;
 use core_services::wasm::http::HttpClient;
 use schema::devlog::rpc_signalling::server::{Message, OfferMessage};
 
+#[derive(Debug, Clone)]
 pub struct SignalingClient {
-    url: String,
+    ws_url: String,
+    http_url: String,
 }
 
 impl SignalingClient {
-    pub fn new(url: impl Into<String>) -> Self {
-        Self { url: url.into() }
+    pub fn new(ws_url: impl Into<String>, http_url: impl Into<String>) -> Self {
+        Self {
+            ws_url: ws_url.into(),
+            http_url: http_url.into(),
+        }
     }
 
     pub async fn send_offer(&self, peer_id: &str, offer_sdp: &str) -> Result<String, SignalingError> {
-        let url = format!("{}/offer/{}", self.url.trim_end_matches('/'), peer_id);
+        let url = format!("{}/offer/{}", self.http_url.trim_end_matches('/'), peer_id);
 
         let offer_msg = Message {
             request_id: None,

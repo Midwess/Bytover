@@ -75,7 +75,7 @@ impl TurnServerRegistry {
             .header("Authorization", format!("Bearer {}", token))
             .send()
             .await
-            .map_err(|e| RegistryError::CloudflareError(e.to_string()))?;
+            .map_err(|e| RegistryError::CloudflareError(format!("HTTP request failed: {:?}", e)))?;
 
         let data: CloudflareDnsResponse = resp.json().await
             .map_err(|e| RegistryError::CloudflareError(e.to_string()))?;
@@ -88,6 +88,7 @@ impl TurnServerRegistry {
             })
             .collect();
 
+        log::info!("Discovered {} TURN servers", current_servers_info.len());
         let mut discovered = self.discovered_servers.lock().await;
         let existing_map: HashMap<_, _> = discovered.iter()
             .map(|s| ((s.ip.clone(), s.domain.clone(), s.continent), s.clone()))
@@ -125,7 +126,7 @@ impl TurnServerRegistry {
             tokio::select! {
                 _ = ticker.tick() => {
                     if let Err(e) = self.discover_turn_servers().await {
-                        log::debug!("TURN discovery error: {}", e);
+                        log::warn!("TURN discovery error: {}", e);
                     }
                 }
             }

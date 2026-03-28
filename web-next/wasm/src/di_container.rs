@@ -1,5 +1,5 @@
 use crate::bridge::bridge::CoreBridgeImpl;
-use crate::config::{get_gateway_grpc_url, get_locator_url, get_signalling_server_ws_url};
+use crate::config::{get_gateway_grpc_url, get_locator_url, get_signalling_server_http_url, get_signalling_server_ws_url};
 use crate::executor::executor::NativeExecutor;
 use crate::executor::p2p::P2PNativeExecutorImpl;
 use crate::executor::persistent::NativePersistentImpl;
@@ -13,6 +13,7 @@ use crate::repository::local_resource::LocalResourceRepositoryImpl;
 use crate::repository::shelf::ShelfRepositoryImpl;
 use crate::repository::transfer_session::TransferSessionRepositoryImpl;
 use crate::repository::IdbPoolProvider;
+use crate::webrtc::signaling::SignalingClient;
 use core_services::utils::never_send::NeverSend;
 use core_services::utils::pool::allocator::{PoolAllocator, PoolBuilder, PoolResourceProvider};
 use core_services::utils::pool::request::PoolRequestBuilder;
@@ -169,6 +170,13 @@ impl DiContainer {
         &*self.core_bridge
     }
 
+    pub fn get_signalling_client(&self) -> SignalingClient {
+        SignalingClient::new(
+            get_signalling_server_ws_url(),
+            get_signalling_server_http_url(),
+        )
+    }
+
     pub async fn get_native_executor(&'static self) -> &'static NativeExecutor {
         if let Some(executor) = self.native_executor.get() {
             return executor
@@ -203,6 +211,7 @@ impl DiContainer {
             p2p: Box::new(P2PNativeExecutorImpl {
                 web_rtc: OnceCell::from(web_rtc),
                 client: OnceCell::new(),
+                signalling: OnceCell::new(),
                 current_user: OnceCell::new(),
             })
         };

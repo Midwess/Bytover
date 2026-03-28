@@ -865,21 +865,9 @@ dependencies = [
 [[package]]
 name = "async_zip"
 version = "0.0.18"
-source = "git+https://github.com/dev-logs/rs-async-zip.git#b2f52eb7e32234967bc0a67c5a87c45c2863a663"
-dependencies = [
- "async-compression",
- "chrono",
- "crc32fast",
- "futures-lite",
- "pin-project",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "async_zip"
-version = "0.0.18"
 source = "git+https://github.com/Midwess/rs-async-zip.git#b2f52eb7e32234967bc0a67c5a87c45c2863a663"
 dependencies = [
+ "async-compression",
  "chrono",
  "crc32fast",
  "futures-lite",
@@ -2323,7 +2311,7 @@ dependencies = [
  "anyhow",
  "async-stream",
  "async-trait",
- "async_zip 0.0.18 (git+https://github.com/dev-logs/rs-async-zip.git)",
+ "async_zip",
  "aws-sdk-s3",
  "bincode 1.3.3",
  "bytes",
@@ -11998,7 +11986,7 @@ dependencies = [
  "anyhow",
  "async-stream",
  "async-trait",
- "async_zip 0.0.18 (git+https://github.com/Midwess/rs-async-zip.git)",
+ "async_zip",
  "bincode 1.3.3",
  "bytes",
  "chrono",

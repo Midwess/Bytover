@@ -37,7 +37,8 @@ impl P2PTransferService {
         user_id: u64,
         device_id: u64,
         device_name: String,
-        alias: String
+        alias: String,
+        signalling_key: String,
     ) -> Result<P2PSession, P2PTransferErrors> {
         let existing_session = self.p2p_repository.find_by_alias(alias.clone()).await?;
 
@@ -47,14 +48,15 @@ impl P2PTransferService {
                 device_id,
                 user_id,
                 session.alias().to_string(),
-                Some(device_name)
+                Some(device_name),
+                signalling_key,
             );
 
             let updated_session = self.p2p_repository.update_session(updated_session).await?;
             return Ok(updated_session);
         }
 
-        let new_session = P2PSession::new(device_id, user_id, alias, Some(device_name)).await;
+        let new_session = P2PSession::new(device_id, user_id, alias, Some(device_name), signalling_key).await;
         let created_session = self.p2p_repository.create_session(new_session).await?;
 
         Ok(created_session)

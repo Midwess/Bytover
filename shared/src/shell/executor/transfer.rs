@@ -70,7 +70,7 @@ where
                 self.web_rtc().cancel_session(peer_id, session_id).await?;
                 Ok(CoreOperationOutput::None)
             }
-            TransferOperation::FindPublicSession { alias } => {
+            TransferOperation::FindSession { alias } => {
                 // Try P2P session first
                 if let Ok(Some(p2p_session)) = self.app_server().find_p2p_session_by_alias(alias.clone()).await {
                     let Some(user) = self.app_server().find_user(p2p_session.owner_user_id).await? else {
@@ -87,7 +87,7 @@ where
                         target: TransferTarget::P2P {
                             from_peer: None,
                             connection_state: crate::entities::target::P2PConnectionState::NotConnected,
-                            signalling_key: Some(p2p_session.signalling_room_id.clone())
+                            signalling_key: Some(p2p_session.signalling_key.clone())
                         },
                         access_url: p2p_session.access_url.clone(),
                         alias: alias.clone(),

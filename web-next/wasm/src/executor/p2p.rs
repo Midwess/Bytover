@@ -1,23 +1,3 @@
-//! P2P Executor for WASM
-//!
-//! This executor handles P2P operations using the WebRTC client.
-//!
-//! ## Architecture
-//!
-//! WASM acts as a P2P client (receiver) - it connects to a single peer.
-//! When `ConnectPeer { signalling_key, current_user }` is called, it connects to the
-//! signalling server, runs the client loop, introduces the current user, and returns `PeerConnected`.
-//! The client instance is stored in a `OnceCell` since there's only one connection.
-//!
-//! ## Operations
-//!
-//! **Inbound (receiving from peer)**:
-//! - `ConnectPeer` - Initiate WebRTC connection to peer
-//! - `ViewSessionDetail` - Request session info from peer
-//! - `DownloadResource` - Download a resource from peer
-//! - `DownloadAllResources` - Download all resources in a session
-//! - `CancelResource` - Cancel an in-progress download
-
 use once_cell::sync::OnceCell;
 use std::sync::Arc;
 use thiserror::Error;
@@ -41,13 +21,9 @@ use crate::di_container::DiContainer;
 ///
 /// The client is stored in a `OnceCell` since there's only one active connection.
 pub struct P2PNativeExecutorImpl {
-    /// WebRTC stub from shared (used for trait compatibility)
     pub web_rtc: OnceCell<Arc<WebRtc>>,
-
-    /// WebRTC client for WASM-specific receiving operations
     pub client: OnceCell<Arc<WebRtcClient>>,
-
-    /// Current user identity (for introduce handshake)
+    pub signalling: OnceCell<SignalingClient>,
     pub current_user: OnceCell<PeerEntity>,
 }
 
@@ -78,31 +54,31 @@ impl P2PNativeExecutorImpl {
         Self {
             web_rtc: OnceCell::new(),
             client: OnceCell::new(),
+            signalling: OnceCell::new(),
             current_user: OnceCell::new(),
         }
     }
 
-    /// Get the WebRtcClient, if connected
     pub fn get_client(&self) -> Option<Arc<WebRtcClient>> {
         self.client.get().cloned()
     }
 
-    /// Set the client after connection is established
     pub fn set_client(&self, client: Arc<WebRtcClient>) -> Result<(), Arc<WebRtcClient>> {
         self.client.set(client)
     }
 
-    /// Set the current user identity
+    pub fn set_signalling(&self, signalling: SignalingClient) -> Result<(), SignalingClient> {
+        self.signalling.set(signalling)
+    }
+
     pub fn set_current_user(&self, user: PeerEntity) -> Result<(), PeerEntity> {
         self.current_user.set(user)
     }
 
-    /// Check if connected to a peer
     pub fn is_connected(&self) -> bool {
         self.client.get().is_some()
     }
 
-    /// Get the current user identity
     pub fn current_user(&self) -> Option<&PeerEntity> {
         self.current_user.get()
     }
@@ -119,8 +95,6 @@ impl P2PNativeExecutorImpl {
 impl P2PNativeExecutor for P2PNativeExecutorImpl {
     async fn handle(&self, _request: CoreRequest, effect: P2POperation) -> Result<CoreOperationOutput, shared::errors::CoreError> {
         match effect {
-            // === Connection Management ===
-
             P2POperation::ConnectPeer { signalling_key, current_user } => {
                 log::info!("ConnectPeer called for WASM with key {}", signalling_key);
 
@@ -131,9 +105,10 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 let di = DiContainer::get_instance();
                 let resource_repo = di.get_local_resource_repository().await;
                 let transfer_repo = di.get_transfer_session_repository();
+                let signalling = di.get_signalling_client();
 
                 let client = WebRtcClient::connect(
-                    SignalingClient::new(&signalling_key),
+                    signalling,
                     IceAgent::new(),
                     &signalling_key,
                     resource_repo,
@@ -168,8 +143,6 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 Ok(CoreOperationOutput::None)
             }
 
-            // === Not applicable to WASM (host-only operations) ===
-
             P2POperation::StartNearbyServer(_) => {
                 log::warn!("StartNearbyServer called on WASM - not applicable (WASM is client-only)");
                 Err(P2PError::NotSupported("StartNearbyServer".into()).into())
@@ -179,8 +152,6 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 log::warn!("StopNearbyServer called on WASM - not applicable");
                 Err(P2PError::NotSupported("StopNearbyServer".into()).into())
             }
-
-            // === Outbound Operations (WASM doesn't send these) ===
 
             P2POperation::SendSessionDetail { .. } => {
                 log::debug!("SendSessionDetail called on WASM - not applicable (client-only)");
@@ -197,8 +168,6 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 Err(P2PError::NotSupported("SendResourceNotification".into()).into())
             }
 
-            // === Inbound Operations (downloading from peer) ===
-
             P2POperation::ViewSessionDetail { peer_id, order_id, password } => {
                 log::info!("ViewSessionDetail called for peer {}, order {}", peer_id, order_id);
 
@@ -207,9 +176,6 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 match client.request_session_detail(order_id, password).await {
                     Ok(_session) => {
                         log::info!("Session detail received for order_id {}", order_id);
-                        // TODO: Convert P2pTransferSessionMessage to TransferSession
-                        // The conversion requires implementing From<P2pTransferSessionMessage> for TransferSession
-                        // For now, return None until the conversion is implemented
                         Ok(CoreOperationOutput::None)
                     }
                     Err(e) => {
@@ -225,8 +191,6 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
 
                 let client = self.get_client_or_not_connected()?;
 
-                // Spawn the download request - the client will receive data and write to resource repo
-                // Full FEC integration and progress reporting is handled in the client's receiving loop
                 let client_clone = client.clone();
                 let resource_clone = resource.clone();
                 wasm_bindgen_futures::spawn_local(async move {
@@ -249,7 +213,6 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
 
                 let client = self.get_client_or_not_connected()?;
 
-                // Spawn downloads for all resources in parallel
                 for resource in resources.iter() {
                     let client_clone = client.clone();
                     let resource_clone = resource.clone();
@@ -284,10 +247,8 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
 
                 let client = self.get_client_or_not_connected()?;
 
-                // Cancel all transfers for the session
                 client.cancel_transfer(session_id).await;
 
-                // If resource_id is provided, also cancel that specific resource
                 if let Some(res_id) = resource_id {
                     client.cancel_resource_transfer(session_id, res_id).await;
                 }

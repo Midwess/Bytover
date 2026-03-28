@@ -43,6 +43,7 @@ pub struct WebRtcClient {
     transfer_session_repo: Arc<dyn TransferSessionRepository>,
     inbound_msg_receiver: YieldContainer<mpsc::UnboundedReceiver<Box<[u8]>>>,
     inbound_data_receiver: YieldContainer<mpsc::UnboundedReceiver<Box<[u8]>>>,
+    signalling: SignalingClient,
 
     msg_channel: OnceCell<DirectMessageChannel>,
     unordered_msg_channel: OnceCell<DirectMessageChannel>,
@@ -97,7 +98,7 @@ impl WebRtcClient {
             .ok_or_else(|| WebRtcClientError::Connection("No local description".to_string()))?
             .sdp();
 
-        log::info!("ICE gathering complete, local SDP ready, sending to signaling");
+        log::info!("ICE gathering complete, local SDP ready, sending to signaling {}", local_sdp);
 
         let answer_sdp = signaling.send_offer(peer_id, &local_sdp).await?;
 
@@ -116,6 +117,7 @@ impl WebRtcClient {
             transfer_session_repo,
             inbound_msg_receiver: YieldContainer::new(msg_inbound_rx),
             inbound_data_receiver: YieldContainer::new(data_inbound_rx),
+            signalling: signaling.clone(),
             msg_channel: OnceCell::new(),
             unordered_msg_channel: OnceCell::new(),
             prefix_channels: Mutex::new(HashMap::new()),
@@ -190,6 +192,8 @@ impl WebRtcClient {
                     avatar_url: resp.peer.avatar_url.clone(),
                     device: resp.peer.device.clone().into(),
                     email: resp.peer.email.clone(),
+                    user_id: None,
+                    signalling_id: None,
                 };
                 self.set_peer(peer).map_err(|_| WebRtcClientError::Connection("Peer already set".to_string()))?;
                 log::info!("Introduce handshake completed");
@@ -213,6 +217,8 @@ impl WebRtcClient {
             avatar_url: msg.mine.avatar_url.clone(),
             device: msg.mine.device.clone().into(),
             email: msg.mine.email.clone(),
+            user_id: None,
+            signalling_id: None,
         };
 
         self.set_peer(peer).map_err(|_| WebRtcClientError::Connection("Peer already set".to_string()))?;

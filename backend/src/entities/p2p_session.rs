@@ -3,31 +3,41 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct P2PSession {
-    session_id: u64,
-    device_id: u64,
-    user_id: u64,
-    alias: String,
-    description: Option<String>
+    pub session_id: u64,
+    pub device_id: u64,
+    pub user_id: u64,
+    pub alias: String,
+    pub description: Option<String>,
+    pub signalling_key: String,
 }
 
 impl P2PSession {
-    pub async fn new(device_id: u64, user_id: u64, alias: String, description: Option<String>) -> Self {
+    pub async fn new(device_id: u64, user_id: u64, alias: String, description: Option<String>, signalling_key: String) -> Self {
         Self {
             session_id: gen_id().await,
             device_id,
             user_id,
             alias,
-            description
+            description,
+            signalling_key,
         }
     }
 
-    pub fn from_db(session_id: u64, device_id: u64, user_id: u64, alias: String, description: Option<String>) -> Self {
+    pub fn from_db(
+        session_id: u64,
+        device_id: u64,
+        user_id: u64,
+        alias: String,
+        description: Option<String>,
+        signalling_key: String,
+    ) -> Self {
         Self {
             session_id,
             device_id,
             user_id,
             alias,
-            description
+            description,
+            signalling_key,
         }
     }
 
@@ -55,15 +65,7 @@ impl P2PSession {
         format!("{base_url}/session/{}", self.alias)
     }
 
-    pub fn get_scope(&self) -> String {
-        format!("{}-{}", self.alias, self.session_id)
-    }
-
-    pub fn owner_signalling_key(&self) -> String {
-        format!("direct://{};owner", self.get_scope())
-    }
-
-    pub fn member_signalling_key(&self) -> String {
-        format!("direct://{};member", self.get_scope())
+    pub fn signalling_key(&self) -> &str {
+        &self.signalling_key
     }
 }

@@ -64,9 +64,6 @@ impl From<WebRtcServerError> for CoreError {
 
 pub struct WebRtcServerConfig {
     pub bind_addr: SocketAddr,
-    pub signalling_host: String,
-    pub signalling_port: u16,
-    pub signalling_ssl: bool,
 }
 
 pub struct WebRtcServer {
@@ -83,14 +80,10 @@ pub struct WebRtcServer {
 impl WebRtcServer {
     pub fn new(
         config: WebRtcServerConfig,
+        signalling: SignalingClient,
         resource_repo: Arc<dyn LocalResourceRepository>,
         transfer_session_repo: Arc<dyn TransferSessionRepository>,
     ) -> Self {
-        let signalling = SignalingClient::new(
-            config.signalling_host.clone(),
-            config.signalling_port,
-            config.signalling_ssl,
-        );
         Self {
             config,
             signalling,
@@ -128,11 +121,7 @@ impl WebRtcServer {
         Ok(())
     }
 
-    pub async fn broadcast_cancel_session(
-        &self,
-        session_id: u64,
-        resource_id: Option<u64>,
-    ) -> Result<(), WebRtcServerError> {
+    pub async fn broadcast_cancel_session(&self, session_id: u64, resource_id: Option<u64>) -> Result<(), WebRtcServerError> {
         let clients = self.clients.lock().await;
         for client in clients.values() {
             let Some(client) = client.upgrade() else {
@@ -148,11 +137,7 @@ impl WebRtcServer {
         Ok(())
     }
 
-    pub async fn start_peer_core_stream(
-        &self,
-        peer_id: String,
-        core_request: CoreRequest,
-    ) -> Result<(), WebRtcServerError> {
+    pub async fn start_peer_core_stream(&self, peer_id: String, core_request: CoreRequest) -> Result<(), WebRtcServerError> {
         let client = self.get_client(&peer_id).await?;
         client.start_core_stream(core_request);
         Ok(())
@@ -167,9 +152,7 @@ impl WebRtcServer {
         error: Option<CoreError>,
     ) -> Result<(), WebRtcServerError> {
         let client = self.get_client(&peer_id).await?;
-        client
-            .send_session_detail_response(request_id, session_message, resources, error)
-            .await?;
+        client.send_session_detail_response(request_id, session_message, resources, error).await?;
         Ok(())
     }
 
@@ -201,12 +184,10 @@ impl WebRtcServer {
         Ok(())
     }
 
-     pub async fn start(&self, core_request: CoreRequest, current_user: PeerEntity) -> Result<(), WebRtcServerError> {
+    pub async fn start(&self, core_request: CoreRequest, current_user: PeerEntity) -> Result<(), WebRtcServerError> {
         if self.is_running() {
             log::info!("[webrtc-server] Already running");
-            core_request
-                .response(CoreOperationOutput::P2P(P2POperationOutput::AlreadyRunning))
-                .await;
+            core_request.response(CoreOperationOutput::P2P(P2POperationOutput::AlreadyRunning)).await;
             return Ok(());
         }
 
@@ -221,7 +202,11 @@ impl WebRtcServer {
         let local_addr = socket.local_addr().await?;
         log::info!("[webrtc-server] UDP socket bound on {local_addr}");
 
-        self.signalling.start();
+        let Some(key) = current_user.signalling_id.clone() else {
+            return Err(WebRtcServerError::Signalling(format!("No signalling id for peer {}", current_user.id)))
+        };
+
+        self.signalling.start(key).await;
         log::info!("[webrtc-server] Signalling background task started");
 
         let mut ice_agent: Option<IceAgent> = None;

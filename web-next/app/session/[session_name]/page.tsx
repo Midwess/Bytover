@@ -83,12 +83,6 @@ export default function SessionPage() {
         ];
     }, [accentColor]);
 
-    useEffect(() => {
-        if (coreReady && coreCompatible) {
-            core.launchNearby();
-        }
-    }, [coreReady, coreCompatible]);
-
     const session = core.useSession(sessionName);
 
     useEffect(() => {

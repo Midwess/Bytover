@@ -8,11 +8,11 @@ use crate::app::operations::p2p::{P2POperation, P2POperationOutput};
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::operations::CoreOperationOutput;
 use crate::app::p2p::module::P2PEvent;
-use crate::app::transfer::module::TransferEvent;
 use crate::entities::peer::Peer;
 use crate::errors::CoreError;
 use crate::CoreOperation;
 use futures_util::StreamExt;
+
 
 impl AppCommand {
     pub async fn restart_nearby(&self) -> Result<(), CoreError> {
@@ -21,24 +21,8 @@ impl AppCommand {
         Ok(())
     }
 
-    pub async fn gen_peer(&self, user: Option<crate::entities::user::User>, device: crate::entities::device::DeviceInfo) -> Peer {
-        let peer_id = Peer::compute_id(&device.unique_id, user.as_ref().map(|u| u.id).unwrap_or(0));
-        match user {
-            Some(user) => Peer {
-                id: peer_id,
-                name: Some(user.name),
-                avatar_url: user.avatar,
-                email: Some(user.email),
-                device,
-            },
-            None => Peer {
-                id: peer_id,
-                name: Some(device.name.clone()),
-                avatar_url: self.run(RpcOperation::random_avatar()).await.unwrap_or_default(),
-                email: None,
-                device,
-            }
-        }
+    pub async fn gen_peer(&self, _user: Option<crate::entities::user::User>, device: crate::entities::device::DeviceInfo) -> Peer {
+        self.run(RpcOperation::gen_peer(device)).await.unwrap()
     }
 
     pub async fn start_nearby_server(&self) -> Result<(), CoreError> {
@@ -85,8 +69,7 @@ impl AppCommand {
                     panic!("Unexpected output from nearby server, output: {output:?}");
                 }
             }
-        };
+        }
         Ok(())
     }
-
 }
