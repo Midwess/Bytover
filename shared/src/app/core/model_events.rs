@@ -31,7 +31,7 @@ pub trait UpdateAction<Data> {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PeerReceivedEvent {
     pub resource_order_id: u64,
-    pub peer_id: String,
+    pub peer_id: String
 }
 
 impl UpdateAction<TransferSession> for PeerReceivedEvent {

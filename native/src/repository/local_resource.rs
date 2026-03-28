@@ -214,7 +214,7 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
     ) -> Result<Box<dyn CIOCursor>, PersistenceError> {
         let absolute_path = self.path_resolver.get_absolute_path(path).await;
         let path = PathBuf::from(absolute_path);
-        let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown").to_string();
+        let _file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown").to_string();
 
         if path.is_dir() {
             let folder = Folder::new(path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;

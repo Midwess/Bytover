@@ -465,7 +465,6 @@ impl WebRtcPeer {
                 self.buffer.wait_buffer_low(TRANSFER_RESOURCE_RELIABLE_CHANNEL_ID, MIN_BUFFER_SIZE, timeout).await;
                 buff_counter = MIN_BUFFER_SIZE;
 
-                // Send a Hold sync probe reliably when transport buffer is overwhelmed
                 let hold_delimiter = TransferDelimiterShema::hold(1).as_bytes()?;
                 if let Ok(FecAction::Framed(frames)) = fec_sender.send(0, hold_delimiter.to_vec().into_boxed_slice()) {
                     for frame in frames {
@@ -818,7 +817,6 @@ impl WebRtcPeer {
             return Err(WebRtcErrors::InvalidDelimiter("Download all failed".into()));
         }
 
-        // Emit saving status before finalizing the session
         let mut session_progress = TransferProgress::new(session_resource.order_id, session_resource.size, TransferType::Receive);
         session_progress.update_progress(session_resource.size);
         log::info!("Emitting saving status for session resource {}", session_resource.order_id);
@@ -835,7 +833,6 @@ impl WebRtcPeer {
             return Err(WebRtcErrors::InvalidDelimiter(format!("Failed to stop download session: {:?}", e)));
         }
 
-        // Emit success status after session is finalized
         session_progress.success();
         log::info!("Emitting success status for session resource {}", session_resource.order_id);
         core_request

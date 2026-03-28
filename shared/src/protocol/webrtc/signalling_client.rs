@@ -111,7 +111,6 @@ impl SignallingClient {
                     }
                 }
 
-                // When it goes here, the websocket was already being disconnected, we need to notify all peers to cancel
                 let drained_messages = signal_receiver.drain().collect::<Vec<_>>().await;
                 log::info!("websocket disconnected, draining {} messages", drained_messages.len());
                 log::info!("websocket disconnected, notifying all peers to cancel");
@@ -144,7 +143,6 @@ impl SignallingClient {
         Ok(())
     }
 
-    // This msg will loop around back to us
     pub fn append_msg(&self, msg: Message) -> Result<(), WebRtcErrors> {
         let _ = self.sender.unbounded_send(msg);
         Ok(())

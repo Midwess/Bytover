@@ -39,7 +39,7 @@ impl AppInfoService for AppGatewayImpl {
         let channel = self.channel.connect().await?;
         let mut client = ApplicationServiceClient::new(channel);
         let request = GenerateRandomAvatarRequest {
-            app_name: Some("BitBridge".to_owned()),
+            app_name: Some("BitBridge".to_owned())
         };
         let response = client.get_avatar(request).await?;
         Ok(response.into_inner().avatar.unwrap_or_default())

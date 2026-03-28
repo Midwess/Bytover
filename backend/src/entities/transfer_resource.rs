@@ -1,7 +1,7 @@
-use std::env;
 use devlog_sdk::distributed_id::gen_id;
 use schema::value::static_resource::{S3Path, StaticResource};
 use serde::{Deserialize, Serialize};
+use std::env;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum TransferResourceType {
@@ -58,19 +58,25 @@ impl TransferResource {
     }
 
     fn bucket_name(&self) -> String {
-        format!("bytover-{}", env::var("BYTOVER_S3_REGION").unwrap_or("ap-southeast-1".to_owned()))
+        format!(
+            "bytover-{}",
+            env::var("BYTOVER_S3_REGION").unwrap_or("ap-southeast-1".to_owned())
+        )
     }
 
     pub fn source(&self) -> StaticResource {
         if matches!(self.r#type, TransferResourceType::Folder) {
             let name = self.name.trim_end_matches(".tar").trim_end_matches(".zip").trim_end_matches(".rar");
-            return StaticResource::s3_path(S3Path::new(self.bucket_name(), format!("sessions/{}/{}.zip", self.session_id, name)))
+            return StaticResource::s3_path(S3Path::new(
+                self.bucket_name(),
+                format!("sessions/{}/{}.zip", self.session_id, name)
+            ))
         }
 
-        StaticResource::s3_path(S3Path::new(self.bucket_name(), format!(
-            "sessions/{}/{}",
-            self.session_id, self.name
-        )))
+        StaticResource::s3_path(S3Path::new(
+            self.bucket_name(),
+            format!("sessions/{}/{}", self.session_id, self.name)
+        ))
     }
 
     pub fn thumbnail_source(&self) -> Option<StaticResource> {
@@ -78,9 +84,9 @@ impl TransferResource {
             return None
         }
 
-        Some(StaticResource::s3_path(S3Path::new(self.bucket_name(), format!(
-            "thumbnails/sessions/{}/{}.png",
-            self.session_id, self.order_id
-        ))))
+        Some(StaticResource::s3_path(S3Path::new(
+            self.bucket_name(),
+            format!("thumbnails/sessions/{}/{}.png", self.session_id, self.order_id)
+        )))
     }
 }

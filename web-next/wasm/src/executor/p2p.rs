@@ -2,17 +2,17 @@ use once_cell::sync::OnceCell;
 use std::sync::Arc;
 use thiserror::Error;
 
-use shared::shell::executor::p2p::P2PNativeExecutor;
-use shared::shell::api::CoreRequest;
 use shared::app::operations::p2p::{P2POperation, P2POperationOutput};
 use shared::app::operations::CoreOperationOutput;
 use shared::entities::peer::Peer as PeerEntity;
+use shared::shell::api::CoreRequest;
+use shared::shell::executor::p2p::P2PNativeExecutor;
 use shared::shell::executor::transfer::WebRtc;
 
+use crate::di_container::DiContainer;
 use crate::webrtc::client::WebRtcClient;
 use crate::webrtc::ice::IceAgent;
 use crate::webrtc::signaling::SignalingClient;
-use crate::di_container::DiContainer;
 
 /// P2P Executor Implementation for WASM
 ///
@@ -24,7 +24,7 @@ pub struct P2PNativeExecutorImpl {
     pub web_rtc: OnceCell<Arc<WebRtc>>,
     pub client: OnceCell<Arc<WebRtcClient>>,
     pub signalling: OnceCell<SignalingClient>,
-    pub current_user: OnceCell<PeerEntity>,
+    pub current_user: OnceCell<PeerEntity>
 }
 
 /// Errors that can occur in P2P operations
@@ -46,7 +46,13 @@ pub enum P2PError {
     Transfer(String),
 
     #[error("Operation not supported on WASM: {0}")]
-    NotSupported(String),
+    NotSupported(String)
+}
+
+impl Default for P2PNativeExecutorImpl {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl P2PNativeExecutorImpl {
@@ -55,7 +61,7 @@ impl P2PNativeExecutorImpl {
             web_rtc: OnceCell::new(),
             client: OnceCell::new(),
             signalling: OnceCell::new(),
-            current_user: OnceCell::new(),
+            current_user: OnceCell::new()
         }
     }
 
@@ -95,7 +101,10 @@ impl P2PNativeExecutorImpl {
 impl P2PNativeExecutor for P2PNativeExecutorImpl {
     async fn handle(&self, _request: CoreRequest, effect: P2POperation) -> Result<CoreOperationOutput, shared::errors::CoreError> {
         match effect {
-            P2POperation::ConnectPeer { signalling_key, current_user } => {
+            P2POperation::ConnectPeer {
+                signalling_key,
+                current_user
+            } => {
                 log::info!("ConnectPeer called for WASM with key {}", signalling_key);
 
                 if self.client.get().is_some() {
@@ -107,15 +116,9 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 let transfer_repo = di.get_transfer_session_repository();
                 let signalling = di.get_signalling_client();
 
-                let client = WebRtcClient::connect(
-                    signalling,
-                    IceAgent::new(),
-                    &signalling_key,
-                    resource_repo,
-                    transfer_repo,
-                )
-                .await
-                .map_err(|e| P2PError::WebRtc(e.to_string()))?;
+                let client = WebRtcClient::connect(signalling, IceAgent::new(), &signalling_key, resource_repo, transfer_repo)
+                    .await
+                    .map_err(|e| P2PError::WebRtc(e.to_string()))?;
 
                 self.set_client(client.clone()).map_err(|_| P2PError::AlreadyConnected)?;
 
@@ -126,11 +129,9 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                     }
                 });
 
-                client.introduce(&current_user).await
-                    .map_err(|e| P2PError::WebRtc(e.to_string()))?;
+                client.introduce(&current_user).await.map_err(|e| P2PError::WebRtc(e.to_string()))?;
 
-                let peer = client.peer_entity()
-                    .ok_or_else(|| P2PError::WebRtc("Peer not set after introduce".into()))?;
+                let peer = client.peer_entity().ok_or_else(|| P2PError::WebRtc("Peer not set after introduce".into()))?;
 
                 self.set_current_user(current_user).ok();
 
@@ -168,7 +169,11 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 Err(P2PError::NotSupported("SendResourceNotification".into()).into())
             }
 
-            P2POperation::ViewSessionDetail { peer_id, order_id, password } => {
+            P2POperation::ViewSessionDetail {
+                peer_id,
+                order_id,
+                password
+            } => {
                 log::info!("ViewSessionDetail called for peer {}, order {}", peer_id, order_id);
 
                 let client = self.get_client_or_not_connected()?;
@@ -185,9 +190,18 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 }
             }
 
-            P2POperation::DownloadResource { peer_id, session_id, resource, progress: _ } => {
-                log::info!("DownloadResource called for peer {}, session {}, resource {}",
-                    peer_id, session_id, resource.order_id);
+            P2POperation::DownloadResource {
+                peer_id,
+                session_id,
+                resource,
+                progress: _
+            } => {
+                log::info!(
+                    "DownloadResource called for peer {}, session {}, resource {}",
+                    peer_id,
+                    session_id,
+                    resource.order_id
+                );
 
                 let client = self.get_client_or_not_connected()?;
 
@@ -207,9 +221,19 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 Ok(CoreOperationOutput::None)
             }
 
-            P2POperation::DownloadAllResources { peer_id, session_id, session_path: _, resources, aggregate_progress: _ } => {
-                log::info!("DownloadAllResources called for peer {}, session {}, {} resources",
-                    peer_id, session_id, resources.len());
+            P2POperation::DownloadAllResources {
+                peer_id,
+                session_id,
+                session_path: _,
+                resources,
+                aggregate_progress: _
+            } => {
+                log::info!(
+                    "DownloadAllResources called for peer {}, session {}, {} resources",
+                    peer_id,
+                    session_id,
+                    resources.len()
+                );
 
                 let client = self.get_client_or_not_connected()?;
 
@@ -233,7 +257,11 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 Ok(CoreOperationOutput::None)
             }
 
-            P2POperation::CancelResource { peer_id: _, session_id, resource_id } => {
+            P2POperation::CancelResource {
+                peer_id: _,
+                session_id,
+                resource_id
+            } => {
                 log::info!("CancelResource called for session {}, resource {}", session_id, resource_id);
 
                 let client = self.get_client_or_not_connected()?;
@@ -243,7 +271,11 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
             }
 
             P2POperation::BroadcastCancelSession { session_id, resource_id } => {
-                log::info!("BroadcastCancelSession called for session {}, resource {:?}", session_id, resource_id);
+                log::info!(
+                    "BroadcastCancelSession called for session {}, resource {:?}",
+                    session_id,
+                    resource_id
+                );
 
                 let client = self.get_client_or_not_connected()?;
 

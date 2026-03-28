@@ -1,10 +1,9 @@
 use core_services::utils::time::epoch_micro;
-use matchbox_protocol::PeerId;
 use matchbox_socket::Packet;
 use n0_future::time::Instant;
 use reed_solomon_erasure::galois_8::ReedSolomon;
 use schema::devlog::bitbridge::fec_feedback::Feedback;
-use schema::devlog::bitbridge::{FecFeedback, MissingBlocks, MissingFrames, NetworkStats};
+use schema::devlog::bitbridge::{FecFeedback, MissingBlocks, MissingFrames};
 use std::collections::HashMap;
 use std::fmt;
 use std::mem::size_of;
@@ -12,7 +11,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
 
-// Too big chunk size will cause higher chance of packet loss
 pub const CHUNK_SIZE: usize = 1095;
 pub const DATA_SHARDS_DEFAULT: usize = 100;
 pub const MIN_PARITY_SHARDS: usize = 2;
@@ -20,12 +18,8 @@ pub const MAX_PARITY_SHARDS: usize = 10;
 const MAX_BLOCK_TIMEOUT_MS: u64 = 1200;
 const RTT_THRESHOLD_MS: u64 = 250;
 
-// Increased from 9/8 (1.125) to reduce false loss detection
-// Higher value = wait longer before declaring packet lost
 const K_TIME_THRESHOLD: f64 = 2.0;
-// Increased from 50ms to give more time for delayed packets
 const MIN_LOSS_DELAY_US: u64 = 100 * 1_000;
-// Increased from 5 to require more evidence before quick loss detection
 const QUICK_LOSS_THRESHOLD: usize = 8;
 
 #[derive(Debug, Error)]
@@ -173,7 +167,6 @@ impl Frame {
         let prefix: u16 = read!(u16);
 
         let payload_offset = offset;
-        // Zero-copy: single allocation via Arc::from
         let buffer: Arc<[u8]> = Arc::from(buf);
 
         Some(Self {
@@ -490,7 +483,6 @@ impl FecSender {
                 }
             }
 
-            // Store all frames for this block in the ring buffer
             self.buffer.insert(self.block_id, block_frames);
             self.block_id = self.block_id.wrapping_add(1);
         }
@@ -504,7 +496,6 @@ impl FecSender {
                 let rtt = net.rtt.map(|it| it.max(self.rtt_ms as u32)).unwrap_or(self.rtt_ms as u32);
                 self.set_rtt(rtt as u64);
                 if let Some(ack) = net.current_block_id {
-                    // Track highest acknowledged block to filter stale retransmit requests
                     self.highest_ack = self.highest_ack.max(ack);
                     for i in (0..ack).rev() {
                         self.buffer.remove(i);
@@ -518,9 +509,6 @@ impl FecSender {
                 let mut all_frames = Vec::new();
 
                 for missing_block in missing_blocks.blocks {
-                    // Ignore retransmit for blocks already acknowledged by receiver
-                    // This handles the race condition where Missing feedback arrives
-                    // after a Network ack due to network reordering
                     if missing_block.block_id < self.highest_ack {
                         log::debug!(
                             "Ignoring stale retransmit request for block {} (highest_ack={})",
@@ -530,7 +518,6 @@ impl FecSender {
                         continue;
                     }
 
-                    // Ignore retransmit block that we did not send yet
                     if missing_block.block_id > self.block_id {
                         continue;
                     }
@@ -605,11 +592,6 @@ impl LossDetector {
         (frame_idx as usize) < self.requested_frames.len() && self.requested_frames[frame_idx as usize]
     }
 
-    /// Clear all requested flags to allow re-requesting frames after a timeout
-    fn clear_requested(&mut self) {
-        self.requested_frames.fill(false);
-    }
-
     fn detect_quick_loss(&self, received_frames: &[Option<Vec<u8>>], threshold: usize) -> Vec<u8> {
         let mut lost = Vec::new();
         let mut i = 0;
@@ -665,7 +647,6 @@ impl LossDetector {
         time_threshold_us: u64,
         quick_loss_threshold: usize
     ) -> Vec<u8> {
-        // Only detect time-based losses after full threshold has expired
         if since.saturating_add(time_threshold_us) <= now {
             let time_lost: Vec<u8> = received_frames
                 .iter()
@@ -686,12 +667,10 @@ impl LossDetector {
             return time_lost
         }
 
-        // Quick loss detection after half threshold (detect gaps with consecutive frames after)
         if since.saturating_add(time_threshold_us / 2) <= now {
             return self.detect_quick_loss(received_frames, quick_loss_threshold);
         }
 
-        // Still within waiting period, don't request retransmissions yet
         Vec::new()
     }
 }
@@ -794,7 +773,6 @@ impl ReceiverBlock {
             self.shards[idx] = Some(Vec::from(payload));
             self.frame_send_times[idx] = now_micros(); // Record when frame arrived
             self.received += 1;
-            // Track data shards separately from parity shards
             if idx < self.data_shards {
                 self.data_received += 1;
             }
@@ -803,12 +781,8 @@ impl ReceiverBlock {
         }
 
         self.last_frame_ts = now_micros();
-        // Note: last_ping_ts is NOT updated here - it tracks when we last checked for loss,
-        // not when frames arrive. Updating it here would prevent time-based loss detection.
-        // is_complete only when ALL data shards are present (no reconstruction needed)
         self.is_complete = self.data_received >= self.data_shards;
 
-        // Return whether we can attempt reconstruction (enough total frames)
         Ok(self.received >= self.data_shards)
     }
 
@@ -861,10 +835,7 @@ impl ReceiverBlock {
     }
 
     fn into_packet(mut self) -> (u16, Packet) {
-        let mut bytes = Vec::with_capacity(self.total_size);
-        unsafe {
-            bytes.set_len(self.total_size);
-        }
+        let mut bytes = vec![0u8; self.total_size];
         let dst: &mut [u8] = bytes.as_mut_slice();
         let mut written = 0;
 
@@ -901,6 +872,12 @@ pub struct FecReceiver {
     blocks_to_reconstruct_buf: Vec<u32>
 }
 
+impl Default for FecReceiver {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FecReceiver {
     pub fn new() -> Self {
         Self::with_window_size(256)
@@ -933,7 +910,12 @@ impl FecReceiver {
 
     /// Returns (total_frames_received, total_lost_frames, retransmit_count, false_retransmit)
     pub fn stats(&self) -> (u64, u64, u64, u64) {
-        (self.total_frames_received, self.total_lost_frames, self.retransmit_count, self.false_retransmit)
+        (
+            self.total_frames_received,
+            self.total_lost_frames,
+            self.retransmit_count,
+            self.false_retransmit
+        )
     }
 
     #[inline]
@@ -1059,7 +1041,6 @@ impl FecReceiver {
             }
         }
 
-        // Emit completed blocks
         if self.blocks.get(self.next_block_id).map(|b| b.is_constructed()).unwrap_or(false) {
             if let Some(block) = self.blocks.remove(self.next_block_id) {
                 log::debug!(
@@ -1146,8 +1127,6 @@ impl FecReceiver {
 
         for entry in self.blocks.entries.iter_mut() {
             if let Some((block_id, block)) = entry.as_mut() {
-                // Only process the current blocking block - skip completed blocks
-                // and future blocks that aren't blocking yet
                 if *block_id != self.next_block_id {
                     continue;
                 }
@@ -1157,12 +1136,8 @@ impl FecReceiver {
                 }
 
                 let present_count = block.shards.iter().filter(|s| s.is_some()).count();
-                if present_count >= block.data_shards {
-                    // Try reconstruction - if it succeeds, skip retransmission request
-                    if block.try_reconstruct(&mut self.decoders)? {
-                        continue;
-                    }
-                    // Reconstruction failed despite having enough shards - continue to request missing frames
+                if present_count >= block.data_shards && block.try_reconstruct(&mut self.decoders)? {
+                    continue;
                 }
 
                 if let Some(ref mut detector) = &mut block.loss_detector {
@@ -1237,17 +1212,23 @@ const BETA_NUM: u64 = 1;
 const BETA_DEN: u64 = 4;
 const K: u64 = 4;
 
-const MIN_RTTVAR_US: u64 = 5_000;      // 5ms minimum
+const MIN_RTTVAR_US: u64 = 5_000; // 5ms minimum
 const CLOCK_GRANULARITY_US: u64 = 10_000; // 10ms
-const MIN_RTO_US: u64 = 200_000;       // 200ms
-const MAX_RTO_US: u64 = 60_000_000;    // 60s
+const MIN_RTO_US: u64 = 200_000; // 200ms
+const MAX_RTO_US: u64 = 60_000_000; // 60s
 const DEFAULT_RTO_US: u64 = 1_000_000; // 1s
 
 #[derive(Debug, Clone)]
 pub struct RttEstimator {
     pub srtt_us: u64,
     pub rttvar_us: u64,
-    initialized: bool,
+    initialized: bool
+}
+
+impl Default for RttEstimator {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl RttEstimator {
@@ -1255,7 +1236,7 @@ impl RttEstimator {
         Self {
             srtt_us: 0,
             rttvar_us: 0,
-            initialized: false,
+            initialized: false
         }
     }
 
@@ -1272,14 +1253,10 @@ impl RttEstimator {
         let latest = latest_rtt_us as i64;
         let abs_diff = (srtt - latest).unsigned_abs();
 
-        // Update RTTVAR with minimum floor
-        self.rttvar_us = ((self.rttvar_us * (BETA_DEN - BETA_NUM))
-                         + (abs_diff * BETA_NUM)) / BETA_DEN;
+        self.rttvar_us = ((self.rttvar_us * (BETA_DEN - BETA_NUM)) + (abs_diff * BETA_NUM)) / BETA_DEN;
         self.rttvar_us = self.rttvar_us.max(MIN_RTTVAR_US);
 
-        // Update SRTT
-        self.srtt_us = ((self.srtt_us * (ALPHA_DEN - ALPHA_NUM))
-                       + (latest_rtt_us * ALPHA_NUM)) / ALPHA_DEN;
+        self.srtt_us = ((self.srtt_us * (ALPHA_DEN - ALPHA_NUM)) + (latest_rtt_us * ALPHA_NUM)) / ALPHA_DEN;
     }
 
     #[inline]
@@ -1288,7 +1265,6 @@ impl RttEstimator {
             return DEFAULT_RTO_US;
         }
 
-        // RFC 6298: RTO = SRTT + max(G, K * RTTVAR)
         let variance_term = (K * self.rttvar_us).max(CLOCK_GRANULARITY_US);
         let rto = self.srtt_us.saturating_add(variance_term);
 

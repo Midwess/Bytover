@@ -204,8 +204,6 @@ impl SharedContext {
         }
     }
 
-    // Return true when peer is not connected
-    // and not connecting
     pub async fn is_peer_connected_or_connecting(&self, peer_id: &PeerId) -> bool {
         self.peers.lock().await.get(peer_id).is_some()
     }
@@ -258,8 +256,6 @@ impl TryFrom<SignallingPeerRequest> for Message {
                 Ok(msg)
             }
             PeerRequest::KeepAlive => {
-                // The keep alive message will be used to continuously to notify
-                // the room about our present
                 Ok(Message {
                     from_id: my_id.to_string(),
                     join: Some(JoinMessage {
@@ -337,7 +333,6 @@ impl WebSignaller {
             ..Default::default()
         };
 
-        // Send the join msg right after the socket connected
         let result = self.client.start(self.shared_context.clone()).await;
         self.client.send(first_msg).await?;
         result

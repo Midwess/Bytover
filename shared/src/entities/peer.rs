@@ -5,14 +5,14 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ResourceReceivedPeer {
     pub id: String,
-    pub avatar_url: String,
+    pub avatar_url: String
 }
 
 impl From<&Peer> for ResourceReceivedPeer {
     fn from(peer: &Peer) -> Self {
         Self {
             id: peer.id.clone(),
-            avatar_url: peer.avatar_url.clone(),
+            avatar_url: peer.avatar_url.clone()
         }
     }
 }
@@ -25,7 +25,7 @@ pub struct Peer {
     pub email: Option<String>,
     pub device: DeviceInfo,
     pub user_id: Option<u64>,
-    pub signalling_id: Option<String>,
+    pub signalling_id: Option<String>
 }
 
 impl From<PeerMessage> for Peer {
@@ -37,7 +37,7 @@ impl From<PeerMessage> for Peer {
             email: value.email,
             device: value.device.into(),
             user_id: None,
-            signalling_id: None,
+            signalling_id: None
         }
     }
 }
@@ -49,7 +49,7 @@ impl From<Peer> for PeerMessage {
             name: value.name,
             avatar_url: value.avatar_url,
             email: value.email,
-            device: value.device.into(),
+            device: value.device.into()
         }
     }
 }

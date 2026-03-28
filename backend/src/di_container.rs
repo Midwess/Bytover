@@ -148,7 +148,7 @@ impl DiContainer {
         CloudGrpcService {
             cloud_storage: Arc::new(self.get_cloud_storage()),
             session_repository: Arc::new(self.get_transfer_session_repository().await),
-            app_service: Box::new(self.get_app_service().await),
+            app_service: Box::new(self.get_app_service().await)
         }
     }
 

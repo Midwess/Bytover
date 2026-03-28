@@ -8,7 +8,7 @@ pub struct P2PSession {
     pub user_id: u64,
     pub alias: String,
     pub description: Option<String>,
-    pub signalling_key: String,
+    pub signalling_key: String
 }
 
 impl P2PSession {
@@ -19,7 +19,7 @@ impl P2PSession {
             user_id,
             alias,
             description,
-            signalling_key,
+            signalling_key
         }
     }
 
@@ -29,7 +29,7 @@ impl P2PSession {
         user_id: u64,
         alias: String,
         description: Option<String>,
-        signalling_key: String,
+        signalling_key: String
     ) -> Self {
         Self {
             session_id,
@@ -37,7 +37,7 @@ impl P2PSession {
             user_id,
             alias,
             description,
-            signalling_key,
+            signalling_key
         }
     }
 

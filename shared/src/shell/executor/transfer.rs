@@ -15,6 +15,12 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct WebRtc;
 
+impl Default for WebRtc {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WebRtc {
     pub fn new() -> Self {
         WebRtc
@@ -112,7 +118,10 @@ where
                 };
 
                 let Some(user) = self.app_server().find_user(session_key.user_id).await? else {
-                    return Err(CoreError::BadRequest(format!("Not found owner {} for this session", session_key.user_id)));
+                    return Err(CoreError::BadRequest(format!(
+                        "Not found owner {} for this session",
+                        session_key.user_id
+                    )));
                 };
 
                 let transfer_session = TransferSession::from_public_overview(

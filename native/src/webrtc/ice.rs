@@ -2,13 +2,13 @@ use std::sync::Arc;
 use str0m::{Candidate, Rtc};
 use thiserror::Error;
 use tokio::sync::{mpsc, Mutex};
-use webrtc_ice::agent::Agent;
+use tokio::task::JoinHandle;
+use tokio::time::{interval, Duration};
 use webrtc_ice::agent::agent_config::AgentConfig;
+use webrtc_ice::agent::Agent;
 use webrtc_ice::mdns::MulticastDnsMode;
 use webrtc_ice::network_type::NetworkType;
 use webrtc_ice::url::Url;
-use tokio::time::{Duration, interval};
-use tokio::task::JoinHandle;
 
 use schema::devlog::rpc_signalling::server::IceConfig;
 
@@ -18,13 +18,13 @@ pub enum IceError {
     Ice(#[from] webrtc_ice::Error),
 
     #[error("Candidate parsing error: {0}")]
-    Parse(String),
+    Parse(String)
 }
 
 pub struct IceAgent {
     agent: Agent,
     cache: Mutex<Vec<Candidate>>,
-    handle: Arc<Mutex<Option<JoinHandle<()>>>>,
+    handle: Arc<Mutex<Option<JoinHandle<()>>>>
 }
 
 impl IceAgent {
@@ -58,29 +58,29 @@ impl IceAgent {
         };
 
         let agent = Agent::new(agent_config).await?;
-        
+
         Ok(Self {
             agent,
             cache: Mutex::new(vec![]),
-            handle: Arc::new(Mutex::new(None)),
+            handle: Arc::new(Mutex::new(None))
         })
     }
 
     pub fn start_background_gathering(self: &Arc<Self>) {
         let weak_inner = Arc::downgrade(self);
-        
+
         let handle = tokio::spawn(async move {
             let mut interval = interval(Duration::from_secs(300));
             loop {
                 interval.tick().await;
-                
+
                 let Some(inner) = weak_inner.upgrade() else {
                     break;
                 };
 
                 let mut cache = inner.cache.lock().await;
                 cache.clear();
-                
+
                 let (tx, mut rx) = mpsc::channel(32);
                 inner.agent.on_candidate(Box::new(move |c| {
                     let tx = tx.clone();
@@ -88,7 +88,7 @@ impl IceAgent {
                         let _ = tx.send(c).await;
                     })
                 }));
-                
+
                 if let Err(e) = inner.agent.restart(String::new(), String::new()).await {
                     log::error!("[webrtc-client] Failed to restart ICE agent: {:?}", e);
                     drop(cache);
@@ -104,7 +104,7 @@ impl IceAgent {
                 while let Some(c) = rx.recv().await {
                     if let Some(candidate) = c {
                         let mut sdp_line = format!("candidate:{}", candidate.marshal());
-                        
+
                         if sdp_line.contains(".local") {
                             let parts: Vec<&str> = sdp_line.split_whitespace().collect();
                             if parts.len() > 4 {
@@ -123,7 +123,11 @@ impl IceAgent {
                                 }
                             }
                             Err(e) => {
-                                log::warn!("[webrtc-client] Failed to parse gathered candidate: {} - error: {:?}", sdp_line, e);
+                                log::warn!(
+                                    "[webrtc-client] Failed to parse gathered candidate: {} - error: {:?}",
+                                    sdp_line,
+                                    e
+                                );
                             }
                         }
                     } else {
@@ -144,15 +148,15 @@ impl IceAgent {
 
     pub async fn gather_candidates(&self, rtc: &mut Rtc) -> Result<(), IceError> {
         let candidates = self.cache.lock().await;
-        
+
         if candidates.is_empty() {
-             log::warn!("[webrtc-client] No candidates available in cache, ICE connection might fail");
+            log::warn!("[webrtc-client] No candidates available in cache, ICE connection might fail");
         }
 
         for candidate in &*candidates {
             rtc.add_local_candidate(candidate.clone());
         }
-        
+
         Ok(())
     }
 }

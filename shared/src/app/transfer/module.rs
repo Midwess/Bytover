@@ -24,24 +24,22 @@ use std::collections::HashMap;
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TransferModel {
     selected_method: TransferMethodSelection,
-    pub sessions: Vec<TransferSession>,
+    pub sessions: Vec<TransferSession>
 }
 
 impl TransferModel {
     pub fn has_active_send_session(&self, shelf_id: u64) -> bool {
-        self.sessions
-            .iter()
-            .any(|s| {
-                if s.is_completed() {
-                    return false
-                }
+        self.sessions.iter().any(|s| {
+            if s.is_completed() {
+                return false
+            }
 
-                if let TransferType::Send { from_shelf_id } = &s.transfer_type {
-                    return from_shelf_id == &shelf_id;
-                }
+            if let TransferType::Send { from_shelf_id } = &s.transfer_type {
+                return from_shelf_id == &shelf_id;
+            }
 
-                return false;
-            })
+            false
+        })
     }
 
     pub fn get_active_p2p_send_session(&self, shelf_id: u64) -> Option<&TransferSession> {
@@ -65,7 +63,7 @@ pub struct TransferViewModel {
     cloud_sessions: Vec<CloudSession>,
     p2p_sessions: Vec<CloudSession>,
     pub total_p2p_receive_progress: Option<f64>,
-    pub is_loading: bool,
+    pub is_loading: bool
 }
 
 pub struct TransferModule;
@@ -297,7 +295,9 @@ impl AppModule<BitBridge> for TransferModule {
                 };
 
                 Command::handle_result(move |it| async move {
-                    it.app().start_p2p_transfer(selected_resources, password, user, shelf_id, shelf_name, signalling_key).await
+                    it.app()
+                        .start_p2p_transfer(selected_resources, password, user, shelf_id, shelf_name, signalling_key)
+                        .await
                 })
             }
             TransferEvent::NewTransferResource { shelf_id, resource } => {
@@ -336,7 +336,12 @@ impl AppModule<BitBridge> for TransferModule {
                     transfer_type: Some(TransferType::Receive)
                 };
                 if let Some(session) = model.transfer.sessions.lookup_mut(&session_id_key) {
-                    if let TransferTarget::P2P { from_peer, connection_state, .. } = &mut session.target {
+                    if let TransferTarget::P2P {
+                        from_peer,
+                        connection_state,
+                        ..
+                    } = &mut session.target
+                    {
                         *from_peer = Some(peer);
                         *connection_state = P2PConnectionState::Connected;
                     }
@@ -416,10 +421,8 @@ impl AppModule<BitBridge> for TransferModule {
                 }
 
                 let session = session.clone();
-                Command::handle_result(move |it| async move {
-                    it.app().view_session(session, session_id, password).await
-                })
-                .then_render()
+                Command::handle_result(move |it| async move { it.app().view_session(session, session_id, password).await })
+                    .then_render()
             }
             TransferEvent::ReceivedViewSessionRequest {
                 peer_id,
@@ -495,7 +498,10 @@ impl AppModule<BitBridge> for TransferModule {
 
                 Command::handle_result(move |it| async move {
                     if needs_recovery {
-                        log::info!("Session {} recovered from timeout, received resource notification", session_order_id);
+                        log::info!(
+                            "Session {} recovered from timeout, received resource notification",
+                            session_order_id
+                        );
                         it.update_model(TransferSessionModelEvent::Update(
                             session_id.clone(),
                             ConnectionRecovered.into()
@@ -729,7 +735,7 @@ impl AppModule<BitBridge> for TransferModule {
                     is_scope_online: match &it.target {
                         TransferTarget::P2P { connection_state, .. } => {
                             matches!(connection_state, crate::entities::target::P2PConnectionState::Connected)
-                        },
+                        }
                         _ => false
                     },
                     id: it.order_id.to_string(),
@@ -758,23 +764,19 @@ impl AppModule<BitBridge> for TransferModule {
             .collect();
 
         let mut sorted = all_receive_sessions;
-        sorted.sort_by(|a, b| {
-            match (a.is_scope_online, b.is_scope_online) {
-                (true, false) => std::cmp::Ordering::Less,
-                (false, true) => std::cmp::Ordering::Greater,
-                _ => b.id.cmp(&a.id)
-            }
+        sorted.sort_by(|a, b| match (a.is_scope_online, b.is_scope_online) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => b.id.cmp(&a.id)
         });
 
         let received_session = sorted.iter().find(|s| !s.is_cloud).cloned();
         let received_cloud_session = sorted.iter().find(|s| s.is_cloud).cloned();
 
-        let is_loading = received_session.as_ref().map(|s| s.is_loading).unwrap_or(false)
-            || received_cloud_session.as_ref().map(|s| s.is_loading).unwrap_or(false);
+        let is_loading = received_session.as_ref().map(|s| s.is_loading).unwrap_or(false) ||
+            received_cloud_session.as_ref().map(|s| s.is_loading).unwrap_or(false);
 
-        let total_p2p_receive_progress = received_session.as_ref()
-            .filter(|s| s.progress > 0.0 && !s.is_completed)
-            .map(|s| s.progress);
+        let total_p2p_receive_progress = received_session.as_ref().filter(|s| s.progress > 0.0 && !s.is_completed).map(|s| s.progress);
 
         Self::ViewModel {
             transfer_method: model.transfer.selected_method.clone(),
@@ -805,7 +807,7 @@ impl AppModule<BitBridge> for TransferModule {
                             display_download_speed: match access_url.is_none() {
                                 true => "Initializing...".to_owned(),
                                 false => match it.transfer_type {
-                                    TransferType::Receive { .. } => "".to_owned(),
+                                    TransferType::Receive => "".to_owned(),
                                     TransferType::Send { .. } => status.to_string()
                                 }
                             },
@@ -851,7 +853,7 @@ impl AppModule<BitBridge> for TransferModule {
                     })
                 })
                 .collect(),
-            total_p2p_receive_progress,
+            total_p2p_receive_progress
         }
     }
 }

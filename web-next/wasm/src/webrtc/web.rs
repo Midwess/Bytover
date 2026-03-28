@@ -5,13 +5,19 @@ use futures::channel::mpsc;
 use futures::stream::StreamExt;
 use js_sys::{Array, ArrayBuffer, Uint8Array};
 use wasm_bindgen::closure::Closure;
-use wasm_bindgen::JsCast;
-use wasm_bindgen::JsValue;
+use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
-    Event, MessageEvent, RtcConfiguration, RtcDataChannel, RtcDataChannelInit,
-    RtcDataChannelType, RtcIceServer, RtcPeerConnection, RtcSdpType,
-    RtcSessionDescriptionInit,
+    Event,
+    MessageEvent,
+    RtcConfiguration,
+    RtcDataChannel,
+    RtcDataChannelInit,
+    RtcDataChannelType,
+    RtcIceServer,
+    RtcPeerConnection,
+    RtcSdpType,
+    RtcSessionDescriptionInit
 };
 
 pub struct RtcConnectionWrapper(pub(crate) RtcPeerConnection);
@@ -21,6 +27,7 @@ unsafe impl Sync for RtcConnectionWrapper {}
 
 impl Deref for RtcConnectionWrapper {
     type Target = RtcPeerConnection;
+
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -46,6 +53,7 @@ unsafe impl Sync for RtcDataChannelWrapper {}
 
 impl Deref for RtcDataChannelWrapper {
     type Target = RtcDataChannel;
+
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -68,7 +76,7 @@ impl Drop for RtcDataChannelWrapper {
 pub struct ChannelConfig {
     pub ordered: bool,
     pub max_retransmits: Option<u16>,
-    pub buffer_low_threshold: Option<usize>,
+    pub buffer_low_threshold: Option<usize>
 }
 
 impl Default for ChannelConfig {
@@ -76,7 +84,7 @@ impl Default for ChannelConfig {
         Self {
             ordered: true,
             max_retransmits: None,
-            buffer_low_threshold: Some(16 * 1024),
+            buffer_low_threshold: Some(16 * 1024)
         }
     }
 }
@@ -90,7 +98,7 @@ pub mod channel_ids {
 }
 
 pub struct WebRtcApi {
-    stun_url: String,
+    stun_url: String
 }
 
 impl WebRtcApi {
@@ -105,15 +113,14 @@ impl WebRtcApi {
         let ice_servers_array = Array::new();
         ice_servers_array.push(&stun_server);
         config.set_ice_servers(&ice_servers_array);
-        let conn = RtcPeerConnection::new_with_configuration(&config)
-            .map_err(|e| WebError::Connection(format!("{:?}", e)))?;
+        let conn = RtcPeerConnection::new_with_configuration(&config).map_err(|e| WebError::Connection(format!("{:?}", e)))?;
         Ok(RtcConnectionWrapper::new(conn))
     }
 
     pub fn create_reliable_channel(
         &self,
         connection: Arc<RtcConnectionWrapper>,
-        channel_id: u16,
+        channel_id: u16
     ) -> Result<Arc<RtcDataChannelWrapper>, WebError> {
         let config = RtcDataChannelInit::new();
         config.set_ordered(true);
@@ -127,7 +134,7 @@ impl WebRtcApi {
     pub fn create_unreliable_channel(
         &self,
         connection: Arc<RtcConnectionWrapper>,
-        channel_id: u16,
+        channel_id: u16
     ) -> Result<Arc<RtcDataChannelWrapper>, WebError> {
         let config = RtcDataChannelInit::new();
         config.set_ordered(false);
@@ -142,7 +149,7 @@ impl WebRtcApi {
     pub fn create_unordered_channel(
         &self,
         connection: Arc<RtcConnectionWrapper>,
-        channel_id: u16,
+        channel_id: u16
     ) -> Result<Arc<RtcDataChannelWrapper>, WebError> {
         let config = RtcDataChannelInit::new();
         config.set_ordered(false);
@@ -156,7 +163,7 @@ impl WebRtcApi {
     pub fn create_ordered_channel(
         &self,
         connection: Arc<RtcConnectionWrapper>,
-        channel_id: u16,
+        channel_id: u16
     ) -> Result<Arc<RtcDataChannelWrapper>, WebError> {
         let config = RtcDataChannelInit::new();
         config.set_ordered(true);
@@ -170,7 +177,7 @@ impl WebRtcApi {
     pub fn setup_channel_handlers(
         &self,
         channel: Arc<RtcDataChannelWrapper>,
-        inbound_tx: mpsc::UnboundedSender<Box<[u8]>>,
+        inbound_tx: mpsc::UnboundedSender<Box<[u8]>>
     ) -> Result<(), WebError> {
         let onopen = {
             let channel = channel.clone();
@@ -218,10 +225,7 @@ impl WebRtcApi {
         Ok(())
     }
 
-    pub async fn create_offer_and_set_local(
-        &self,
-        connection: &RtcConnectionWrapper,
-    ) -> Result<String, WebError> {
+    pub async fn create_offer_and_set_local(&self, connection: &RtcConnectionWrapper) -> Result<String, WebError> {
         let offer = JsFuture::from(connection.create_offer())
             .await
             .map_err(|e| WebError::Sdp(format!("create_offer failed: {:?}", e)))?;
@@ -239,11 +243,7 @@ impl WebRtcApi {
         Ok(sdp)
     }
 
-    pub async fn set_remote_description(
-        &self,
-        connection: &RtcConnectionWrapper,
-        answer_sdp: &str,
-    ) -> Result<(), WebError> {
+    pub async fn set_remote_description(&self, connection: &RtcConnectionWrapper, answer_sdp: &str) -> Result<(), WebError> {
         let answer_desc = RtcSessionDescriptionInit::new(RtcSdpType::Answer);
         answer_desc.set_sdp(answer_sdp);
         JsFuture::from(connection.set_remote_description(&answer_desc))
@@ -252,10 +252,7 @@ impl WebRtcApi {
         Ok(())
     }
 
-    pub async fn wait_for_channel_open(
-        &self,
-        channel: Arc<RtcDataChannelWrapper>,
-    ) -> Result<(), WebError> {
+    pub async fn wait_for_channel_open(&self, channel: Arc<RtcDataChannelWrapper>) -> Result<(), WebError> {
         let (tx, mut rx) = mpsc::channel::<()>(1);
         let onopen = Closure::wrap(Box::new(move || {
             let _ = tx.clone().try_send(());
@@ -273,5 +270,5 @@ pub enum WebError {
     Connection(String),
 
     #[error("SDP error: {0}")]
-    Sdp(String),
+    Sdp(String)
 }

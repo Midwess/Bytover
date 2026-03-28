@@ -1,9 +1,14 @@
-use crate::config::{get_gateway_grpc_url, get_locator_url, get_signalling_server_ws_url, get_signalling_server_http_url, GATEWAY_HOST};
+use crate::config::{
+    get_gateway_grpc_url,
+    get_locator_url,
+    get_signalling_server_http_url,
+    get_signalling_server_ws_url,
+    GATEWAY_HOST
+};
 use crate::core_api_impl::net_stream::NetStreamImpl;
 use crate::native::executor::NativeExecutor;
 use crate::native::p2p::P2PNativeExecutorImpl;
 use crate::native::persistent::NativePersistentImpl;
-use crate::webrtc::server::{WebRtcServer, WebRtcServerConfig};
 use crate::native::rpc::NativeRpcImpl;
 use crate::native::transfer::TransferNativeImpl;
 use crate::network::grpc::RpcNetworkModuleImpl;
@@ -13,6 +18,7 @@ use crate::repository::local_resource::LocalResourceRepositoryImpl;
 use crate::repository::shelf::ShelfRepositoryImpl;
 use crate::repository::transfer_session::TransferSessionRepositoryImpl;
 use crate::repository::RedbPoolProvider;
+use crate::webrtc::server::{WebRtcServer, WebRtcServerConfig};
 use crate::webrtc::signalling::SignalingClient;
 use core_services::utils::pool::allocator::{PoolAllocator, PoolBuilder, PoolResourceProvider};
 use core_services::utils::pool::request::PoolRequestBuilder;
@@ -22,7 +28,6 @@ use shared::protocol::public_cloud::cloud_service::CloudService;
 use shared::protocol::rpc::app_server::AppServer;
 use shared::protocol::rpc::auth_provider::AuthProvider;
 use shared::protocol::rpc::cloud_server::CloudServer;
-use shared::shell::executor::transfer::WebRtc;
 use shared::repository::auth_session::AuthSessionRepository;
 use shared::repository::local_resource::LocalResourceRepository;
 use shared::repository::path_resolver::PathResolver;
@@ -30,7 +35,7 @@ use shared::repository::shelf::ShelfRepository;
 use shared::repository::transfer_session::TransferSessionRepository;
 use shared::shell::api::network::InternetConnection;
 use shared::shell::api::{CoreBridge, NetStream};
-use std::net::SocketAddr;
+use shared::shell::executor::transfer::WebRtc;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::OnceCell;
@@ -167,10 +172,7 @@ impl DiContainer {
     }
 
     pub fn get_signalling_client(&self) -> SignalingClient {
-        SignalingClient::new(
-            get_signalling_server_ws_url(),
-            get_signalling_server_http_url(),
-        )
+        SignalingClient::new(get_signalling_server_ws_url(), get_signalling_server_http_url())
     }
 
     pub fn get_native_executor(&'static self) -> &'static NativeExecutor {
@@ -184,7 +186,7 @@ impl DiContainer {
         let web_rtc_stub = Arc::new(WebRtc::new());
 
         let web_rtc_config = WebRtcServerConfig {
-            bind_addr: "[::]:0".parse().unwrap(),
+            bind_addr: "[::]:0".parse().unwrap()
         };
         let web_rtc_server = WebRtcServer::new(
             web_rtc_config,

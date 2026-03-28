@@ -1,5 +1,3 @@
-// Only compile these modules when "lib" feature is enabled
-
 static _CURRENT_VERSION: &str = "1.0.0";
 
 use core_services::logger::setup;
@@ -100,7 +98,6 @@ impl<E: Serialize + Send + 'static> Drop for ThrottleShellRuntime<E> {
     }
 }
 
-// NativeProcessor implementation
 pub struct NativeProcessor {
     native_executor: &'static NativeExecutor
 }

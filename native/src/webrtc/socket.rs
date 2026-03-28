@@ -2,7 +2,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::net::UdpSocket;
-use tokio::sync::{mpsc, Mutex, oneshot};
+use tokio::sync::{mpsc, oneshot, Mutex};
 
 #[derive(Debug, Error)]
 pub enum SyncUdpSocketError {
@@ -11,24 +11,24 @@ pub enum SyncUdpSocketError {
     #[error("response sender dropped")]
     SenderDropped,
     #[error("IO error: {0}")]
-    Io(#[from] std::io::Error),
+    Io(#[from] std::io::Error)
 }
 
 struct SendEntry {
     buf: Vec<u8>,
     target: SocketAddr,
-    resp: oneshot::Sender<std::io::Result<usize>>,
+    resp: oneshot::Sender<std::io::Result<usize>>
 }
 
 struct RecvEntry {
     addr: SocketAddr,
-    resp: oneshot::Sender<std::io::Result<(Vec<u8>, SocketAddr)>>,
+    resp: oneshot::Sender<std::io::Result<(Vec<u8>, SocketAddr)>>
 }
 
 fn map_to_v6(addr: SocketAddr) -> SocketAddr {
     match addr {
         SocketAddr::V4(v4) => SocketAddr::new(IpAddr::V6(v4.ip().to_ipv6_mapped()), v4.port()),
-        v6 => v6,
+        v6 => v6
     }
 }
 
@@ -36,7 +36,7 @@ fn map_to_v6(addr: SocketAddr) -> SocketAddr {
 pub struct SyncUdpSocket {
     inner: Arc<Mutex<UdpSocket>>,
     send_tx: mpsc::Sender<SendEntry>,
-    recv_tx: mpsc::Sender<RecvEntry>,
+    recv_tx: mpsc::Sender<RecvEntry>
 }
 
 impl SyncUdpSocket {
@@ -56,7 +56,7 @@ impl SyncUdpSocket {
         socket: Arc<Mutex<UdpSocket>>,
         mut send_rx: mpsc::Receiver<SendEntry>,
         mut recv_rx: mpsc::Receiver<RecvEntry>,
-        is_v6: bool,
+        is_v6: bool
     ) {
         loop {
             tokio::select! {
@@ -93,7 +93,11 @@ impl SyncUdpSocket {
 
     pub async fn send_to(&self, buf: &[u8], target: SocketAddr) -> Result<usize, SyncUdpSocketError> {
         let (resp_tx, resp_rx) = oneshot::channel();
-        let entry = SendEntry { buf: buf.to_vec(), target, resp: resp_tx };
+        let entry = SendEntry {
+            buf: buf.to_vec(),
+            target,
+            resp: resp_tx
+        };
         self.send_tx.send(entry).await.map_err(|_| SyncUdpSocketError::QueueClosed)?;
         Ok(resp_rx.await.map_err(|_| SyncUdpSocketError::SenderDropped)??)
     }
@@ -113,7 +117,7 @@ impl SyncUdpSocket {
     pub fn local_addr_sync(&self) -> Result<SocketAddr, SyncUdpSocketError> {
         match self.inner.try_lock() {
             Ok(socket) => Ok(socket.local_addr()?),
-            Err(_) => Err(std::io::Error::new(std::io::ErrorKind::WouldBlock, "socket locked").into()),
+            Err(_) => Err(std::io::Error::new(std::io::ErrorKind::WouldBlock, "socket locked").into())
         }
     }
 

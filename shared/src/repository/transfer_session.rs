@@ -1,6 +1,6 @@
-use crate::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
+use crate::entities::local_resource::{LocalResourcePath, ResourceType};
 use crate::entities::target::TransferTarget;
-use crate::entities::transfer_session::{TransferProgress, TransferSession, TransferType};
+use crate::entities::transfer_session::{TransferSession, TransferType};
 use crate::repository::errors::PersistenceError;
 use core_services::db::repository::abstraction::id::DbId;
 use core_services::db::repository::abstraction::repository::Repository;

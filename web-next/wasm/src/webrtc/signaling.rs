@@ -1,7 +1,4 @@
-use js_sys::Uint8Array;
 use prost::Message as ProstMessage;
-use wasm_bindgen::JsCast;
-use wasm_bindgen_futures::JsFuture;
 
 use core_services::wasm::http::HttpClient;
 use schema::devlog::rpc_signalling::server::{Message, OfferMessage};
@@ -9,14 +6,14 @@ use schema::devlog::rpc_signalling::server::{Message, OfferMessage};
 #[derive(Debug, Clone)]
 pub struct SignalingClient {
     ws_url: String,
-    http_url: String,
+    http_url: String
 }
 
 impl SignalingClient {
     pub fn new(ws_url: impl Into<String>, http_url: impl Into<String>) -> Self {
         Self {
             ws_url: ws_url.into(),
-            http_url: http_url.into(),
+            http_url: http_url.into()
         }
     }
 
@@ -25,15 +22,16 @@ impl SignalingClient {
 
         let offer_msg = Message {
             request_id: None,
-            offer: Some(OfferMessage { sdp: offer_sdp.to_string() }),
+            offer: Some(OfferMessage {
+                sdp: offer_sdp.to_string()
+            }),
             answer: None,
             error: None,
-            ice_config: None,
+            ice_config: None
         };
 
         let mut encoded = Vec::new();
-        prost::Message::encode(&offer_msg, &mut encoded)
-            .map_err(|e| SignalingError::Encoding(e.to_string()))?;
+        prost::Message::encode(&offer_msg, &mut encoded).map_err(|e| SignalingError::Encoding(e.to_string()))?;
 
         let (status, _headers, bytes) = HttpClient::new()
             .method("POST")
@@ -47,18 +45,12 @@ impl SignalingClient {
             .map_err(|e| SignalingError::Network(format!("{:?}", e)))?;
 
         if status != 200 {
-            return Err(SignalingError::Server(
-                String::from_utf8_lossy(&bytes).to_string(),
-            ));
+            return Err(SignalingError::Server(String::from_utf8_lossy(&bytes).to_string()));
         }
 
-        let response_msg = Message::decode(&bytes[..])
-            .map_err(|e| SignalingError::Decoding(format!("{:?}", e)))?;
+        let response_msg = Message::decode(&bytes[..]).map_err(|e| SignalingError::Decoding(format!("{:?}", e)))?;
 
-        response_msg
-            .answer
-            .ok_or(SignalingError::InvalidResponse)
-            .map(|a| a.sdp)
+        response_msg.answer.ok_or(SignalingError::InvalidResponse).map(|a| a.sdp)
     }
 }
 
@@ -80,5 +72,5 @@ pub enum SignalingError {
     Timeout,
 
     #[error("Invalid response")]
-    InvalidResponse,
+    InvalidResponse
 }

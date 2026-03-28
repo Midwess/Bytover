@@ -24,13 +24,13 @@ use shared::protocol::public_cloud::cloud_service::CloudService;
 use shared::protocol::rpc::app_server::AppServer;
 use shared::protocol::rpc::auth_provider::AuthProvider;
 use shared::protocol::rpc::cloud_server::CloudServer;
-use shared::shell::executor::transfer::WebRtc;
 use shared::repository::auth_session::AuthSessionRepository;
 use shared::repository::local_resource::LocalResourceRepository;
 use shared::repository::shelf::ShelfRepository;
 use shared::repository::transfer_session::TransferSessionRepository;
 use shared::shell::api::network::InternetConnection;
 use shared::shell::api::{CoreBridge, NetStream};
+use shared::shell::executor::transfer::WebRtc;
 use std::sync::Arc;
 use std::time::Duration;
 use tonic_web_wasm_client::Client;
@@ -171,10 +171,7 @@ impl DiContainer {
     }
 
     pub fn get_signalling_client(&self) -> SignalingClient {
-        SignalingClient::new(
-            get_signalling_server_ws_url(),
-            get_signalling_server_http_url(),
-        )
+        SignalingClient::new(get_signalling_server_ws_url(), get_signalling_server_http_url())
     }
 
     pub async fn get_native_executor(&'static self) -> &'static NativeExecutor {
@@ -212,7 +209,7 @@ impl DiContainer {
                 web_rtc: OnceCell::from(web_rtc),
                 client: OnceCell::new(),
                 signalling: OnceCell::new(),
-                current_user: OnceCell::new(),
+                current_user: OnceCell::new()
             })
         };
 

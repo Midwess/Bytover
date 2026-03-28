@@ -213,7 +213,7 @@ impl TransferProgress {
         if !self.received_by_peers.iter().any(|p| p.id == peer_id) {
             self.received_by_peers.push(ResourceReceivedPeer {
                 id: peer_id,
-                avatar_url: String::new(),
+                avatar_url: String::new()
             });
         }
     }
@@ -278,7 +278,7 @@ impl TransferSession {
             target: TransferTarget::P2P {
                 from_peer: None,
                 connection_state: P2PConnectionState::NotConnected,
-                signalling_key: Some(signalling_key),
+                signalling_key: Some(signalling_key)
             },
             from_user: User {
                 id: 0,
@@ -468,7 +468,9 @@ impl TransferSession {
     }
 
     fn is_initializing(&self) -> bool {
-        self.progress.iter().all(|it| it.status == TransferStatus::InProgress && it.bytes_per_second == 0 && it.percentage() == 0f64)
+        self.progress
+            .iter()
+            .all(|it| it.status == TransferStatus::InProgress && it.bytes_per_second == 0 && it.percentage() == 0f64)
     }
 
     pub fn update_progress(&mut self, progress: TransferProgress) {
@@ -566,10 +568,7 @@ impl TransferSession {
             };
         }
 
-        if let TransferTarget::P2P {
-            connection_state, ..
-        } = &self.target
-        {
+        if let TransferTarget::P2P { connection_state, .. } = &self.target {
             match connection_state {
                 P2PConnectionState::NotConnected => {
                     return TransferSessionStatus::Initializing {
@@ -644,8 +643,7 @@ impl TransferSession {
 
         if self.is_success() {
             TransferSessionStatus::Success
-        }
-        else {
+        } else {
             TransferSessionStatus::InProgress {
                 bytes_per_second: self.speed(1000),
                 percentage: self.total_progress()

@@ -50,14 +50,11 @@ async fn main() -> Result<(), MainErrors> {
     let http_handle = tokio::spawn(async move {
         log::info!("Starting HTTP server on port {}", http_port);
         let std_listener = http_listener.into_std().expect("Failed to convert listener");
-        actix_web::HttpServer::new(|| {
-            actix_web::App::new()
-                .configure(http::config)
-        })
-        .listen(std_listener)
-        .expect("Failed to bind HTTP server")
-        .run()
-        .await
+        actix_web::HttpServer::new(|| actix_web::App::new().configure(http::config))
+            .listen(std_listener)
+            .expect("Failed to bind HTTP server")
+            .run()
+            .await
     });
 
     // Wait for either gRPC server or Ctrl+C

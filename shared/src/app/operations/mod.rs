@@ -50,7 +50,7 @@ pub enum CoreOperation {
     Notified(AppEvent),
     Dialog(DialogOperation),
     Delay(Duration),
-    LaunchNearbyServer,
+    LaunchNearbyServer
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, From, TryFrom, TryInto)]

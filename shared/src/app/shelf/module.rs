@@ -37,7 +37,7 @@ pub struct ShelfItemViewModel {
     pub description: String,
     pub is_online: bool,
     pub is_resource_remove_allowed: bool,
-    pub resources: Vec<SelectedResourceViewModel>,
+    pub resources: Vec<SelectedResourceViewModel>
 }
 
 impl ShelfItemViewModel {
@@ -66,7 +66,7 @@ impl From<&Shelf> for ShelfItemViewModel {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ShelfViewModel {
     pub shelves: Vec<ShelfItemViewModel>,
-    pub is_loading: bool,
+    pub is_loading: bool
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -336,11 +336,8 @@ impl AppModule<BitBridge> for ShelfModule {
                     for resource_vm in &mut view_model.resources {
                         if let Ok(order_id) = resource_vm.order_id.parse::<u64>() {
                             if let Some(progress) = session.resource_progress(order_id) {
-                                resource_vm.received_by_peers = progress
-                                    .received_by_peers()
-                                    .iter()
-                                    .map(PeerAvatarViewModel::from)
-                                    .collect();
+                                resource_vm.received_by_peers =
+                                    progress.received_by_peers().iter().map(PeerAvatarViewModel::from).collect();
                             }
                         }
                     }
@@ -354,7 +351,7 @@ impl AppModule<BitBridge> for ShelfModule {
 
         ShelfViewModel {
             shelves,
-            is_loading: model.shelf.is_loading,
+            is_loading: model.shelf.is_loading
         }
     }
 }

@@ -20,7 +20,7 @@ impl DirectMessageChannel {
     pub fn new(outbound_sender: mpsc::Sender<Box<[u8]>>) -> Self {
         DirectMessageChannel {
             response_streams: Arc::new(Mutex::new(HashMap::new())),
-            outbound_sender,
+            outbound_sender
         }
     }
 
@@ -41,7 +41,6 @@ impl DirectMessageChannel {
     }
 
     pub async fn notify_response(&self, request_id: String, response: Response) {
-        // We clone the tx to drop the lock, make sure it will not blocking
         let tx = self.response_streams.lock().await.get_mut(&request_id).cloned();
         if let Some(tx) = tx {
             let _ = tx.clone().send(response).await;
@@ -116,16 +115,14 @@ impl DirectMessageChannel {
     /// If it's a response, delivers it to the appropriate request's response channel.
     /// Returns the decoded message body if it needs further processing (e.g., requests).
     pub async fn receive_packet(&self, packet: Box<[u8]>) -> Result<Option<PeerMessageBody>, WebRtcErrors> {
-        let msg = PeerMessageBody::decode(&*packet)
-            .map_err(|e| WebRtcErrors::MessageChannelError(format!("decode error: {:?}", e)))?;
+        let msg =
+            PeerMessageBody::decode(&*packet).map_err(|e| WebRtcErrors::MessageChannelError(format!("decode error: {:?}", e)))?;
 
-        // If this is a response, deliver it to the appropriate channel
         if msg.response.is_some() {
             self.notify_response(msg.request_id.clone(), msg.response.unwrap()).await;
             return Ok(None);
         }
 
-        // It's a request or other message type, caller should handle it
         Ok(Some(msg))
     }
 }

@@ -4,29 +4,17 @@ use std::rc::Rc;
 use futures::channel::mpsc;
 use futures::stream::StreamExt;
 use futures_timer::Delay;
-use futures_util::select_biased;
-use futures_util::FutureExt;
+use futures_util::{select_biased, FutureExt};
 use wasm_bindgen::closure::Closure;
-use wasm_bindgen::JsCast;
-use wasm_bindgen::JsValue;
+use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{RtcIceGatheringState, RtcPeerConnection};
 
+#[derive(Default)]
 struct IceCandidateTracker {
     host_candidates: usize,
     srflx_candidates: usize,
     relay_candidates: usize,
-    prflx_candidates: usize,
-}
-
-impl Default for IceCandidateTracker {
-    fn default() -> Self {
-        Self {
-            host_candidates: 0,
-            srflx_candidates: 0,
-            relay_candidates: 0,
-            prflx_candidates: 0,
-        }
-    }
+    prflx_candidates: usize
 }
 
 impl IceCandidateTracker {
@@ -43,15 +31,14 @@ impl IceCandidateTracker {
     }
 
     fn has_sufficient_candidates(&self) -> bool {
-        (self.host_candidates > 0 || self.srflx_candidates > 0 || self.relay_candidates > 0)
-            && self.prflx_candidates > 0
+        (self.host_candidates > 0 || self.srflx_candidates > 0 || self.relay_candidates > 0) && self.prflx_candidates > 0
     }
 }
 
 pub struct IceAgent {
     timeout_ms: u64,
     early_check_ms: u64,
-    cap_ms: u64,
+    cap_ms: u64
 }
 
 impl Default for IceAgent {
@@ -59,7 +46,7 @@ impl Default for IceAgent {
         Self {
             timeout_ms: 30_000,
             early_check_ms: 1_000,
-            cap_ms: 5_500,
+            cap_ms: 5_500
         }
     }
 }
@@ -132,5 +119,5 @@ impl IceAgent {
 #[derive(Debug, thiserror::Error)]
 pub enum IceError {
     #[error("Timeout")]
-    Timeout,
+    Timeout
 }

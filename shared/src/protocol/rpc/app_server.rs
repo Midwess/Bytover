@@ -4,19 +4,12 @@ use crate::protocol::rpc::auth_provider::AuthProvider;
 use crate::protocol::rpc::connection::RpcNetworkModule;
 use crate::protocol::rpc::errors::RpcErrors;
 use core_services::utils::maybe::MaybeSend;
-use schema::devlog::app_gateway::rpc::application_service_client::ApplicationServiceClient;
 use schema::devlog::app_gateway::rpc::auth_service_client::AuthServiceClient;
 use schema::devlog::app_gateway::rpc::authenticate_response::Action;
 use schema::devlog::app_gateway::rpc::feedback_service_client::FeedbackServiceClient;
 use schema::devlog::app_gateway::rpc::people_service_client::PeopleServiceClient;
 use schema::devlog::app_gateway::rpc::user_service_client::UserServiceClient;
-use schema::devlog::app_gateway::rpc::{
-    AppFeedbackRequest,
-    AuthenticateRequest,
-    FindUserRequest,
-    GenerateRandomAvatarRequest,
-    MeRequest
-};
+use schema::devlog::app_gateway::rpc::{AppFeedbackRequest, AuthenticateRequest, FindUserRequest, MeRequest};
 use schema::devlog::bitbridge::p2p_orchestration_service_client::P2pOrchestrationServiceClient;
 use schema::devlog::bitbridge::{CreateDeviceSessionRequest, FindP2pSessionRequest, GetDeviceAliasesRequest};
 use schema::value::auth_method::AuthMethod;
@@ -142,7 +135,11 @@ where
         Ok(())
     }
 
-    pub async fn create_device_session(&self, alias: String, signalling_key: String) -> Result<schema::devlog::bitbridge::P2pSession, RpcErrors> {
+    pub async fn create_device_session(
+        &self,
+        alias: String,
+        signalling_key: String
+    ) -> Result<schema::devlog::bitbridge::P2pSession, RpcErrors> {
         let channel = self.rpc_module.connect().await?;
         let req = CreateDeviceSessionRequest { alias, signalling_key };
         let mut request = Request::new(req);
@@ -185,7 +182,8 @@ where
             device_name: device.name.clone(),
             device_unique_key: device.unique_id.clone(),
             device_type: schema::value::device::DeviceType::OtherLaptop as i32, // Or a better default
-            url: "".to_string(), // Client may not have the true URL here, or it can be a default empty string
+            url: "".to_string()                                                 /* Client may not have the true URL here, or it can
+                                                                                 * be a default empty string */
         };
 
         let req = schema::devlog::bitbridge::GenPeerRequest { device: device_msg };
@@ -196,10 +194,10 @@ where
 
         let mut client = P2pOrchestrationServiceClient::new(channel);
         let response = client.gen_peer(request).await?.into_inner();
-        
+
         let mut peer = crate::entities::peer::Peer::from(response.peer);
         peer.signalling_id = response.signalling_id;
-        
+
         Ok(peer)
     }
 }

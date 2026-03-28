@@ -5,10 +5,10 @@ use std::sync::{Arc, Weak};
 
 use futures_util::stream::FuturesUnordered;
 use futures_util::StreamExt;
+use socket2::{Domain, Protocol, Socket, Type};
 use thiserror::Error;
 use tokio::net::UdpSocket;
 use tokio::sync::{Mutex, OnceCell};
-use socket2::{Domain, Protocol, Socket, Type};
 
 use shared::app::operations::p2p::P2POperationOutput;
 use shared::app::operations::CoreOperationOutput;
@@ -48,7 +48,7 @@ pub enum WebRtcServerError {
     PeerNotFound(String),
 
     #[error("Client error: {0}")]
-    Client(String),
+    Client(String)
 }
 
 impl From<WebRtcClientError> for WebRtcServerError {
@@ -64,7 +64,7 @@ impl From<WebRtcServerError> for CoreError {
 }
 
 pub struct WebRtcServerConfig {
-    pub bind_addr: SocketAddr,
+    pub bind_addr: SocketAddr
 }
 
 pub struct WebRtcServer {
@@ -76,7 +76,7 @@ pub struct WebRtcServer {
     current_user: OnceCell<PeerEntity>,
     core_request: OnceCell<CoreRequest>,
     running: AtomicBool,
-    ice_agent: OnceCell<Arc<IceAgent>>,
+    ice_agent: OnceCell<Arc<IceAgent>>
 }
 
 impl WebRtcServer {
@@ -84,7 +84,7 @@ impl WebRtcServer {
         config: WebRtcServerConfig,
         signalling: SignalingClient,
         resource_repo: Arc<dyn LocalResourceRepository>,
-        transfer_session_repo: Arc<dyn TransferSessionRepository>,
+        transfer_session_repo: Arc<dyn TransferSessionRepository>
     ) -> Arc<Self> {
         Arc::new(Self {
             config,
@@ -95,7 +95,7 @@ impl WebRtcServer {
             current_user: Default::default(),
             core_request: Default::default(),
             running: AtomicBool::new(false),
-            ice_agent: OnceCell::new(),
+            ice_agent: OnceCell::new()
         })
     }
 
@@ -152,7 +152,7 @@ impl WebRtcServer {
         request_id: String,
         session_message: Option<schema::devlog::bitbridge::P2pTransferSessionMessage>,
         resources: Option<Vec<LocalResource>>,
-        error: Option<CoreError>,
+        error: Option<CoreError>
     ) -> Result<(), WebRtcServerError> {
         let client = self.get_client(&peer_id).await?;
         client.send_session_detail_response(request_id, session_message, resources, error).await?;
@@ -164,7 +164,7 @@ impl WebRtcServer {
         peer_id: String,
         session_id: u64,
         transfer_id: u16,
-        resource: LocalResource,
+        resource: LocalResource
     ) -> Result<(), WebRtcServerError> {
         let client = self.get_client(&peer_id).await?;
         client.stream_resource(session_id, transfer_id, resource).await?;
@@ -175,7 +175,7 @@ impl WebRtcServer {
         &self,
         peer_id: String,
         session_id: u64,
-        resource: LocalResource,
+        resource: LocalResource
     ) -> Result<(), WebRtcServerError> {
         let client = self.get_client(&peer_id).await?;
         client.send_resource_notification(session_id, resource).await?;
@@ -214,13 +214,14 @@ impl WebRtcServer {
         log::info!("[webrtc-server] UDP socket bound on {local_addr}");
 
         let Some(key) = current_user.signalling_id.clone() else {
-            return Err(WebRtcServerError::Signalling(format!("No signalling id for peer {}", current_user.id)))
+            return Err(WebRtcServerError::Signalling(format!(
+                "No signalling id for peer {}",
+                current_user.id
+            )))
         };
 
         self.signalling.start(key.clone()).await;
         log::info!("[webrtc-server] Signalling background task started");
-
-        // ice_agent is now managed as a singleton in `self.ice_agent`
 
         let mut connect_futs: FuturesUnordered<_> = FuturesUnordered::new();
         let resource_repo = self.resource_repo.clone();
@@ -259,7 +260,11 @@ impl WebRtcServer {
                                 "[webrtc-server] IceAgent created with {} STUN URLs",
                                 config.urls.len()
                             );
-                            let agent = Arc::new(IceAgent::new(config).await.map_err(|e| WebRtcServerError::Signalling(format!("{e}")))?);
+                            let agent = Arc::new(
+                                IceAgent::new(config).await.map_err(|e| {
+                                    WebRtcServerError::Signalling(format!("{e}"))
+                                })?,
+                            );
                             agent.start_background_gathering();
                             let _ = self.ice_agent.set(agent);
                         }
@@ -267,7 +272,7 @@ impl WebRtcServer {
                         let client_socket = socket.clone();
                         let user = current_user.clone();
                         let repo = resource_repo.clone();
-                        let session_repo = transfer_session_repo.clone();
+                        let _session_repo = transfer_session_repo.clone();
                         let srv = server.clone();
                         let rid = request_id.clone();
                         let off = offer.clone();
@@ -280,14 +285,12 @@ impl WebRtcServer {
                                 rid,
                                 agent,
                                 repo,
-                                session_repo,
                             )
                             .await;
 
                             log::info!("[webrtc-server] Client connection result {:?}", result);
 
-                            if result.is_ok() {
-                                let client = result.unwrap();
+                            if let Ok(client) = result {
                                 Some((client, user))
                             } else {
                                 None

@@ -266,7 +266,6 @@ impl TransfersContext {
     pub async fn get_or_create_resource_token(&self, session_id: u64, resource_id: u64) -> CancellationToken {
         let mut actives = self.active_transfers.lock().await;
 
-        // Find or create session if it doesn't exist
         if !actives.iter().any(|it| it.session_id == session_id) {
             actives.push(SessionContext::new(session_id, String::new()));
         }

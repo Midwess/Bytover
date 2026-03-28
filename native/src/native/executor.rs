@@ -9,8 +9,6 @@ use shared::shell::executor::transfer::TransferNative;
 use tokio::time::sleep;
 use tonic::transport::Channel;
 
-// Handle the effect coming from the platform
-// This is the placed where we can put Rust logic to share across platform
 pub struct NativeExecutor {
     pub rpc: Box<dyn NativeRpc<Channel>>,
     pub persistent: Box<dyn NativePersistent>,

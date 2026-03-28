@@ -27,15 +27,6 @@ impl IOWriter for FileEntryWriter {
     }
 }
 
-impl<W: IOWriter> DIOWriterWrapper<W> {
-    pub fn new(inner: W, compression_support: bool) -> Self {
-        Self {
-            inner,
-            compression_support
-        }
-    }
-}
-
 impl DIOWriterWrapper<FileEntryWriter> {
     pub async fn from_path(path: PathBuf, compression_support: bool) -> Result<Self> {
         let file = FileEntry::new(None, path).await?;

@@ -13,7 +13,6 @@ use crate::errors::CoreError;
 use crate::CoreOperation;
 use futures_util::StreamExt;
 
-
 impl AppCommand {
     pub async fn gen_peer(&self, _user: Option<crate::entities::user::User>, device: crate::entities::device::DeviceInfo) -> Peer {
         self.run(RpcOperation::gen_peer(device)).await.unwrap()

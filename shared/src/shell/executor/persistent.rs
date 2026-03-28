@@ -14,12 +14,11 @@ use crate::repository::device_alias::DeviceAliasRepository;
 use crate::repository::local_resource::LocalResourceRepository;
 use crate::repository::shelf::ShelfRepository;
 use crate::repository::transfer_session::TransferSessionRepository;
-use core_services::db::repository::abstraction::table::Table;
 
 #[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]
 #[cfg_attr(target_family = "wasm", async_trait::async_trait(?Send))]
 pub trait NativePersistent: Send + Sync {
-    fn auth_session_repository(&self) -> &Box<dyn AuthSessionRepository>;
+    fn auth_session_repository(&self) -> &dyn AuthSessionRepository;
     fn local_resource_repository(&self) -> &dyn LocalResourceRepository;
     fn transfer_session_repository(&self) -> &dyn TransferSessionRepository;
     fn shelf_repository(&self) -> &dyn ShelfRepository;

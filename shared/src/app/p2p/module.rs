@@ -11,12 +11,12 @@ use serde::{Deserialize, Serialize};
 pub struct P2PModel {
     pub device: Option<DeviceInfo>,
     pub me: Option<Peer>,
-    pub launched: bool,
+    pub launched: bool
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct P2PViewModel {
-    pub me: Option<PeerViewModel>,
+    pub me: Option<PeerViewModel>
 }
 
 pub struct P2PModule;
@@ -25,7 +25,7 @@ pub struct P2PModule;
 pub enum P2PEvent {
     Launch,
     SetLaunched(bool),
-    UpdateMe { new_peer: Peer },
+    UpdateMe { new_peer: Peer }
 }
 
 impl AppModule<BitBridge> for P2PModule {
@@ -45,10 +45,7 @@ impl AppModule<BitBridge> for P2PModule {
                 }
                 model.p2p.launched = true;
                 let me = model.p2p.me.clone();
-                Command::handle_result(|it| async move {
-                    it.app().start_nearby_server(me).await
-                })
-                .then_render()
+                Command::handle_result(|it| async move { it.app().start_nearby_server(me).await }).then_render()
             }
             P2PEvent::SetLaunched(launched) => {
                 model.p2p.launched = launched;
@@ -63,7 +60,7 @@ impl AppModule<BitBridge> for P2PModule {
 
     fn view(&self, model: &AppModel) -> Self::ViewModel {
         Self::ViewModel {
-            me: model.p2p.me.as_ref().map(PeerViewModel::from),
+            me: model.p2p.me.as_ref().map(PeerViewModel::from)
         }
     }
 }

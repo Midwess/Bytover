@@ -1,8 +1,7 @@
 use shared::protocol::public_cloud::cloud_service::CloudService;
 use shared::protocol::rpc::app_server::AppServer;
 use shared::protocol::rpc::cloud_server::CloudServer;
-use shared::shell::executor::transfer::TransferNative;
-use shared::shell::executor::transfer::WebRtc;
+use shared::shell::executor::transfer::{TransferNative, WebRtc};
 use std::sync::Arc;
 use tonic_web_wasm_client::Client;
 

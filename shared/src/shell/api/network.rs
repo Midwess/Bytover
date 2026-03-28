@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use crate::app::operations::device::GeoLocation;
 use crate::errors::CoreError;
 use core_services::retry;

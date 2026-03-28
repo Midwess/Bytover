@@ -65,7 +65,7 @@ pub enum P2POperation {
         peer_id: String,
         session_id: u64,
         resource: LocalResource
-    },
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -202,10 +202,7 @@ impl P2POperation {
         .map(|it| it.result())
     }
 
-    pub fn connect(
-        signalling_key: String,
-        current_user: Peer
-    ) -> AppRequestBuilder<impl Future<Output = Result<Peer, CoreError>>> {
+    pub fn connect(signalling_key: String, current_user: Peer) -> AppRequestBuilder<impl Future<Output = Result<Peer, CoreError>>> {
         Command::request_from_shell(CoreOperation::P2P(P2POperation::ConnectPeer {
             signalling_key,
             current_user
