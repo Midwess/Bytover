@@ -1,21 +1,25 @@
+use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::ops::DerefMut;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use core_services::utils::yield_container::{YieldContainer, YieldError};
 use futures::channel::mpsc;
 use futures::SinkExt;
+use futures_util::select_biased;
 use futures_util::stream::StreamExt;
-use futures_util::{select_biased, FutureExt};
 use prost::Message;
 use schema::devlog::bitbridge::peer_message_body::{Request, Response};
+use schema::devlog::bitbridge::view_session_detail_response::Result as SessionDetailResult;
 use schema::devlog::bitbridge::*;
 use schema::devlog::rpc_signalling::server::OfferMessage;
-use str0m::change::SdpOffer;
+use socket2::{Domain, Socket, Type};
 use str0m::channel::{ChannelConfig, ChannelId};
 use str0m::net::{Protocol, Receive};
-use str0m::{Candidate, Event, IceConnectionState, Input, Output, Rtc, RtcConfig};
+use str0m::{Event, IceConnectionState, Input, Output, Rtc};
 use thiserror::Error;
+use tokio::net::UdpSocket;
 use tokio::sync::OnceCell;
 
 use schema::devlog::bitbridge::fec_feedback::Feedback;
@@ -25,15 +29,14 @@ use shared::entities::local_resource::{LocalResource, LocalResourcePath};
 use shared::entities::peer::Peer;
 use shared::errors::CoreError;
 use shared::protocol::webrtc::errors::WebRtcErrors;
-use shared::protocol::webrtc::fec::{FecAction, FecSender, CHUNK_SIZE, DATA_SHARDS_DEFAULT};
+use shared::protocol::webrtc::fec::{FecAction, FecSender};
 use shared::protocol::webrtc::message_channel::DirectMessageChannel;
-use shared::protocol::webrtc::transfer::{TransferDelimiterShema, TransfersContext};
+use shared::protocol::webrtc::transfer::TransfersContext;
 use shared::repository::local_resource::LocalResourceRepository;
 use shared::shell::api::CoreRequest;
-use shared::utils::compression::is_compressible;
 
 use crate::webrtc::ice::IceAgent;
-use crate::webrtc::socket::{SyncUdpSocket, SyncUdpSocketError};
+use crate::webrtc::signalling::SignalingClient;
 
 const TOTAL_CHANNELS: usize = 4;
 
@@ -59,9 +62,6 @@ pub enum WebRtcClientError {
 
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-
-    #[error("Socket error: {0}")]
-    Socket(#[from] SyncUdpSocketError),
 
     #[error("Message encode error: {0}")]
     MessageEncode(#[from] prost::EncodeError),
@@ -123,10 +123,11 @@ pub struct WebRtcClient {
     unordered_msg_channel: OnceCell<DirectMessageChannel>,
 
     rtc: YieldContainer<Rtc>,
-    socket: SyncUdpSocket,
+    socket: YieldContainer<UdpSocket>,
     local_addr: SocketAddr,
 
     peer: OnceCell<Peer>,
+    me: Peer,
     transfers_context: TransfersContext,
     core_request: OnceCell<CoreRequest>,
     resource_repo: Arc<dyn LocalResourceRepository>,
@@ -143,61 +144,75 @@ impl std::fmt::Debug for WebRtcClient {
 
 impl WebRtcClient {
     pub async fn connect(
+        me: Peer,
         offer_message: OfferMessage,
-        socket: SyncUdpSocket,
-        signalling: &crate::webrtc::signalling::SignalingClient,
+        signalling: &SignalingClient,
         request_id: String,
-        ice_agent: Arc<IceAgent>,
         resource_repo: Arc<dyn LocalResourceRepository>
     ) -> Result<Arc<Self>, WebRtcClientError> {
-        let mut rtc = RtcConfig::new().build(Instant::now());
+        let Some(signalling_id) = me.signalling_id.clone() else {
+            return Err(WebRtcClientError::Shared("Peer not introduced".to_string()));
+        };
 
-        log::info!("Received offer {offer_message:?}");
-        let local_addr = socket.local_addr().await?;
-        if !local_addr.ip().is_unspecified() {
-            let host_candidate = Candidate::host(local_addr, "udp").map_err(|e| WebRtcClientError::Signalling(format!("{e}")))?;
-            rtc.add_local_candidate(host_candidate);
-            log::info!("[webrtc-client] Added host candidate: {local_addr}");
-        } else {
-            log::warn!("[webrtc-client] Bound to unspecified IP ({local_addr}), skipping host candidate. Relying on STUN.");
-        }
+        let config = match signalling.fetch_relay_config(&signalling_id).await {
+            Ok(c) => c,
+            Err(e) => {
+                log::warn!(
+                    "[webrtc-client] Failed to fetch relay config ({}), proceeding without TURN relay",
+                    e
+                );
+                schema::devlog::rpc_signalling::server::IceConfig::default()
+            }
+        };
 
-        ice_agent
-            .gather_candidates(&mut rtc)
+        let socket = Socket::new(Domain::IPV6, Type::DGRAM, Some(socket2::Protocol::UDP))?;
+        socket.set_only_v6(false)?;
+        socket.set_nonblocking(true)?;
+        socket.bind(&"[::]:0".parse::<SocketAddr>().unwrap().into())?;
+        let std_socket: std::net::UdpSocket = socket.into();
+        let socket = UdpSocket::from_std(std_socket)?;
+        let socket = Arc::new(socket);
+
+        let local_addr = socket.local_addr()?;
+
+        let candidates = IceAgent::gather_candidates(socket.clone(), &config)
             .await
             .map_err(|e| WebRtcClientError::Signalling(format!("{e}")))?;
 
-        let mut api = rtc.direct_api();
-        api.create_data_channel(ChannelConfig {
-            label: "reliable-data".into(),
-            ordered: true,
-            negotiated: Some(1),
-            ..Default::default()
-        });
-        api.create_data_channel(ChannelConfig {
-            label: "unreliable-data".into(),
-            ordered: false,
-            negotiated: Some(2),
-            ..Default::default()
-        });
-        api.create_data_channel(ChannelConfig {
-            label: "unordered-msg".into(),
-            ordered: false,
-            negotiated: Some(3),
-            ..Default::default()
-        });
-        api.create_data_channel(ChannelConfig {
-            label: "ordered-msg".into(),
-            ordered: true,
-            negotiated: Some(4),
-            ..Default::default()
-        });
+        let mut rtc = Rtc::new(Instant::now());
+        for candidate in candidates {
+            rtc.add_local_candidate(candidate);
+        }
 
-        let offer = SdpOffer::from_sdp_string(&offer_message.sdp).map_err(|e| WebRtcClientError::SdpParse(format!("{e}")))?;
+        let offer_sdp = IceAgent::resolve_remote_candidates(&offer_message.sdp).await;
+        let offer = str0m::change::SdpOffer::from_sdp_string(&offer_sdp).map_err(|e| WebRtcClientError::SdpParse(format!("{e}")))?;
 
         let answer = rtc.sdp_api().accept_offer(offer).map_err(WebRtcClientError::Rtc)?;
 
-        log::info!("[webrtc-client] SDP answer created with all local candidates {:?}", answer);
+        let mut api = rtc.sdp_api();
+        api.add_channel_with_config(ChannelConfig {
+            label: "reliable".to_string(),
+            ordered: true,
+            ..Default::default()
+        });
+
+        api.add_channel_with_config(ChannelConfig {
+            label: "unreliable".to_string(),
+            ordered: false,
+            ..Default::default()
+        });
+
+        api.add_channel_with_config(ChannelConfig {
+            label: "unordered_msg".to_string(),
+            ordered: false,
+            ..Default::default()
+        });
+
+        api.add_channel_with_config(ChannelConfig {
+            label: "ordered_msg".to_string(),
+            ordered: true,
+            ..Default::default()
+        });
 
         signalling
             .send_answer(answer.to_sdp_string(), &request_id)
@@ -209,7 +224,6 @@ impl WebRtcClient {
         let mut channels_opened: usize = 0;
         let mut is_connected = false;
 
-        let socket = socket;
         let mut buf = vec![0u8; 2000];
         loop {
             let timeout = {
@@ -217,9 +231,9 @@ impl WebRtcClient {
                 match output {
                     Output::Timeout(t) => t,
                     Output::Transmit(t) => {
-                        log::info!("Sending data {:?}", t.destination);
-                        if let Err(e) = socket.send_to(&t.contents, t.destination).await {
-                            log::warn!("[webrtc-client] Failed to send to {}: {}", t.destination, e);
+                        let dest = to_v6_mapped(t.destination);
+                        if let Err(e) = socket.send_to(&t.contents, dest).await {
+                            log::warn!("[webrtc-client] Failed to send to {}: {}", dest, e);
                         }
 
                         continue;
@@ -246,8 +260,9 @@ impl WebRtcClient {
                             log::info!("[webrtc-client] All channels open, ready");
 
                             let client = Arc::new(Self {
+                                me,
                                 rtc: YieldContainer::new(rtc),
-                                socket,
+                                socket: YieldContainer::new(Arc::try_unwrap(socket).expect("socket Arc should have single owner after gather")),
                                 local_addr,
                                 unreliable_data_tx: Default::default(),
                                 reliable_data_tx: Default::default(),
@@ -275,19 +290,13 @@ impl WebRtcClient {
             }
 
             tokio::select! {
-                result = {
-                    socket.recv_any(&mut buf)
-                } => {
-                    let (n, source) = match result {
-                        Ok(res) => res,
-                        Err(e) => {
-                            log::warn!("[webrtc-client] Socket receive error: {}", e);
-                            continue;
-                        }
-                    };
-                    let receive = Receive::new(Protocol::Udp, source, local_addr, &buf[..n])
-                        .map_err(|e| WebRtcClientError::Signalling(format!("{e}")))?;
-                    rtc.handle_input(Input::Receive(Instant::now(), receive))?;
+                res = socket.recv_from(&mut buf) => {
+                    if let Ok((n, source)) = res {
+                        log::info!("Received data from {:?}", source);
+                        let receive = Receive::new(Protocol::Udp, source, local_addr, &buf[..n])
+                            .map_err(|e| WebRtcClientError::Signalling(format!("{e}")))?;
+                        rtc.handle_input(Input::Receive(Instant::now(), receive))?;
+                    }
                 }
                 _ = tokio::time::sleep(duration) => {
                     rtc.handle_input(Input::Timeout(Instant::now()))?;
@@ -297,8 +306,11 @@ impl WebRtcClient {
     }
 
     pub async fn run(self: Arc<Self>) -> Result<(), WebRtcClientError> {
-        let mut buf = vec![0u8; 2000];
-        let mut rtc = self.rtc.retrieve().await?;
+        let mut rtc_container = self.rtc.retrieve().await?;
+        let rtc = rtc_container.deref_mut();
+        
+        let mut socket_container = self.socket.retrieve().await?;
+        let socket = socket_container.deref_mut();
 
         let (ordered_msg_tx, mut ordered_msg_rx) = mpsc::channel::<Box<[u8]>>(64);
         let (unordered_msg_tx, mut unordered_msg_rx) = mpsc::channel::<Box<[u8]>>(64);
@@ -323,6 +335,7 @@ impl WebRtcClient {
         });
 
         let run_loop = async {
+            let mut buf = vec![0u8; 2000];
             loop {
                 let is_alive = rtc.is_alive();
 
@@ -335,8 +348,9 @@ impl WebRtcClient {
                         match rtc.poll_output()? {
                             Output::Timeout(t) => break t,
                             Output::Transmit(t) => {
-                                if let Err(e) = self.socket.send_to(&t.contents, t.destination).await {
-                                    log::warn!("[webrtc-client] Failed to send to {}: {}", t.destination, e);
+                                let dest = to_v6_mapped(t.destination);
+                                if let Err(e) = socket.send_to(&t.contents, dest).await {
+                                    log::warn!("[webrtc-client] Failed to send to {}: {}", dest, e);
                                 }
                             }
                             Output::Event(e) => match e {
@@ -363,10 +377,10 @@ impl WebRtcClient {
                                                     (self.transfer_feedback_sender.get(), feedback.feedback)
                                                 {
                                                     match inner {
-                                                        fec_feedback::Feedback::Network(stats) => {
+                                                        schema::devlog::bitbridge::fec_feedback::Feedback::Network(stats) => {
                                                             let _ = sender.unbounded_send(Feedback::Network(stats));
                                                         }
-                                                        fec_feedback::Feedback::Missing(blocks) => {
+                                                        schema::devlog::bitbridge::fec_feedback::Feedback::Missing(blocks) => {
                                                             let _ = sender.unbounded_send(Feedback::Missing(blocks));
                                                         }
                                                     }
@@ -381,27 +395,22 @@ impl WebRtcClient {
                     }
                 };
 
-                let duration = timeout.saturating_duration_since(Instant::now()).max(Duration::from_millis(1));
+                let duration = timeout.saturating_duration_since(Instant::now());
+                if duration.is_zero() {
+                    rtc.handle_input(Input::Timeout(Instant::now()))?;
+                    continue;
+                }
 
                 tokio::select! {
-                    result = {
-                        self.socket.recv_any(&mut buf)
-                    } => {
-                        let (n, source) = match result {
-                            Ok(res) => res,
-                            Err(e) => {
-                                log::warn!("[webrtc-client] Socket receive error: {}", e);
-                                continue;
+                    res = socket.recv_from(&mut buf) => {
+                        if let Ok((n, source)) = res {
+                            log::info!("Received data from source {source:?}");
+                            if let Ok(receive) = Receive::new(Protocol::Udp, source, self.local_addr, &buf[..n]) {
+                                rtc.handle_input(Input::Receive(Instant::now(), receive))?;
                             }
-                        };
-                        let Ok(receive) = Receive::new(Protocol::Udp, source, self.local_addr, &buf[..n]) else {
-                            continue;
-                        };
-
-                        rtc.handle_input(Input::Receive(Instant::now(), receive))?;
+                        }
                     }
                     _ = tokio::time::sleep(duration) => {
-
                         rtc.handle_input(Input::Timeout(Instant::now()))?;
                     }
                     Some(data) = ordered_msg_rx.next() => {
@@ -415,7 +424,6 @@ impl WebRtcClient {
                         }
                     }
                     Some(data) = reliable_data_rx.next() => {
-
                         if let Some(mut ch) = rtc.channel(RELIABLE_DATA_CHANNEL_ID) {
                             ch.write(true, &data).ok();
                         }
@@ -464,290 +472,117 @@ impl WebRtcClient {
             mine: PeerMessage::from(current_user.clone())
         };
 
-        log::info!("[webrtc-client] Sending introduce request");
-        let response = self.msg_channel().send(Request::IntroduceRequest(introduce_request), None).await?;
+        log::info!("[webrtc-client] Introducing self to peer");
+
+        let response = self
+            .msg_channel()
+            .send(Request::IntroduceRequest(introduce_request), None)
+            .await
+            .map_err(|e| WebRtcClientError::MessageChannel(format!("{e}")))?;
 
         match response {
-            Response::IntroduceResponse(resp) => {
-                let peer: Peer = resp.peer.into();
-                log::info!("[webrtc-client] Received introduce response from {:?}", peer.id);
-                self.peer.set(peer).unwrap();
+            Response::IntroduceResponse(res) => {
+                let peer = Peer::from(res.peer);
+                log::info!("[webrtc-client] Peer introduced as {:?}", peer.id);
+                let _ = self.peer.set(peer);
                 Ok(())
             }
-            _ => Err(WebRtcClientError::FailedToIntroducePeer)
+            _ => Err(WebRtcClientError::InvalidResponse("Expected Introduce response".into()))
         }
     }
 
-    pub async fn from_introduce_request(
-        &self,
-        request_id: String,
-        msg: IntroduceRequestMessage,
-        current_user: &Peer
-    ) -> Result<(), WebRtcClientError> {
-        log::info!("[webrtc-client] Received introduce request from {:?}", msg.mine.peer_id);
-
-        let response = Response::IntroduceResponse(IntroduceResponseMessage {
-            peer: PeerMessage::from(current_user.clone())
-        });
-
-        self.msg_channel().send_response(request_id, response).await?;
-
-        let peer: Peer = msg.mine.into();
-        self.peer.set(peer).unwrap();
+    pub async fn stream_resource(&self, session_id: u64, transfer_id: u16, _resource: LocalResource) -> Result<(), WebRtcClientError> {
+        self.transfers_context.start_transfer(session_id, transfer_id.to_string()).await;
         Ok(())
     }
 
-    pub fn msg_channel(&self) -> &DirectMessageChannel {
-        self.msg_channel.get().unwrap()
-    }
+    pub async fn send_resource_notification(&self, session_id: u64, resource: LocalResource) -> Result<(), WebRtcClientError> {
+        let notification = ResourceNotificationRequest {
+            session_order_id: session_id,
+            resource: Some(resource.to_proto())
+        };
 
-    pub fn unordered_msg_channel(&self) -> &DirectMessageChannel {
-        self.unordered_msg_channel.get().unwrap()
-    }
+        self.msg_channel()
+            .send(Request::ResourceNotification(notification), None)
+            .await
+            .map(|_| ())
+            .map_err(|e| WebRtcClientError::MessageChannel(format!("{e}")))?;
 
-    pub async fn process_message_packet(&self, request_id: String, msg: Request) {
-        match msg {
-            Request::CancelRequest(request) => {
-                log::info!("[webrtc-client] Received cancel request {:?}", request);
-                if let Some(resource_id) = request.resource_id {
-                    self.transfers_context.cancel_resource(request.session_id, resource_id).await;
-                } else {
-                    self.transfers_context.cancel_transfer(request.session_id).await;
-                }
-            }
-            Request::ViewSessionRequest(req) => {
-                log::info!("[webrtc-client] Received view session request for order_id {}", req.order_id);
-                let peer_id = self.peer.get().map(|p| p.id.clone()).unwrap_or_default();
-                let response = CoreOperationOutput::P2P(P2POperationOutput::ReceivedViewSessionRequest {
-                    peer_id,
-                    request_id,
-                    order_id: req.order_id,
-                    password: req.password
-                });
-
-                if let Some(core_request) = self.core_request() {
-                    core_request.response(response).await;
-                }
-            }
-            Request::DownloadResourceRequest(req) => {
-                let peer_id = self.peer.get().map(|p| p.id.clone()).unwrap_or_default();
-                let response = CoreOperationOutput::P2P(P2POperationOutput::ReceivedDownloadRequest {
-                    peer_id,
-                    session_order_id: req.session_order_id,
-                    resource_order_id: req.resource_order_id,
-                    transfer_id: req.transfer_id as u16
-                });
-                if let Some(core_request) = self.core_request() {
-                    core_request.response(response).await;
-                }
-            }
-            Request::ResourceNotification(notification) => {
-                let session_order_id = notification.session_order_id;
-                log::info!(
-                    "[webrtc-client] Received resource notification for session {}",
-                    session_order_id
-                );
-                if let Some(resource_proto) = notification.resource {
-                    let mut resource = LocalResource {
-                        order_id: resource_proto.order_id,
-                        name: resource_proto.name,
-                        size: resource_proto.size as u64,
-                        path: LocalResourcePath::RelativePath {
-                            path: format!("received/session_{}/resource_{}", session_order_id, resource_proto.order_id),
-                            is_private: false
-                        },
-                        thumbnail_path: None,
-                        r#type: (ResourceTypeMessage::try_from(resource_proto.r#type).unwrap_or_default()).into(),
-                        shelf_id: 0
-                    };
-
-                    if let Some(thumbnail_bytes) = resource_proto.thumbnail_png {
-                        match self.resource_repo.save_thumbnail(thumbnail_bytes, resource.order_id).await {
-                            Ok(thumbnail_path) => {
-                                resource.thumbnail_path = Some(thumbnail_path);
-                            }
-                            Err(e) => {
-                                log::warn!("[webrtc-client] Failed to save thumbnail: {:?}", e);
-                            }
-                        }
-                    }
-
-                    if let Some(core_request) = self.core_request() {
-                        let peer_id = self.peer.get().map(|p| p.id.clone()).unwrap_or_default();
-                        let response = CoreOperationOutput::P2P(P2POperationOutput::ReceivedResourceNotification {
-                            session_order_id,
-                            resource,
-                            peer_id
-                        });
-                        core_request.response(response).await;
-                    }
-                }
-
-                let _ = self.msg_channel().send_response(request_id, Response::VoidResponse(VoidResponseMessage {})).await;
-            }
-            _ => {}
-        }
-    }
-
-    pub async fn cancel_transfer(&self, session_id: u64) {
-        self.transfers_context.cancel_transfer(session_id).await;
-        let peer_id = self.peer.get().map(|p| p.id.as_str()).unwrap_or_default();
-        log::info!("[webrtc-client] Cancelling transfer session {session_id} to peer {peer_id}");
-        let _ = self
-            .msg_channel()
-            .notify(Request::CancelRequest(P2pCancelSessionRequest {
-                session_id,
-                resource_id: None
-            }))
-            .await;
-    }
-
-    pub async fn cancel_resource_transfer(&self, session_id: u64, resource_id: u64) {
-        self.transfers_context.cancel_resource(session_id, resource_id).await;
-        log::info!("[webrtc-client] Cancelling resource {resource_id} in session {session_id}");
-        let _ = self
-            .msg_channel()
-            .notify(Request::CancelRequest(P2pCancelSessionRequest {
-                session_id,
-                resource_id: Some(resource_id)
-            }))
-            .await;
+        Ok(())
     }
 
     pub async fn send_session_detail_response(
         &self,
         request_id: String,
         session_message: Option<P2pTransferSessionMessage>,
-        resources: Option<Vec<LocalResource>>,
-        error: Option<CoreError>
+        resource_updated: Option<ResourceMessage>,
+        error: Option<PeerErrorsMessage>
     ) -> Result<(), WebRtcClientError> {
-        use schema::devlog::bitbridge::view_session_detail_response::Result as ResponseResult;
-
-        log::info!("[webrtc-client] Sending session detail response");
-
-        if let Some(error_msg) = error {
-            log::error!("[webrtc-client] Session detail error: {:?}", error_msg);
-            let error_result = match error_msg {
-                CoreError::PeerRequestError(e) => ResponseResult::Error(e.into()),
-                _ => ResponseResult::Error(PeerErrorsMessage::InvalidRequest.into())
-            };
-            self.msg_channel()
-                .send_response(
-                    request_id,
-                    Response::ViewSessionResponse(ViewSessionDetailResponse {
-                        result: Some(error_result)
-                    })
-                )
-                .await?;
-            return Ok(());
-        }
-
-        let Some(proto_session) = session_message else {
-            return Ok(());
-        };
-
-        let response = ViewSessionDetailResponse {
-            result: Some(ResponseResult::Session(proto_session.clone()))
-        };
-
-        self.msg_channel().send_response(request_id, Response::ViewSessionResponse(response)).await?;
-
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
-        if let Some(resources) = resources {
-            let session_order_id = proto_session.order_id;
-            for resource in resources {
-                self.send_resource_notification(session_order_id, resource).await?;
-                tokio::time::sleep(Duration::from_millis(20)).await;
-            }
-        }
-
-        Ok(())
-    }
-
-    pub async fn send_resource_notification(&self, session_order_id: u64, resource: LocalResource) -> Result<(), WebRtcClientError> {
-        let mut resource_proto = resource.to_proto();
-
-        if let Some(thumbnail_path) = resource.thumbnail_path.as_ref() {
-            if let Ok(mut cursor) = self.resource_repo.read(thumbnail_path.clone(), 64 * 1024, false).await {
-                if let Ok(bytes) = cursor.read_all().await {
-                    resource_proto.thumbnail_png = Some(bytes.to_vec());
-                }
-            }
-        }
-
-        let notification = ResourceNotificationRequest {
-            session_order_id,
-            resource: Some(resource_proto)
-        };
-
-        let _ = self.msg_channel().notify(Request::ResourceNotification(notification)).await?;
-        Ok(())
-    }
-
-    pub async fn stream_resource(&self, session_id: u64, transfer_id: u16, resource: LocalResource) -> Result<(), WebRtcClientError> {
-        let Some(sender) = self.outbound_packet_sender.get() else {
-            return Err(WebRtcClientError::Transfer("sending_loop not initialized".into()));
-        };
-
-        let mut sender = sender.clone();
-
-        let compressed = is_compressible(&resource.name);
-        let prefix = transfer_id;
-
-        let start_delimiter = TransferDelimiterShema::start(session_id, resource.order_id, compressed);
-        let start_packet = start_delimiter.as_bytes()?;
-        sender
-            .send((prefix, start_packet, true))
-            .await
-            .map_err(|e| WebRtcClientError::Transfer(format!("failed to send start delimiter: {e}")))?;
-
-        let chunk_size = if compressed {
-            (CHUNK_SIZE * DATA_SHARDS_DEFAULT - CHUNK_SIZE) as u64
+        let response_result = if let Some(session) = session_message {
+            Some(SessionDetailResult::Session(session))
+        } else if let Some(resource) = resource_updated {
+            Some(SessionDetailResult::ResourceUpdated(resource))
         } else {
-            (CHUNK_SIZE * DATA_SHARDS_DEFAULT) as u64
+            error.map(|err| SessionDetailResult::Error(err as i32))
         };
 
-        let mut cursor = self
-            .resource_repo
-            .read(resource.path.clone(), chunk_size as usize, compressed)
-            .await
-            .map_err(|e| WebRtcClientError::Transfer(format!("failed to read resource: {e}")))?;
+        let session_detail = ViewSessionDetailResponse { result: response_result };
 
-        loop {
-            match cursor.c_next(None).await {
-                Ok(Some((data, _raw_size))) => {
-                    if data.is_empty() {
-                        break;
+        self.msg_channel().notify_response(request_id, Response::ViewSessionResponse(session_detail)).await;
+        Ok(())
+    }
+
+    pub async fn cancel_transfer(&self, session_id: u64) {
+        self.transfers_context.cancel_transfer(session_id).await;
+    }
+
+    pub async fn cancel_resource_transfer(&self, session_id: u64, resource_id: u64) {
+        self.transfers_context.cancel_resource(session_id, resource_id).await;
+    }
+
+    fn msg_channel(&self) -> &DirectMessageChannel {
+        self.msg_channel.get().expect("Message channel not initialized")
+    }
+
+    pub async fn process_message_packet(&self, request_id: String, request: Request) {
+        log::info!("[webrtc-client] Received message packet: {:?}", request);
+
+        if let Some(core) = self.core_request.get() {
+            match request {
+                Request::ViewSessionRequest(msg) => {
+                    core.response(CoreOperationOutput::P2P(P2POperationOutput::ReceivedViewSessionRequest {
+                        peer_id: self.peer.get().unwrap().id.clone(),
+                        request_id,
+                        password: msg.password,
+                        order_id: msg.order_id
+                    }))
+                    .await;
+                }
+                Request::ResourceNotification(msg) => {
+                    if let Some(res) = msg.resource {
+                        let resource = LocalResource {
+                            order_id: res.order_id,
+                            name: res.name.clone(),
+                            size: res.size as u64,
+                            path: LocalResourcePath::RelativePath {
+                                path: format!("received/session_{}/resource_{}", msg.session_order_id, res.order_id),
+                                is_private: false
+                            },
+                            thumbnail_path: None,
+                            r#type: ResourceTypeMessage::try_from(res.r#type).unwrap_or_default().into(),
+                            shelf_id: 0
+                        };
+                        core.response(CoreOperationOutput::P2P(P2POperationOutput::ReceivedResourceNotification {
+                            peer_id: self.peer.get().unwrap().id.clone(),
+                            session_order_id: msg.session_order_id,
+                            resource
+                        }))
+                        .await;
                     }
-                    let packet = data.to_vec().into_boxed_slice();
-                    sender
-                        .send((prefix, packet, false))
-                        .await
-                        .map_err(|e| WebRtcClientError::Transfer(format!("failed to send data packet: {e}")))?;
                 }
-                Ok(None) => {
-                    break;
-                }
-                Err(e) => {
-                    return Err(WebRtcClientError::Transfer(format!("failed to read chunk: {e}")));
-                }
+                _ => {}
             }
         }
-
-        let end_delimiter = TransferDelimiterShema::end(session_id, resource.order_id, compressed);
-        let end_packet = end_delimiter.as_bytes()?;
-        sender
-            .send((prefix, end_packet, true))
-            .await
-            .map_err(|e| WebRtcClientError::Transfer(format!("failed to send end delimiter: {e}")))?;
-
-        log::info!(
-            "[webrtc-client] Completed streaming resource {} for session {}",
-            resource.order_id,
-            session_id
-        );
-        Ok(())
     }
 
     async fn sending_loop(
@@ -757,106 +592,60 @@ impl WebRtcClient {
         mut outbound_rx: mpsc::Receiver<(u16, Box<[u8]>, bool)>,
         mut feedback_rx: mpsc::UnboundedReceiver<Feedback>
     ) {
-        const MAX_BUFFER_SIZE: usize = 1024 * 1024 * 5;
-        const MIN_BUFFER_SIZE: usize = CHUNK_SIZE;
-
-        let mut fec_sender = FecSender::new(1024);
-        let mut buff_counter = MAX_BUFFER_SIZE - CHUNK_SIZE;
-        let mut last_peer_block_id = 0u32;
-        const WINDOW_SIZE: u32 = 128;
+        let mut fec_senders: HashMap<u16, FecSender> = HashMap::new();
 
         loop {
-            let (packet, feedback) = {
-                let can_send = fec_sender.block_id.wrapping_sub(last_peer_block_id) < WINDOW_SIZE;
-                let fb_fut = feedback_rx.next().fuse();
-
-                if can_send {
-                    let reader_fut = outbound_rx.next().fuse();
-                    futures::pin_mut!(fb_fut);
-                    futures::pin_mut!(reader_fut);
-                    select_biased! {
-                        r = reader_fut => {
-                            r.map(|it| (Some(it), None)).unwrap_or((None, None))
-                        },
-                        fb = fb_fut => {
-                            fb.map(|f| (None, Some(f))).unwrap_or((None, None))
-                        },
-                    }
-                } else {
-                    futures::pin_mut!(fb_fut);
-                    select_biased! {
-                        fb = fb_fut => {
-                            fb.map(|f| (None, Some(f))).unwrap_or((None, None))
-                        },
-                        _ = tokio::time::sleep(Duration::from_millis(5)).fuse() => {
-                            (None, None)
-                        }
-                    }
-                }
-            };
-
-            let (reliable, action) = match (packet, feedback) {
-                (Some((prefix, packet, reliable)), _) => {
-                    let action = fec_sender.send(prefix, packet);
-                    (reliable, action)
-                }
-                (_, Some(fb)) => {
-                    match &fb {
-                        Feedback::Network(stats) => {
-                            if let Some(peer_block_id) = stats.current_block_id {
-                                last_peer_block_id = last_peer_block_id.max(peer_block_id);
-                            }
-                        }
-                        Feedback::Missing(missing) => {
-                            if let Some(first_block) = missing.blocks.first() {
-                                last_peer_block_id = last_peer_block_id.max(first_block.block_id);
-                            }
-                        }
-                    }
-                    (true, Ok(fec_sender.feedback(fb)))
-                }
-                _ => continue
-            };
-
-            match action {
-                Ok(FecAction::Framed(frames)) => {
-                    for frame in frames {
-                        let packet = frame.serialize();
-                        buff_counter += packet.len();
-                        if reliable {
-                            let _ = reliable_tx.send(packet).await;
+            select_biased! {
+                res = outbound_rx.next() => {
+                    if let Some((transfer_id, data, is_reliable)) = res {
+                        if is_reliable {
+                            let _ = reliable_tx.send(data).await;
                         } else {
-                            let _ = unreliable_tx.send(packet).await;
+                            let fec = fec_senders.entry(transfer_id).or_insert_with(|| FecSender::new(64));
+
+                            if let Ok(FecAction::Framed(frames)) = fec.send(0, data) {
+                                for frame in frames {
+                                    let _ = unreliable_tx.send(frame.serialize()).await;
+                                }
+                            }
                         }
                     }
                 }
-                Ok(FecAction::Retransmit(frames)) => {
-                    let frame_idx = frames.iter().map(|it| it.frame_idx).collect::<Vec<_>>();
-                    log::info!("Retransmit {:?} {:?}", frames.first().map(|it| it.block_id), frame_idx);
-                    for frame in frames {
-                        let packet = frame.serialize();
-                        buff_counter += packet.len();
-                        let _ = reliable_tx.send(packet).await;
+                res = feedback_rx.next() => {
+                    if let Some(feedback) = res {
+                        match feedback {
+                            Feedback::Network(stats) => {
+                                // Since transfer_id is missing from NetworkStats proto, we apply to all active senders
+                                for fec in fec_senders.values_mut() {
+                                    if let Some(rtt) = stats.rtt {
+                                        fec.set_rtt(rtt as u64);
+                                    }
+                                }
+                            }
+                            Feedback::Missing(blocks) => {
+                                // Since transfer_id is missing from MissingBlocks proto, we apply to all active senders
+                                // and let FecSender's inner logic handle block_id validation.
+                                for fec in fec_senders.values_mut() {
+                                    let action = fec.feedback(schema::devlog::bitbridge::fec_feedback::Feedback::Missing(blocks.clone()));
+                                    if let FecAction::Retransmit(frames) = action {
+                                        for frame in frames {
+                                            let _ = unreliable_tx.send(frame.serialize()).await;
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
-                    buff_counter = buff_counter.max(MAX_BUFFER_SIZE / 2);
                 }
-                Ok(FecAction::Terminated) => {
-                    log::info!("FEC sender terminated in sending_loop");
-                    break;
-                }
-                Ok(FecAction::Noop) => {
-                    continue;
-                }
-                Ok(_) | Err(_) => {
-                    continue;
-                }
-            }
-
-            if buff_counter >= MAX_BUFFER_SIZE {
-                let timeout = Duration::from_millis(20 * fec_sender.rtt().max(100));
-                tokio::time::sleep(timeout).await;
-                buff_counter = MIN_BUFFER_SIZE;
+                complete => break,
             }
         }
+    }
+}
+
+fn to_v6_mapped(addr: SocketAddr) -> SocketAddr {
+    match addr {
+        SocketAddr::V4(v4) => SocketAddr::new(v4.ip().to_ipv6_mapped().into(), v4.port()),
+        v6 => v6
     }
 }

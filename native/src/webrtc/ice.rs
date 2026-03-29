@@ -1,173 +1,256 @@
+use std::collections::HashSet;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
-use str0m::{Candidate, Rtc};
+use std::time::Duration;
+
+use bytecodec::{DecodeExt, EncodeExt};
+use str0m::Candidate;
+use stun_codec::rfc5389::methods::BINDING;
+use stun_codec::rfc5389::Attribute;
+use stun_codec::{Message, MessageClass, MessageDecoder, MessageEncoder, TransactionId};
 use thiserror::Error;
-use tokio::sync::{mpsc, Mutex};
-use tokio::task::JoinHandle;
-use tokio::time::{interval, Duration};
-use webrtc_ice::agent::agent_config::AgentConfig;
-use webrtc_ice::agent::Agent;
-use webrtc_ice::mdns::MulticastDnsMode;
-use webrtc_ice::network_type::NetworkType;
-use webrtc_ice::url::Url;
+use tokio::net::{lookup_host, UdpSocket};
+use tokio::task::JoinSet;
 
 use schema::devlog::rpc_signalling::server::IceConfig;
 
+const STUN_TIMEOUT: Duration = Duration::from_millis(1500);
+const STUN_MAX_PACKET: usize = 512;
+
 #[derive(Debug, Error)]
 pub enum IceError {
-    #[error("ICE error: {0}")]
-    Ice(#[from] webrtc_ice::Error),
-
     #[error("Candidate parsing error: {0}")]
-    Parse(String)
+    Parse(String),
+
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+
+    #[error("STUN error: {0}")]
+    Stun(String),
+
+    #[error("Gathering timed out")]
+    Timeout
 }
 
-pub struct IceAgent {
-    agent: Agent,
-    cache: Mutex<Vec<Candidate>>,
-    handle: Arc<Mutex<Option<JoinHandle<()>>>>
+fn build_binding_request() -> (TransactionId, Vec<u8>) {
+    let mut rng_bytes = [0u8; 12];
+    rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut rng_bytes);
+    let txn_id = TransactionId::new(rng_bytes);
+
+    let message = Message::<Attribute>::new(MessageClass::Request, BINDING, txn_id);
+    let bytes = MessageEncoder::new()
+        .encode_into_bytes(message)
+        .expect("STUN encode never fails for a simple binding request");
+
+    (txn_id, bytes)
 }
 
-impl IceAgent {
-    pub async fn new(config: IceConfig) -> Result<Self, IceError> {
-        let mut urls = vec![];
-        for url_str in &config.urls {
-            match Url::parse_url(url_str) {
-                Ok(mut url) => {
-                    if let Some(user) = &config.username {
-                        url.username = user.clone();
-                    }
-                    if let Some(cred) = &config.credential {
-                        url.password = cred.clone();
-                    }
-                    urls.push(url);
-                }
-                Err(e) => {
-                    log::warn!("[webrtc-client] Failed to parse ICE URL {}: {}", url_str, e);
-                }
-            }
-        }
+fn parse_binding_response(buf: &[u8], expected: TransactionId) -> Result<SocketAddr, &'static str> {
+    let decoded: Message<Attribute> = MessageDecoder::new()
+        .decode_from_bytes(buf)
+        .map_err(|_| "decode frame failed")?
+        .map_err(|_| "decode message failed")?;
 
-        let agent_config = AgentConfig {
-            urls,
-            network_types: vec![
-                NetworkType::Udp4,
-                NetworkType::Udp6,
-            ],
-            multicast_dns_mode: MulticastDnsMode::QueryAndGather,
-            ..Default::default()
-        };
-
-        let agent = Agent::new(agent_config).await?;
-
-        Ok(Self {
-            agent,
-            cache: Mutex::new(vec![]),
-            handle: Arc::new(Mutex::new(None))
-        })
+    if decoded.class() != MessageClass::SuccessResponse {
+        return Err("class is not SuccessResponse");
+    }
+    if decoded.transaction_id() != expected {
+        return Err("transaction ID mismatch");
     }
 
-    pub fn start_background_gathering(self: &Arc<Self>) {
-        let weak_inner = Arc::downgrade(self);
+    for attr in decoded.attributes() {
+        match attr {
+            Attribute::XorMappedAddress(xma) => return Ok(xma.address()),
+            Attribute::MappedAddress(ma) => return Ok(ma.address()),
+            _ => {}
+        }
+    }
+    Err("no MappedAddress or XorMappedAddress found")
+}
 
-        let handle = tokio::spawn(async move {
-            let mut interval = interval(Duration::from_secs(300));
-            loop {
-                interval.tick().await;
+fn is_usable_interface(iface: &if_addrs::Interface) -> bool {
+    if iface.is_loopback() {
+        return false;
+    }
 
-                let Some(inner) = weak_inner.upgrade() else {
-                    break;
-                };
+    let name = &iface.name;
+    if name.starts_with("docker") ||
+        name.starts_with("vbox") ||
+        name.starts_with("br-") ||
+        name.starts_with("veth") ||
+        name.starts_with("virbr")
+    {
+        return false;
+    }
 
-                let mut cache = inner.cache.lock().await;
-                cache.clear();
+    match iface.ip() {
+        IpAddr::V4(v4) => !v4.is_link_local(),
+        IpAddr::V6(v6) => {
+            let seg = v6.segments();
+            (seg[0] & 0xffc0) != 0xfe80
+        }
+    }
+}
 
-                let (tx, mut rx) = mpsc::channel(32);
-                inner.agent.on_candidate(Box::new(move |c| {
-                    let tx = tx.clone();
-                    Box::pin(async move {
-                        let _ = tx.send(c).await;
-                    })
-                }));
+fn to_v6_mapped(addr: SocketAddr) -> SocketAddr {
+    match addr {
+        SocketAddr::V4(v4) => SocketAddr::new(v4.ip().to_ipv6_mapped().into(), v4.port()),
+        v6 => v6
+    }
+}
 
-                if let Err(e) = inner.agent.restart(String::new(), String::new()).await {
-                    log::error!("[webrtc-client] Failed to restart ICE agent: {:?}", e);
-                    drop(cache);
-                    continue;
-                }
+fn parse_stun_urls(config: &IceConfig) -> Vec<String> {
+    config.urls.iter().filter(|u| u.starts_with("stun:")).cloned().collect()
+}
 
-                if let Err(e) = inner.agent.gather_candidates() {
-                    log::error!("[webrtc-client] Failed to start ICE gathering: {:?}", e);
-                    drop(cache);
-                    continue;
-                }
+fn stun_url_to_host_port(url: &str) -> Option<String> {
+    let stripped = url.strip_prefix("stun:")?;
+    if stripped.contains(':') {
+        Some(stripped.to_string())
+    } else {
+        Some(format!("{}:3478", stripped))
+    }
+}
 
-                while let Some(c) = rx.recv().await {
-                    if let Some(candidate) = c {
-                        let mut sdp_line = format!("candidate:{}", candidate.marshal());
+pub struct IceAgent;
 
-                        if sdp_line.contains(".local") {
-                            let parts: Vec<&str> = sdp_line.split_whitespace().collect();
-                            if parts.len() > 4 {
-                                let ip = candidate.addr().ip().to_string();
-                                let mut new_parts = parts;
-                                new_parts[4] = &ip;
-                                sdp_line = new_parts.join(" ");
-                            }
-                        }
+impl IceAgent {
+    pub async fn resolve_remote_candidates(sdp: &str) -> String {
+        let mut resolved_lines = Vec::new();
+        for line in sdp.lines() {
+            if line.contains("candidate:") {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() > 5 {
+                    let hostname = parts[4];
+                    if hostname.parse::<IpAddr>().is_err() {
+                        let port = parts[5];
+                        let lookup = format!("{}:{}", hostname, port);
 
-                        match Candidate::from_sdp_string(&sdp_line) {
-                            Ok(c) => {
-                                if !cache.iter().any(|existing| existing.to_sdp_string() == sdp_line) {
-                                    log::info!("[webrtc-client] Background gathered new candidate: {}", sdp_line);
-                                    cache.push(c);
+                        match lookup_host(lookup).await {
+                            Ok(mut addrs) => {
+                                if let Some(resolved) = addrs.next() {
+                                    let mut new_parts = parts;
+                                    let ip_str = resolved.ip().to_string();
+                                    new_parts[4] = &ip_str;
+                                    resolved_lines.push(new_parts.join(" "));
+                                    continue;
                                 }
                             }
                             Err(e) => {
-                                log::warn!(
-                                    "[webrtc-client] Failed to parse gathered candidate: {} - error: {:?}",
-                                    sdp_line,
-                                    e
-                                );
+                                log::warn!("[ice] Failed to resolve remote candidate {}: {}", hostname, e);
                             }
                         }
-                    } else {
-                        break;
                     }
                 }
             }
-        });
-
-        let handle_mutex = self.handle.clone();
-        tokio::spawn(async move {
-            let mut current_handle = handle_mutex.lock().await;
-            if let Some(old) = current_handle.replace(handle) {
-                old.abort();
-            }
-        });
+            resolved_lines.push(line.to_string());
+        }
+        resolved_lines.join("\r\n")
     }
 
-    pub async fn gather_candidates(&self, rtc: &mut Rtc) -> Result<(), IceError> {
-        let candidates = self.cache.lock().await;
+    pub async fn gather_candidates(socket: Arc<UdpSocket>, config: &IceConfig) -> Result<Vec<Candidate>, IceError> {
+        log::info!("[ice] Gathering candidates using config {config:?}");
 
-        if candidates.is_empty() {
-            log::warn!("[webrtc-client] No candidates available in cache, ICE connection might fail");
-        }
+        let mut candidates: HashSet<Candidate> = HashSet::new();
+        let local_port = socket.local_addr().map(|a| a.port()).unwrap_or(0);
 
-        for candidate in &*candidates {
-            rtc.add_local_candidate(candidate.clone());
-        }
+        if let Ok(ifaces) = if_addrs::get_if_addrs() {
+            for iface in ifaces {
+                if !is_usable_interface(&iface) {
+                    continue;
+                }
 
-        Ok(())
-    }
-}
-
-impl Drop for IceAgent {
-    fn drop(&mut self) {
-        let handle_mutex = self.handle.clone();
-        tokio::spawn(async move {
-            if let Some(h) = handle_mutex.lock().await.take() {
-                h.abort();
+                let addr = SocketAddr::new(iface.ip(), local_port);
+                match Candidate::host(addr, "udp") {
+                    Ok(c) => {
+                        log::debug!("[ice] Host candidate: {}", c);
+                        candidates.insert(c);
+                    }
+                    Err(e) => {
+                        log::warn!("[ice] Failed to create host candidate for {}: {:?}", addr, e);
+                    }
+                }
             }
-        });
+        }
+
+        let stun_urls = parse_stun_urls(config);
+        if !stun_urls.is_empty() {
+            let mut join_set: JoinSet<Option<(SocketAddr, SocketAddr)>> = JoinSet::new();
+
+            for url_str in &stun_urls {
+                let Some(host_port) = stun_url_to_host_port(url_str) else {
+                    log::warn!("[ice] Failed to parse STUN URL: {}", url_str);
+                    continue;
+                };
+
+                let addrs: Vec<SocketAddr> = match lookup_host(&host_port).await {
+                    Ok(addrs) => addrs.collect(),
+                    Err(e) => {
+                        log::warn!("[ice] Failed to resolve STUN server {}: {}", host_port, e);
+                        continue;
+                    }
+                };
+
+                for stun_addr in addrs {
+                    let sock = socket.clone();
+                    let base_addr = sock.local_addr().ok();
+                    let send_addr = to_v6_mapped(stun_addr);
+
+                    join_set.spawn(async move {
+                        let (txn_id, request_bytes) = build_binding_request();
+
+                        if let Err(e) = sock.send_to(&request_bytes, send_addr).await {
+                            log::warn!("[ice] Failed to send STUN request to {}: {}", stun_addr, e);
+                            return None;
+                        }
+
+                        let mut buf = [0u8; STUN_MAX_PACKET];
+                        match tokio::time::timeout(STUN_TIMEOUT, sock.recv_from(&mut buf)).await {
+                            Ok(Ok((n, _src))) => match parse_binding_response(&buf[..n], txn_id) {
+                                Ok(mapped) => {
+                                    let mut base = base_addr.unwrap_or_else(|| SocketAddr::new(mapped.ip(), mapped.port()));
+                                    if mapped.is_ipv4() && base.is_ipv6() {
+                                        base = SocketAddr::new(std::net::Ipv4Addr::UNSPECIFIED.into(), base.port());
+                                    } else if mapped.is_ipv6() && base.is_ipv4() {
+                                        base = SocketAddr::new(std::net::Ipv6Addr::UNSPECIFIED.into(), base.port());
+                                    }
+                                    Some((mapped, base))
+                                }
+                                Err(reason) => {
+                                    log::warn!("[ice] Invalid STUN response from {}: {}", stun_addr, reason);
+                                    None
+                                }
+                            },
+                            Ok(Err(e)) => {
+                                log::warn!("[ice] STUN recv error from {}: {}", stun_addr, e);
+                                None
+                            }
+                            Err(_) => {
+                                log::warn!("[ice] STUN timeout from {}", stun_addr);
+                                None
+                            }
+                        }
+                    });
+                }
+            }
+
+            while let Some(result) = join_set.join_next().await {
+                if let Ok(Some((mapped_addr, base_addr))) = result {
+                    match Candidate::server_reflexive(mapped_addr, base_addr, "udp") {
+                        Ok(c) => {
+                            log::debug!("[ice] Srflx candidate: {} (base: {})", c, base_addr);
+                            candidates.insert(c);
+                        }
+                        Err(e) => {
+                            log::warn!("[ice] Failed to create srflx candidate for {}: {:?}", mapped_addr, e);
+                        }
+                    }
+                }
+            }
+        }
+
+        let result: Vec<Candidate> = candidates.into_iter().collect();
+        log::info!("[ice] Gathered {:?} candidates", result);
+        Ok(result)
     }
 }

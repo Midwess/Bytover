@@ -5,9 +5,7 @@ use std::sync::{Arc, Weak};
 
 use futures_util::stream::FuturesUnordered;
 use futures_util::StreamExt;
-use socket2::{Domain, Protocol, Socket, Type};
 use thiserror::Error;
-use tokio::net::UdpSocket;
 use tokio::sync::{Mutex, OnceCell};
 
 use shared::app::operations::p2p::P2POperationOutput;
@@ -20,17 +18,12 @@ use shared::repository::transfer_session::TransferSessionRepository;
 use shared::shell::api::CoreRequest;
 
 use crate::webrtc::client::{WebRtcClient, WebRtcClientError};
-use crate::webrtc::ice::IceAgent;
 use crate::webrtc::signalling::SignalingClient;
-use crate::webrtc::socket::{SyncUdpSocket, SyncUdpSocketError};
 
 #[derive(Debug, Error)]
 pub enum WebRtcServerError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-
-    #[error("Socket error: {0}")]
-    Socket(#[from] SyncUdpSocketError),
 
     #[error("Signalling error: {0}")]
     Signalling(String),
@@ -75,8 +68,7 @@ pub struct WebRtcServer {
     transfer_session_repo: Arc<dyn TransferSessionRepository>,
     current_user: OnceCell<PeerEntity>,
     core_request: OnceCell<CoreRequest>,
-    running: AtomicBool,
-    ice_agent: OnceCell<Arc<IceAgent>>
+    running: AtomicBool
 }
 
 impl WebRtcServer {
@@ -94,8 +86,7 @@ impl WebRtcServer {
             transfer_session_repo,
             current_user: Default::default(),
             core_request: Default::default(),
-            running: AtomicBool::new(false),
-            ice_agent: OnceCell::new()
+            running: AtomicBool::new(false)
         })
     }
 
@@ -150,12 +141,19 @@ impl WebRtcServer {
         &self,
         peer_id: String,
         request_id: String,
-        session_message: Option<schema::devlog::bitbridge::P2pTransferSessionMessage>,
+        mut session_message: Option<schema::devlog::bitbridge::P2pTransferSessionMessage>,
         resources: Option<Vec<LocalResource>>,
         error: Option<CoreError>
     ) -> Result<(), WebRtcServerError> {
         let client = self.get_client(&peer_id).await?;
-        client.send_session_detail_response(request_id, session_message, resources, error).await?;
+
+        if let (Some(session), Some(_res)) = (session_message.take(), resources) {
+            session_message = Some(session);
+        }
+
+        let err_msg = error.map(|_| schema::devlog::bitbridge::PeerErrorsMessage::InvalidRequest);
+
+        client.send_session_detail_response(request_id, session_message, None, err_msg).await?;
         Ok(())
     }
 
@@ -201,18 +199,6 @@ impl WebRtcServer {
 
         log::info!("[webrtc-server] Starting with peer = {:?}", current_user.id);
 
-        let socket = if self.config.bind_addr.is_ipv6() {
-            let socket = Socket::new(Domain::IPV6, Type::DGRAM, Some(Protocol::UDP))?;
-            socket.set_only_v6(false)?;
-            socket.bind(&self.config.bind_addr.into())?;
-            UdpSocket::from_std(socket.into())?
-        } else {
-            UdpSocket::bind(self.config.bind_addr).await?
-        };
-        let socket = SyncUdpSocket::new(socket);
-        let local_addr = socket.local_addr().await?;
-        log::info!("[webrtc-server] UDP socket bound on {local_addr}");
-
         let Some(key) = current_user.signalling_id.clone() else {
             return Err(WebRtcServerError::Signalling(format!(
                 "No signalling id for peer {}",
@@ -225,7 +211,6 @@ impl WebRtcServer {
 
         let mut connect_futs: FuturesUnordered<_> = FuturesUnordered::new();
         let resource_repo = self.resource_repo.clone();
-        let transfer_session_repo = self.transfer_session_repo.clone();
         let current_user = current_user.clone();
         let server = self.clone();
 
@@ -248,42 +233,19 @@ impl WebRtcServer {
                         continue;
                     };
 
-                    let msg_offer = msg.offer;
-
-                    if let Some(offer) = msg_offer {
-                        if self.ice_agent.get().is_none() {
-                            let config = self.signalling
-                                .fetch_relay_config(&key)
-                                .await
-                                .map_err(|e| WebRtcServerError::Signalling(format!("{e}")))?;
-                            log::info!(
-                                "[webrtc-server] IceAgent created with {} STUN URLs",
-                                config.urls.len()
-                            );
-                            let agent = Arc::new(
-                                IceAgent::new(config).await.map_err(|e| {
-                                    WebRtcServerError::Signalling(format!("{e}"))
-                                })?,
-                            );
-                            agent.start_background_gathering();
-                            let _ = self.ice_agent.set(agent);
-                        }
-                        let agent = self.ice_agent.get().unwrap().clone();
-                        let client_socket = socket.clone();
+                    if let Some(offer) = msg.offer {
                         let user = current_user.clone();
                         let repo = resource_repo.clone();
-                        let _session_repo = transfer_session_repo.clone();
                         let srv = server.clone();
                         let rid = request_id.clone();
                         let off = offer.clone();
 
                         connect_futs.push(async move {
                             let result = WebRtcClient::connect(
+                                user.clone(),
                                 off,
-                                client_socket,
                                 &srv.signalling,
                                 rid,
-                                agent,
                                 repo,
                             )
                             .await;
