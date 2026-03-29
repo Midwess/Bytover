@@ -16,6 +16,8 @@ resolver = "2"
 [workspace.package]
 authors = ["Jimmy"]
 edition = "2021"
+rust-version = "1.74.0"
+version = "0.1.0"
 
 [profile.dev]
 debug-assertions = false

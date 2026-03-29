@@ -53,6 +53,8 @@ if-addrs = { workspace = true }
 mdns-sd = { workspace = true }
 turn = { workspace = true }
 webrtc-util = { workspace = true }
+turn-client-proto = "0.7.0"
+turn-types = "0.7.0"
 [target.uniffi-bindgen.dependencies]
 uniffi = { workspace = true }
 

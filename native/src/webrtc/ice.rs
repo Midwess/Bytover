@@ -116,7 +116,7 @@ impl IceAgent {
         resolved_lines.join("\r\n")
     }
 
-    pub async fn gather_candidates(socket: Arc<UdpSocket>, config: &IceConfig) -> Result<Vec<Candidate>, IceError> {
+    pub async fn gather_candidates(socket: Arc<UdpSocket>, config: &IceConfig) -> Result<(Vec<Candidate>, Option<turn_client_proto::udp::TurnClientUdp>), IceError> {
         log::info!("[ice] Gathering candidates using config {config:?}");
 
         let mut candidates: HashSet<Candidate> = HashSet::new();
@@ -248,8 +248,86 @@ impl IceAgent {
             }
         }
 
+        let mut relay_client = None;
+        if let Ok(Some((relay_cand, client))) = Self::connect_relay(&socket, config).await {
+            candidates.insert(relay_cand);
+            relay_client = Some(client);
+        }
+
         let result: Vec<Candidate> = candidates.into_iter().collect();
         log::info!("[ice] Gathered {:?} candidates", result);
-        Ok(result)
+        Ok((result, relay_client))
+    }
+
+    async fn connect_relay(socket: &Arc<UdpSocket>, config: &IceConfig) -> Result<Option<(Candidate, turn_client_proto::udp::TurnClientUdp)>, IceError> {
+        let username = match &config.username {
+            Some(u) => u.as_str(),
+            None => return Ok(None),
+        };
+        let password = match &config.credential {
+            Some(p) => p.as_str(),
+            None => return Ok(None),
+        };
+        let turn_urls: Vec<String> = config.urls.iter().filter(|u| u.starts_with("turn:")).cloned().collect();
+        if turn_urls.is_empty() { return Ok(None); }
+        let local_addr = socket.local_addr().unwrap_or_else(|_| SocketAddr::new(std::net::Ipv4Addr::UNSPECIFIED.into(), 0));
+        let credentials = turn_types::TurnCredentials::new(username, password);
+        let turn_config = turn_client_proto::api::TurnConfig::new(credentials);
+        
+        let mut turn_addr = None;
+        for url_str in &turn_urls {
+            let stripped = url_str.strip_prefix("turn:").unwrap();
+            let stripped = if let Some(idx) = stripped.find('?') { &stripped[..idx] } else { stripped };
+            let host_port = if stripped.contains(':') { stripped.to_string() } else { format!("{}:3478", stripped) };
+            log::info!("[ice] Looking up TURN host: {}", host_port);
+            if let Ok(mut addrs) = tokio::net::lookup_host(host_port.as_str()).await {
+                if let Some(addr) = addrs.next() { turn_addr = Some(to_v6_mapped(addr)); break; }
+            };
+        }
+        let send_addr = match turn_addr {
+            Some(a) => a,
+            None => {
+                log::warn!("[ice] Failed to resolve any TURN servers");
+                return Ok(None);
+            }
+        };
+        
+        let mut client = turn_client_proto::udp::TurnClientUdp::allocate(local_addr, send_addr, turn_config);
+        let start = tokio::time::Instant::now();
+        let stun_base = std::time::Instant::now();
+        let mut buf = [0u8; STUN_MAX_PACKET];
+        
+        while start.elapsed() < STUN_TIMEOUT {
+            let now = stun_proto::Instant::from_std(stun_base);
+            let _lowest_wait = match turn_client_proto::api::TurnClientApi::poll(&mut client, now) {
+                turn_client_proto::api::TurnPollRet::WaitUntil(wait) => wait,
+                turn_client_proto::api::TurnPollRet::Closed => break,
+                _ => now,
+            };
+            
+            if let Some(event) = turn_client_proto::api::TurnClientApi::poll_event(&mut client) {
+                if let turn_client_proto::api::TurnEvent::AllocationCreated(_, addr) = event {
+                    if let Ok(c) = Candidate::relayed(addr, local_addr, "udp") { return Ok(Some((c, client))); }
+                } else if let turn_client_proto::api::TurnEvent::AllocationCreateFailed(_) = event { break; }
+            }
+            
+            while let Some(transmit) = turn_client_proto::api::TurnClientApi::poll_transmit(&mut client, now) {
+                let _ = socket.send_to(&transmit.data, transmit.to).await;
+            }
+            
+            let remaining = STUN_TIMEOUT.saturating_sub(start.elapsed());
+            if remaining.is_zero() { break; }
+            
+            tokio::select! {
+                result = socket.recv_from(&mut buf) => {
+                    if let Ok((n, src)) = result {
+                        let transmit = stun_proto::agent::Transmit::new(&buf[..n], stun_proto::types::TransportType::Udp, src, local_addr);
+                        let _ = turn_client_proto::api::TurnClientApi::recv(&mut client, transmit, stun_proto::Instant::from_std(stun_base));
+                    }
+                }
+                _ = tokio::time::sleep(Duration::from_millis(500).min(remaining)) => {}
+            }
+        }
+        Ok(None)
     }
 }

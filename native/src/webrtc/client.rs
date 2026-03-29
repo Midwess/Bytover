@@ -177,7 +177,7 @@ impl WebRtcClient {
 
         let local_addr = socket.local_addr()?;
 
-        let candidates = IceAgent::gather_candidates(socket.clone(), &config)
+        let (candidates, _relay_client) = IceAgent::gather_candidates(socket.clone(), &config)
             .await
             .map_err(|e| WebRtcClientError::Signalling(format!("{e}")))?;
 

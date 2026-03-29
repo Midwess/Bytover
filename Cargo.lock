@@ -6218,6 +6218,8 @@ dependencies = [
  "tokio-util",
  "tonic 0.13.1",
  "turn 0.7.1",
+ "turn-client-proto",
+ "turn-types",
  "uniffi",
  "url",
  "webrtc-util 0.8.1",
@@ -11609,6 +11611,32 @@ dependencies = [
  "tokio",
  "tokio-util",
  "webrtc-util 0.17.1",
+]
+
+[[package]]
+name = "turn-client-proto"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cec842967ba2d894ed95048d99b95ae00df8ea61d63a074b14862955c34b5c0c"
+dependencies = [
+ "byteorder",
+ "smallvec",
+ "stun-proto",
+ "thiserror 2.0.18",
+ "tracing",
+ "turn-types",
+]
+
+[[package]]
+name = "turn-types"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e454dba020bdf40eb24ade8f83f6537f4b9b90db24c63568cef71188679eea1c"
+dependencies = [
+ "byteorder",
+ "stun-proto",
+ "stun-types",
+ "tracing",
 ]
 
 [[package]]
