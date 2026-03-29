@@ -98,20 +98,30 @@ pub mod channel_ids {
 }
 
 pub struct WebRtcApi {
-    stun_url: String
+    config: schema::devlog::rpc_signalling::server::IceConfig
 }
 
 impl WebRtcApi {
-    pub fn new(stun_url: impl Into<String>) -> Self {
-        Self { stun_url: stun_url.into() }
+    pub fn new(config: schema::devlog::rpc_signalling::server::IceConfig) -> Self {
+        Self { config }
     }
 
     pub fn create_peer_connection(&self) -> Result<Arc<RtcConnectionWrapper>, WebError> {
         let config = RtcConfiguration::new();
-        let stun_server = RtcIceServer::new();
-        stun_server.set_urls(&JsValue::from_str(&self.stun_url));
         let ice_servers_array = Array::new();
-        ice_servers_array.push(&stun_server);
+        
+        for url in &self.config.urls {
+            let server = RtcIceServer::new();
+            server.set_urls(&JsValue::from_str(url));
+            if let Some(user) = &self.config.username {
+                server.set_username(user);
+            }
+            if let Some(cred) = &self.config.credential {
+                server.set_credential(cred);
+            }
+            ice_servers_array.push(&server);
+        }
+        
         config.set_ice_servers(&ice_servers_array);
         let conn = RtcPeerConnection::new_with_configuration(&config).map_err(|e| WebError::Connection(format!("{:?}", e)))?;
         Ok(RtcConnectionWrapper::new(conn))

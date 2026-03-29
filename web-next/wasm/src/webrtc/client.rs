@@ -66,7 +66,15 @@ impl WebRtcClient {
     ) -> Result<Arc<Self>, WebRtcClientError> {
         log::info!("WebRtcClient connecting to peer {}", peer_id);
 
-        let api = WebRtcApi::new("stun:stun.l.google.com:19302");
+        let ice_config = signaling.fetch_relay_config(peer_id).await.unwrap_or_else(|e| {
+            log::warn!("Failed to fetch relay config: {:?}", e);
+            schema::devlog::rpc_signalling::server::IceConfig {
+                urls: vec!["stun:stun.l.google.com:19302".to_string()],
+                ..Default::default()
+            }
+        });
+
+        let api = WebRtcApi::new(ice_config);
         let connection = api.create_peer_connection()?;
 
         let (msg_inbound_tx, msg_inbound_rx) = unbounded();
