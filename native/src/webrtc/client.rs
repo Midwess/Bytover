@@ -185,6 +185,7 @@ impl WebRtcClient {
         }
 
         let offer_sdp = IceAgent::resolve_remote_candidates(&offer_message.sdp).await;
+        log::info!("Received offer sdp: {offer_sdp}");
         let offer = str0m::change::SdpOffer::from_sdp_string(&offer_sdp).map_err(|e| WebRtcClientError::SdpParse(format!("{e}")))?;
 
         let answer = rtc.sdp_api().accept_offer(offer).map_err(WebRtcClientError::Rtc)?;
@@ -193,24 +194,28 @@ impl WebRtcClient {
         api.add_channel_with_config(ChannelConfig {
             label: "reliable".to_string(),
             ordered: true,
+            negotiated: Some(1),
             ..Default::default()
         });
 
         api.add_channel_with_config(ChannelConfig {
             label: "unreliable".to_string(),
             ordered: false,
+            negotiated: Some(2),
             ..Default::default()
         });
 
         api.add_channel_with_config(ChannelConfig {
             label: "unordered_msg".to_string(),
             ordered: false,
+            negotiated: Some(3),
             ..Default::default()
         });
 
         api.add_channel_with_config(ChannelConfig {
             label: "ordered_msg".to_string(),
             ordered: true,
+            negotiated: Some(4),
             ..Default::default()
         });
 
@@ -232,6 +237,7 @@ impl WebRtcClient {
                     Output::Timeout(t) => t,
                     Output::Transmit(t) => {
                         let dest = to_v6_mapped(t.destination);
+                        log::info!("Sending data to {:?}", t.destination);
                         if let Err(e) = socket.send_to(&t.contents, dest).await {
                             log::warn!("[webrtc-client] Failed to send to {}: {}", dest, e);
                         }
@@ -241,6 +247,7 @@ impl WebRtcClient {
                     Output::Event(e) => {
                         match &e {
                             Event::Connected => {
+                                log::info!("Connected");
                                 is_connected = true;
                             }
                             Event::ChannelOpen(_, label) => {
@@ -292,7 +299,7 @@ impl WebRtcClient {
             tokio::select! {
                 res = socket.recv_from(&mut buf) => {
                     if let Ok((n, source)) = res {
-                        log::info!("Received data from {:?}", source);
+                        log::info!("Received from {:?}", source);
                         let receive = Receive::new(Protocol::Udp, source, local_addr, &buf[..n])
                             .map_err(|e| WebRtcClientError::Signalling(format!("{e}")))?;
                         rtc.handle_input(Input::Receive(Instant::now(), receive))?;
@@ -649,3 +656,5 @@ fn to_v6_mapped(addr: SocketAddr) -> SocketAddr {
         v6 => v6
     }
 }
+
+

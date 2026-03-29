@@ -119,27 +119,31 @@ impl IceAgent {
         let mut resolved_lines = Vec::new();
         for line in sdp.lines() {
             if line.contains("candidate:") {
-                let parts: Vec<&str> = line.split_whitespace().collect();
+                let mut parts: Vec<String> = line.split_whitespace().map(|s| s.to_string()).collect();
                 if parts.len() > 5 {
-                    let hostname = parts[4];
-                    if hostname.parse::<IpAddr>().is_err() {
-                        let port = parts[5];
+                    let hostname = &parts[4];
+                    let resolved_ip = if let Ok(ip) = hostname.parse::<std::net::IpAddr>() {
+                        Some(ip)
+                    } else {
+                        let port = &parts[5];
                         let lookup = format!("{}:{}", hostname, port);
-
-                        match lookup_host(lookup).await {
-                            Ok(mut addrs) => {
-                                if let Some(resolved) = addrs.next() {
-                                    let mut new_parts = parts;
-                                    let ip_str = resolved.ip().to_string();
-                                    new_parts[4] = &ip_str;
-                                    resolved_lines.push(new_parts.join(" "));
-                                    continue;
-                                }
-                            }
+                        match tokio::net::lookup_host(lookup).await {
+                            Ok(mut addrs) => addrs.next().map(|a| a.ip()),
                             Err(e) => {
                                 log::warn!("[ice] Failed to resolve remote candidate {}: {}", hostname, e);
+                                None
                             }
                         }
+                    };
+
+                    if let Some(ip) = resolved_ip {
+                        let mapped = match ip {
+                            std::net::IpAddr::V4(v4) => v4.to_ipv6_mapped().to_string(),
+                            std::net::IpAddr::V6(v6) => v6.to_string(),
+                        };
+                        parts[4] = mapped;
+                        resolved_lines.push(parts.join(" "));
+                        continue;
                     }
                 }
             }
