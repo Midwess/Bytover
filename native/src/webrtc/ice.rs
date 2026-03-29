@@ -175,74 +175,69 @@ impl IceAgent {
 
         let stun_urls = parse_stun_urls(config);
         if !stun_urls.is_empty() {
-            let mut join_set: JoinSet<Option<(SocketAddr, SocketAddr)>> = JoinSet::new();
-
+            let mut stuns_to_query = Vec::new();
             for url_str in &stun_urls {
-                let Some(host_port) = stun_url_to_host_port(url_str) else {
-                    log::warn!("[ice] Failed to parse STUN URL: {}", url_str);
-                    continue;
-                };
-
-                let addrs: Vec<SocketAddr> = match lookup_host(&host_port).await {
-                    Ok(addrs) => addrs.collect(),
-                    Err(e) => {
-                        log::warn!("[ice] Failed to resolve STUN server {}: {}", host_port, e);
-                        continue;
+                if let Some(host_port) = stun_url_to_host_port(url_str) {
+                    if let Ok(addrs) = tokio::net::lookup_host(&host_port).await {
+                        for stun_addr in addrs {
+                            stuns_to_query.push(stun_addr);
+                        }
                     }
-                };
-
-                for stun_addr in addrs {
-                    let sock = socket.clone();
-                    let base_addr = sock.local_addr().ok();
-                    let send_addr = to_v6_mapped(stun_addr);
-
-                    join_set.spawn(async move {
-                        let (txn_id, request_bytes) = build_binding_request();
-
-                        if let Err(e) = sock.send_to(&request_bytes, send_addr).await {
-                            log::warn!("[ice] Failed to send STUN request to {}: {}", stun_addr, e);
-                            return None;
-                        }
-
-                        let mut buf = [0u8; STUN_MAX_PACKET];
-                        match tokio::time::timeout(STUN_TIMEOUT, sock.recv_from(&mut buf)).await {
-                            Ok(Ok((n, _src))) => match parse_binding_response(&buf[..n], txn_id) {
-                                Ok(mapped) => {
-                                    let mut base = base_addr.unwrap_or_else(|| SocketAddr::new(mapped.ip(), mapped.port()));
-                                    if mapped.is_ipv4() && base.is_ipv6() {
-                                        base = SocketAddr::new(std::net::Ipv4Addr::UNSPECIFIED.into(), base.port());
-                                    } else if mapped.is_ipv6() && base.is_ipv4() {
-                                        base = SocketAddr::new(std::net::Ipv6Addr::UNSPECIFIED.into(), base.port());
-                                    }
-                                    Some((mapped, base))
-                                }
-                                Err(reason) => {
-                                    log::warn!("[ice] Invalid STUN response from {}: {}", stun_addr, reason);
-                                    None
-                                }
-                            },
-                            Ok(Err(e)) => {
-                                log::warn!("[ice] STUN recv error from {}: {}", stun_addr, e);
-                                None
-                            }
-                            Err(_) => {
-                                log::warn!("[ice] STUN timeout from {}", stun_addr);
-                                None
-                            }
-                        }
-                    });
                 }
             }
 
-            while let Some(result) = join_set.join_next().await {
-                if let Ok(Some((mapped_addr, base_addr))) = result {
-                    match Candidate::server_reflexive(mapped_addr, base_addr, "udp") {
-                        Ok(c) => {
-                            log::debug!("[ice] Srflx candidate: {} (base: {})", c, base_addr);
-                            candidates.insert(c);
+            let mut pending_transactions = std::collections::HashMap::new();
+            for stun_addr in stuns_to_query {
+                let send_addr = to_v6_mapped(stun_addr);
+                let (txn_id, request_bytes) = build_binding_request();
+
+                // Send 2 identical requests to trivially mitigate UDP packet loss
+                for _ in 0..2 {
+                    if let Err(e) = socket.send_to(&request_bytes, send_addr).await {
+                        log::warn!("[ice] Failed to send STUN request to {}: {}", stun_addr, e);
+                    }
+                }
+                pending_transactions.insert(txn_id, stun_addr);
+            }
+
+            let start = tokio::time::Instant::now();
+            let mut buf = [0u8; STUN_MAX_PACKET];
+
+            while !pending_transactions.is_empty() && start.elapsed() < STUN_TIMEOUT {
+                let timeout_duration = STUN_TIMEOUT.saturating_sub(start.elapsed());
+                if timeout_duration.is_zero() {
+                    break;
+                }
+
+                if let Ok(Ok((n, _src))) = tokio::time::timeout(timeout_duration, socket.recv_from(&mut buf)).await {
+                    let mut found_txn = None;
+
+                    for (txn_id, stun_addr) in pending_transactions.iter() {
+                        if let Ok(mapped) = parse_binding_response(&buf[..n], *txn_id) {
+                            found_txn = Some((*txn_id, *stun_addr, mapped));
+                            break;
                         }
-                        Err(e) => {
-                            log::warn!("[ice] Failed to create srflx candidate for {}: {:?}", mapped_addr, e);
+                    }
+
+                    if let Some((txn_id, _stun_addr, mapped)) = found_txn {
+                        pending_transactions.remove(&txn_id);
+
+                        let base_addr = socket.local_addr().ok();
+                        let mut base = base_addr.unwrap_or_else(|| SocketAddr::new(mapped.ip(), mapped.port()));
+                        if mapped.is_ipv4() && base.is_ipv6() {
+                            base = SocketAddr::new(std::net::Ipv4Addr::UNSPECIFIED.into(), base.port());
+                        } else if mapped.is_ipv6() && base.is_ipv4() {
+                            base = SocketAddr::new(std::net::Ipv6Addr::UNSPECIFIED.into(), base.port());
+                        }
+
+                        match Candidate::server_reflexive(mapped, base, "udp") {
+                            Ok(c) => {
+                                log::debug!("[ice] Srflx candidate: {} (base: {})", c, base);
+                                candidates.insert(c);
+                            }
+                            Err(e) => {
+                                log::warn!("[ice] Failed to create srflx candidate for {}: {:?}", mapped, e);
+                            }
                         }
                     }
                 }

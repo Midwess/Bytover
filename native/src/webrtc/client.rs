@@ -246,7 +246,6 @@ impl WebRtcClient {
                     Output::Timeout(t) => t,
                     Output::Transmit(t) => {
                         let dest = to_v6_mapped(t.destination);
-                        log::info!("Sending data to {:?}", t.destination);
                         if let Err(e) = socket.send_to(&t.contents, dest).await {
                             log::warn!("[webrtc-client] Failed to send to {}: {}", dest, e);
                         }
@@ -316,9 +315,16 @@ impl WebRtcClient {
                         } else {
                             local_v6_addr.unwrap_or(local_addr)
                         };
-                        let receive = Receive::new(Protocol::Udp, source, local, &buf[..n])
-                            .map_err(|e| WebRtcClientError::Signalling(format!("{e}")))?;
-                        rtc.handle_input(Input::Receive(Instant::now(), receive))?;
+                        match Receive::new(Protocol::Udp, source, local, &buf[..n]) {
+                            Ok(receive) => {
+                                if let Err(e) = rtc.handle_input(Input::Receive(Instant::now(), receive)) {
+                                    log::warn!("[webrtc-client] Input handle error during connect: {}", e);
+                                }
+                            }
+                            Err(e) => {
+                                log::warn!("[webrtc-client] Failed to create Receive from packet: {}", e);
+                            }
+                        }
                     }
                 }
                 _ = tokio::time::sleep(duration) => {
@@ -433,8 +439,15 @@ impl WebRtcClient {
                             } else {
                                 self.local_v6_addr.unwrap_or(self.local_addr)
                             };
-                            if let Ok(receive) = Receive::new(Protocol::Udp, source, local, &buf[..n]) {
-                                rtc.handle_input(Input::Receive(Instant::now(), receive))?;
+                            match Receive::new(Protocol::Udp, source, local, &buf[..n]) {
+                                Ok(receive) => {
+                                    if let Err(e) = rtc.handle_input(Input::Receive(Instant::now(), receive)) {
+                                        log::trace!("[webrtc-client] Input handle packet drop: {}", e);
+                                    }
+                                }
+                                Err(e) => {
+                                    log::trace!("[webrtc-client] Failed to parse Receive: {}", e);
+                                }
                             }
                         }
                     }
