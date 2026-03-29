@@ -125,6 +125,8 @@ pub struct WebRtcClient {
     rtc: YieldContainer<Rtc>,
     socket: YieldContainer<UdpSocket>,
     local_addr: SocketAddr,
+    local_v4_addr: Option<SocketAddr>,
+    local_v6_addr: Option<SocketAddr>,
 
     peer: OnceCell<Peer>,
     me: Peer,
@@ -180,7 +182,14 @@ impl WebRtcClient {
             .map_err(|e| WebRtcClientError::Signalling(format!("{e}")))?;
 
         let mut rtc = Rtc::new(Instant::now());
+        let mut local_v4_addr = None;
+        let mut local_v6_addr = None;
         for candidate in candidates {
+            if candidate.addr().is_ipv4() && local_v4_addr.is_none() {
+                local_v4_addr = Some(candidate.addr());
+            } else if candidate.addr().is_ipv6() && local_v6_addr.is_none() {
+                local_v6_addr = Some(candidate.addr());
+            }
             rtc.add_local_candidate(candidate);
         }
 
@@ -271,6 +280,8 @@ impl WebRtcClient {
                                 rtc: YieldContainer::new(rtc),
                                 socket: YieldContainer::new(Arc::try_unwrap(socket).expect("socket Arc should have single owner after gather")),
                                 local_addr,
+                                local_v4_addr,
+                                local_v6_addr,
                                 unreliable_data_tx: Default::default(),
                                 reliable_data_tx: Default::default(),
                                 msg_channel: Default::default(),
@@ -298,9 +309,14 @@ impl WebRtcClient {
 
             tokio::select! {
                 res = socket.recv_from(&mut buf) => {
-                    if let Ok((n, source)) = res {
-                        log::info!("Received from {:?}", source);
-                        let receive = Receive::new(Protocol::Udp, source, local_addr, &buf[..n])
+                    if let Ok((n, mut source)) = res {
+                        source = from_v6_mapped(source);
+                        let local = if source.is_ipv4() {
+                            local_v4_addr.unwrap_or(local_addr)
+                        } else {
+                            local_v6_addr.unwrap_or(local_addr)
+                        };
+                        let receive = Receive::new(Protocol::Udp, source, local, &buf[..n])
                             .map_err(|e| WebRtcClientError::Signalling(format!("{e}")))?;
                         rtc.handle_input(Input::Receive(Instant::now(), receive))?;
                     }
@@ -410,9 +426,14 @@ impl WebRtcClient {
 
                 tokio::select! {
                     res = socket.recv_from(&mut buf) => {
-                        if let Ok((n, source)) = res {
-                            log::info!("Received data from source {source:?}");
-                            if let Ok(receive) = Receive::new(Protocol::Udp, source, self.local_addr, &buf[..n]) {
+                        if let Ok((n, mut source)) = res {
+                            source = from_v6_mapped(source);
+                            let local = if source.is_ipv4() {
+                                self.local_v4_addr.unwrap_or(self.local_addr)
+                            } else {
+                                self.local_v6_addr.unwrap_or(self.local_addr)
+                            };
+                            if let Ok(receive) = Receive::new(Protocol::Udp, source, local, &buf[..n]) {
                                 rtc.handle_input(Input::Receive(Instant::now(), receive))?;
                             }
                         }
@@ -654,6 +675,21 @@ fn to_v6_mapped(addr: SocketAddr) -> SocketAddr {
     match addr {
         SocketAddr::V4(v4) => SocketAddr::new(v4.ip().to_ipv6_mapped().into(), v4.port()),
         v6 => v6
+    }
+}
+
+fn from_v6_mapped(addr: SocketAddr) -> SocketAddr {
+    match addr {
+        SocketAddr::V6(v6) => {
+            let octets = v6.ip().octets();
+            if octets[0..12] == [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff] {
+                let v4 = std::net::Ipv4Addr::new(octets[12], octets[13], octets[14], octets[15]);
+                SocketAddr::new(v4.into(), v6.port())
+            } else {
+                addr
+            }
+        }
+        _ => addr
     }
 }
 
