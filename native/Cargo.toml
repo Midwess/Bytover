@@ -48,11 +48,11 @@ thiserror.workspace = true
 rand.workspace = true
 tokio-tungstenite.workspace = true
 socket2.workspace = true
-stun_codec = { workspace = true }
-bytecodec = { workspace = true }
+stun-proto = { workspace = true }
 if-addrs = { workspace = true }
 mdns-sd = { workspace = true }
-
+turn = { workspace = true }
+webrtc-util = { workspace = true }
 [target.uniffi-bindgen.dependencies]
 uniffi = { workspace = true }
 

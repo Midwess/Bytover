@@ -78,8 +78,7 @@ tokio-tungstenite = "0.29.0"
 socket2 = "0.6.3"
 sha1 = "0.10.6"
 base64 = "0.22.1"
-stun_codec = "0.4.0"
-bytecodec = "0.5.0"
+stun-proto = { version = "2.0.0", features = ["std"] }
 if-addrs = "0.15.0"
 mdns-sd = "0.18.2"
 hmac = "0.12.1"
@@ -88,6 +87,8 @@ h3ron = "0.18.0"
 geo-types = "0.7"
 maxminddb = "0.24"
 jsonwebtoken = "9.3"
+turn = "0.7.1"
+webrtc-util = "0.8.0"
 
 [workspace.metadata.bin]
 cargo-xcode = { version = "=1.7.0" }

@@ -3,14 +3,15 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
 
-use bytecodec::{DecodeExt, EncodeExt};
 use str0m::Candidate;
-use stun_codec::rfc5389::methods::BINDING;
-use stun_codec::rfc5389::Attribute;
-use stun_codec::{Message, MessageClass, MessageDecoder, MessageEncoder, TransactionId};
+use stun_proto::agent::{StunAgent, StunAgentPollRet};
+use stun_proto::types::attribute::{AttributeType, MappedSocketAddr, XorMappedAddress};
+use stun_proto::types::message::{Message, MessageWriteVec, BINDING};
+use stun_proto::types::prelude::*;
+use stun_proto::types::TransportType;
+use stun_proto::Instant as StunInstant;
 use thiserror::Error;
-use tokio::net::{lookup_host, UdpSocket};
-use tokio::task::JoinSet;
+use tokio::net::UdpSocket;
 
 use schema::devlog::rpc_signalling::server::IceConfig;
 
@@ -29,73 +30,32 @@ pub enum IceError {
     Stun(String),
 
     #[error("Gathering timed out")]
-    Timeout
-}
-
-fn build_binding_request() -> (TransactionId, Vec<u8>) {
-    let mut rng_bytes = [0u8; 12];
-    rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut rng_bytes);
-    let txn_id = TransactionId::new(rng_bytes);
-
-    let message = Message::<Attribute>::new(MessageClass::Request, BINDING, txn_id);
-    let bytes = MessageEncoder::new()
-        .encode_into_bytes(message)
-        .expect("STUN encode never fails for a simple binding request");
-
-    (txn_id, bytes)
-}
-
-fn parse_binding_response(buf: &[u8], expected: TransactionId) -> Result<SocketAddr, &'static str> {
-    let decoded: Message<Attribute> = MessageDecoder::new()
-        .decode_from_bytes(buf)
-        .map_err(|_| "decode frame failed")?
-        .map_err(|_| "decode message failed")?;
-
-    if decoded.class() != MessageClass::SuccessResponse {
-        return Err("class is not SuccessResponse");
-    }
-    if decoded.transaction_id() != expected {
-        return Err("transaction ID mismatch");
-    }
-
-    for attr in decoded.attributes() {
-        match attr {
-            Attribute::XorMappedAddress(xma) => return Ok(xma.address()),
-            Attribute::MappedAddress(ma) => return Ok(ma.address()),
-            _ => {}
-        }
-    }
-    Err("no MappedAddress or XorMappedAddress found")
+    Timeout,
 }
 
 fn is_usable_interface(iface: &if_addrs::Interface) -> bool {
     if iface.is_loopback() {
         return false;
     }
-
     let name = &iface.name;
-    if name.starts_with("docker") ||
-        name.starts_with("vbox") ||
-        name.starts_with("br-") ||
-        name.starts_with("veth") ||
-        name.starts_with("virbr")
+    if name.starts_with("docker")
+        || name.starts_with("vbox")
+        || name.starts_with("br-")
+        || name.starts_with("veth")
+        || name.starts_with("virbr")
     {
         return false;
     }
-
     match iface.ip() {
         IpAddr::V4(v4) => !v4.is_link_local(),
-        IpAddr::V6(v6) => {
-            let seg = v6.segments();
-            (seg[0] & 0xffc0) != 0xfe80
-        }
+        IpAddr::V6(v6) => (v6.segments()[0] & 0xffc0) != 0xfe80,
     }
 }
 
 fn to_v6_mapped(addr: SocketAddr) -> SocketAddr {
     match addr {
         SocketAddr::V4(v4) => SocketAddr::new(v4.ip().to_ipv6_mapped().into(), v4.port()),
-        v6 => v6
+        v6 => v6,
     }
 }
 
@@ -112,6 +72,15 @@ fn stun_url_to_host_port(url: &str) -> Option<String> {
     }
 }
 
+fn extract_mapped_addr(msg: &Message<'_>) -> Option<SocketAddr> {
+    if let Ok(xma) = msg.attribute::<XorMappedAddress>() {
+        return Some(xma.addr(msg.transaction_id()));
+    }
+    msg.raw_attribute(AttributeType::new(0x0001))
+        .and_then(|raw| MappedSocketAddr::from_raw(&raw).ok())
+        .map(|m| m.addr())
+}
+
 pub struct IceAgent;
 
 impl IceAgent {
@@ -125,7 +94,6 @@ impl IceAgent {
                     if hostname.parse::<std::net::IpAddr>().is_err() {
                         let port = parts[5];
                         let lookup = format!("{}:{}", hostname, port);
-
                         match tokio::net::lookup_host(lookup).await {
                             Ok(mut addrs) => {
                                 if let Some(resolved) = addrs.next() {
@@ -159,7 +127,6 @@ impl IceAgent {
                 if !is_usable_interface(&iface) {
                     continue;
                 }
-
                 let addr = SocketAddr::new(iface.ip(), local_port);
                 match Candidate::host(addr, "udp") {
                     Ok(c) => {
@@ -175,69 +142,106 @@ impl IceAgent {
 
         let stun_urls = parse_stun_urls(config);
         if !stun_urls.is_empty() {
-            let mut stuns_to_query = Vec::new();
+            let local_addr = socket
+                .local_addr()
+                .unwrap_or_else(|_| SocketAddr::new(std::net::Ipv4Addr::UNSPECIFIED.into(), 0));
+
+            let stun_base = std::time::Instant::now();
+            let stun_now = || StunInstant::from_std(stun_base);
+
+            let mut pending: Vec<(StunAgent, SocketAddr)> = Vec::new();
+
             for url_str in &stun_urls {
                 if let Some(host_port) = stun_url_to_host_port(url_str) {
                     if let Ok(addrs) = tokio::net::lookup_host(&host_port).await {
                         for stun_addr in addrs {
-                            stuns_to_query.push(stun_addr);
+                            let send_addr = to_v6_mapped(stun_addr);
+                            let mut agent = StunAgent::builder(TransportType::Udp, local_addr)
+                                .remote_addr(send_addr)
+                                .build();
+                            let msg = Message::builder_request(BINDING, MessageWriteVec::new()).finish();
+                            match agent.send_request(msg, send_addr, stun_now()) {
+                                Ok(transmit) => {
+                                    let data = transmit.data.as_ref().to_vec();
+                                    let to = transmit.to;
+                                    drop(transmit);
+                                    match socket.send_to(&data, to).await {
+                                        Ok(_) => pending.push((agent, stun_addr)),
+                                        Err(e) => log::warn!("[ice] Send to {stun_addr}: {e}"),
+                                    }
+                                }
+                                Err(e) => log::warn!("[ice] send_request for {stun_addr}: {e:?}"),
+                            }
                         }
                     }
                 }
-            }
-
-            let mut pending_transactions = std::collections::HashMap::new();
-            for stun_addr in stuns_to_query {
-                let send_addr = to_v6_mapped(stun_addr);
-                let (txn_id, request_bytes) = build_binding_request();
-
-                // Send 2 identical requests to trivially mitigate UDP packet loss
-                for _ in 0..2 {
-                    if let Err(e) = socket.send_to(&request_bytes, send_addr).await {
-                        log::warn!("[ice] Failed to send STUN request to {}: {}", stun_addr, e);
-                    }
-                }
-                pending_transactions.insert(txn_id, stun_addr);
             }
 
             let start = tokio::time::Instant::now();
             let mut buf = [0u8; STUN_MAX_PACKET];
 
-            while !pending_transactions.is_empty() && start.elapsed() < STUN_TIMEOUT {
-                let timeout_duration = STUN_TIMEOUT.saturating_sub(start.elapsed());
-                if timeout_duration.is_zero() {
+            while !pending.is_empty() && start.elapsed() < STUN_TIMEOUT {
+                let remaining = STUN_TIMEOUT.saturating_sub(start.elapsed());
+                if remaining.is_zero() {
                     break;
                 }
 
-                if let Ok(Ok((n, _src))) = tokio::time::timeout(timeout_duration, socket.recv_from(&mut buf)).await {
-                    let mut found_txn = None;
-
-                    for (txn_id, stun_addr) in pending_transactions.iter() {
-                        if let Ok(mapped) = parse_binding_response(&buf[..n], *txn_id) {
-                            found_txn = Some((*txn_id, *stun_addr, mapped));
-                            break;
+                tokio::select! {
+                    result = socket.recv_from(&mut buf) => {
+                        let Ok((n, src)) = result else { break; };
+                        if let Ok(msg) = Message::from_bytes(&buf[..n]) {
+                            if msg.is_response() {
+                                let mut matched = None;
+                                for (idx, (agent, _)) in pending.iter_mut().enumerate() {
+                                    if agent.handle_stun_message(&msg, src) {
+                                        matched = Some(idx);
+                                        break;
+                                    }
+                                }
+                                if let Some(idx) = matched {
+                                    pending.remove(idx);
+                                    if let Some(mapped) = extract_mapped_addr(&msg) {
+                                        let mut base = local_addr;
+                                        if mapped.is_ipv4() && base.is_ipv6() {
+                                            base = SocketAddr::new(std::net::Ipv4Addr::UNSPECIFIED.into(), base.port());
+                                        } else if mapped.is_ipv6() && base.is_ipv4() {
+                                            base = SocketAddr::new(std::net::Ipv6Addr::UNSPECIFIED.into(), base.port());
+                                        }
+                                        match Candidate::server_reflexive(mapped, base, "udp") {
+                                            Ok(c) => {
+                                                log::debug!("[ice] Srflx candidate: {} (base: {})", c, base);
+                                                candidates.insert(c);
+                                            }
+                                            Err(e) => log::warn!("[ice] Srflx for {mapped}: {e:?}"),
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
+                    _ = tokio::time::sleep(Duration::from_millis(500).min(remaining)) => {}
+                }
 
-                    if let Some((txn_id, _stun_addr, mapped)) = found_txn {
-                        pending_transactions.remove(&txn_id);
-
-                        let base_addr = socket.local_addr().ok();
-                        let mut base = base_addr.unwrap_or_else(|| SocketAddr::new(mapped.ip(), mapped.port()));
-                        if mapped.is_ipv4() && base.is_ipv6() {
-                            base = SocketAddr::new(std::net::Ipv4Addr::UNSPECIFIED.into(), base.port());
-                        } else if mapped.is_ipv6() && base.is_ipv4() {
-                            base = SocketAddr::new(std::net::Ipv6Addr::UNSPECIFIED.into(), base.port());
+                let now = stun_now();
+                pending.retain_mut(|(agent, stun_addr)| {
+                    match agent.poll(now) {
+                        StunAgentPollRet::TransactionTimedOut(_) | StunAgentPollRet::TransactionCancelled(_) => {
+                            log::warn!("[ice] STUN timed out for {stun_addr}");
+                            false
                         }
+                        StunAgentPollRet::WaitUntil(_) => true,
+                    }
+                });
 
-                        match Candidate::server_reflexive(mapped, base, "udp") {
-                            Ok(c) => {
-                                log::debug!("[ice] Srflx candidate: {} (base: {})", c, base);
-                                candidates.insert(c);
-                            }
-                            Err(e) => {
-                                log::warn!("[ice] Failed to create srflx candidate for {}: {:?}", mapped, e);
-                            }
+                let now = stun_now();
+                for (agent, stun_addr) in pending.iter_mut() {
+                    let mut retransmits = Vec::new();
+                    while let Some(t) = agent.poll_transmit(now) {
+                        retransmits.push((t.data.to_vec(), t.to));
+                    }
+                    for (data, to) in retransmits {
+                        if let Err(e) = socket.send_to(&data, to).await {
+                            log::warn!("[ice] Retransmit to {stun_addr}: {e}");
                         }
                     }
                 }
