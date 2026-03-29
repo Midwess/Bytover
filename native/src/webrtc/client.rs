@@ -235,67 +235,140 @@ impl WebRtcClient {
 
         log::info!("[webrtc-client] Answer sent, waiting for connection and all channels");
 
+        let client = Arc::new(Self {
+            me,
+            rtc: YieldContainer::new(rtc),
+            socket: YieldContainer::new(Arc::try_unwrap(socket).expect("socket Arc should have single owner after gather")),
+            local_addr,
+            local_v4_addr,
+            local_v6_addr,
+            unreliable_data_tx: Default::default(),
+            reliable_data_tx: Default::default(),
+            msg_channel: Default::default(),
+            unordered_msg_channel: Default::default(),
+            peer: OnceCell::new(),
+            transfers_context: TransfersContext::new(),
+            core_request: OnceCell::new(),
+            resource_repo,
+            outbound_packet_sender: Default::default(),
+            transfer_feedback_sender: Default::default()
+        });
+
+        // Run the event loop until all data channels are established
+        client.clone().run(true).await?;
+
+        Ok(client)
+    }
+
+    pub async fn run(self: Arc<Self>, initial_connection: bool) -> Result<(), WebRtcClientError> {
+        let mut rtc_container = self.rtc.retrieve().await?;
+        let rtc = rtc_container.deref_mut();
+
+        let mut socket_container = self.socket.retrieve().await?;
+        let socket = socket_container.deref_mut();
+
+        // Only set up mpsc channels and sending loop for normal (non-initial) run
+        let (mut ordered_msg_rx, mut unordered_msg_rx, mut reliable_data_rx, mut unreliable_data_rx) = if !initial_connection {
+            let (ordered_msg_tx, ordered_msg_rx) = mpsc::channel::<Box<[u8]>>(64);
+            let (unordered_msg_tx, unordered_msg_rx) = mpsc::channel::<Box<[u8]>>(64);
+            let (reliable_tx, reliable_data_rx) = mpsc::channel::<Box<[u8]>>(64);
+            let (unreliable_tx, unreliable_data_rx) = mpsc::channel::<Box<[u8]>>(64);
+            let (outbound_tx, outbound_rx) = mpsc::channel::<(u16, Box<[u8]>, bool)>(64);
+            let (feedback_tx, feedback_rx) = mpsc::unbounded::<Feedback>();
+
+            let _ = self.msg_channel.set(DirectMessageChannel::new(ordered_msg_tx));
+            let _ = self.unordered_msg_channel.set(DirectMessageChannel::new(unordered_msg_tx));
+            let _ = self.reliable_data_tx.set(reliable_tx);
+            let _ = self.unreliable_data_tx.set(unreliable_tx);
+            let _ = self.outbound_packet_sender.set(outbound_tx);
+            let _ = self.transfer_feedback_sender.set(feedback_tx);
+
+            let mut reliable_tx_clone = self.reliable_data_tx.get().cloned().unwrap();
+            let mut unreliable_tx_clone = self.unreliable_data_tx.get().cloned().unwrap();
+
+            let this = self.clone();
+            tokio::spawn(async move {
+                this.sending_loop(&mut reliable_tx_clone, &mut unreliable_tx_clone, outbound_rx, feedback_rx).await;
+            });
+
+            (Some(ordered_msg_rx), Some(unordered_msg_rx), Some(reliable_data_rx), Some(unreliable_data_rx))
+        } else {
+            (None, None, None, None)
+        };
+
         let mut channels_opened: usize = 0;
         let mut is_connected = false;
-
         let mut buf = vec![0u8; 2000];
-        loop {
-            let timeout = {
-                let output = rtc.poll_output()?;
-                match output {
-                    Output::Timeout(t) => t,
-                    Output::Transmit(t) => {
-                        let dest = to_v6_mapped(t.destination);
-                        if let Err(e) = socket.send_to(&t.contents, dest).await {
-                            log::warn!("[webrtc-client] Failed to send to {}: {}", dest, e);
-                        }
 
-                        continue;
-                    }
-                    Output::Event(e) => {
-                        match &e {
-                            Event::Connected => {
-                                log::info!("Connected");
+        loop {
+            if !initial_connection && !rtc.is_alive() {
+                return Ok(());
+            }
+
+            let timeout: Instant = {
+                loop {
+                    match rtc.poll_output()? {
+                        Output::Timeout(t) => break t,
+                        Output::Transmit(t) => {
+                            let dest = to_v6_mapped(t.destination);
+                            if let Err(e) = socket.send_to(&t.contents, dest).await {
+                                log::warn!("[webrtc-client] Failed to send to {}: {}", dest, e);
+                            }
+                        }
+                        Output::Event(e) => match e {
+                            Event::Connected if initial_connection => {
+                                log::info!("[webrtc-client] Connected");
                                 is_connected = true;
                             }
-                            Event::ChannelOpen(_, label) => {
+                            Event::ChannelOpen(_, label) if initial_connection => {
                                 channels_opened += 1;
                                 log::info!("[webrtc-client] Channel {} opened (label: {})", channels_opened, label);
+
+                                if is_connected && channels_opened >= TOTAL_CHANNELS {
+                                    log::info!("[webrtc-client] All channels open, ready");
+                                    return Ok(());
+                                }
                             }
                             Event::IceConnectionStateChange(state) => {
                                 log::info!("[webrtc-client] ICE state: {:?}", state);
                                 if matches!(state, IceConnectionState::Disconnected) {
-                                    return Err(WebRtcClientError::Signalling("Peer disconnected during setup".into()));
+                                    if initial_connection {
+                                        return Err(WebRtcClientError::Signalling("Peer disconnected during setup".into()));
+                                    }
+                                    rtc.disconnect();
+                                }
+                            }
+                            Event::ChannelData(data) if !initial_connection => {
+                                if data.id == ORDERED_MSG_CHANNEL_ID {
+                                    if let Ok(msg) = PeerMessageBody::decode(&data.data[..]) {
+                                        let request_id = msg.request_id;
+                                        if let Some(response) = msg.response {
+                                            self.msg_channel().notify_response(request_id, response).await;
+                                        } else if let Some(request) = msg.request {
+                                            self.process_message_packet(request_id, request).await;
+                                        }
+                                    }
+                                } else if data.id == UNORDERED_MSG_CHANNEL_ID {
+                                    if let Ok(msg) = PeerMessageBody::decode(&data.data[..]) {
+                                        if let Some(Request::FecFeedback(feedback)) = msg.request {
+                                            if let (Some(sender), Some(inner)) =
+                                                (self.transfer_feedback_sender.get(), feedback.feedback)
+                                            {
+                                                match inner {
+                                                    schema::devlog::bitbridge::fec_feedback::Feedback::Network(stats) => {
+                                                        let _ = sender.unbounded_send(Feedback::Network(stats));
+                                                    }
+                                                    schema::devlog::bitbridge::fec_feedback::Feedback::Missing(blocks) => {
+                                                        let _ = sender.unbounded_send(Feedback::Missing(blocks));
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                             _ => {}
                         }
-
-                        if is_connected && channels_opened >= TOTAL_CHANNELS {
-                            log::info!("[webrtc-client] All channels open, ready");
-
-                            let client = Arc::new(Self {
-                                me,
-                                rtc: YieldContainer::new(rtc),
-                                socket: YieldContainer::new(Arc::try_unwrap(socket).expect("socket Arc should have single owner after gather")),
-                                local_addr,
-                                local_v4_addr,
-                                local_v6_addr,
-                                unreliable_data_tx: Default::default(),
-                                reliable_data_tx: Default::default(),
-                                msg_channel: Default::default(),
-                                unordered_msg_channel: Default::default(),
-                                peer: OnceCell::new(),
-                                transfers_context: TransfersContext::new(),
-                                core_request: OnceCell::new(),
-                                resource_repo,
-                                outbound_packet_sender: Default::default(),
-                                transfer_feedback_sender: Default::default()
-                            });
-
-                            return Ok(client);
-                        }
-                        continue;
                     }
                 }
             };
@@ -311,18 +384,18 @@ impl WebRtcClient {
                     if let Ok((n, mut source)) = res {
                         source = from_v6_mapped(source);
                         let local = if source.is_ipv4() {
-                            local_v4_addr.unwrap_or(local_addr)
+                            self.local_v4_addr.unwrap_or(self.local_addr)
                         } else {
-                            local_v6_addr.unwrap_or(local_addr)
+                            self.local_v6_addr.unwrap_or(self.local_addr)
                         };
                         match Receive::new(Protocol::Udp, source, local, &buf[..n]) {
                             Ok(receive) => {
                                 if let Err(e) = rtc.handle_input(Input::Receive(Instant::now(), receive)) {
-                                    log::warn!("[webrtc-client] Input handle error during connect: {}", e);
+                                    log::trace!("[webrtc-client] Input handle packet drop: {}", e);
                                 }
                             }
                             Err(e) => {
-                                log::warn!("[webrtc-client] Failed to create Receive from packet: {}", e);
+                                log::trace!("[webrtc-client] Failed to parse Receive: {}", e);
                             }
                         }
                     }
@@ -330,166 +403,28 @@ impl WebRtcClient {
                 _ = tokio::time::sleep(duration) => {
                     rtc.handle_input(Input::Timeout(Instant::now()))?;
                 }
+                Some(data) = async { ordered_msg_rx.as_mut()?.next().await }, if !initial_connection => {
+                    if let Some(mut ch) = rtc.channel(ORDERED_MSG_CHANNEL_ID) {
+                        ch.write(true, &data).ok();
+                    }
+                }
+                Some(data) = async { unordered_msg_rx.as_mut()?.next().await }, if !initial_connection => {
+                    if let Some(mut ch) = rtc.channel(UNORDERED_MSG_CHANNEL_ID) {
+                        ch.write(true, &data).ok();
+                    }
+                }
+                Some(data) = async { reliable_data_rx.as_mut()?.next().await }, if !initial_connection => {
+                    if let Some(mut ch) = rtc.channel(RELIABLE_DATA_CHANNEL_ID) {
+                        ch.write(true, &data).ok();
+                    }
+                }
+                Some(data) = async { unreliable_data_rx.as_mut()?.next().await }, if !initial_connection => {
+                    if let Some(mut ch) = rtc.channel(UNRELIABLE_DATA_CHANNEL_ID) {
+                        ch.write(true, &data).ok();
+                    }
+                }
             }
         }
-    }
-
-    pub async fn run(self: Arc<Self>) -> Result<(), WebRtcClientError> {
-        let mut rtc_container = self.rtc.retrieve().await?;
-        let rtc = rtc_container.deref_mut();
-        
-        let mut socket_container = self.socket.retrieve().await?;
-        let socket = socket_container.deref_mut();
-
-        let (ordered_msg_tx, mut ordered_msg_rx) = mpsc::channel::<Box<[u8]>>(64);
-        let (unordered_msg_tx, mut unordered_msg_rx) = mpsc::channel::<Box<[u8]>>(64);
-        let (reliable_tx, mut reliable_data_rx) = mpsc::channel::<Box<[u8]>>(64);
-        let (unreliable_tx, mut unreliable_data_rx) = mpsc::channel::<Box<[u8]>>(64);
-        let (outbound_tx, outbound_rx) = mpsc::channel::<(u16, Box<[u8]>, bool)>(64);
-        let (feedback_tx, feedback_rx) = mpsc::unbounded::<Feedback>();
-
-        let _ = self.msg_channel.set(DirectMessageChannel::new(ordered_msg_tx));
-        let _ = self.unordered_msg_channel.set(DirectMessageChannel::new(unordered_msg_tx));
-        let _ = self.reliable_data_tx.set(reliable_tx);
-        let _ = self.unreliable_data_tx.set(unreliable_tx);
-        let _ = self.outbound_packet_sender.set(outbound_tx);
-        let _ = self.transfer_feedback_sender.set(feedback_tx);
-
-        let mut reliable_tx_clone = self.reliable_data_tx.get().cloned().unwrap();
-        let mut unreliable_tx_clone = self.unreliable_data_tx.get().cloned().unwrap();
-
-        let this = self.clone();
-        let sending_handle = tokio::spawn(async move {
-            this.sending_loop(&mut reliable_tx_clone, &mut unreliable_tx_clone, outbound_rx, feedback_rx).await;
-        });
-
-        let run_loop = async {
-            let mut buf = vec![0u8; 2000];
-            loop {
-                let is_alive = rtc.is_alive();
-
-                if !is_alive {
-                    return Ok::<(), WebRtcClientError>(());
-                }
-
-                let timeout: Instant = {
-                    loop {
-                        match rtc.poll_output()? {
-                            Output::Timeout(t) => break t,
-                            Output::Transmit(t) => {
-                                let dest = to_v6_mapped(t.destination);
-                                if let Err(e) = socket.send_to(&t.contents, dest).await {
-                                    log::warn!("[webrtc-client] Failed to send to {}: {}", dest, e);
-                                }
-                            }
-                            Output::Event(e) => match e {
-                                Event::IceConnectionStateChange(state) => {
-                                    log::info!("[webrtc-client] ICE state: {:?}", state);
-                                    if matches!(state, IceConnectionState::Disconnected) {
-                                        rtc.disconnect();
-                                    }
-                                }
-                                Event::ChannelData(data) => {
-                                    if data.id == ORDERED_MSG_CHANNEL_ID {
-                                        if let Ok(msg) = PeerMessageBody::decode(&data.data[..]) {
-                                            let request_id = msg.request_id;
-                                            if let Some(response) = msg.response {
-                                                self.msg_channel().notify_response(request_id, response).await;
-                                            } else if let Some(request) = msg.request {
-                                                self.process_message_packet(request_id, request).await;
-                                            }
-                                        }
-                                    } else if data.id == UNORDERED_MSG_CHANNEL_ID {
-                                        if let Ok(msg) = PeerMessageBody::decode(&data.data[..]) {
-                                            if let Some(Request::FecFeedback(feedback)) = msg.request {
-                                                if let (Some(sender), Some(inner)) =
-                                                    (self.transfer_feedback_sender.get(), feedback.feedback)
-                                                {
-                                                    match inner {
-                                                        schema::devlog::bitbridge::fec_feedback::Feedback::Network(stats) => {
-                                                            let _ = sender.unbounded_send(Feedback::Network(stats));
-                                                        }
-                                                        schema::devlog::bitbridge::fec_feedback::Feedback::Missing(blocks) => {
-                                                            let _ = sender.unbounded_send(Feedback::Missing(blocks));
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-                };
-
-                let duration = timeout.saturating_duration_since(Instant::now());
-                if duration.is_zero() {
-                    rtc.handle_input(Input::Timeout(Instant::now()))?;
-                    continue;
-                }
-
-                tokio::select! {
-                    res = socket.recv_from(&mut buf) => {
-                        if let Ok((n, mut source)) = res {
-                            source = from_v6_mapped(source);
-                            let local = if source.is_ipv4() {
-                                self.local_v4_addr.unwrap_or(self.local_addr)
-                            } else {
-                                self.local_v6_addr.unwrap_or(self.local_addr)
-                            };
-                            match Receive::new(Protocol::Udp, source, local, &buf[..n]) {
-                                Ok(receive) => {
-                                    if let Err(e) = rtc.handle_input(Input::Receive(Instant::now(), receive)) {
-                                        log::trace!("[webrtc-client] Input handle packet drop: {}", e);
-                                    }
-                                }
-                                Err(e) => {
-                                    log::trace!("[webrtc-client] Failed to parse Receive: {}", e);
-                                }
-                            }
-                        }
-                    }
-                    _ = tokio::time::sleep(duration) => {
-                        rtc.handle_input(Input::Timeout(Instant::now()))?;
-                    }
-                    Some(data) = ordered_msg_rx.next() => {
-                        if let Some(mut ch) = rtc.channel(ORDERED_MSG_CHANNEL_ID) {
-                            ch.write(true, &data).ok();
-                        }
-                    }
-                    Some(data) = unordered_msg_rx.next() => {
-                        if let Some(mut ch) = rtc.channel(UNORDERED_MSG_CHANNEL_ID) {
-                            ch.write(true, &data).ok();
-                        }
-                    }
-                    Some(data) = reliable_data_rx.next() => {
-                        if let Some(mut ch) = rtc.channel(RELIABLE_DATA_CHANNEL_ID) {
-                            ch.write(true, &data).ok();
-                        }
-                    }
-                    Some(data) = unreliable_data_rx.next() => {
-                        if let Some(mut ch) = rtc.channel(UNRELIABLE_DATA_CHANNEL_ID) {
-                            ch.write(true, &data).ok();
-                        }
-                    }
-                }
-            }
-        };
-
-        tokio::select! {
-            result = run_loop => {
-                log::info!("[webrtc-client] Run loop terminated, stopping run() {:?}", result);
-                result
-            },
-            result = sending_handle => {
-                log::info!("[webrtc-client] Sending loop terminated, stopping run() {:?}", result);
-                Ok(())
-            },
-        }?;
-
-        Ok(())
     }
 
     pub fn start_core_stream(&self, core_request: CoreRequest) {
@@ -705,5 +640,3 @@ fn from_v6_mapped(addr: SocketAddr) -> SocketAddr {
         _ => addr
     }
 }
-
-
