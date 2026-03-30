@@ -43,6 +43,7 @@ pub struct WebRtcClient {
     unordered_data_channel: Arc<RtcDataChannelWrapper>,
     ordered_data_channel: Arc<RtcDataChannelWrapper>,
     transfers_context: TransfersContext,
+    me: OnceCell<PeerEntity>,
     peer: OnceCell<PeerEntity>,
     core_request: OnceCell<CoreRequest>,
     resource_repo: Arc<dyn LocalResourceRepository>,
@@ -124,6 +125,7 @@ impl WebRtcClient {
             unordered_data_channel: unordered_channel.clone(),
             ordered_data_channel: ordered_channel.clone(),
             transfers_context: TransfersContext::new(),
+            me: OnceCell::new(),
             peer: OnceCell::new(),
             core_request: OnceCell::new(),
             resource_repo,
@@ -178,6 +180,7 @@ impl WebRtcClient {
 
     pub async fn introduce(&self, current_user: &PeerEntity) -> Result<(), WebRtcClientError> {
         log::info!("Starting introduce handshake");
+        let _ = self.me.set(current_user.clone());
 
         let introduce_request = schema::devlog::bitbridge::IntroduceRequestMessage {
             mine: schema::devlog::bitbridge::PeerMessage {
@@ -225,6 +228,7 @@ impl WebRtcClient {
         current_user: &PeerEntity
     ) -> Result<(), WebRtcClientError> {
         log::info!("Creating WebRtcClient from introduce request");
+        let _ = self.me.set(current_user.clone());
 
         let peer = PeerEntity {
             id: msg.mine.peer_id.clone(),
@@ -489,6 +493,39 @@ impl WebRtcClient {
 
     pub async fn process_message_packet(&self, request_id: String, msg: Request) {
         match msg {
+            Request::IntroduceRequest(introduce_msg) => {
+                log::info!("Received introduce request from peer");
+                let peer = PeerEntity {
+                    id: introduce_msg.mine.peer_id.clone(),
+                    name: introduce_msg.mine.name.clone(),
+                    avatar_url: introduce_msg.mine.avatar_url.clone(),
+                    device: introduce_msg.mine.device.clone().into(),
+                    email: introduce_msg.mine.email.clone(),
+                    user_id: None,
+                    signalling_id: None
+                };
+                log::info!("Remote peer: {:?}", peer.id);
+                let _ = self.set_peer(peer);
+
+                if let Some(me) = self.me.get() {
+                    let response = schema::devlog::bitbridge::IntroduceResponseMessage {
+                        peer: schema::devlog::bitbridge::PeerMessage {
+                            peer_id: me.id.clone(),
+                            name: me.name.clone(),
+                            avatar_url: me.avatar_url.clone(),
+                            device: me.device.clone().into(),
+                            email: me.email.clone()
+                        }
+                    };
+                    if let Some(msg_channel) = self.msg_channel.get() {
+                        let _ = msg_channel
+                            .send_response(request_id, Response::IntroduceResponse(response))
+                            .await;
+                    }
+                } else {
+                    log::warn!("Cannot respond to IntroduceRequest: current user not set (call introduce() first)");
+                }
+            }
             Request::CancelRequest(request) => {
                 log::info!("Received cancel request {:?}", request);
                 if let Some(resource_id) = request.resource_id {

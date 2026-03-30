@@ -31,10 +31,7 @@ use shared::repository::local_resource::LocalResourceRepository;
 use shared::shell::api::CoreRequest;
 use shared::utils::compression::is_compressible;
 
-use crate::webrtc::rtc::{
-    RtcClient, ORDERED_MSG_CHANNEL_ID, RELIABLE_DATA_CHANNEL_ID, UNORDERED_MSG_CHANNEL_ID,
-    UNRELIABLE_DATA_CHANNEL_ID,
-};
+use crate::webrtc::rtc::RtcClient;
 use str0m::Event;
 use crate::webrtc::signalling::SignalingClient;
 
@@ -212,6 +209,8 @@ impl WebRtcClient {
         let mut rtc_container = self.rtc_client.retrieve().await?;
         let rtc = rtc_container.deref_mut();
 
+        let cids = *rtc.channel_ids();
+
         let WebRtcEventChannels {
             mut ordered_msg_rx,
             mut unordered_msg_rx,
@@ -233,15 +232,14 @@ impl WebRtcClient {
                 log::info!("Sending loop has been finished with result {:?}", handle.await);
                 break;
             }
-                
+
             while let Some(event) = rtc.poll_event().await? {
                 match event {
                     Event::ChannelData(data) => {
                         let id = data.id;
                         let data = data.data;
-                        if id == ORDERED_MSG_CHANNEL_ID {
+                        if id == cids.ordered_msg {
                             if let Ok(msg) = PeerMessageBody::decode(&data[..]) {
-                                log::info!("Received request {msg:?}");
                                 let request_id = msg.request_id;
                                 if let Some(response) = msg.response {
                                     self.msg_channel().notify_response(request_id, response).await;
@@ -249,7 +247,7 @@ impl WebRtcClient {
                                     self.process_message_packet(request_id, request).await;
                                 }
                             }
-                        } else if id == UNORDERED_MSG_CHANNEL_ID {
+                        } else if id == cids.unordered_msg {
                             if let Ok(msg) = PeerMessageBody::decode(&data[..]) {
                                 if let Some(Request::FecFeedback(feedback)) = msg.request {
                                     if let (Some(sender), Some(inner)) =
@@ -279,16 +277,16 @@ impl WebRtcClient {
             tokio::select! {
                 _ = rtc.wait_for_input(timeout) => {}
                 Some(data) = ordered_msg_rx.next() => {
-                    rtc.send(&data, ORDERED_MSG_CHANNEL_ID);
+                    rtc.send(&data, cids.ordered_msg);
                 }
                 Some(data) = unordered_msg_rx.next() => {
-                    rtc.send(&data, UNORDERED_MSG_CHANNEL_ID);
+                    rtc.send(&data, cids.unordered_msg);
                 }
                 Some(data) = reliable_data_rx.next() => {
-                    rtc.send(&data, RELIABLE_DATA_CHANNEL_ID);
+                    rtc.send(&data, cids.reliable);
                 }
                 Some(data) = unreliable_data_rx.next() => {
-                    rtc.send(&data, UNRELIABLE_DATA_CHANNEL_ID);
+                    rtc.send(&data, cids.unreliable);
                 }
             }
         }
@@ -534,6 +532,19 @@ impl WebRtcClient {
                 } else {
                     self.transfers_context.cancel_transfer(req.session_id).await;
                 }
+            }
+            Request::IntroduceRequest(msg) => {
+                log::info!("[webrtc-client] Received introduce request from peer");
+                let peer = Peer::from(msg.mine);
+                log::info!("[webrtc-client] Remote peer: {:?}", peer.id);
+                let _ = self.peer.set(peer);
+
+                let response = IntroduceResponseMessage {
+                    peer: PeerMessage::from(self.me.clone())
+                };
+                let _ = self.msg_channel()
+                    .send_response(request_id, Response::IntroduceResponse(response))
+                    .await;
             }
             Request::FecFeedback(feedback) => {
                 if let Some(feedback) = feedback.feedback {

@@ -15,15 +15,22 @@ use crate::webrtc::client::WebRtcClientError;
 use crate::webrtc::ice::IceAgent;
 use crate::webrtc::signalling::SignalingClient;
 
-const fn channel_id(raw: usize) -> ChannelId {
-    unsafe { std::mem::transmute(raw) }
+/// The negotiated SCTP stream IDs shared with the WASM peer.
+/// These match the `channel_ids` constants on the WASM side.
+pub const RELIABLE_STREAM_ID: u16 = 1;
+pub const UNRELIABLE_STREAM_ID: u16 = 2;
+pub const UNORDERED_MSG_STREAM_ID: u16 = 3;
+pub const ORDERED_MSG_STREAM_ID: u16 = 4;
+
+/// Actual str0m ChannelIds assigned at runtime.
+/// ChannelId is an opaque sequential counter — NOT the SCTP stream id.
+#[derive(Debug, Clone, Copy)]
+pub struct ChannelIds {
+    pub reliable: ChannelId,
+    pub unreliable: ChannelId,
+    pub unordered_msg: ChannelId,
+    pub ordered_msg: ChannelId,
 }
-
-pub const RELIABLE_DATA_CHANNEL_ID: ChannelId = channel_id(1);
-pub const UNRELIABLE_DATA_CHANNEL_ID: ChannelId = channel_id(2);
-pub const UNORDERED_MSG_CHANNEL_ID: ChannelId = channel_id(3);
-pub const ORDERED_MSG_CHANNEL_ID: ChannelId = channel_id(4);
-
 
 pub struct RtcClient {
     rtc: Rtc,
@@ -33,6 +40,7 @@ pub struct RtcClient {
     local_v6_addr: Option<SocketAddr>,
     buf: Vec<u8>,
     cached_timeout: Instant,
+    channel_ids: ChannelIds,
 }
 
 impl RtcClient {
@@ -87,30 +95,37 @@ impl RtcClient {
         let answer = rtc.sdp_api().accept_offer(offer).map_err(WebRtcClientError::Rtc)?;
 
         let mut api = rtc.sdp_api();
-        api.add_channel_with_config(ChannelConfig {
+        let reliable_id = api.add_channel_with_config(ChannelConfig {
             label: "reliable".to_string(),
             ordered: true,
-            negotiated: Some(1),
+            negotiated: Some(RELIABLE_STREAM_ID),
             ..Default::default()
         });
-        api.add_channel_with_config(ChannelConfig {
+        let unreliable_id = api.add_channel_with_config(ChannelConfig {
             label: "unreliable".to_string(),
             ordered: false,
-            negotiated: Some(2),
+            negotiated: Some(UNRELIABLE_STREAM_ID),
             ..Default::default()
         });
-        api.add_channel_with_config(ChannelConfig {
+        let unordered_msg_id = api.add_channel_with_config(ChannelConfig {
             label: "unordered_msg".to_string(),
             ordered: false,
-            negotiated: Some(3),
+            negotiated: Some(UNORDERED_MSG_STREAM_ID),
             ..Default::default()
         });
-        api.add_channel_with_config(ChannelConfig {
+        let ordered_msg_id = api.add_channel_with_config(ChannelConfig {
             label: "ordered_msg".to_string(),
             ordered: true,
-            negotiated: Some(4),
+            negotiated: Some(ORDERED_MSG_STREAM_ID),
             ..Default::default()
         });
+        let channel_ids = ChannelIds {
+            reliable: reliable_id,
+            unreliable: unreliable_id,
+            unordered_msg: unordered_msg_id,
+            ordered_msg: ordered_msg_id,
+        };
+        log::info!("[rtc-client] Channel IDs assigned: {:?}", channel_ids);
 
         signalling
             .send_answer(answer.to_sdp_string(), request_id)
@@ -127,6 +142,7 @@ impl RtcClient {
             local_v6_addr,
             buf: vec![0u8; 2000],
             cached_timeout: Instant::now(),
+            channel_ids,
         };
 
         // Negotiated channels (negotiated: Some(id)) are implicitly open once
@@ -220,6 +236,10 @@ impl RtcClient {
         } else {
             false
         }
+    }
+
+    pub fn channel_ids(&self) -> &ChannelIds {
+        &self.channel_ids
     }
 
     pub fn is_alive(&self) -> bool {
