@@ -3,7 +3,9 @@ use crate::app::core::model_events::{ConnectionRecovered, TransferSessionModelEv
 use crate::app::modules::AppModule;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::dialog::{AlertDialog, DialogOperation};
+use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::persistent::TransferSessionPersistentOperation;
+use crate::app::operations::{CoreOperation, CoreOperationOutput};
 use crate::app::view_models::cloud_session::CloudSession;
 use crate::app::view_models::receive_session::{ReceiveResourceViewModel, ReceiveSessionViewModel};
 use crate::app::view_models::selected_resource::SelectedResourceViewModel;
@@ -315,8 +317,20 @@ impl AppModule<BitBridge> for TransferModule {
 
                 let mut commands = vec![];
                 commands.push(Command::event(
-                    TransferSessionModelEvent::Update(id, TransferSessionUpdateEvent::ResourceUpdate(res)).into()
+                    TransferSessionModelEvent::Update(id.clone(), TransferSessionUpdateEvent::ResourceUpdate(res.clone())).into()
                 ));
+
+                if active_session.target.is_peer() {
+                    commands.push(Command::new(move |it| {
+                        let resource = res.clone();
+                        async move {
+                            it.notify_shell(CoreOperation::P2P(P2POperation::SendResourceNotification {
+                                session_id: active_session_id,
+                                resource
+                            }));
+                        }
+                    }));
+                }
 
                 Command::all(commands)
             }

@@ -235,11 +235,6 @@ impl TransfersContext {
         }
     }
 
-    pub async fn start_transfer(&self, session_id: u64, rtc_request_id: String) {
-        let mut actives = self.active_transfers.lock().await;
-        actives.push(SessionContext::new(session_id, rtc_request_id));
-    }
-
     pub async fn cancel_transfer(&self, session_id: u64) {
         let mut actives = self.active_transfers.lock().await;
         if let Some(session) = actives.iter().find(|it| it.session_id == session_id) {

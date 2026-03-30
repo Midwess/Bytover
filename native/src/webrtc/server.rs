@@ -158,12 +158,17 @@ impl WebRtcServer {
 
     pub async fn send_resource_notification(
         &self,
-        peer_id: String,
         session_id: u64,
         resource: LocalResource
     ) -> Result<(), WebRtcServerError> {
-        let client = self.get_client(&peer_id).await?;
-        client.send_resource_notification(session_id, resource).await?;
+        for client in self.clients.lock().await.values() {
+            let Some(client) = client.upgrade() else {
+                continue;
+            };
+
+            client.send_resource_notification(session_id, resource.clone()).await?;
+        }
+
         Ok(())
     }
 
@@ -254,7 +259,7 @@ impl WebRtcServer {
                 Some(result) = connect_futs.next() => {
                     match result {
                         Some((client, channels, user)) => {
-                            let peer_id = client.peer_id().await.unwrap_or_default();
+                            let peer_id = client.peer_id().unwrap_or_default();
                             log::info!("[webrtc-server] Client connected and introduced as {peer_id}, registering");
                             self.clients.lock().await.insert(peer_id.clone(), Arc::downgrade(&client));
                             log::info!("[webrtc-server] Active clients: {}", self.clients.lock().await.len());
@@ -262,6 +267,8 @@ impl WebRtcServer {
                             log::info!("[webrtc-server] Spawning run loop");
                             client.start_core_stream(self.core_request.get().unwrap().clone());
                             let client_for_run = client.clone();
+                            let core_request = self.core_request.get().unwrap().clone();
+                            core_request.response(CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(client.peer_entity().unwrap()))).await;
                             tokio::spawn(async move {
                                 if let Err(e) = client_for_run.run(channels).await {
                                     log::error!("[webrtc-server] Client run error: {e}");

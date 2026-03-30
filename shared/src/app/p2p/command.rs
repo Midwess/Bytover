@@ -77,8 +77,11 @@ impl AppCommand {
                 CoreOperationOutput::P2P(P2POperationOutput::ReceivedResourceNotification { session_order_id, resource, peer_id }) => {
                     self.notify_event(TransferEvent::ResourceNotification { session_order_id, resource, peer_id });
                 }
-                _ => {
-                    panic!("Unexpected output from nearby server, output: {output:?}");
+                CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(connected)) => {
+                    log::info!("Peer connected {connected:?}");
+                }
+                e => {
+                    log::warn!("Unexpected output from nearby server, output: {e:?}");
                 }
             }
         }

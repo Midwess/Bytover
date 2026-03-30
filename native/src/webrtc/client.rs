@@ -128,6 +128,7 @@ pub struct WebRtcClient {
     transfers_context: TransfersContext,
     core_request: OnceCell<CoreRequest>,
     resource_repo: Arc<dyn LocalResourceRepository>,
+    session_id: OnceCell<u64>,
 
     outbound_packet_sender: OnceCell<mpsc::Sender<(u16, Vec<u8>, bool)>>,
     transfer_feedback_sender: OnceCell<mpsc::UnboundedSender<Feedback>>
@@ -253,6 +254,7 @@ impl WebRtcClient {
             msg_channel: msg_channel_cell,
             unordered_msg_channel: unordered_msg_channel_cell,
             peer,
+            session_id: Default::default(),
             transfers_context: TransfersContext::new(),
             core_request: OnceCell::new(),
             resource_repo,
@@ -307,7 +309,6 @@ impl WebRtcClient {
                 match event {
                     Event::ChannelData(data) => {
                         let id = data.id;
-                        log::info!("[webrtc-client] ChannelData on {:?}, {} bytes", id, data.data.len());
                         let data = data.data;
                         if id == cids.ordered_msg {
                             if let Ok(msg) = PeerMessageBody::decode(&data[..]) {
@@ -376,11 +377,11 @@ impl WebRtcClient {
         self.core_request.get()
     }
 
-    pub async fn peer_id(&self) -> Option<String> {
+    pub fn peer_id(&self) -> Option<String> {
         self.peer.get().map(|p| p.id.clone())
     }
 
-    pub async fn peer_entity(&self) -> Option<Peer> {
+    pub fn peer_entity(&self) -> Option<Peer> {
         self.peer.get().cloned()
     }
 
@@ -484,6 +485,15 @@ impl WebRtcClient {
     }
 
     pub async fn send_resource_notification(&self, session_order_id: u64, resource: LocalResource) -> Result<(), WebRtcClientError> {
+        let Some(mine_session_id) = self.session_id.get() else {
+            log::error!("[webrtc-client] Session id not found");
+            return Err(WebRtcClientError::Transfer("Session id not found".to_string()));
+        };
+
+        if *mine_session_id != session_order_id {
+            return Ok(())
+        }
+
         let mut resource_proto = resource.to_proto();
 
         if let Some(thumbnail_path) = resource.thumbnail_path.as_ref() {
@@ -629,6 +639,7 @@ impl WebRtcClient {
                 if let Some(core) = self.core_request.get() {
                     match request {
                         Request::ViewSessionRequest(msg) => {
+                            let _ = self.session_id.set(msg.order_id);
                             core.response(CoreOperationOutput::P2P(P2POperationOutput::ReceivedViewSessionRequest {
                                 peer_id: self.peer.get().unwrap().id.clone(),
                                 request_id,

@@ -44,11 +44,10 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 Ok(CoreOperationOutput::None)
             }
             shared::app::operations::p2p::P2POperation::SendResourceNotification {
-                peer_id,
                 session_id,
                 resource
             } => {
-                self.web_rtc.send_resource_notification(peer_id, session_id, resource).await?;
+                self.web_rtc.send_resource_notification(session_id, resource).await?;
                 Ok(CoreOperationOutput::None)
             }
             shared::app::operations::p2p::P2POperation::ViewSessionDetail { peer_id, order_id, .. } => {
