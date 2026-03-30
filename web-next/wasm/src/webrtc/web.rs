@@ -204,10 +204,12 @@ impl WebRtcApi {
             Closure::wrap(Box::new(move |event: MessageEvent| {
                 if let Ok(arraybuf) = event.data().dyn_into::<ArrayBuffer>() {
                     let packet: Vec<u8> = Uint8Array::new(&arraybuf).to_vec();
-                    log::debug!("WASM received {} bytes on channel {}", packet.len(), channel.id().unwrap_or(0));
+                    log::info!("WASM received {} bytes on channel {}", packet.len(), channel.id().unwrap_or(0));
                     if let Err(e) = inbound_tx.unbounded_send(packet) {
                         log::warn!("Failed to send inbound packet: {:?}", e);
                     }
+                } else {
+                    log::warn!("WASM onmessage: data is not ArrayBuffer on channel {}", channel.id().unwrap_or(0));
                 }
             }) as Box<dyn FnMut(MessageEvent)>)
         };

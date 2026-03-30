@@ -92,28 +92,25 @@ impl RtcClient {
         let offer = str0m::change::SdpOffer::from_sdp_string(&offer_sdp)
             .map_err(|e| WebRtcClientError::SdpParse(format!("{e}")))?;
 
-        let answer = rtc.sdp_api().accept_offer(offer).map_err(WebRtcClientError::Rtc)?;
-
-        let mut api = rtc.sdp_api();
-        let reliable_id = api.add_channel_with_config(ChannelConfig {
+        let reliable_id = rtc.direct_api().create_data_channel(ChannelConfig {
             label: "reliable".to_string(),
             ordered: true,
             negotiated: Some(RELIABLE_STREAM_ID),
             ..Default::default()
         });
-        let unreliable_id = api.add_channel_with_config(ChannelConfig {
+        let unreliable_id = rtc.direct_api().create_data_channel(ChannelConfig {
             label: "unreliable".to_string(),
             ordered: false,
             negotiated: Some(UNRELIABLE_STREAM_ID),
             ..Default::default()
         });
-        let unordered_msg_id = api.add_channel_with_config(ChannelConfig {
+        let unordered_msg_id = rtc.direct_api().create_data_channel(ChannelConfig {
             label: "unordered_msg".to_string(),
             ordered: false,
             negotiated: Some(UNORDERED_MSG_STREAM_ID),
             ..Default::default()
         });
-        let ordered_msg_id = api.add_channel_with_config(ChannelConfig {
+        let ordered_msg_id = rtc.direct_api().create_data_channel(ChannelConfig {
             label: "ordered_msg".to_string(),
             ordered: true,
             negotiated: Some(ORDERED_MSG_STREAM_ID),
@@ -126,6 +123,8 @@ impl RtcClient {
             ordered_msg: ordered_msg_id,
         };
         log::info!("[rtc-client] Channel IDs assigned: {:?}", channel_ids);
+
+        let answer = rtc.sdp_api().accept_offer(offer).map_err(WebRtcClientError::Rtc)?;
 
         signalling
             .send_answer(answer.to_sdp_string(), request_id)
@@ -145,25 +144,56 @@ impl RtcClient {
             channel_ids,
         };
 
-        // Negotiated channels (negotiated: Some(id)) are implicitly open once
-        // the SCTP association is established — str0m won't emit ChannelOpen for them.
-        // We only need to wait for the connection event.
+        let mut connected = false;
         loop {
-            match client.poll_loop().await? {
-                Event::Connected => {
+            let event_opt = client.poll_event().await?;
+            if let Some(event) = event_opt {
+                match event {
+                    Event::Connected => {
+                        log::info!("[rtc-client] DTLS Connected, waiting for SCTP channels to open");
+                        connected = true;
+                    }
+                    Event::IceConnectionStateChange(state) => {
+                        log::info!("[rtc-client] ICE state: {:?}", state);
+                        if matches!(state, IceConnectionState::Disconnected) {
+                            return Err(WebRtcClientError::Signalling("Peer disconnected during setup".into()));
+                        }
+                    }
+                    Event::ChannelOpen(cid, name) => {
+                        log::info!("[rtc-client] ChannelOpen event: {:?} {}", cid, name);
+                    }
+                    Event::ChannelData(data) => {
+                        // If we ever get channel data here, the channels must be ready.
+                        // We shouldn't drop it. But we don't expect it before channels are ready.
+                        log::warn!("[rtc-client] Unexpected ChannelData during connect on {:?}", data.id);
+                    }
+                    e => {
+                        log::info!("[rtc-client] event during connect: {:?}", e);
+                    }
+                }
+            }
+
+            if connected {
+                let ready = [channel_ids.reliable, channel_ids.unreliable, channel_ids.unordered_msg, channel_ids.ordered_msg]
+                    .iter()
+                    .all(|&cid| client.rtc.channel(cid).is_some());
+                
+                if ready {
+                    for cid in [channel_ids.reliable, channel_ids.unreliable, channel_ids.unordered_msg, channel_ids.ordered_msg] {
+                        let exists = client.rtc.channel(cid).is_some();
+                        log::info!("[rtc-client] Channel {:?} exists after connect: {}", cid, exists);
+                    }
                     log::info!("[rtc-client] Connected, negotiated channels ready");
                     return Ok(client);
                 }
-                Event::IceConnectionStateChange(state) => {
-                    log::info!("[rtc-client] ICE state: {:?}", state);
-                    if matches!(state, IceConnectionState::Disconnected) {
-                        return Err(WebRtcClientError::Signalling("Peer disconnected during setup".into()));
-                    }
-                }
-                e => {
-                    log::warn!("[rtc-client] skipped event: {e:?}");
-                }
             }
+
+            if !client.rtc.is_alive() {
+                return Err(WebRtcClientError::Signalling("RTC connection closed".into()));
+            }
+
+            let timeout = client.timeout_duration();
+            client.wait_for_input(timeout).await?;
         }
     }
 
@@ -232,8 +262,16 @@ impl RtcClient {
 
     pub fn send(&mut self, data: &[u8], channel_id: ChannelId) -> bool {
         if let Some(mut ch) = self.rtc.channel(channel_id) {
-            ch.write(true, data).is_ok()
+            if let Err(e) = ch.write(true, data) {
+                log::warn!("Cannot send data {e:?}");
+                false
+            }
+            else {
+                log::info!("[rtc-client] Data written to channel {:?}, {} bytes", channel_id, data.len());
+                true
+            }
         } else {
+            log::warn!("[rtc-client] Channel {:?} not found, data dropped!", channel_id);
             false
         }
     }
@@ -244,19 +282,6 @@ impl RtcClient {
 
     pub fn is_alive(&self) -> bool {
         self.rtc.is_alive()
-    }
-
-    async fn poll_loop(&mut self) -> Result<Event, WebRtcClientError> {
-        loop {
-            if let Some(event) = self.poll_event().await? {
-                return Ok(event);
-            }
-            if !self.rtc.is_alive() {
-                return Err(WebRtcClientError::Signalling("RTC connection closed".into()));
-            }
-            let timeout = self.timeout_duration();
-            self.wait_for_input(timeout).await?;
-        }
     }
 }
 

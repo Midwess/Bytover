@@ -59,14 +59,13 @@ impl DirectMessageChannel {
         msg.encode(&mut bytes)?;
         let packet = bytes;
 
-        self.outbound_sender
-            .clone()
-            .send(packet)
-            .await
-            .map_err(|e| WebRtcErrors::MessageChannelError(format!("{e:?}")))?;
-
         let (tx, mut rx) = mpsc::channel(1);
         self.response_streams.lock().await.insert(request_id.clone(), tx);
+
+        if let Err(e) = self.outbound_sender.clone().send(packet).await {
+            self.response_streams.lock().await.remove(&request_id);
+            return Err(WebRtcErrors::MessageChannelError(format!("{e:?}")));
+        }
         let Some(response) = rx.next().await else {
             return Err(WebRtcErrors::MessageChannelError("No response".to_string()));
         };
@@ -97,10 +96,24 @@ impl DirectMessageChannel {
     }
 
     pub async fn stream(&self, request: peer_message_body::Request) -> Result<impl Stream<Item = Response> + '_, WebRtcErrors> {
-        let request_id = self.notify(request).await?;
-
+        let request_id = uuid::Uuid::new_v4().to_string();
         let (tx, mut rx) = mpsc::channel(64);
         self.response_streams.lock().await.insert(request_id.clone(), tx);
+
+        let msg = PeerMessageBody {
+            request: Some(request),
+            request_id: request_id.clone(),
+            ..Default::default()
+        };
+
+        let mut bytes = vec![];
+        msg.encode(&mut bytes)?;
+        let packet = bytes;
+
+        if let Err(e) = self.outbound_sender.clone().send(packet).await {
+            self.response_streams.lock().await.remove(&request_id);
+            return Err(WebRtcErrors::MessageChannelError(format!("{e:?}")));
+        }
 
         Ok(stream! {
             while let Some(response) = rx.next().await {
@@ -119,6 +132,7 @@ impl DirectMessageChannel {
             PeerMessageBody::decode(&*packet).map_err(|e| WebRtcErrors::MessageChannelError(format!("decode error: {:?}", e)))?;
 
         if msg.response.is_some() {
+            log::info!("Received a response {msg:?}");
             self.notify_response(msg.request_id.clone(), msg.response.unwrap()).await;
             return Ok(None);
         }

@@ -30,6 +30,7 @@ use shared::protocol::webrtc::transfer::{TransferDelimiterShema, TransfersContex
 use shared::repository::local_resource::LocalResourceRepository;
 use shared::shell::api::CoreRequest;
 use shared::utils::compression::is_compressible;
+use tokio::time::sleep;
 
 use crate::webrtc::rtc::RtcClient;
 use str0m::Event;
@@ -237,6 +238,7 @@ impl WebRtcClient {
                 match event {
                     Event::ChannelData(data) => {
                         let id = data.id;
+                        log::info!("[webrtc-client] ChannelData on {:?}, {} bytes", id, data.data.len());
                         let data = data.data;
                         if id == cids.ordered_msg {
                             if let Ok(msg) = PeerMessageBody::decode(&data[..]) {
@@ -269,7 +271,9 @@ impl WebRtcClient {
                     Event::IceConnectionStateChange(state) => {
                         log::info!("[webrtc-client] ICE state: {:?}", state);
                     }
-                    _ => {}
+                    _ => {
+                        log::info!("[webrtc-client] event: {:?}", event);
+                    }
                 }
             }
 
@@ -277,6 +281,7 @@ impl WebRtcClient {
             tokio::select! {
                 _ = rtc.wait_for_input(timeout) => {}
                 Some(data) = ordered_msg_rx.next() => {
+                    log::info!("Sending msg");
                     rtc.send(&data, cids.ordered_msg);
                 }
                 Some(data) = unordered_msg_rx.next() => {
@@ -317,6 +322,7 @@ impl WebRtcClient {
         };
 
         log::info!("[webrtc-client] Introducing self to peer");
+        sleep(Duration::from_secs(2)).await;
 
         let response = self
             .msg_channel()

@@ -213,56 +213,12 @@ impl WebRtcClient {
                     user_id: None,
                     signalling_id: None
                 };
-                self.set_peer(peer).map_err(|_| WebRtcClientError::Connection("Peer already set".to_string()))?;
+                let _ = self.set_peer(peer);
                 log::info!("Introduce handshake completed");
                 Ok(())
             }
             _ => Err(WebRtcClientError::Message("Unexpected response type".to_string()))
         }
-    }
-
-    pub async fn from_introduce_request(
-        self: Arc<Self>,
-        request_id: String,
-        msg: schema::devlog::bitbridge::IntroduceRequestMessage,
-        current_user: &PeerEntity
-    ) -> Result<(), WebRtcClientError> {
-        log::info!("Creating WebRtcClient from introduce request");
-        let _ = self.me.set(current_user.clone());
-
-        let peer = PeerEntity {
-            id: msg.mine.peer_id.clone(),
-            name: msg.mine.name.clone(),
-            avatar_url: msg.mine.avatar_url.clone(),
-            device: msg.mine.device.clone().into(),
-            email: msg.mine.email.clone(),
-            user_id: None,
-            signalling_id: None
-        };
-
-        self.set_peer(peer).map_err(|_| WebRtcClientError::Connection("Peer already set".to_string()))?;
-
-        let msg_channel = self
-            .msg_channel
-            .get()
-            .ok_or_else(|| WebRtcClientError::Connection("No message channel".to_string()))?;
-
-        let response = schema::devlog::bitbridge::IntroduceResponseMessage {
-            peer: schema::devlog::bitbridge::PeerMessage {
-                peer_id: current_user.id.clone(),
-                name: current_user.name.clone(),
-                avatar_url: current_user.avatar_url.clone(),
-                device: current_user.device.clone().into(),
-                email: current_user.email.clone()
-            }
-        };
-
-        msg_channel
-            .send_response(request_id, Response::IntroduceResponse(response))
-            .await
-            .map_err(|e| WebRtcClientError::Message(e.to_string()))?;
-        log::info!("Sent introduce response to peer");
-        Ok(())
     }
 
     pub async fn request_session_detail(
@@ -624,12 +580,21 @@ impl WebRtcClient {
             .ok_or_else(|| WebRtcClientError::Connection("No message channel".to_string()))?;
 
         while let Some(packet) = msg_rx.next().await {
-            log::debug!("Received message packet of size {}", packet.len());
+            log::info!("message_loop: received packet of {} bytes", packet.len());
 
-            if let Ok(Some(msg)) = msg_channel.receive_packet(packet).await {
-                if let Some(request) = msg.request {
-                    let request_id = msg.request_id;
-                    self.process_message_packet(request_id, request).await;
+            match msg_channel.receive_packet(packet).await {
+                Ok(Some(msg)) => {
+                    log::info!("message_loop: decoded request, request_id={}", msg.request_id);
+                    if let Some(request) = msg.request {
+                        let request_id = msg.request_id;
+                        self.process_message_packet(request_id, request).await;
+                    }
+                }
+                Ok(None) => {
+                    log::info!("message_loop: decoded response (routed to pending send)");
+                }
+                Err(e) => {
+                    log::warn!("message_loop: failed to decode packet: {:?}", e);
                 }
             }
         }
