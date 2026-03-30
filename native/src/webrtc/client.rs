@@ -119,7 +119,6 @@ impl From<WebRtcClientError> for CoreError {
 
 pub struct WebRtcClient {
     msg_channel: OnceCell<DirectMessageChannel>,
-    unordered_msg_channel: OnceCell<DirectMessageChannel>,
 
     rtc_client: YieldContainer<RtcClient>,
 
@@ -239,8 +238,6 @@ impl WebRtcClient {
 
         let msg_channel_cell = OnceCell::new();
         let _ = msg_channel_cell.set(msg_channel);
-        let unordered_msg_channel_cell = OnceCell::new();
-        let _ = unordered_msg_channel_cell.set(DirectMessageChannel::new(unordered_msg_tx));
         let outbound_packet_sender_cell = OnceCell::new();
         let _ = outbound_packet_sender_cell.set(outbound_tx);
         let transfer_feedback_sender_cell = OnceCell::new();
@@ -252,7 +249,6 @@ impl WebRtcClient {
             me,
             rtc_client: YieldContainer::new(rtc_client),
             msg_channel: msg_channel_cell,
-            unordered_msg_channel: unordered_msg_channel_cell,
             peer,
             session_id: Default::default(),
             transfers_context: TransfersContext::new(),
@@ -294,17 +290,19 @@ impl WebRtcClient {
             mut unreliable_data_tx,
         } = channels;
 
-        let this = self.clone();
-        let handle = tokio::spawn(async move {
-            this.sending_loop(&mut reliable_data_tx, &mut unreliable_data_tx, outbound_rx, feedback_rx).await;
+        let (msg_tx, msg_rx) = mpsc::unbounded::<(String, Request)>();
+
+        let this_send = self.clone();
+        let mut sending_handle = tokio::spawn(async move {
+            this_send.sending_loop(&mut reliable_data_tx, &mut unreliable_data_tx, outbound_rx, feedback_rx).await;
+        });
+
+        let this_msg = self.clone();
+        let mut msg_handle = tokio::spawn(async move {
+            this_msg.msg_loop(msg_rx).await;
         });
 
         while rtc.is_alive() {
-            if handle.is_finished() {
-                log::info!("Sending loop has been finished with result {:?}", handle.await);
-                break;
-            }
-
             while let Some(event) = rtc.poll_event().await? {
                 match event {
                     Event::ChannelData(data) => {
@@ -316,7 +314,7 @@ impl WebRtcClient {
                                 if let Some(response) = msg.response {
                                     self.msg_channel().notify_response(request_id, response).await;
                                 } else if let Some(request) = msg.request {
-                                    self.process_message_packet(request_id, request).await;
+                                    let _ = msg_tx.unbounded_send((request_id, request));
                                 }
                             }
                         } else if id == cids.unordered_msg {
@@ -360,11 +358,26 @@ impl WebRtcClient {
                 Some(data) = unreliable_data_rx.next() => {
                     rtc.send(&data, cids.unreliable);
                 }
+                result = &mut sending_handle => {
+                    log::info!("[webrtc-client] sending_loop finished: {:?}", result);
+                    break;
+                }
+                result = &mut msg_handle => {
+                    log::info!("[webrtc-client] msg_loop finished: {:?}", result);
+                    break;
+                }
             }
         }
 
         self.peer_disconnected().await;
         Ok(())
+    }
+
+    async fn msg_loop(&self, mut msg_rx: mpsc::UnboundedReceiver<(String, Request)>) {
+        while let Some((request_id, request)) = msg_rx.next().await {
+            self.process_message_packet(request_id, request).await;
+        }
+        log::info!("[webrtc-client] msg_loop ended");
     }
 
     pub fn start_core_stream(&self, core_request: CoreRequest) {
