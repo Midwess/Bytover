@@ -526,7 +526,7 @@ impl WebRtcClient {
             }
             Request::ResourceNotification(notification) => {
                 let session_order_id = notification.session_order_id;
-                log::info!("Received resource notification: {:?}", notification);
+                log::info!("Received resource notification for session order_id {} resource_id {:?}", session_order_id, notification.resource.as_ref().map(|it| it.order_id)); 
                 if let Some(resource_proto) = notification.resource {
                     let mut resource = LocalResource {
                         order_id: resource_proto.order_id,
@@ -615,11 +615,9 @@ impl WebRtcClient {
             .ok_or_else(|| WebRtcClientError::Connection("No message channel".to_string()))?;
 
         while let Some(packet) = msg_rx.next().await {
-            log::info!("message_loop: received packet of {} bytes", packet.len());
-
             match msg_channel.receive_packet(packet).await {
                 Ok(Some(msg)) => {
-                    log::info!("message_loop: decoded request, request_id={}", msg.request_id);
+                    log::debug!("message_loop: decoded request, request_id={}", msg.request_id);
                     if let Some(request) = msg.request {
                         let request_id = msg.request_id;
                         self.process_message_packet(request_id, request).await;

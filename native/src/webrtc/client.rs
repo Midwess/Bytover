@@ -341,9 +341,7 @@ impl WebRtcClient {
                     Event::IceConnectionStateChange(state) => {
                         log::info!("[webrtc-client] ICE state: {:?}", state);
                     }
-                    _ => {
-                        log::info!("[webrtc-client] event: {:?}", event);
-                    }
+                    _ => {}
                 }
             }
 
@@ -566,7 +564,7 @@ impl WebRtcClient {
         if let Some(resources) = resources {
             let session_order_id = proto_session.order_id;
             for resource in resources {
-                log::info!("[webrtc-client] Sending resource notification order_id={}", resource.order_id);
+                log::debug!("[webrtc-client] Sending resource notification order_id={}", resource.order_id);
                 self.send_resource_notification(session_order_id, resource).await?;
                 tokio::time::sleep(Duration::from_millis(20)).await;
             }
