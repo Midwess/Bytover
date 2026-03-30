@@ -43,10 +43,7 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 self.web_rtc.stream_resource_to_peer(peer_id, session_id, transfer_id, resource).await?;
                 Ok(CoreOperationOutput::None)
             }
-            shared::app::operations::p2p::P2POperation::SendResourceNotification {
-                session_id,
-                resource
-            } => {
+            shared::app::operations::p2p::P2POperation::SendResourceNotification { session_id, resource } => {
                 self.web_rtc.send_resource_notification(session_id, resource).await?;
                 Ok(CoreOperationOutput::None)
             }
@@ -67,24 +64,15 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 Ok(CoreOperationOutput::None)
             }
             shared::app::operations::p2p::P2POperation::IsRunning => Ok(self.web_rtc.is_running().into()),
-            shared::app::operations::p2p::P2POperation::CancelResource {
-                peer_id,
-                session_id,
-                ..
-            } => {
+            shared::app::operations::p2p::P2POperation::CancelResource { peer_id, session_id, .. } => {
                 self.web_rtc.cancel_session(peer_id, session_id).await?;
                 Ok(CoreOperationOutput::None)
             }
-            shared::app::operations::p2p::P2POperation::BroadcastCancelSession {
-                session_id,
-                resource_id
-            } => {
+            shared::app::operations::p2p::P2POperation::BroadcastCancelSession { session_id, resource_id } => {
                 self.web_rtc.broadcast_cancel_session(session_id, resource_id).await?;
                 Ok(CoreOperationOutput::None)
             }
-            shared::app::operations::p2p::P2POperation::ConnectPeer { signalling_key, .. } => {
-                Ok(CoreOperationOutput::None)
-            }
+            shared::app::operations::p2p::P2POperation::ConnectPeer { signalling_key: _, .. } => Ok(CoreOperationOutput::None)
         }
     }
 }

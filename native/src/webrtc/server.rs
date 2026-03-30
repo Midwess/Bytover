@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 
@@ -14,7 +13,6 @@ use shared::entities::local_resource::LocalResource;
 use shared::entities::peer::Peer as PeerEntity;
 use shared::errors::CoreError;
 use shared::repository::local_resource::LocalResourceRepository;
-use shared::repository::transfer_session::TransferSessionRepository;
 use shared::shell::api::CoreRequest;
 
 use crate::webrtc::client::{WebRtcClient, WebRtcClientError};
@@ -56,16 +54,11 @@ impl From<WebRtcServerError> for CoreError {
     }
 }
 
-pub struct WebRtcServerConfig {
-    pub bind_addr: SocketAddr
-}
 
 pub struct WebRtcServer {
-    config: WebRtcServerConfig,
     signalling: SignalingClient,
     clients: Mutex<HashMap<String, Weak<WebRtcClient>>>,
     resource_repo: Arc<dyn LocalResourceRepository>,
-    transfer_session_repo: Arc<dyn TransferSessionRepository>,
     current_user: OnceCell<PeerEntity>,
     core_request: OnceCell<CoreRequest>,
     running: AtomicBool
@@ -73,17 +66,13 @@ pub struct WebRtcServer {
 
 impl WebRtcServer {
     pub fn new(
-        config: WebRtcServerConfig,
         signalling: SignalingClient,
-        resource_repo: Arc<dyn LocalResourceRepository>,
-        transfer_session_repo: Arc<dyn TransferSessionRepository>
+        resource_repo: Arc<dyn LocalResourceRepository>
     ) -> Arc<Self> {
         Arc::new(Self {
-            config,
             signalling,
             clients: Mutex::new(HashMap::new()),
             resource_repo,
-            transfer_session_repo,
             current_user: Default::default(),
             core_request: Default::default(),
             running: AtomicBool::new(false)
@@ -156,11 +145,7 @@ impl WebRtcServer {
         Ok(())
     }
 
-    pub async fn send_resource_notification(
-        &self,
-        session_id: u64,
-        resource: LocalResource
-    ) -> Result<(), WebRtcServerError> {
+    pub async fn send_resource_notification(&self, session_id: u64, resource: LocalResource) -> Result<(), WebRtcServerError> {
         for client in self.clients.lock().await.values() {
             let Some(client) = client.upgrade() else {
                 continue;
@@ -258,7 +243,7 @@ impl WebRtcServer {
 
                 Some(result) = connect_futs.next() => {
                     match result {
-                        Some((client, channels, user)) => {
+                        Some((client, channels, _user)) => {
                             let peer_id = client.peer_id().unwrap_or_default();
                             log::info!("[webrtc-server] Client connected and introduced as {peer_id}, registering");
                             self.clients.lock().await.insert(peer_id.clone(), Arc::downgrade(&client));

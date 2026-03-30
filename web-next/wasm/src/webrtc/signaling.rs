@@ -5,14 +5,12 @@ use schema::devlog::rpc_signalling::server::{Message, OfferMessage, IceConfig};
 
 #[derive(Debug, Clone)]
 pub struct SignalingClient {
-    ws_url: String,
     http_url: String
 }
 
 impl SignalingClient {
-    pub fn new(ws_url: impl Into<String>, http_url: impl Into<String>) -> Self {
+    pub fn new(_ws_url: impl Into<String>, http_url: impl Into<String>) -> Self {
         Self {
-            ws_url: ws_url.into(),
             http_url: http_url.into()
         }
     }

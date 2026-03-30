@@ -123,29 +123,9 @@ pub fn check_input_monitoring_permission(_prompt: bool) -> bool {
     true // No input monitoring permission needed on other platforms
 }
 
-/// Opens System Preferences to the Accessibility privacy pane on macOS.
-#[cfg(target_os = "macos")]
-pub fn open_accessibility_preferences() {
-    use std::process::Command;
-    let _ = Command::new("open")
-        .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
-        .spawn();
-}
 
-/// Opens System Preferences to the Input Monitoring privacy pane on macOS.
-#[cfg(target_os = "macos")]
-pub fn open_input_monitoring_preferences() {
-    use std::process::Command;
-    let _ = Command::new("open")
-        .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")
-        .spawn();
-}
 
-#[cfg(not(target_os = "macos"))]
-pub fn open_accessibility_preferences() {}
 
-#[cfg(not(target_os = "macos"))]
-pub fn open_input_monitoring_preferences() {}
 
 static USER_DID_DROP: AtomicBool = AtomicBool::new(false);
 

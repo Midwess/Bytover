@@ -34,14 +34,9 @@ use shared::shell::api::CoreRequest;
 use crate::webrtc::ice::{IceAgent, IceError};
 use crate::webrtc::signaling::{SignalingClient, SignalingError};
 use crate::webrtc::web::channel_ids::*;
-use crate::webrtc::web::{RtcConnectionWrapper, RtcDataChannelWrapper, WebError, WebRtcApi};
+use crate::webrtc::web::{RtcDataChannelWrapper, WebError, WebRtcApi};
 
 pub struct WebRtcClient {
-    connection: Arc<RtcConnectionWrapper>,
-    reliable_data_channel: Arc<RtcDataChannelWrapper>,
-    unreliable_data_channel: Arc<RtcDataChannelWrapper>,
-    unordered_data_channel: Arc<RtcDataChannelWrapper>,
-    ordered_data_channel: Arc<RtcDataChannelWrapper>,
     transfers_context: TransfersContext,
     me: OnceCell<PeerEntity>,
     peer: OnceCell<PeerEntity>,
@@ -50,7 +45,6 @@ pub struct WebRtcClient {
     transfer_session_repo: Arc<dyn TransferSessionRepository>,
     inbound_msg_receiver: YieldContainer<mpsc::UnboundedReceiver<Vec<u8>>>,
     inbound_data_receiver: YieldContainer<mpsc::UnboundedReceiver<Vec<u8>>>,
-    signalling: SignalingClient,
 
     msg_channel: OnceCell<DirectMessageChannel>,
     unordered_msg_channel: OnceCell<DirectMessageChannel>,
@@ -120,11 +114,6 @@ impl WebRtcClient {
         api.set_remote_description(&connection, &answer_sdp).await?;
 
         let client = Arc::new(WebRtcClient {
-            connection,
-            reliable_data_channel: reliable_channel.clone(),
-            unreliable_data_channel: unreliable_channel,
-            unordered_data_channel: unordered_channel.clone(),
-            ordered_data_channel: ordered_channel.clone(),
             transfers_context: TransfersContext::new(),
             me: OnceCell::new(),
             peer: OnceCell::new(),
@@ -133,7 +122,6 @@ impl WebRtcClient {
             transfer_session_repo,
             inbound_msg_receiver: YieldContainer::new(msg_inbound_rx),
             inbound_data_receiver: YieldContainer::new(data_inbound_rx),
-            signalling: signaling.clone(),
             msg_channel: OnceCell::new(),
             unordered_msg_channel: OnceCell::new(),
             prefix_channels: Mutex::new(HashMap::new())

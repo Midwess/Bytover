@@ -18,7 +18,7 @@ use crate::repository::local_resource::LocalResourceRepositoryImpl;
 use crate::repository::shelf::ShelfRepositoryImpl;
 use crate::repository::transfer_session::TransferSessionRepositoryImpl;
 use crate::repository::RedbPoolProvider;
-use crate::webrtc::server::{WebRtcServer, WebRtcServerConfig};
+use crate::webrtc::server::WebRtcServer;
 use crate::webrtc::signalling::SignalingClient;
 use core_services::utils::pool::allocator::{PoolAllocator, PoolBuilder, PoolResourceProvider};
 use core_services::utils::pool::request::PoolRequestBuilder;
@@ -181,18 +181,12 @@ impl DiContainer {
         }
 
         let local_resource_repo = Arc::new(self.get_local_resource_repository());
-        let transfer_session_repo = Arc::new(self.get_transfer_session_repository());
 
         let web_rtc_stub = Arc::new(WebRtc::new());
 
-        let web_rtc_config = WebRtcServerConfig {
-            bind_addr: "[::]:0".parse().unwrap()
-        };
         let web_rtc_server = WebRtcServer::new(
-            web_rtc_config,
             self.get_signalling_client(),
-            local_resource_repo.clone(),
-            transfer_session_repo
+            local_resource_repo.clone()
         );
 
         let cloud_service = CloudService {

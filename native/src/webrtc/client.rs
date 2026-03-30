@@ -6,9 +6,8 @@ use core_services::utils::cancellation::{FutureExtension, TaskErrors};
 use core_services::utils::yield_container::{YieldContainer, YieldError};
 use futures::channel::mpsc;
 use futures::SinkExt;
-use futures_util::select_biased;
 use futures_util::stream::StreamExt;
-use futures_util::FutureExt;
+use futures_util::{select_biased, FutureExt};
 use prost::Message;
 use schema::devlog::bitbridge::peer_message_body::{Request, Response};
 use schema::devlog::bitbridge::view_session_detail_response::Result as SessionDetailResult;
@@ -32,9 +31,9 @@ use shared::shell::api::CoreRequest;
 use shared::utils::compression::is_compressible;
 
 use crate::webrtc::rtc::RtcClient;
+use crate::webrtc::signalling::SignalingClient;
 use str0m::channel::ChannelId;
 use str0m::Event;
-use crate::webrtc::signalling::SignalingClient;
 
 #[derive(Debug, Error)]
 pub enum WebRtcClientError {
@@ -141,7 +140,7 @@ pub struct WebRtcEventChannels {
     pub outbound_rx: mpsc::Receiver<(u16, Vec<u8>, bool)>,
     pub feedback_rx: mpsc::UnboundedReceiver<Feedback>,
     pub reliable_data_tx: mpsc::Sender<Vec<u8>>,
-    pub unreliable_data_tx: mpsc::Sender<Vec<u8>>,
+    pub unreliable_data_tx: mpsc::Sender<Vec<u8>>
 }
 
 impl std::fmt::Debug for WebRtcClient {
@@ -167,7 +166,7 @@ impl WebRtcClient {
         log::info!("[webrtc-client] RTC connected, creating client");
 
         let (ordered_msg_tx, mut ordered_msg_rx) = mpsc::channel::<Vec<u8>>(64);
-        let (unordered_msg_tx, unordered_msg_rx) = mpsc::channel::<Vec<u8>>(64);
+        let (_unordered_msg_tx, unordered_msg_rx) = mpsc::channel::<Vec<u8>>(64);
         let (reliable_data_tx, reliable_data_rx) = mpsc::channel::<Vec<u8>>(64);
         let (unreliable_data_tx, unreliable_data_rx) = mpsc::channel::<Vec<u8>>(64);
         let (outbound_tx, outbound_rx) = mpsc::channel::<(u16, Vec<u8>, bool)>(64);
@@ -222,9 +221,11 @@ impl WebRtcClient {
 
             if !introduced {
                 log::info!("[webrtc-client] Introducing self to peer");
-                let _ = msg_channel.notify(Request::IntroduceRequest(IntroduceRequestMessage {
-                    mine: PeerMessage::from(me.clone())
-                })).await;
+                let _ = msg_channel
+                    .notify(Request::IntroduceRequest(IntroduceRequestMessage {
+                        mine: PeerMessage::from(me.clone())
+                    }))
+                    .await;
                 introduced = true;
             }
 
@@ -255,7 +256,7 @@ impl WebRtcClient {
             core_request: OnceCell::new(),
             resource_repo,
             outbound_packet_sender: outbound_packet_sender_cell,
-            transfer_feedback_sender: transfer_feedback_sender_cell,
+            transfer_feedback_sender: transfer_feedback_sender_cell
         };
 
         Ok((
@@ -268,7 +269,7 @@ impl WebRtcClient {
                 outbound_rx,
                 feedback_rx,
                 reliable_data_tx,
-                unreliable_data_tx,
+                unreliable_data_tx
             }
         ))
     }
@@ -287,14 +288,16 @@ impl WebRtcClient {
             outbound_rx,
             feedback_rx,
             mut reliable_data_tx,
-            mut unreliable_data_tx,
+            mut unreliable_data_tx
         } = channels;
 
         let (msg_tx, msg_rx) = mpsc::unbounded::<(String, Request)>();
 
         let this_send = self.clone();
         let mut sending_handle = tokio::spawn(async move {
-            this_send.sending_loop(&mut reliable_data_tx, &mut unreliable_data_tx, outbound_rx, feedback_rx).await;
+            this_send
+                .sending_loop(&mut reliable_data_tx, &mut unreliable_data_tx, outbound_rx, feedback_rx)
+                .await;
         });
 
         let this_msg = self.clone();
@@ -320,9 +323,7 @@ impl WebRtcClient {
                         } else if id == cids.unordered_msg {
                             if let Ok(msg) = PeerMessageBody::decode(&data[..]) {
                                 if let Some(Request::FecFeedback(feedback)) = msg.request {
-                                    if let (Some(sender), Some(inner)) =
-                                        (self.transfer_feedback_sender.get(), feedback.feedback)
-                                    {
+                                    if let (Some(sender), Some(inner)) = (self.transfer_feedback_sender.get(), feedback.feedback) {
                                         match inner {
                                             schema::devlog::bitbridge::fec_feedback::Feedback::Network(stats) => {
                                                 let _ = sender.unbounded_send(Feedback::Network(stats));
@@ -430,7 +431,12 @@ impl WebRtcClient {
         result
     }
 
-    async fn stream_resource_inner(&self, session_id: u64, transfer_id: u16, resource: LocalResource) -> Result<(), WebRtcClientError> {
+    async fn stream_resource_inner(
+        &self,
+        session_id: u64,
+        transfer_id: u16,
+        resource: LocalResource
+    ) -> Result<(), WebRtcClientError> {
         let resource_id = resource.order_id;
         let prefix = transfer_id;
         let resource_token = self.transfers_context.get_or_create_resource_token(session_id, resource_id).await;
@@ -545,9 +551,7 @@ impl WebRtcClient {
             self.msg_channel()
                 .send_response(
                     request_id,
-                    Response::ViewSessionResponse(ViewSessionDetailResponse {
-                        result: Some(err_result)
-                    })
+                    Response::ViewSessionResponse(ViewSessionDetailResponse { result: Some(err_result) })
                 )
                 .await
                 .map_err(|e| WebRtcClientError::MessageChannel(format!("{e}")))?;
@@ -616,7 +620,6 @@ impl WebRtcClient {
     }
 
     pub async fn process_message_packet(&self, request_id: String, request: Request) {
-
         match request {
             Request::CancelRequest(req) => {
                 log::info!("[webrtc-client] Received cancel request {:?}", req);
@@ -635,9 +638,7 @@ impl WebRtcClient {
                 let response = IntroduceResponseMessage {
                     peer: PeerMessage::from(self.me.clone())
                 };
-                let _ = self.msg_channel()
-                    .send_response(request_id, Response::IntroduceResponse(response))
-                    .await;
+                let _ = self.msg_channel().send_response(request_id, Response::IntroduceResponse(response)).await;
             }
             Request::FecFeedback(feedback) => {
                 if let Some(feedback) = feedback.feedback {
@@ -690,10 +691,7 @@ impl WebRtcClient {
                                 .await;
                             }
 
-                            let _ = self
-                                .msg_channel()
-                                .send_response(request_id, Response::VoidResponse(VoidResponseMessage {}))
-                                .await;
+                            let _ = self.msg_channel().send_response(request_id, Response::VoidResponse(VoidResponseMessage {})).await;
                         }
                         _ => {}
                     }
