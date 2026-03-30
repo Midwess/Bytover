@@ -179,10 +179,6 @@ impl RtcClient {
                     .all(|&cid| client.rtc.channel(cid).is_some());
                 
                 if ready {
-                    for cid in [channel_ids.reliable, channel_ids.unreliable, channel_ids.unordered_msg, channel_ids.ordered_msg] {
-                        let exists = client.rtc.channel(cid).is_some();
-                        log::info!("[rtc-client] Channel {:?} exists after connect: {}", cid, exists);
-                    }
                     log::info!("[rtc-client] Connected, negotiated channels ready");
                     return Ok(client);
                 }
