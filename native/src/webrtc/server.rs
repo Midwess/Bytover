@@ -141,19 +141,12 @@ impl WebRtcServer {
         &self,
         peer_id: String,
         request_id: String,
-        mut session_message: Option<schema::devlog::bitbridge::P2pTransferSessionMessage>,
+        session_message: Option<schema::devlog::bitbridge::P2pTransferSessionMessage>,
         resources: Option<Vec<LocalResource>>,
         error: Option<CoreError>
     ) -> Result<(), WebRtcServerError> {
         let client = self.get_client(&peer_id).await?;
-
-        if let (Some(session), Some(_res)) = (session_message.take(), resources) {
-            session_message = Some(session);
-        }
-
-        let err_msg = error.map(|_| schema::devlog::bitbridge::PeerErrorsMessage::InvalidRequest);
-
-        client.send_session_detail_response(request_id, session_message, None, err_msg).await?;
+        client.send_session_detail_response(request_id, session_message, resources, error).await?;
         Ok(())
     }
 
