@@ -3,7 +3,7 @@ use crate::app::core::extensions::CoreCommandContextUtils;
 use crate::app::core::model_events::{PeerReceivedEvent, SessionLoadError, TransferSessionModelEvent};
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::dialog::{DialogOperation, MessageReason};
-use crate::app::operations::p2p::P2POperation;
+use crate::app::operations::p2p::{P2POperation, P2POperationOutput};
 use crate::app::operations::persistent::TransferSessionPersistentOperation;
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
@@ -182,29 +182,55 @@ impl AppCommand {
             let current_user = self.gen_peer(user, device.unwrap()).await;
 
             log::info!("Connecting to peer with key: {key:?}");
-            match self.run(P2POperation::connect(key.to_string(), current_user)).await {
-                Ok(peer) => {
-                    self.update_model(TransferEvent::PeerConnected {
-                        session_id: session_order_id,
-                        peer
-                    });
+            let mut stream = self.stream_from_shell(
+                P2POperation::ConnectPeer {
+                    signalling_key: key.to_string(),
+                    current_user
                 }
-                Err(e) => {
-                    log::error!("Failed to connect to peer: {e:?}");
-                    self.update_model(TransferEvent::UpdateConnectionState {
-                        session_id: session_order_id,
-                        state: P2PConnectionState::Failed(e.to_string())
-                    });
-                    return Ok(());
+                .into()
+            );
+
+            let mut viewed = false;
+            while let Some(output) = stream.next().await {
+                match output {
+                    CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(peer)) => {
+                        self.update_model(TransferEvent::PeerConnected {
+                            session_id: session_order_id,
+                            peer
+                        });
+
+                        if !viewed {
+                            viewed = true;
+                            self.update_model(TransferEvent::ViewSession {
+                                password: password.clone(),
+                                session_id: session_order_id,
+                                transfer_type: TransferType::Receive
+                            });
+                        }
+                    }
+                    CoreOperationOutput::P2P(P2POperationOutput::ReceivedResourceNotification {
+                        session_order_id,
+                        resource,
+                        peer_id
+                    }) => {
+                        self.update_model(TransferEvent::ResourceNotification {
+                            session_order_id,
+                            resource,
+                            peer_id
+                        });
+                    }
+                    CoreOperationOutput::Error(e) => {
+                        log::error!("Failed to connect to peer: {e:?}");
+                        self.update_model(TransferEvent::UpdateConnectionState {
+                            session_id: session_order_id,
+                            state: P2PConnectionState::Failed(e.to_string())
+                        });
+                        return Ok(());
+                    }
+                    _ => {}
                 }
             }
         }
-
-        self.update_model(TransferEvent::ViewSession {
-            password,
-            session_id: session_order_id,
-            transfer_type: TransferType::Receive
-        });
 
         Ok(())
     }

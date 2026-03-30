@@ -74,6 +74,9 @@ impl AppCommand {
                     log::info!("Received download request {transfer_id:?}");
                     self.notify_event(TransferEvent::ReceivedDownloadRequest { peer_id, session_order_id, resource_order_id, transfer_id });
                 }
+                CoreOperationOutput::P2P(P2POperationOutput::ReceivedResourceNotification { session_order_id, resource, peer_id }) => {
+                    self.notify_event(TransferEvent::ResourceNotification { session_order_id, resource, peer_id });
+                }
                 _ => {
                     panic!("Unexpected output from nearby server, output: {output:?}");
                 }

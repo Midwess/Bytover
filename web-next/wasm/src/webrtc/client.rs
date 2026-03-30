@@ -526,6 +526,7 @@ impl WebRtcClient {
             }
             Request::ResourceNotification(notification) => {
                 let session_order_id = notification.session_order_id;
+                log::info!("Received resource notification: {:?}", notification);
                 if let Some(resource_proto) = notification.resource {
                     let mut resource = LocalResource {
                         order_id: resource_proto.order_id,

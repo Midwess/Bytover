@@ -500,7 +500,7 @@ impl WebRtcClient {
         };
 
         self.msg_channel()
-            .send(Request::ResourceNotification(notification), None)
+            .notify(Request::ResourceNotification(notification))
             .await
             .map(|_| ())
             .map_err(|e| WebRtcClientError::MessageChannel(format!("{e}")))?;

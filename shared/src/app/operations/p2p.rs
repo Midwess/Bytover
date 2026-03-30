@@ -202,18 +202,6 @@ impl P2POperation {
         .map(|it| it.result())
     }
 
-    pub fn connect(signalling_key: String, current_user: Peer) -> AppRequestBuilder<impl Future<Output = Result<Peer, CoreError>>> {
-        Command::request_from_shell(CoreOperation::P2P(P2POperation::ConnectPeer {
-            signalling_key,
-            current_user
-        }))
-        .map(|it| match it {
-            super::CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(peer)) => Ok(peer),
-            super::CoreOperationOutput::Error(e) => Err(e),
-            _ => Err(CoreError::BadRequest("Unexpected response from ConnectPeer".into()))
-        })
-    }
-
     pub fn send_resource_notification(
         peer_id: String,
         session_id: u64,

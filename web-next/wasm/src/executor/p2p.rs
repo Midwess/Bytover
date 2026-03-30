@@ -99,7 +99,7 @@ impl P2PNativeExecutorImpl {
 
 #[async_trait::async_trait(?Send)]
 impl P2PNativeExecutor for P2PNativeExecutorImpl {
-    async fn handle(&self, _request: CoreRequest, effect: P2POperation) -> Result<CoreOperationOutput, shared::errors::CoreError> {
+    async fn handle(&self, request: CoreRequest, effect: P2POperation) -> Result<CoreOperationOutput, shared::errors::CoreError> {
         match effect {
             P2POperation::ConnectPeer {
                 signalling_key,
@@ -120,6 +120,7 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                     .await
                     .map_err(|e| P2PError::WebRtc(e.to_string()))?;
 
+                client.start_core_stream(request);
                 self.set_client(client.clone()).map_err(|_| P2PError::AlreadyConnected)?;
 
                 let client_clone = client.clone();
@@ -177,7 +178,7 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 let client = self.get_client_or_not_connected()?;
 
                 client
-                    .request_session_detail(_request.clone(), order_id, password)
+                    .request_session_detail(request, order_id, password)
                     .await
                     .map_err(|e| P2PError::Transfer(e.to_string()))?;
 
@@ -198,7 +199,7 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 );
 
                 let client = self.get_client_or_not_connected()?;
-                let core_request = _request.clone();
+                let core_request = request.clone();
 
                 let resource_clone = resource.clone();
                 wasm_bindgen_futures::spawn_local(async move {
@@ -230,7 +231,7 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 );
 
                 let client = self.get_client_or_not_connected()?;
-                let core_request = _request.clone();
+                let core_request = request.clone();
 
                 wasm_bindgen_futures::spawn_local(async move {
                     match client.download_all_resources(core_request, session_id, session_path, resources).await {
