@@ -130,7 +130,7 @@ pub struct WebRtcClient {
     core_request: OnceCell<CoreRequest>,
     resource_repo: Arc<dyn LocalResourceRepository>,
 
-    outbound_packet_sender: OnceCell<mpsc::Sender<(u16, Box<[u8]>, bool)>>,
+    outbound_packet_sender: OnceCell<mpsc::Sender<(u16, Vec<u8>, bool)>>,
     transfer_feedback_sender: OnceCell<mpsc::UnboundedSender<Feedback>>
 }
 
@@ -176,12 +176,12 @@ impl WebRtcClient {
         let mut rtc_container = self.rtc_client.retrieve().await?;
         let rtc = rtc_container.deref_mut();
 
-        let (ordered_msg_tx, mut ordered_msg_rx) = mpsc::channel::<Box<[u8]>>(64);
-        let (unordered_msg_tx, mut unordered_msg_rx) = mpsc::channel::<Box<[u8]>>(64);
-        let (mut reliable_data_tx, mut reliable_data_rx) = mpsc::channel::<Box<[u8]>>(64);
-        let (mut unreliable_data_tx, mut unreliable_data_rx) = mpsc::channel::<Box<[u8]>>(64);
+        let (ordered_msg_tx, mut ordered_msg_rx) = mpsc::channel::<Vec<u8>>(64);
+        let (unordered_msg_tx, mut unordered_msg_rx) = mpsc::channel::<Vec<u8>>(64);
+        let (mut reliable_data_tx, mut reliable_data_rx) = mpsc::channel::<Vec<u8>>(64);
+        let (mut unreliable_data_tx, mut unreliable_data_rx) = mpsc::channel::<Vec<u8>>(64);
 
-        let (outbound_tx, outbound_rx) = mpsc::channel::<(u16, Box<[u8]>, bool)>(64);
+        let (outbound_tx, outbound_rx) = mpsc::channel::<(u16, Vec<u8>, bool)>(64);
         let (feedback_tx, feedback_rx) = mpsc::unbounded::<Feedback>();
 
         let _ = self.msg_channel.set(DirectMessageChannel::new(ordered_msg_tx));
@@ -348,7 +348,7 @@ impl WebRtcClient {
                         log::warn!("[webrtc-client] Cursor returned empty data");
                         break;
                     }
-                    let packet = data.to_vec().into_boxed_slice();
+                    let packet = data.to_vec();
                     outbound_packet_sender
                         .send((prefix, packet, false))
                         .with_cancel(&resource_token)
@@ -558,9 +558,9 @@ impl WebRtcClient {
 
     async fn sending_loop(
         &self,
-        reliable_tx: &mut mpsc::Sender<Box<[u8]>>,
-        unreliable_tx: &mut mpsc::Sender<Box<[u8]>>,
-        mut outbound_rx: mpsc::Receiver<(u16, Box<[u8]>, bool)>,
+        reliable_tx: &mut mpsc::Sender<Vec<u8>>,
+        unreliable_tx: &mut mpsc::Sender<Vec<u8>>,
+        mut outbound_rx: mpsc::Receiver<(u16, Vec<u8>, bool)>,
         mut feedback_rx: mpsc::UnboundedReceiver<Feedback>
     ) {
         let mut fec_sender = FecSender::new(1024);
@@ -664,7 +664,7 @@ impl WebRtcClient {
                 buff_counter = MIN_BUFFER_SIZE;
 
                 if let Ok(hold_delimiter) = TransferDelimiterShema::hold(1).as_bytes() {
-                    if let Ok(FecAction::Framed(frames)) = fec_sender.send(0, hold_delimiter.to_vec().into_boxed_slice()) {
+                    if let Ok(FecAction::Framed(frames)) = fec_sender.send(0, hold_delimiter) {
                         for frame in frames {
                             let _ = reliable_tx.send(frame.serialize()).await;
                         }

@@ -187,7 +187,7 @@ impl WebRtcApi {
     pub fn setup_channel_handlers(
         &self,
         channel: Arc<RtcDataChannelWrapper>,
-        inbound_tx: mpsc::UnboundedSender<Box<[u8]>>
+        inbound_tx: mpsc::UnboundedSender<Vec<u8>>
     ) -> Result<(), WebError> {
         let onopen = {
             let channel = channel.clone();
@@ -203,7 +203,7 @@ impl WebRtcApi {
             let channel = channel.clone();
             Closure::wrap(Box::new(move |event: MessageEvent| {
                 if let Ok(arraybuf) = event.data().dyn_into::<ArrayBuffer>() {
-                    let packet: Box<[u8]> = Uint8Array::new(&arraybuf).to_vec().into_boxed_slice();
+                    let packet: Vec<u8> = Uint8Array::new(&arraybuf).to_vec();
                     log::debug!("WASM received {} bytes on channel {}", packet.len(), channel.id().unwrap_or(0));
                     if let Err(e) = inbound_tx.unbounded_send(packet) {
                         log::warn!("Failed to send inbound packet: {:?}", e);

@@ -47,16 +47,16 @@ pub struct WebRtcClient {
     core_request: OnceCell<CoreRequest>,
     resource_repo: Arc<dyn LocalResourceRepository>,
     transfer_session_repo: Arc<dyn TransferSessionRepository>,
-    inbound_msg_receiver: YieldContainer<mpsc::UnboundedReceiver<Box<[u8]>>>,
-    inbound_data_receiver: YieldContainer<mpsc::UnboundedReceiver<Box<[u8]>>>,
+    inbound_msg_receiver: YieldContainer<mpsc::UnboundedReceiver<Vec<u8>>>,
+    inbound_data_receiver: YieldContainer<mpsc::UnboundedReceiver<Vec<u8>>>,
     signalling: SignalingClient,
 
     msg_channel: OnceCell<DirectMessageChannel>,
     unordered_msg_channel: OnceCell<DirectMessageChannel>,
-    prefix_channels: Mutex<HashMap<u16, mpsc::Sender<Box<[u8]>>>>
+    prefix_channels: Mutex<HashMap<u16, mpsc::Sender<Vec<u8>>>>
 }
 
-fn spawn_outbound_sender(channel: Arc<RtcDataChannelWrapper>, mut rx: mpsc::Receiver<Box<[u8]>>) {
+fn spawn_outbound_sender(channel: Arc<RtcDataChannelWrapper>, mut rx: mpsc::Receiver<Vec<u8>>) {
     wasm_bindgen_futures::spawn_local(async move {
         while let Some(data) = rx.next().await {
             let arr = js_sys::Uint8Array::from(&data[..]);
@@ -330,7 +330,7 @@ impl WebRtcClient {
             transfer_id: transfer_id as u32
         };
 
-        let (tx, mut rx) = mpsc::channel::<Box<[u8]>>(64);
+        let (tx, mut rx) = mpsc::channel::<Vec<u8>>(64);
         self.prefix_channels.lock().await.insert(transfer_id, tx);
 
         let resource_token = self
@@ -660,7 +660,7 @@ impl WebRtcClient {
 
                     let mut should_ack = false;
                     for (prefix, raw) in packets_with_prefix {
-                        let packet: Box<[u8]> = raw.into_boxed_slice();
+                        let packet = raw;
                         if let Ok(hold) = TransferDelimiterShema::from_hold_packet(&packet) {
                             let network_stats = NetworkStats {
                                 current_block_id: Some(fec_receiver.current_block_id()),

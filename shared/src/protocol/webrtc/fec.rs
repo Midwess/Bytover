@@ -114,7 +114,7 @@ impl Frame {
         }
     }
 
-    pub fn serialize(&self) -> Box<[u8]> {
+    pub fn serialize(&self) -> Vec<u8> {
         let payload = self.data();
         let header_len = size_of::<u32>() * 2 + 6;
         let total_len = header_len + payload.len();
@@ -133,7 +133,7 @@ impl Frame {
             buf.set_len(total_len);
         }
 
-        buf.into_boxed_slice()
+        buf
     }
 
     pub fn deserialize(buf: &[u8]) -> Option<Self> {
@@ -184,7 +184,7 @@ impl Frame {
 
 #[allow(dead_code)]
 impl FrameEntry {
-    pub fn serialize(&self) -> Box<[u8]> {
+    pub fn serialize(&self) -> Vec<u8> {
         let header_len = size_of::<u32>() * 2 + size_of::<u64>() + size_of::<u16>() + 4;
         let total_len = header_len + self.data.len();
         let mut buf = Vec::with_capacity(total_len);
@@ -203,7 +203,7 @@ impl FrameEntry {
             buf.set_len(total_len);
         }
 
-        buf.into_boxed_slice()
+        buf
     }
 
     pub fn deserialize(buf: &[u8]) -> Option<Self> {
@@ -384,7 +384,7 @@ impl FecSender {
         }
     }
 
-    pub fn send(&mut self, prefix: u16, packet: Box<[u8]>) -> Result<FecAction, FecError> {
+    pub fn send(&mut self, prefix: u16, packet: Vec<u8>) -> Result<FecAction, FecError> {
         let mut offset = 0usize;
         let estimated_frames =
             (packet.len() / (CHUNK_SIZE * self.data_shards)).saturating_add(1) * (self.data_shards + MAX_PARITY_SHARDS);
@@ -760,7 +760,7 @@ impl ReceiverBlock {
         }
     }
 
-    fn insert_frame(&mut self, idx: usize, payload: Box<[u8]>, false_retransmit_counter: &mut u64) -> Result<bool, FecError> {
+    fn insert_frame(&mut self, idx: usize, payload: Vec<u8>, false_retransmit_counter: &mut u64) -> Result<bool, FecError> {
         if idx >= self.total_shards {
             return Err(FecError::InvalidFrameIndex {
                 idx: idx as u8,
@@ -769,7 +769,7 @@ impl ReceiverBlock {
         }
 
         if self.shards[idx].is_none() {
-            self.shards[idx] = Some(Vec::from(payload));
+            self.shards[idx] = Some(payload);
             self.frame_send_times[idx] = now_micros(); // Record when frame arrived
             self.received += 1;
             if idx < self.data_shards {
@@ -1024,8 +1024,8 @@ impl FecReceiver {
             );
 
             let idx = frame.frame_idx as usize;
-            let payload_box = Box::from(frame.data());
-            let can_decode = block.insert_frame(idx, payload_box, &mut self.false_retransmit)?;
+            let payload = frame.data().to_vec();
+            let can_decode = block.insert_frame(idx, payload, &mut self.false_retransmit)?;
             self.total_frames_received += 1;
 
             if can_decode && !self.blocks_to_reconstruct_buf.contains(&block_id) {

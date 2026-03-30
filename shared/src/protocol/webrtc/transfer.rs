@@ -3,7 +3,6 @@ use anyhow::Context;
 use core_services::utils::cancellation::CancellationToken;
 use futures::channel::mpsc;
 use futures_util::lock::Mutex;
-use matchbox_socket::Packet;
 use n0_future::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -66,7 +65,7 @@ impl TransferDelimiterShema {
         }
     }
 
-    pub fn as_bytes(&self) -> Result<Packet, WebRtcErrors> {
+    pub fn as_bytes(&self) -> Result<Vec<u8>, WebRtcErrors> {
         let bytes = bincode::serialize(self).context("Cannot serialize delimiter shema to bytes")?;
         let mut buffer = vec![0u8; 1024];
 
@@ -81,10 +80,10 @@ impl TransferDelimiterShema {
 
         buffer[2..2 + len].copy_from_slice(&bytes);
 
-        Ok(buffer.into_boxed_slice())
+        Ok(buffer)
     }
 
-    pub async fn forward_to_next_resource(rx: &mut mpsc::Receiver<Packet>, session_id: u64) -> Result<Self, WebRtcErrors> {
+    pub async fn forward_to_next_resource(rx: &mut mpsc::Receiver<Vec<u8>>, session_id: u64) -> Result<Self, WebRtcErrors> {
         loop {
             let Some(packet) = rx.next().await else {
                 return Err(WebRtcErrors::InvalidDelimiter(
@@ -98,7 +97,7 @@ impl TransferDelimiterShema {
         }
     }
 
-    pub fn from_start_packet(data: &Packet, session_id: u64) -> Result<Self, WebRtcErrors> {
+    pub fn from_start_packet(data: &[u8], session_id: u64) -> Result<Self, WebRtcErrors> {
         let result = Self::from_bytes(data)?;
 
         if !matches!(result, Self::Start { .. }) {
@@ -117,7 +116,7 @@ impl TransferDelimiterShema {
         Ok(result)
     }
 
-    pub fn from_end_packet(data: &Packet, session_id: u64) -> Result<Self, WebRtcErrors> {
+    pub fn from_end_packet(data: &[u8], session_id: u64) -> Result<Self, WebRtcErrors> {
         let result = Self::from_bytes(data)?;
 
         if !matches!(result, Self::End { .. }) {
@@ -136,7 +135,7 @@ impl TransferDelimiterShema {
         Ok(result)
     }
 
-    pub fn from_hold_packet(data: &Packet) -> Result<Self, WebRtcErrors> {
+    pub fn from_hold_packet(data: &[u8]) -> Result<Self, WebRtcErrors> {
         let result = Self::from_bytes(data)?;
 
         if !matches!(result, Self::Hold(_)) {
@@ -157,7 +156,7 @@ impl TransferDelimiterShema {
         }
     }
 
-    pub fn from_bytes(data: &Packet) -> Result<Self, WebRtcErrors> {
+    pub fn from_bytes(data: &[u8]) -> Result<Self, WebRtcErrors> {
         if data.len() != 1024 {
             return Err(WebRtcErrors::InvalidDelimiter(format!(
                 "Data buffer must be exactly 1024 bytes got {}",

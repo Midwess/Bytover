@@ -22,7 +22,7 @@ thiserror = { workspace = true }
 bytemuck.workspace = true
 chrono = { workspace = true }
 anyhow = { workspace = true }
-uuid = { workspace = true, features = ["v7"] }
+uuid = { workspace = true, features = ["v4", "v7"] }
 serde = { workspace = true, features = ["derive"] }
 futures-util = { workspace = true }
 prost.workspace = true
@@ -30,18 +30,14 @@ futures-timer = {workspace = true, features = ["wasm-bindgen"]}
 n0-future.workspace = true
 async-stream = {workspace = true, default-features = false}
 bincode.workspace = true
-raptorq.workspace = true
 reqwest = { workspace = true, features = ["json"], default-features = false }
-matchbox_protocol.workspace = true
-matchbox_socket.workspace = true
-ewebsock = { workspace = true, features = ["tokio", "tls"] }
 once_cell = { workspace = true }
 futures = { workspace = true }
 http-body = { workspace = true }
 serde_json = { workspace = true }
 url = { workspace = true }
 bytes = { workspace = true }
-derive_more = {  version = "2.0.1", features = ["try_from", "try_into", "try_unwrap"] }
+derive_more = {  version = "2.0.1", features = ["from", "try_from", "try_into", "try_unwrap"] }
 ambassador = "0.4.2"
 
 [dev-dependencies]
@@ -49,4 +45,4 @@ rand = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-uuid = { workspace = true, features = ["js", "v7"] }
+uuid = { workspace = true, features = ["js", "v4", "v7"] }

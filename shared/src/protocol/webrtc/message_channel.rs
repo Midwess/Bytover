@@ -13,11 +13,11 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct DirectMessageChannel {
     response_streams: Arc<Mutex<HashMap<String, mpsc::Sender<Response>>>>,
-    outbound_sender: mpsc::Sender<Box<[u8]>>
+    outbound_sender: mpsc::Sender<Vec<u8>>
 }
 
 impl DirectMessageChannel {
-    pub fn new(outbound_sender: mpsc::Sender<Box<[u8]>>) -> Self {
+    pub fn new(outbound_sender: mpsc::Sender<Vec<u8>>) -> Self {
         DirectMessageChannel {
             response_streams: Arc::new(Mutex::new(HashMap::new())),
             outbound_sender
@@ -34,7 +34,7 @@ impl DirectMessageChannel {
         }
         .encode(&mut binary)?;
 
-        let packet = binary.into_boxed_slice();
+        let packet = binary;
         let _ = self.outbound_sender.clone().send(packet).await;
 
         Ok(())
@@ -48,7 +48,7 @@ impl DirectMessageChannel {
     }
 
     pub async fn send(&self, request: peer_message_body::Request, request_id: Option<uuid::Uuid>) -> Result<Response, WebRtcErrors> {
-        let request_id = request_id.unwrap_or(uuid::Uuid::now_v7()).to_string();
+        let request_id = request_id.unwrap_or(uuid::Uuid::new_v4()).to_string();
         let msg = PeerMessageBody {
             request: Some(request),
             request_id: request_id.clone(),
@@ -57,7 +57,7 @@ impl DirectMessageChannel {
 
         let mut bytes = vec![];
         msg.encode(&mut bytes)?;
-        let packet = bytes.into_boxed_slice();
+        let packet = bytes;
 
         self.outbound_sender
             .clone()
@@ -76,7 +76,7 @@ impl DirectMessageChannel {
     }
 
     pub async fn notify(&self, request: peer_message_body::Request) -> Result<String, WebRtcErrors> {
-        let request_id = uuid::Uuid::now_v7().to_string();
+        let request_id = uuid::Uuid::new_v4().to_string();
         let msg = PeerMessageBody {
             request: Some(request),
             request_id: request_id.clone(),
@@ -85,7 +85,7 @@ impl DirectMessageChannel {
 
         let mut bytes = vec![];
         msg.encode(&mut bytes)?;
-        let packet = bytes.into_boxed_slice();
+        let packet = bytes;
 
         self.outbound_sender
             .clone()
@@ -114,7 +114,7 @@ impl DirectMessageChannel {
     /// Receive an incoming packet and process it.
     /// If it's a response, delivers it to the appropriate request's response channel.
     /// Returns the decoded message body if it needs further processing (e.g., requests).
-    pub async fn receive_packet(&self, packet: Box<[u8]>) -> Result<Option<PeerMessageBody>, WebRtcErrors> {
+    pub async fn receive_packet(&self, packet: Vec<u8>) -> Result<Option<PeerMessageBody>, WebRtcErrors> {
         let msg =
             PeerMessageBody::decode(&*packet).map_err(|e| WebRtcErrors::MessageChannelError(format!("decode error: {:?}", e)))?;
 
