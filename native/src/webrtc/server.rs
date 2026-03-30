@@ -278,7 +278,7 @@ impl WebRtcServer {
 
                             let peer_id = client.peer_id().await.unwrap_or_default();
                             tokio::spawn(async move {
-                                if let Err(e) = client.run(false).await {
+                                if let Err(e) = client.run().await {
                                     log::error!("[webrtc-server] Client run error: {e}");
                                 }
                                 log::info!("[webrtc-server] Client {peer_id} run loop ended");

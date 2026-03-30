@@ -1,5 +1,4 @@
 use core_services::utils::time::epoch_micro;
-use matchbox_socket::Packet;
 use n0_future::time::Instant;
 use reed_solomon_erasure::galois_8::ReedSolomon;
 use schema::devlog::bitbridge::fec_feedback::Feedback;
@@ -834,7 +833,7 @@ impl ReceiverBlock {
         self.is_complete
     }
 
-    fn into_packet(mut self) -> (u16, Packet) {
+    fn into_packet(mut self) -> (u16, Vec<u8>) {
         let mut bytes = vec![0u8; self.total_size];
         let dst: &mut [u8] = bytes.as_mut_slice();
         let mut written = 0;
@@ -855,7 +854,7 @@ impl ReceiverBlock {
             }
         }
 
-        (self.prefix, Packet::from(bytes.into_boxed_slice()))
+        (self.prefix, bytes)
     }
 }
 
@@ -1104,7 +1103,7 @@ impl FecReceiver {
                     }
                 }
 
-                let bytes: Vec<(u16, Packet)> = completed_blocks.into_iter().map(|b| b.into_packet()).collect();
+                let bytes: Vec<(u16, Vec<u8>)> = completed_blocks.into_iter().map(|b| b.into_packet()).collect();
                 log::debug!("Emitting {} reconstructed packets from consecutive blocks", bytes.len());
                 let next_check = self.calculate_next_check_time();
                 return Ok(FecAction::Constructed(bytes, next_check));
@@ -1193,7 +1192,7 @@ impl FecReceiver {
 #[derive(Debug)]
 pub enum FecAction {
     Framed(Vec<Frame>),
-    Constructed(Vec<(u16, Packet)>, Instant),
+    Constructed(Vec<(u16, Vec<u8>)>, Instant),
     Retransmit(Vec<Frame>),
     Feedback(FecFeedback, Instant),
     Noop,
