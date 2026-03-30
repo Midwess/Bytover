@@ -116,7 +116,7 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 let transfer_repo = di.get_transfer_session_repository();
                 let signalling = di.get_signalling_client();
 
-                let client = WebRtcClient::connect(signalling, IceAgent::new(), &signalling_key, resource_repo, transfer_repo)
+                let client = WebRtcClient::connect(current_user.clone(), signalling, IceAgent::new(), &signalling_key, resource_repo, transfer_repo)
                     .await
                     .map_err(|e| P2PError::WebRtc(e.to_string()))?;
 
@@ -128,8 +128,6 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                         log::error!("WebRtcClient run error: {:?}", e);
                     }
                 });
-
-                client.introduce(&current_user).await.map_err(|e| P2PError::WebRtc(e.to_string()))?;
 
                 let peer = client.peer_entity().ok_or_else(|| P2PError::WebRtc("Peer not set after introduce".into()))?;
 

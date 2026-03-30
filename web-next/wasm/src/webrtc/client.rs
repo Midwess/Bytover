@@ -68,6 +68,7 @@ fn spawn_outbound_sender(channel: Arc<RtcDataChannelWrapper>, mut rx: mpsc::Rece
 
 impl WebRtcClient {
     pub async fn connect(
+        me: PeerEntity,
         signaling: SignalingClient,
         ice_agent: IceAgent,
         peer_id: &str,
@@ -146,7 +147,40 @@ impl WebRtcClient {
 
         api.wait_for_channel_open(ordered_channel).await?;
 
-        log::info!("WebRtcClient connection established");
+        log::info!("WebRtcClient connection established, performing introduce handshake...");
+
+        let mut msg_rx = client.inbound_msg_receiver.retrieve().await?;
+
+        let client_clone = client.clone();
+        let me_clone = me.clone();
+        wasm_bindgen_futures::spawn_local(async move {
+            if let Err(e) = client_clone.introduce(&me_clone).await {
+                log::error!("Failed to introduce on connect: {:?}", e);
+            }
+        });
+
+        while let Some(packet) = msg_rx.next().await {
+            if let Some(msg_channel) = client.msg_channel.get() {
+                match msg_channel.receive_packet(packet).await {
+                    Ok(Some(msg)) => {
+                        if let Some(request) = msg.request {
+                            client.process_message_packet(msg.request_id, request).await;
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(e) => {
+                        log::warn!("Failed to decode packet in initial connect loop: {:?}", e);
+                    }
+                }
+            }
+            if client.peer.get().is_some() {
+                break;
+            }
+        }
+
+        drop(msg_rx);
+
+        log::info!("WebRtcClient introduce complete");
         Ok(client)
     }
 

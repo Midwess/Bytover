@@ -30,9 +30,9 @@ use shared::protocol::webrtc::transfer::{TransferDelimiterShema, TransfersContex
 use shared::repository::local_resource::LocalResourceRepository;
 use shared::shell::api::CoreRequest;
 use shared::utils::compression::is_compressible;
-use tokio::time::sleep;
 
 use crate::webrtc::rtc::RtcClient;
+use str0m::channel::ChannelId;
 use str0m::Event;
 use crate::webrtc::signalling::SignalingClient;
 
@@ -157,39 +157,108 @@ impl WebRtcClient {
         signalling: &SignalingClient,
         request_id: String,
         resource_repo: Arc<dyn LocalResourceRepository>
-    ) -> Result<(Arc<Self>, WebRtcEventChannels), WebRtcClientError> {
+    ) -> Result<(Self, WebRtcEventChannels), WebRtcClientError> {
         let Some(signalling_id) = me.signalling_id.clone() else {
             return Err(WebRtcClientError::Shared("Peer not introduced".to_string()));
         };
 
-        let rtc_client = RtcClient::connect(&signalling_id, offer_message, signalling, &request_id).await?;
+        let mut rtc_client = RtcClient::connect(&signalling_id, offer_message, signalling, &request_id).await?;
 
         log::info!("[webrtc-client] RTC connected, creating client");
 
-        let (ordered_msg_tx, ordered_msg_rx) = mpsc::channel::<Vec<u8>>(64);
+        let (ordered_msg_tx, mut ordered_msg_rx) = mpsc::channel::<Vec<u8>>(64);
         let (unordered_msg_tx, unordered_msg_rx) = mpsc::channel::<Vec<u8>>(64);
         let (reliable_data_tx, reliable_data_rx) = mpsc::channel::<Vec<u8>>(64);
         let (unreliable_data_tx, unreliable_data_rx) = mpsc::channel::<Vec<u8>>(64);
         let (outbound_tx, outbound_rx) = mpsc::channel::<(u16, Vec<u8>, bool)>(64);
         let (feedback_tx, feedback_rx) = mpsc::unbounded::<Feedback>();
 
-        let client = Arc::new(Self {
+        let msg_channel = DirectMessageChannel::new(ordered_msg_tx);
+        let cids = *rtc_client.channel_ids();
+        let peer: OnceCell<Peer> = OnceCell::new();
+        let mut introduced = false;
+        // Responses queued during poll_event are buffered here and sent after the inner loop,
+        // since RtcClient::send() and poll_event() both require &mut self.
+        let mut pending_sends: Vec<(Vec<u8>, ChannelId)> = Vec::new();
+
+        loop {
+            while let Some(event) = rtc_client.poll_event().await? {
+                if let Event::ChannelData(data) = event {
+                    if data.id == cids.ordered_msg {
+                        if let Ok(msg) = PeerMessageBody::decode(&data.data[..]) {
+                            let request_id = msg.request_id;
+                            if let Some(Response::IntroduceResponse(res)) = msg.response {
+                                let p = Peer::from(res.peer);
+                                log::info!("[webrtc-client] Peer introduced as {:?}", p.id);
+                                let _ = peer.set(p);
+                            } else if let Some(Request::IntroduceRequest(intro)) = msg.request {
+                                let p = Peer::from(intro.mine);
+                                log::info!("[webrtc-client] Remote peer: {:?}", p.id);
+                                let _ = peer.set(p);
+                                let mut bytes = vec![];
+                                let response_body = PeerMessageBody {
+                                    request_id,
+                                    response: Some(Response::IntroduceResponse(IntroduceResponseMessage {
+                                        peer: PeerMessage::from(me.clone())
+                                    })),
+                                    ..Default::default()
+                                };
+                                if response_body.encode(&mut bytes).is_ok() {
+                                    pending_sends.push((bytes, cids.ordered_msg));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            for (data, channel_id) in pending_sends.drain(..) {
+                let _ = rtc_client.send(&data, channel_id);
+            }
+
+            if peer.get().is_some() {
+                break;
+            }
+
+            if !introduced {
+                log::info!("[webrtc-client] Introducing self to peer");
+                let _ = msg_channel.notify(Request::IntroduceRequest(IntroduceRequestMessage {
+                    mine: PeerMessage::from(me.clone())
+                })).await;
+                introduced = true;
+            }
+
+            tokio::select! {
+                _ = rtc_client.wait_for_input(rtc_client.timeout_duration()) => {}
+                Some(data) = ordered_msg_rx.next() => {
+                    let _ = rtc_client.send(&data, cids.ordered_msg);
+                }
+            }
+        }
+
+        let msg_channel_cell = OnceCell::new();
+        let _ = msg_channel_cell.set(msg_channel);
+        let unordered_msg_channel_cell = OnceCell::new();
+        let _ = unordered_msg_channel_cell.set(DirectMessageChannel::new(unordered_msg_tx));
+        let outbound_packet_sender_cell = OnceCell::new();
+        let _ = outbound_packet_sender_cell.set(outbound_tx);
+        let transfer_feedback_sender_cell = OnceCell::new();
+        let _ = transfer_feedback_sender_cell.set(feedback_tx);
+
+        // rtc_client goes directly into YieldContainer here — it was never retrieved,
+        // so run() can call retrieve() immediately without any async race.
+        let client = Self {
             me,
             rtc_client: YieldContainer::new(rtc_client),
-            msg_channel: Default::default(),
-            unordered_msg_channel: Default::default(),
-            peer: OnceCell::new(),
+            msg_channel: msg_channel_cell,
+            unordered_msg_channel: unordered_msg_channel_cell,
+            peer,
             transfers_context: TransfersContext::new(),
             core_request: OnceCell::new(),
             resource_repo,
-            outbound_packet_sender: Default::default(),
-            transfer_feedback_sender: Default::default()
-        });
-
-        let _ = client.msg_channel.set(DirectMessageChannel::new(ordered_msg_tx));
-        let _ = client.unordered_msg_channel.set(DirectMessageChannel::new(unordered_msg_tx));
-        let _ = client.outbound_packet_sender.set(outbound_tx);
-        let _ = client.transfer_feedback_sender.set(feedback_tx);
+            outbound_packet_sender: outbound_packet_sender_cell,
+            transfer_feedback_sender: transfer_feedback_sender_cell,
+        };
 
         Ok((
             client,
@@ -321,7 +390,6 @@ impl WebRtcClient {
         };
 
         log::info!("[webrtc-client] Introducing self to peer");
-        sleep(Duration::from_secs(2)).await;
 
         let response = self
             .msg_channel()

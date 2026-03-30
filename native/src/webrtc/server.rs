@@ -243,7 +243,7 @@ impl WebRtcServer {
                             }
 
                             if let Ok((client, channels)) = result {
-                                Some((client, channels, user))
+                                Some((Arc::new(client), channels, user))
                             } else {
                                 None
                             }
@@ -254,8 +254,12 @@ impl WebRtcServer {
                 Some(result) = connect_futs.next() => {
                     match result {
                         Some((client, channels, user)) => {
-                            log::info!("[webrtc-server] Client connected, spawning run loop");
+                            let peer_id = client.peer_id().await.unwrap_or_default();
+                            log::info!("[webrtc-server] Client connected and introduced as {peer_id}, registering");
+                            self.clients.lock().await.insert(peer_id.clone(), Arc::downgrade(&client));
+                            log::info!("[webrtc-server] Active clients: {}", self.clients.lock().await.len());
 
+                            log::info!("[webrtc-server] Spawning run loop");
                             client.start_core_stream(self.core_request.get().unwrap().clone());
                             let client_for_run = client.clone();
                             tokio::spawn(async move {
@@ -263,19 +267,6 @@ impl WebRtcServer {
                                     log::error!("[webrtc-server] Client run error: {e}");
                                 }
                             });
-
-                            log::info!("[webrtc-server] Performing introduce handshake");
-                            if let Err(e) = client.introduce(&user).await {
-                                log::error!("[webrtc-server] Failed to introduce: {e}");
-                                continue;
-                            }
-
-                            let peer_id = client.peer_id().await.unwrap_or_default();
-                            log::info!("[webrtc-server] Client introduced as {peer_id}, registering");
-
-                            self.clients.lock().await.insert(peer_id.clone(), Arc::downgrade(&client));
-
-                            log::info!("[webrtc-server] Active clients: {}", self.clients.lock().await.len());
                         }
                         None => {
                             continue;
