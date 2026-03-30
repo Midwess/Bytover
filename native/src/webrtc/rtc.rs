@@ -15,8 +15,6 @@ use crate::webrtc::client::WebRtcClientError;
 use crate::webrtc::ice::IceAgent;
 use crate::webrtc::signalling::SignalingClient;
 
-const TOTAL_CHANNELS: usize = 4;
-
 const fn channel_id(raw: usize) -> ChannelId {
     unsafe { std::mem::transmute(raw) }
 }
@@ -119,7 +117,7 @@ impl RtcClient {
             .await
             .map_err(|e| WebRtcClientError::Signalling(format!("{e}")))?;
 
-        log::info!("[rtc-client] Answer sent, waiting for connection and all channels");
+        log::info!("[rtc-client] Answer sent, waiting for connection");
 
         let mut client = Self {
             rtc,
@@ -131,22 +129,14 @@ impl RtcClient {
             cached_timeout: Instant::now(),
         };
 
-        let mut channels_opened: usize = 0;
-        let mut is_connected = false;
-
+        // Negotiated channels (negotiated: Some(id)) are implicitly open once
+        // the SCTP association is established — str0m won't emit ChannelOpen for them.
+        // We only need to wait for the connection event.
         loop {
             match client.poll_loop().await? {
                 Event::Connected => {
-                    log::info!("[rtc-client] Connected");
-                    is_connected = true;
-                }
-                Event::ChannelOpen(_, ref label) => {
-                    channels_opened += 1;
-                    log::info!("[rtc-client] Channel {} opened (label: {})", channels_opened, label);
-                    if is_connected && channels_opened >= TOTAL_CHANNELS {
-                        log::info!("[rtc-client] All channels open, ready");
-                        return Ok(client);
-                    }
+                    log::info!("[rtc-client] Connected, negotiated channels ready");
+                    return Ok(client);
                 }
                 Event::IceConnectionStateChange(state) => {
                     log::info!("[rtc-client] ICE state: {:?}", state);
@@ -154,7 +144,9 @@ impl RtcClient {
                         return Err(WebRtcClientError::Signalling("Peer disconnected during setup".into()));
                     }
                 }
-                _ => {}
+                e => {
+                    log::warn!("[rtc-client] skipped event: {e:?}");
+                }
             }
         }
     }
@@ -206,11 +198,11 @@ impl RtcClient {
                     match Receive::new(Protocol::Udp, source, local, &self.buf[..n]) {
                         Ok(receive) => {
                             if let Err(e) = self.rtc.handle_input(Input::Receive(Instant::now(), receive)) {
-                                log::trace!("[rtc-client] Input handle packet drop: {}", e);
+                                log::warn!("[rtc-client] Input handle packet drop: {}", e);
                             }
                         }
                         Err(e) => {
-                            log::trace!("[rtc-client] Failed to parse Receive: {}", e);
+                            log::warn!("[rtc-client] Failed to parse Receive: {}", e);
                         }
                     }
                 }

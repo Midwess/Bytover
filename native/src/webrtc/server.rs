@@ -243,10 +243,13 @@ impl WebRtcServer {
                             )
                             .await;
 
-                            log::info!("[webrtc-server] Client connection result {:?}", result);
+                            match &result {
+                                Ok(_) => log::info!("[webrtc-server] Client connected successfully"),
+                                Err(e) => log::error!("[webrtc-server] Client connection failed: {:?}", e),
+                            }
 
-                            if let Ok(client) = result {
-                                Some((client, user))
+                            if let Ok((client, channels)) = result {
+                                Some((client, channels, user))
                             } else {
                                 None
                             }
@@ -256,9 +259,17 @@ impl WebRtcServer {
 
                 Some(result) = connect_futs.next() => {
                     match result {
-                        Some((client, user)) => {
-                            log::info!("[webrtc-server] Client connected, performing introduce");
+                        Some((client, channels, user)) => {
+                            log::info!("[webrtc-server] Client connected, spawning run loop");
 
+                            let client_for_run = client.clone();
+                            tokio::spawn(async move {
+                                if let Err(e) = client_for_run.run(channels).await {
+                                    log::error!("[webrtc-server] Client run error: {e}");
+                                }
+                            });
+
+                            log::info!("[webrtc-server] Performing introduce handshake");
                             if let Err(e) = client.introduce(&user).await {
                                 log::error!("[webrtc-server] Failed to introduce: {e}");
                                 continue;
@@ -268,14 +279,6 @@ impl WebRtcServer {
                             log::info!("[webrtc-server] Client introduced as {peer_id}, registering");
 
                             self.clients.lock().await.insert(peer_id.clone(), Arc::downgrade(&client));
-
-                            let peer_id = client.peer_id().await.unwrap_or_default();
-                            tokio::spawn(async move {
-                                if let Err(e) = client.run().await {
-                                    log::error!("[webrtc-server] Client run error: {e}");
-                                }
-                                log::info!("[webrtc-server] Client {peer_id} run loop ended");
-                            });
 
                             log::info!("[webrtc-server] Active clients: {}", self.clients.lock().await.len());
                         }

@@ -135,6 +135,17 @@ pub struct WebRtcClient {
     transfer_feedback_sender: OnceCell<mpsc::UnboundedSender<Feedback>>
 }
 
+pub struct WebRtcEventChannels {
+    pub ordered_msg_rx: mpsc::Receiver<Vec<u8>>,
+    pub unordered_msg_rx: mpsc::Receiver<Vec<u8>>,
+    pub reliable_data_rx: mpsc::Receiver<Vec<u8>>,
+    pub unreliable_data_rx: mpsc::Receiver<Vec<u8>>,
+    pub outbound_rx: mpsc::Receiver<(u16, Vec<u8>, bool)>,
+    pub feedback_rx: mpsc::UnboundedReceiver<Feedback>,
+    pub reliable_data_tx: mpsc::Sender<Vec<u8>>,
+    pub unreliable_data_tx: mpsc::Sender<Vec<u8>>,
+}
+
 impl std::fmt::Debug for WebRtcClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("WebRtcClient").field("peer", &self.peer.get()).finish()
@@ -148,7 +159,7 @@ impl WebRtcClient {
         signalling: &SignalingClient,
         request_id: String,
         resource_repo: Arc<dyn LocalResourceRepository>
-    ) -> Result<Arc<Self>, WebRtcClientError> {
+    ) -> Result<(Arc<Self>, WebRtcEventChannels), WebRtcClientError> {
         let Some(signalling_id) = me.signalling_id.clone() else {
             return Err(WebRtcClientError::Shared("Peer not introduced".to_string()));
         };
@@ -156,6 +167,13 @@ impl WebRtcClient {
         let rtc_client = RtcClient::connect(&signalling_id, offer_message, signalling, &request_id).await?;
 
         log::info!("[webrtc-client] RTC connected, creating client");
+
+        let (ordered_msg_tx, ordered_msg_rx) = mpsc::channel::<Vec<u8>>(64);
+        let (unordered_msg_tx, unordered_msg_rx) = mpsc::channel::<Vec<u8>>(64);
+        let (reliable_data_tx, reliable_data_rx) = mpsc::channel::<Vec<u8>>(64);
+        let (unreliable_data_tx, unreliable_data_rx) = mpsc::channel::<Vec<u8>>(64);
+        let (outbound_tx, outbound_rx) = mpsc::channel::<(u16, Vec<u8>, bool)>(64);
+        let (feedback_tx, feedback_rx) = mpsc::unbounded::<Feedback>();
 
         let client = Arc::new(Self {
             me,
@@ -170,32 +188,52 @@ impl WebRtcClient {
             transfer_feedback_sender: Default::default()
         });
 
-        Ok(client)
+        let _ = client.msg_channel.set(DirectMessageChannel::new(ordered_msg_tx));
+        let _ = client.unordered_msg_channel.set(DirectMessageChannel::new(unordered_msg_tx));
+        let _ = client.outbound_packet_sender.set(outbound_tx);
+        let _ = client.transfer_feedback_sender.set(feedback_tx);
+
+        Ok((
+            client,
+            WebRtcEventChannels {
+                ordered_msg_rx,
+                unordered_msg_rx,
+                reliable_data_rx,
+                unreliable_data_rx,
+                outbound_rx,
+                feedback_rx,
+                reliable_data_tx,
+                unreliable_data_tx,
+            }
+        ))
     }
 
-    pub async fn run(self: Arc<Self>) -> Result<(), WebRtcClientError> {
+    pub async fn run(self: Arc<Self>, channels: WebRtcEventChannels) -> Result<(), WebRtcClientError> {
         let mut rtc_container = self.rtc_client.retrieve().await?;
         let rtc = rtc_container.deref_mut();
 
-        let (ordered_msg_tx, mut ordered_msg_rx) = mpsc::channel::<Vec<u8>>(64);
-        let (unordered_msg_tx, mut unordered_msg_rx) = mpsc::channel::<Vec<u8>>(64);
-        let (mut reliable_data_tx, mut reliable_data_rx) = mpsc::channel::<Vec<u8>>(64);
-        let (mut unreliable_data_tx, mut unreliable_data_rx) = mpsc::channel::<Vec<u8>>(64);
-
-        let (outbound_tx, outbound_rx) = mpsc::channel::<(u16, Vec<u8>, bool)>(64);
-        let (feedback_tx, feedback_rx) = mpsc::unbounded::<Feedback>();
-
-        let _ = self.msg_channel.set(DirectMessageChannel::new(ordered_msg_tx));
-        let _ = self.unordered_msg_channel.set(DirectMessageChannel::new(unordered_msg_tx));
-        let _ = self.outbound_packet_sender.set(outbound_tx);
-        let _ = self.transfer_feedback_sender.set(feedback_tx);
+        let WebRtcEventChannels {
+            mut ordered_msg_rx,
+            mut unordered_msg_rx,
+            mut reliable_data_rx,
+            mut unreliable_data_rx,
+            outbound_rx,
+            feedback_rx,
+            mut reliable_data_tx,
+            mut unreliable_data_tx,
+        } = channels;
 
         let this = self.clone();
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             this.sending_loop(&mut reliable_data_tx, &mut unreliable_data_tx, outbound_rx, feedback_rx).await;
         });
 
         while rtc.is_alive() {
+            if handle.is_finished() {
+                log::info!("Sending loop has been finished with result {:?}", handle.await);
+                break;
+            }
+                
             while let Some(event) = rtc.poll_event().await? {
                 match event {
                     Event::ChannelData(data) => {
@@ -203,6 +241,7 @@ impl WebRtcClient {
                         let data = data.data;
                         if id == ORDERED_MSG_CHANNEL_ID {
                             if let Ok(msg) = PeerMessageBody::decode(&data[..]) {
+                                log::info!("Received request {msg:?}");
                                 let request_id = msg.request_id;
                                 if let Some(response) = msg.response {
                                     self.msg_channel().notify_response(request_id, response).await;
