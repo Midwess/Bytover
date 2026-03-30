@@ -8,6 +8,7 @@ use crate::app::operations::p2p::{P2POperation, P2POperationOutput};
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::operations::CoreOperationOutput;
 use crate::app::p2p::module::P2PEvent;
+use crate::app::transfer::module::TransferEvent;
 use crate::entities::peer::Peer;
 use crate::errors::CoreError;
 use crate::CoreOperation;
@@ -65,6 +66,14 @@ impl AppCommand {
                     break;
                 }
                 CoreOperationOutput::None => {}
+                CoreOperationOutput::P2P(P2POperationOutput::ReceivedViewSessionRequest { peer_id, request_id, order_id, password }) => {
+                    log::info!("Received view session request {request_id:?}");
+                    self.notify_event(TransferEvent::ReceivedViewSessionRequest { peer_id, request_id, order_id, password });
+                }
+                CoreOperationOutput::P2P(P2POperationOutput::ReceivedDownloadRequest { peer_id, session_order_id, resource_order_id, transfer_id }) => {
+                    log::info!("Received download request {transfer_id:?}");
+                    self.notify_event(TransferEvent::ReceivedDownloadRequest { peer_id, session_order_id, resource_order_id, transfer_id });
+                }
                 _ => {
                     panic!("Unexpected output from nearby server, output: {output:?}");
                 }

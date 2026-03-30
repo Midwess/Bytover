@@ -131,12 +131,6 @@ impl WebRtcServer {
         Ok(())
     }
 
-    pub async fn start_peer_core_stream(&self, peer_id: String, core_request: CoreRequest) -> Result<(), WebRtcServerError> {
-        let client = self.get_client(&peer_id).await?;
-        client.start_core_stream(core_request);
-        Ok(())
-    }
-
     pub async fn send_session_detail(
         &self,
         peer_id: String,
@@ -262,6 +256,7 @@ impl WebRtcServer {
                         Some((client, channels, user)) => {
                             log::info!("[webrtc-server] Client connected, spawning run loop");
 
+                            client.start_core_stream(self.core_request.get().unwrap().clone());
                             let client_for_run = client.clone();
                             tokio::spawn(async move {
                                 if let Err(e) = client_for_run.run(channels).await {

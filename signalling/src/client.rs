@@ -59,7 +59,6 @@ impl Client {
             pending.insert(request_id.clone(), tx);
         }
 
-        log::info!("Sending msg: {:?}", message);
         let mut buf = Vec::new();
         message
             .encode(&mut buf)
@@ -70,7 +69,6 @@ impl Client {
             .binary(Bytes::from(buf))
             .await
             .map_err(|_| ClientError::Disconnected)?;
-        log::info!("sent msg");
 
         timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS), rx)
             .await

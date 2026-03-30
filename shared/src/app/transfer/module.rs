@@ -435,6 +435,8 @@ impl AppModule<BitBridge> for TransferModule {
                     transfer_type: Some(TransferType::send_any())
                 };
 
+                log::info!("Received view session request {session_id:?}");
+
                 let session = model.transfer.sessions.lookup(&session_id).cloned();
                 let device = model.environment.device.clone();
                 Command::handle_result(move |it| async move {

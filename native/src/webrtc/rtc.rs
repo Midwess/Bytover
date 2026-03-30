@@ -267,7 +267,6 @@ impl RtcClient {
                 false
             }
             else {
-                log::info!("[rtc-client] Data written to channel {:?}, {} bytes", channel_id, data.len());
                 true
             }
         } else {

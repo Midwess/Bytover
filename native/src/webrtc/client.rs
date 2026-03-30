@@ -281,7 +281,6 @@ impl WebRtcClient {
             tokio::select! {
                 _ = rtc.wait_for_input(timeout) => {}
                 Some(data) = ordered_msg_rx.next() => {
-                    log::info!("Sending msg");
                     rtc.send(&data, cids.ordered_msg);
                 }
                 Some(data) = unordered_msg_rx.next() => {
@@ -528,7 +527,6 @@ impl WebRtcClient {
     }
 
     pub async fn process_message_packet(&self, request_id: String, request: Request) {
-        log::info!("[webrtc-client] Received message packet: {:?}", request);
 
         match request {
             Request::CancelRequest(req) => {

@@ -17,11 +17,6 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
         effect: shared::app::operations::p2p::P2POperation
     ) -> Result<CoreOperationOutput, shared::errors::CoreError> {
         match effect {
-            shared::app::operations::p2p::P2POperation::ConnectPeer { signalling_key, .. } => {
-                let web_rtc = self.web_rtc.clone();
-                web_rtc.start_peer_core_stream(signalling_key, request).await?;
-                Ok(CoreOperationOutput::None)
-            }
             shared::app::operations::p2p::P2POperation::StartNearbyServer(peer) => {
                 if let Err(e) = self.web_rtc.start(request.clone(), peer).await {
                     log::error!("Failed to start nearby server: {e:?}");
@@ -86,6 +81,9 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 resource_id
             } => {
                 self.web_rtc.broadcast_cancel_session(session_id, resource_id).await?;
+                Ok(CoreOperationOutput::None)
+            }
+            shared::app::operations::p2p::P2POperation::ConnectPeer { signalling_key, .. } => {
                 Ok(CoreOperationOutput::None)
             }
         }
