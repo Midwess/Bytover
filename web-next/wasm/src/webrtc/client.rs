@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use bytes::Bytes;
+use core_services::utils::cancellation::{FutureExtension, TaskErrors};
 use core_services::utils::yield_container::{YieldContainer, YieldError};
 use futures::channel::mpsc;
 use futures::channel::mpsc::unbounded;
@@ -13,8 +15,15 @@ use n0_future::time::Instant;
 use once_cell::sync::OnceCell;
 use schema::devlog::bitbridge::fec_feedback::Feedback;
 use schema::devlog::bitbridge::peer_message_body::{Request, Response};
-use schema::devlog::bitbridge::{FecFeedback, NetworkStats};
+use schema::devlog::bitbridge::{
+    FecFeedback, NetworkStats, P2pCancelSessionRequest, ResourceTypeMessage, VoidResponseMessage
+};
+use shared::app::operations::p2p::P2POperationOutput;
+use shared::app::operations::transfer::TransferOperationOutput;
+use shared::app::operations::CoreOperationOutput;
+use shared::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use shared::entities::peer::Peer as PeerEntity;
+use shared::entities::transfer_session::TransferProgress;
 use shared::protocol::webrtc::fec::{FecAction, FecReceiver, Frame};
 use shared::protocol::webrtc::message_channel::DirectMessageChannel;
 use shared::protocol::webrtc::transfer::{TransferDelimiterShema, TransfersContext};
@@ -254,12 +263,13 @@ impl WebRtcClient {
 
     pub async fn request_session_detail(
         &self,
+        core_request: CoreRequest,
         order_id: u64,
         password: Option<String>
-    ) -> Result<schema::devlog::bitbridge::P2pTransferSessionMessage, WebRtcClientError> {
+    ) -> Result<(), WebRtcClientError> {
         use schema::devlog::bitbridge::view_session_detail_response::Result as ResponseResult;
-
-        log::info!("Requesting session detail for order_id {}", order_id);
+        use schema::devlog::bitbridge::PeerErrorsMessage;
+        use core_services::utils::cancellation::CancellationToken;
 
         let request = schema::devlog::bitbridge::ViewSessionDetailRequest { order_id, password };
 
@@ -268,38 +278,51 @@ impl WebRtcClient {
             .get()
             .ok_or_else(|| WebRtcClientError::Connection("No message channel".to_string()))?;
 
+        let timeout_token = CancellationToken::timeout(Duration::from_secs(60));
+
         let response = msg_channel
             .send(Request::ViewSessionRequest(request), None)
+            .with_cancel(&timeout_token)
             .await
+            .map_err(|_| WebRtcClientError::Timeout)?
             .map_err(|e| WebRtcClientError::Message(e.to_string()))?;
 
         match response {
             Response::ViewSessionResponse(resp) => match resp.result {
                 Some(ResponseResult::Session(session)) => {
-                    log::info!("Received session detail for order_id {}", order_id);
-                    Ok(session)
+                    core_request
+                        .response(CoreOperationOutput::Transfer(TransferOperationOutput::SessionDetailReceived(session)))
+                        .await;
                 }
-                Some(ResponseResult::Error(error_msg)) => {
-                    log::error!("Session detail error: {:?}", error_msg);
-                    Err(WebRtcClientError::Peer(format!("{:?}", error_msg)))
+                Some(ResponseResult::Error(error_type)) => {
+                    let error_msg = PeerErrorsMessage::try_from(error_type).unwrap_or(PeerErrorsMessage::InvalidRequest);
+                    core_request
+                        .response(CoreOperationOutput::Error(shared::errors::CoreError::PeerRequestError(error_msg)))
+                        .await;
+                    return Err(WebRtcClientError::Peer(error_msg.to_string()));
                 }
-                Some(ResponseResult::ResourceUpdated(_)) => Err(WebRtcClientError::Message("Unexpected resource updated".to_string())),
-                None => Err(WebRtcClientError::Message("No result in response".to_string()))
+                _ => return Err(WebRtcClientError::Message("Unexpected response".to_string()))
             },
-            _ => Err(WebRtcClientError::Message("Unexpected response type".to_string()))
+            _ => return Err(WebRtcClientError::Message("Unexpected response type".to_string()))
         }
+
+        Ok(())
     }
 
     pub async fn request_resource_download(
-        self: Arc<Self>,
+        &self,
+        core_request: CoreRequest,
         session_order_id: u64,
-        resource_order_id: u64
-    ) -> Result<(), WebRtcClientError> {
+        resource: LocalResource,
+        mut progress: TransferProgress
+    ) -> Result<TransferProgress, WebRtcClientError> {
         use schema::devlog::bitbridge::DownloadResourceRequest;
+        use std::sync::atomic::{AtomicU16, Ordering};
 
-        static TRANSFER_ID_COUNTER: std::sync::atomic::AtomicU16 = std::sync::atomic::AtomicU16::new(1);
+        static TRANSFER_ID_COUNTER: AtomicU16 = AtomicU16::new(1);
 
-        let transfer_id = TRANSFER_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let resource_order_id = resource.order_id;
+        let transfer_id = TRANSFER_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
 
         let request = DownloadResourceRequest {
             session_order_id,
@@ -310,32 +333,150 @@ impl WebRtcClient {
         let (tx, mut rx) = mpsc::channel::<Box<[u8]>>(64);
         self.prefix_channels.lock().await.insert(transfer_id, tx);
 
-        log::info!(
-            "Requesting download for resource {}, registered prefix channel: {}",
-            resource_order_id,
-            transfer_id
-        );
+        let resource_token = self
+            .transfers_context
+            .get_or_create_resource_token(session_order_id, resource_order_id)
+            .await;
+
+        progress.update_progress(1);
+        core_request
+            .response(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
+            .await;
 
         let msg_channel = self
             .msg_channel
             .get()
             .ok_or_else(|| WebRtcClientError::Connection("No message channel".to_string()))?;
 
-        let _request_id = msg_channel
+        msg_channel
             .notify(Request::DownloadResourceRequest(request))
             .await
             .map_err(|e| WebRtcClientError::Message(e.to_string()))?;
 
-        log::debug!("Sent download request with transfer_id: {}", transfer_id);
+        let start_delimiter = loop {
+            match rx.next().with_cancel(&resource_token).await? {
+                Some(packet) => {
+                    if let Ok(v) = TransferDelimiterShema::from_start_packet(&packet, session_order_id) {
+                        break v;
+                    }
+                }
+                None => {
+                    self.prefix_channels.lock().await.remove(&transfer_id);
+                    return Err(WebRtcClientError::Transfer("Channel closed before start delimiter".into()));
+                }
+            }
+        };
 
-        while let Some(packet) = rx.next().await {
-            log::debug!("Received packet of size {} on prefix channel", packet.len());
-            self.process_data_packet(packet).await;
+        let compressed = start_delimiter.compressed();
+        let mut writer = self
+            .resource_repo
+            .write(resource.path.clone(), compressed)
+            .await
+            .map_err(|e| WebRtcClientError::Transfer(format!("Failed to create writer: {:?}", e)))?;
+
+        loop {
+            match rx.next().with_cancel(&resource_token).await? {
+                Some(packet) => {
+                    if TransferDelimiterShema::from_end_packet(&packet, session_order_id).is_ok() {
+                        progress.success();
+                        core_request
+                            .response(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
+                            .await;
+                        break;
+                    }
+
+                    let bytes = Bytes::from(packet.to_vec());
+                    if let Some(written) = writer.d_write(bytes).await.map_err(|e| WebRtcClientError::Transfer(e.to_string()))? {
+                        progress.update_progress(written as u64);
+                        core_request
+                            .response_throttle(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
+                            .await;
+                    }
+                }
+                None => {
+                    self.prefix_channels.lock().await.remove(&transfer_id);
+                    return Err(WebRtcClientError::Transfer("Channel closed before end delimiter".into()));
+                }
+            }
         }
 
-        log::info!("Prefix channel {} closed", transfer_id);
         self.prefix_channels.lock().await.remove(&transfer_id);
-        Ok(())
+        Ok(progress)
+    }
+
+    pub async fn download_all_resources(
+        &self,
+        core_request: CoreRequest,
+        session_order_id: u64,
+        session_resource: LocalResource,
+        resources: Vec<LocalResource>
+    ) -> Result<TransferProgress, WebRtcClientError> {
+        use shared::entities::transfer_session::TransferType;
+
+        let token = self
+            .transfers_context
+            .get_or_create_resource_token(session_order_id, session_resource.order_id)
+            .await;
+        let zip_path = session_resource.path.clone();
+
+        if let Err(e) = self.transfer_session_repo.start_download_session(zip_path.clone()).await {
+            self.cancel_resource_transfer(session_order_id, session_resource.order_id).await;
+            return Err(WebRtcClientError::Transfer(format!("Failed to start download session: {:?}", e)));
+        }
+
+        let mut download_failed = false;
+
+        for resource in resources {
+            let resource_id = resource.order_id;
+            let progress = TransferProgress::new(resource_id, resource.size, TransferType::Receive);
+
+            let result = self
+                .request_resource_download(core_request.clone(), session_order_id, resource, progress)
+                .with_cancel(&token)
+                .await;
+
+            match result {
+                Ok(Ok(_)) => {}
+                Err(_) => {
+                    self.cancel_resource_transfer(session_order_id, resource_id).await;
+                    download_failed = true;
+                    break;
+                }
+                Ok(Err(e)) => {
+                    log::error!("Failed to download resource {}: {:?}", resource_id, e);
+                    self.cancel_resource_transfer(session_order_id, resource_id).await;
+                    download_failed = true;
+                    break;
+                }
+            }
+        }
+
+        if download_failed {
+            let _ = self.transfer_session_repo.stop_download_session(zip_path).await;
+            self.cancel_resource_transfer(session_order_id, session_resource.order_id).await;
+            return Err(WebRtcClientError::Transfer("Download all failed".into()));
+        }
+
+        let mut session_progress = TransferProgress::new(session_resource.order_id, session_resource.size, TransferType::Receive);
+        session_progress.update_progress(session_resource.size);
+        core_request
+            .response(TransferOperationOutput::TransferResourceProgressUpdate(session_progress.clone()))
+            .await;
+
+        if let Err(e) = self.transfer_session_repo.stop_download_session(zip_path).await {
+            session_progress.fail(format!("Failed to save: {:?}", e));
+            core_request
+                .response(TransferOperationOutput::TransferResourceProgressUpdate(session_progress))
+                .await;
+            return Err(WebRtcClientError::Transfer("Failed to stop download session".into()));
+        }
+
+        session_progress.success();
+        core_request
+            .response(TransferOperationOutput::TransferResourceProgressUpdate(session_progress.clone()))
+            .await;
+
+        Ok(session_progress)
     }
 
     pub fn start_core_stream(&self, core_request: CoreRequest) {
@@ -346,7 +487,7 @@ impl WebRtcClient {
         self.core_request.get()
     }
 
-    pub async fn process_message_packet(&self, _request_id: String, msg: Request) {
+    pub async fn process_message_packet(&self, request_id: String, msg: Request) {
         match msg {
             Request::CancelRequest(request) => {
                 log::info!("Received cancel request {:?}", request);
@@ -357,11 +498,50 @@ impl WebRtcClient {
                 }
             }
             Request::ResourceNotification(notification) => {
-                log::info!(
-                    "Received resource notification for session order_id {}",
-                    notification.session_order_id
-                );
-                let _ = notification;
+                let session_order_id = notification.session_order_id;
+                if let Some(resource_proto) = notification.resource {
+                    let mut resource = LocalResource {
+                        order_id: resource_proto.order_id,
+                        name: resource_proto.name,
+                        size: resource_proto.size as u64,
+                        path: LocalResourcePath::RelativePath {
+                            path: format!("received/session_{}/resource_{}", session_order_id, resource_proto.order_id),
+                            is_private: false
+                        },
+                        thumbnail_path: None,
+                        r#type: (ResourceTypeMessage::try_from(resource_proto.r#type).unwrap_or_default())
+                            .try_into()
+                            .unwrap_or(ResourceType::File),
+                        shelf_id: 0
+                    };
+
+                    if let Some(thumbnail_bytes) = resource_proto.thumbnail_png {
+                        match self.resource_repo.save_thumbnail(thumbnail_bytes, resource.order_id).await {
+                            Ok(thumbnail_path) => {
+                                resource.thumbnail_path = Some(thumbnail_path);
+                            }
+                            Err(e) => {
+                                log::warn!("Failed to save thumbnail: {:?}", e);
+                            }
+                        }
+                    }
+
+                    if let Some(core_request) = self.core_request() {
+                        core_request
+                            .response(CoreOperationOutput::P2P(P2POperationOutput::ReceivedResourceNotification {
+                                session_order_id,
+                                resource,
+                                peer_id: self.peer.get().map(|p| p.id.clone()).unwrap_or_default()
+                            }))
+                            .await;
+                    }
+                }
+
+                if let Some(msg_channel) = self.msg_channel.get() {
+                    let _ = msg_channel
+                        .send_response(request_id, Response::VoidResponse(VoidResponseMessage {}))
+                        .await;
+                }
             }
             _ => {
                 log::debug!("Unhandled message request type");
@@ -369,19 +549,26 @@ impl WebRtcClient {
         }
     }
 
-    pub async fn process_data_packet(&self, packet: Box<[u8]>) {
-        let mut channels = self.prefix_channels.lock().await;
-        if let Some(tx) = channels.get_mut(&0) {
-            let _ = tx.try_send(packet);
-        }
-    }
-
     pub async fn cancel_transfer(&self, session_id: u64) {
         self.transfers_context.cancel_transfer(session_id).await;
+        if let Some(msg_channel) = self.msg_channel.get() {
+            let cancel_msg = P2pCancelSessionRequest {
+                session_id,
+                resource_id: None
+            };
+            let _ = msg_channel.notify(Request::CancelRequest(cancel_msg)).await;
+        }
     }
 
     pub async fn cancel_resource_transfer(&self, session_id: u64, resource_id: u64) {
         self.transfers_context.cancel_resource(session_id, resource_id).await;
+        if let Some(msg_channel) = self.msg_channel.get() {
+            let cancel_msg = P2pCancelSessionRequest {
+                session_id,
+                resource_id: Some(resource_id)
+            };
+            let _ = msg_channel.notify(Request::CancelRequest(cancel_msg)).await;
+        }
     }
 
     pub async fn peer_disconnected(&self) {
@@ -472,7 +659,8 @@ impl WebRtcClient {
                     next_check_time = Some(next_check);
 
                     let mut should_ack = false;
-                    for (prefix, packet) in packets_with_prefix {
+                    for (prefix, raw) in packets_with_prefix {
+                        let packet: Box<[u8]> = raw.into_boxed_slice();
                         if let Ok(hold) = TransferDelimiterShema::from_hold_packet(&packet) {
                             let network_stats = NetworkStats {
                                 current_block_id: Some(fec_receiver.current_block_id()),
@@ -556,7 +744,10 @@ pub enum WebRtcClientError {
     Peer(String),
 
     #[error("Yield error: {0}")]
-    Yield(#[from] YieldError)
+    Yield(#[from] YieldError),
+
+    #[error("Task cancelled")]
+    TaskCancelled(#[from] TaskErrors)
 }
 
 impl From<SignalingError> for WebRtcClientError {

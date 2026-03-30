@@ -178,23 +178,19 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
 
                 let client = self.get_client_or_not_connected()?;
 
-                match client.request_session_detail(order_id, password).await {
-                    Ok(_session) => {
-                        log::info!("Session detail received for order_id {}", order_id);
-                        Ok(CoreOperationOutput::None)
-                    }
-                    Err(e) => {
-                        log::error!("Session detail failed for order_id {}: {:?}", order_id, e);
-                        Err(P2PError::Transfer(e.to_string()).into())
-                    }
-                }
+                client
+                    .request_session_detail(_request.clone(), order_id, password)
+                    .await
+                    .map_err(|e| P2PError::Transfer(e.to_string()))?;
+
+                Ok(CoreOperationOutput::None)
             }
 
             P2POperation::DownloadResource {
                 peer_id,
                 session_id,
                 resource,
-                progress: _
+                progress
             } => {
                 log::info!(
                     "DownloadResource called for peer {}, session {}, resource {}",
@@ -204,12 +200,12 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 );
 
                 let client = self.get_client_or_not_connected()?;
+                let core_request = _request.clone();
 
-                let client_clone = client.clone();
                 let resource_clone = resource.clone();
                 wasm_bindgen_futures::spawn_local(async move {
-                    match client_clone.request_resource_download(session_id, resource_clone.order_id).await {
-                        Ok(()) => {
+                    match client.request_resource_download(core_request, session_id, resource_clone.clone(), progress).await {
+                        Ok(_) => {
                             log::info!("Resource download completed for resource {}", resource_clone.order_id);
                         }
                         Err(e) => {
@@ -224,7 +220,7 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
             P2POperation::DownloadAllResources {
                 peer_id,
                 session_id,
-                session_path: _,
+                session_path,
                 resources,
                 aggregate_progress: _
             } => {
@@ -236,23 +232,18 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 );
 
                 let client = self.get_client_or_not_connected()?;
+                let core_request = _request.clone();
 
-                for resource in resources.iter() {
-                    let client_clone = client.clone();
-                    let resource_clone = resource.clone();
-                    let session_id = session_id;
-
-                    wasm_bindgen_futures::spawn_local(async move {
-                        match client_clone.request_resource_download(session_id, resource_clone.order_id).await {
-                            Ok(()) => {
-                                log::info!("Resource download completed for resource {}", resource_clone.order_id);
-                            }
-                            Err(e) => {
-                                log::error!("Resource download failed for resource {}: {:?}", resource_clone.order_id, e);
-                            }
+                wasm_bindgen_futures::spawn_local(async move {
+                    match client.download_all_resources(core_request, session_id, session_path, resources).await {
+                        Ok(_) => {
+                            log::info!("Download all resources completed for session {}", session_id);
                         }
-                    });
-                }
+                        Err(e) => {
+                            log::error!("Download all resources failed for session {}: {:?}", session_id, e);
+                        }
+                    }
+                });
 
                 Ok(CoreOperationOutput::None)
             }
