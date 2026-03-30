@@ -1,11 +1,10 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
-use futures::channel::mpsc;
-use futures_util::stream::StreamExt;
 use socket2::{Domain, Socket, Type};
-use str0m::channel::{ChannelConfig, ChannelId};
+use str0m::channel::ChannelId;
+use str0m::channel::ChannelConfig;
 use str0m::net::{Protocol, Receive};
 use str0m::{Event, IceConnectionState, Input, Output, Rtc};
 use tokio::net::UdpSocket;
@@ -35,13 +34,6 @@ pub enum RtcEvent {
     Closed,
 }
 
-pub struct ChannelSenders {
-    pub ordered_msg_tx: mpsc::Sender<Box<[u8]>>,
-    pub unordered_msg_tx: mpsc::Sender<Box<[u8]>>,
-    pub reliable_data_tx: mpsc::Sender<Box<[u8]>>,
-    pub unreliable_data_tx: mpsc::Sender<Box<[u8]>>,
-}
-
 pub struct RtcClient {
     rtc: Rtc,
     socket: UdpSocket,
@@ -49,10 +41,7 @@ pub struct RtcClient {
     local_v4_addr: Option<SocketAddr>,
     local_v6_addr: Option<SocketAddr>,
     buf: Vec<u8>,
-    ordered_msg_rx: Option<mpsc::Receiver<Box<[u8]>>>,
-    unordered_msg_rx: Option<mpsc::Receiver<Box<[u8]>>>,
-    reliable_data_rx: Option<mpsc::Receiver<Box<[u8]>>>,
-    unreliable_data_rx: Option<mpsc::Receiver<Box<[u8]>>>,
+    cached_timeout: Instant,
 }
 
 impl RtcClient {
@@ -146,10 +135,7 @@ impl RtcClient {
             local_v4_addr,
             local_v6_addr,
             buf: vec![0u8; 2000],
-            ordered_msg_rx: None,
-            unordered_msg_rx: None,
-            reliable_data_rx: None,
-            unreliable_data_rx: None,
+            cached_timeout: Instant::now(),
         };
 
         let mut channels_opened: usize = 0;
@@ -180,115 +166,94 @@ impl RtcClient {
         }
     }
 
-    pub fn setup_channels(&mut self) -> ChannelSenders {
-        let (ordered_msg_tx, ordered_msg_rx) = mpsc::channel::<Box<[u8]>>(64);
-        let (unordered_msg_tx, unordered_msg_rx) = mpsc::channel::<Box<[u8]>>(64);
-        let (reliable_data_tx, reliable_data_rx) = mpsc::channel::<Box<[u8]>>(64);
-        let (unreliable_data_tx, unreliable_data_rx) = mpsc::channel::<Box<[u8]>>(64);
+    pub async fn poll_event(&mut self) -> Result<Option<RtcEvent>, WebRtcClientError> {
+        if !self.rtc.is_alive() {
+            return Ok(Some(RtcEvent::Closed));
+        }
 
-        self.ordered_msg_rx = Some(ordered_msg_rx);
-        self.unordered_msg_rx = Some(unordered_msg_rx);
-        self.reliable_data_rx = Some(reliable_data_rx);
-        self.unreliable_data_rx = Some(unreliable_data_rx);
-
-        ChannelSenders {
-            ordered_msg_tx,
-            unordered_msg_tx,
-            reliable_data_tx,
-            unreliable_data_tx,
+        loop {
+            match self.rtc.poll_output()? {
+                Output::Timeout(t) => {
+                    self.cached_timeout = t;
+                    return Ok(None);
+                }
+                Output::Transmit(t) => {
+                    let dest = to_v6_mapped(t.destination);
+                    if let Err(e) = self.socket.send_to(&t.contents, dest).await {
+                        log::warn!("[rtc-client] Failed to send to {}: {}", dest, e);
+                    }
+                }
+                Output::Event(e) => match e {
+                    Event::Connected => return Ok(Some(RtcEvent::Connected)),
+                    Event::ChannelOpen(id, label) => return Ok(Some(RtcEvent::ChannelOpen(id, label))),
+                    Event::ChannelData(data) => {
+                        return Ok(Some(RtcEvent::ChannelData { id: data.id, data: data.data }));
+                    }
+                    Event::IceConnectionStateChange(state) => {
+                        if matches!(state, IceConnectionState::Disconnected) {
+                            self.rtc.disconnect();
+                        }
+                        return Ok(Some(RtcEvent::IceConnectionStateChange(state)));
+                    }
+                    _ => {}
+                },
+            }
         }
     }
 
-    pub async fn poll_loop(&mut self) -> Result<RtcEvent, WebRtcClientError> {
-        loop {
-            if !self.rtc.is_alive() {
-                return Ok(RtcEvent::Closed);
-            }
+    pub fn timeout_duration(&self) -> Duration {
+        self.cached_timeout.saturating_duration_since(Instant::now())
+    }
 
-            let timeout: Instant = {
-                loop {
-                    match self.rtc.poll_output()? {
-                        Output::Timeout(t) => break t,
-                        Output::Transmit(t) => {
-                            let dest = to_v6_mapped(t.destination);
-                            if let Err(e) = self.socket.send_to(&t.contents, dest).await {
-                                log::warn!("[rtc-client] Failed to send to {}: {}", dest, e);
+    pub async fn wait_for_input(&mut self, timeout: Duration) -> Result<(), WebRtcClientError> {
+        if timeout.is_zero() {
+            self.rtc.handle_input(Input::Timeout(Instant::now()))?;
+            return Ok(());
+        }
+
+        tokio::select! {
+            res = self.socket.recv_from(&mut self.buf[..]) => {
+                if let Ok((n, mut source)) = res {
+                    source = from_v6_mapped(source);
+                    let local = if source.is_ipv4() {
+                        self.local_v4_addr.unwrap_or(self.local_addr)
+                    } else {
+                        self.local_v6_addr.unwrap_or(self.local_addr)
+                    };
+                    match Receive::new(Protocol::Udp, source, local, &self.buf[..n]) {
+                        Ok(receive) => {
+                            if let Err(e) = self.rtc.handle_input(Input::Receive(Instant::now(), receive)) {
+                                log::trace!("[rtc-client] Input handle packet drop: {}", e);
                             }
                         }
-                        Output::Event(e) => match e {
-                            Event::Connected => return Ok(RtcEvent::Connected),
-                            Event::ChannelOpen(id, label) => return Ok(RtcEvent::ChannelOpen(id, label)),
-                            Event::ChannelData(data) => {
-                                return Ok(RtcEvent::ChannelData { id: data.id, data: data.data });
-                            }
-                            Event::IceConnectionStateChange(state) => {
-                                if matches!(state, IceConnectionState::Disconnected) {
-                                    self.rtc.disconnect();
-                                }
-                                return Ok(RtcEvent::IceConnectionStateChange(state));
-                            }
-                            _ => {}
-                        },
+                        Err(e) => {
+                            log::trace!("[rtc-client] Failed to parse Receive: {}", e);
+                        }
                     }
                 }
-            };
-
-            let duration = timeout.saturating_duration_since(Instant::now());
-            if duration.is_zero() {
+            }
+            _ = tokio::time::sleep(timeout) => {
                 self.rtc.handle_input(Input::Timeout(Instant::now()))?;
-                continue;
             }
+        }
+        Ok(())
+    }
 
-            let Self {
-                rtc, socket, buf, local_addr, local_v4_addr, local_v6_addr,
-                ordered_msg_rx, unordered_msg_rx, reliable_data_rx, unreliable_data_rx,
-            } = self;
+    pub fn send(&mut self, data: &[u8], channel_id: ChannelId) -> bool {
+        if let Some(mut ch) = self.rtc.channel(channel_id) {
+            ch.write(true, data).is_ok()
+        } else {
+            false
+        }
+    }
 
-            tokio::select! {
-                res = socket.recv_from(&mut buf[..]) => {
-                    if let Ok((n, mut source)) = res {
-                        source = from_v6_mapped(source);
-                        let local = if source.is_ipv4() {
-                            local_v4_addr.unwrap_or(*local_addr)
-                        } else {
-                            local_v6_addr.unwrap_or(*local_addr)
-                        };
-                        match Receive::new(Protocol::Udp, source, local, &buf[..n]) {
-                            Ok(receive) => {
-                                if let Err(e) = rtc.handle_input(Input::Receive(Instant::now(), receive)) {
-                                    log::trace!("[rtc-client] Input handle packet drop: {}", e);
-                                }
-                            }
-                            Err(e) => {
-                                log::trace!("[rtc-client] Failed to parse Receive: {}", e);
-                            }
-                        }
-                    }
-                }
-                _ = tokio::time::sleep(duration) => {
-                    rtc.handle_input(Input::Timeout(Instant::now()))?;
-                }
-                Some(data) = async { ordered_msg_rx.as_mut()?.next().await } => {
-                    if let Some(mut ch) = rtc.channel(ORDERED_MSG_CHANNEL_ID) {
-                        ch.write(true, &data).ok();
-                    }
-                }
-                Some(data) = async { unordered_msg_rx.as_mut()?.next().await } => {
-                    if let Some(mut ch) = rtc.channel(UNORDERED_MSG_CHANNEL_ID) {
-                        ch.write(true, &data).ok();
-                    }
-                }
-                Some(data) = async { reliable_data_rx.as_mut()?.next().await } => {
-                    if let Some(mut ch) = rtc.channel(RELIABLE_DATA_CHANNEL_ID) {
-                        ch.write(true, &data).ok();
-                    }
-                }
-                Some(data) = async { unreliable_data_rx.as_mut()?.next().await } => {
-                    if let Some(mut ch) = rtc.channel(UNRELIABLE_DATA_CHANNEL_ID) {
-                        ch.write(true, &data).ok();
-                    }
-                }
+    async fn poll_loop(&mut self) -> Result<RtcEvent, WebRtcClientError> {
+        loop {
+            if let Some(event) = self.poll_event().await? {
+                return Ok(event);
             }
+            let timeout = self.timeout_duration();
+            self.wait_for_input(timeout).await?;
         }
     }
 }

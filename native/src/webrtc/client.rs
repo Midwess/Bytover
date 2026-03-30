@@ -31,7 +31,10 @@ use shared::repository::local_resource::LocalResourceRepository;
 use shared::shell::api::CoreRequest;
 use shared::utils::compression::is_compressible;
 
-use crate::webrtc::rtc::{RtcClient, RtcEvent, ORDERED_MSG_CHANNEL_ID, UNORDERED_MSG_CHANNEL_ID};
+use crate::webrtc::rtc::{
+    RtcClient, RtcEvent, ORDERED_MSG_CHANNEL_ID, RELIABLE_DATA_CHANNEL_ID, UNORDERED_MSG_CHANNEL_ID,
+    UNRELIABLE_DATA_CHANNEL_ID,
+};
 use crate::webrtc::signalling::SignalingClient;
 
 #[derive(Debug, Error)]
@@ -116,9 +119,6 @@ impl From<WebRtcClientError> for CoreError {
 }
 
 pub struct WebRtcClient {
-    reliable_data_tx: OnceCell<mpsc::Sender<Box<[u8]>>>,
-    unreliable_data_tx: OnceCell<mpsc::Sender<Box<[u8]>>>,
-
     msg_channel: OnceCell<DirectMessageChannel>,
     unordered_msg_channel: OnceCell<DirectMessageChannel>,
 
@@ -159,8 +159,6 @@ impl WebRtcClient {
         let client = Arc::new(Self {
             me,
             rtc_client: YieldContainer::new(rtc_client),
-            unreliable_data_tx: Default::default(),
-            reliable_data_tx: Default::default(),
             msg_channel: Default::default(),
             unordered_msg_channel: Default::default(),
             peer: OnceCell::new(),
@@ -176,68 +174,84 @@ impl WebRtcClient {
 
     pub async fn run(self: Arc<Self>) -> Result<(), WebRtcClientError> {
         let mut rtc_container = self.rtc_client.retrieve().await?;
-        let rtc_client = rtc_container.deref_mut();
+        let rtc = rtc_container.deref_mut();
 
-        // Set up channels: RtcClient holds receivers, we get senders
-        let channel_senders = rtc_client.setup_channels();
+        let (ordered_msg_tx, mut ordered_msg_rx) = mpsc::channel::<Box<[u8]>>(64);
+        let (unordered_msg_tx, mut unordered_msg_rx) = mpsc::channel::<Box<[u8]>>(64);
+        let (mut reliable_data_tx, mut reliable_data_rx) = mpsc::channel::<Box<[u8]>>(64);
+        let (mut unreliable_data_tx, mut unreliable_data_rx) = mpsc::channel::<Box<[u8]>>(64);
 
         let (outbound_tx, outbound_rx) = mpsc::channel::<(u16, Box<[u8]>, bool)>(64);
         let (feedback_tx, feedback_rx) = mpsc::unbounded::<Feedback>();
 
-        let _ = self.msg_channel.set(DirectMessageChannel::new(channel_senders.ordered_msg_tx));
-        let _ = self.unordered_msg_channel.set(DirectMessageChannel::new(channel_senders.unordered_msg_tx));
-        let _ = self.reliable_data_tx.set(channel_senders.reliable_data_tx);
-        let _ = self.unreliable_data_tx.set(channel_senders.unreliable_data_tx);
+        let _ = self.msg_channel.set(DirectMessageChannel::new(ordered_msg_tx));
+        let _ = self.unordered_msg_channel.set(DirectMessageChannel::new(unordered_msg_tx));
         let _ = self.outbound_packet_sender.set(outbound_tx);
         let _ = self.transfer_feedback_sender.set(feedback_tx);
 
-        let mut reliable_tx_clone = self.reliable_data_tx.get().cloned().unwrap();
-        let mut unreliable_tx_clone = self.unreliable_data_tx.get().cloned().unwrap();
-
         let this = self.clone();
         tokio::spawn(async move {
-            this.sending_loop(&mut reliable_tx_clone, &mut unreliable_tx_clone, outbound_rx, feedback_rx).await;
+            this.sending_loop(&mut reliable_data_tx, &mut unreliable_data_tx, outbound_rx, feedback_rx).await;
         });
 
         loop {
-            match rtc_client.poll_loop().await? {
-                RtcEvent::ChannelData { id, data } => {
-                    if id == ORDERED_MSG_CHANNEL_ID {
-                        if let Ok(msg) = PeerMessageBody::decode(&data[..]) {
-                            let request_id = msg.request_id;
-                            if let Some(response) = msg.response {
-                                self.msg_channel().notify_response(request_id, response).await;
-                            } else if let Some(request) = msg.request {
-                                self.process_message_packet(request_id, request).await;
+            while let Some(event) = rtc.poll_event().await? {
+                match event {
+                    RtcEvent::ChannelData { id, data } => {
+                        if id == ORDERED_MSG_CHANNEL_ID {
+                            if let Ok(msg) = PeerMessageBody::decode(&data[..]) {
+                                let request_id = msg.request_id;
+                                if let Some(response) = msg.response {
+                                    self.msg_channel().notify_response(request_id, response).await;
+                                } else if let Some(request) = msg.request {
+                                    self.process_message_packet(request_id, request).await;
+                                }
                             }
-                        }
-                    } else if id == UNORDERED_MSG_CHANNEL_ID {
-                        if let Ok(msg) = PeerMessageBody::decode(&data[..]) {
-                            if let Some(Request::FecFeedback(feedback)) = msg.request {
-                                if let (Some(sender), Some(inner)) =
-                                    (self.transfer_feedback_sender.get(), feedback.feedback)
-                                {
-                                    match inner {
-                                        schema::devlog::bitbridge::fec_feedback::Feedback::Network(stats) => {
-                                            let _ = sender.unbounded_send(Feedback::Network(stats));
-                                        }
-                                        schema::devlog::bitbridge::fec_feedback::Feedback::Missing(blocks) => {
-                                            let _ = sender.unbounded_send(Feedback::Missing(blocks));
+                        } else if id == UNORDERED_MSG_CHANNEL_ID {
+                            if let Ok(msg) = PeerMessageBody::decode(&data[..]) {
+                                if let Some(Request::FecFeedback(feedback)) = msg.request {
+                                    if let (Some(sender), Some(inner)) =
+                                        (self.transfer_feedback_sender.get(), feedback.feedback)
+                                    {
+                                        match inner {
+                                            schema::devlog::bitbridge::fec_feedback::Feedback::Network(stats) => {
+                                                let _ = sender.unbounded_send(Feedback::Network(stats));
+                                            }
+                                            schema::devlog::bitbridge::fec_feedback::Feedback::Missing(blocks) => {
+                                                let _ = sender.unbounded_send(Feedback::Missing(blocks));
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
                     }
+                    RtcEvent::IceConnectionStateChange(state) => {
+                        log::info!("[webrtc-client] ICE state: {:?}", state);
+                    }
+                    RtcEvent::Closed => {
+                        self.peer_disconnected().await;
+                        return Ok(());
+                    }
+                    _ => {}
                 }
-                RtcEvent::IceConnectionStateChange(state) => {
-                    log::info!("[webrtc-client] ICE state: {:?}", state);
+            }
+
+            let timeout = rtc.timeout_duration();
+            tokio::select! {
+                _ = rtc.wait_for_input(timeout) => {}
+                Some(data) = ordered_msg_rx.next() => {
+                    rtc.send(&data, ORDERED_MSG_CHANNEL_ID);
                 }
-                RtcEvent::Closed => {
-                    self.peer_disconnected().await;
-                    return Ok(());
+                Some(data) = unordered_msg_rx.next() => {
+                    rtc.send(&data, UNORDERED_MSG_CHANNEL_ID);
                 }
-                _ => {}
+                Some(data) = reliable_data_rx.next() => {
+                    rtc.send(&data, RELIABLE_DATA_CHANNEL_ID);
+                }
+                Some(data) = unreliable_data_rx.next() => {
+                    rtc.send(&data, UNRELIABLE_DATA_CHANNEL_ID);
+                }
             }
         }
     }
