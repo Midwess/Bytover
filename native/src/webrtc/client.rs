@@ -32,9 +32,10 @@ use shared::shell::api::CoreRequest;
 use shared::utils::compression::is_compressible;
 
 use crate::webrtc::rtc::{
-    RtcClient, RtcEvent, ORDERED_MSG_CHANNEL_ID, RELIABLE_DATA_CHANNEL_ID, UNORDERED_MSG_CHANNEL_ID,
+    RtcClient, ORDERED_MSG_CHANNEL_ID, RELIABLE_DATA_CHANNEL_ID, UNORDERED_MSG_CHANNEL_ID,
     UNRELIABLE_DATA_CHANNEL_ID,
 };
+use str0m::Event;
 use crate::webrtc::signalling::SignalingClient;
 
 #[derive(Debug, Error)]
@@ -194,10 +195,12 @@ impl WebRtcClient {
             this.sending_loop(&mut reliable_data_tx, &mut unreliable_data_tx, outbound_rx, feedback_rx).await;
         });
 
-        loop {
+        while rtc.is_alive() {
             while let Some(event) = rtc.poll_event().await? {
                 match event {
-                    RtcEvent::ChannelData { id, data } => {
+                    Event::ChannelData(data) => {
+                        let id = data.id;
+                        let data = data.data;
                         if id == ORDERED_MSG_CHANNEL_ID {
                             if let Ok(msg) = PeerMessageBody::decode(&data[..]) {
                                 let request_id = msg.request_id;
@@ -226,12 +229,8 @@ impl WebRtcClient {
                             }
                         }
                     }
-                    RtcEvent::IceConnectionStateChange(state) => {
+                    Event::IceConnectionStateChange(state) => {
                         log::info!("[webrtc-client] ICE state: {:?}", state);
-                    }
-                    RtcEvent::Closed => {
-                        self.peer_disconnected().await;
-                        return Ok(());
                     }
                     _ => {}
                 }
@@ -254,6 +253,9 @@ impl WebRtcClient {
                 }
             }
         }
+
+        self.peer_disconnected().await;
+        Ok(())
     }
 
     pub fn start_core_stream(&self, core_request: CoreRequest) {

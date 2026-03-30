@@ -26,13 +26,6 @@ pub const UNRELIABLE_DATA_CHANNEL_ID: ChannelId = channel_id(2);
 pub const UNORDERED_MSG_CHANNEL_ID: ChannelId = channel_id(3);
 pub const ORDERED_MSG_CHANNEL_ID: ChannelId = channel_id(4);
 
-pub enum RtcEvent {
-    Connected,
-    ChannelOpen(ChannelId, String),
-    ChannelData { id: ChannelId, data: Vec<u8> },
-    IceConnectionStateChange(IceConnectionState),
-    Closed,
-}
 
 pub struct RtcClient {
     rtc: Rtc,
@@ -143,11 +136,11 @@ impl RtcClient {
 
         loop {
             match client.poll_loop().await? {
-                RtcEvent::Connected => {
+                Event::Connected => {
                     log::info!("[rtc-client] Connected");
                     is_connected = true;
                 }
-                RtcEvent::ChannelOpen(_, ref label) => {
+                Event::ChannelOpen(_, ref label) => {
                     channels_opened += 1;
                     log::info!("[rtc-client] Channel {} opened (label: {})", channels_opened, label);
                     if is_connected && channels_opened >= TOTAL_CHANNELS {
@@ -155,7 +148,7 @@ impl RtcClient {
                         return Ok(client);
                     }
                 }
-                RtcEvent::IceConnectionStateChange(state) => {
+                Event::IceConnectionStateChange(state) => {
                     log::info!("[rtc-client] ICE state: {:?}", state);
                     if matches!(state, IceConnectionState::Disconnected) {
                         return Err(WebRtcClientError::Signalling("Peer disconnected during setup".into()));
@@ -166,11 +159,7 @@ impl RtcClient {
         }
     }
 
-    pub async fn poll_event(&mut self) -> Result<Option<RtcEvent>, WebRtcClientError> {
-        if !self.rtc.is_alive() {
-            return Ok(Some(RtcEvent::Closed));
-        }
-
+    pub async fn poll_event(&mut self) -> Result<Option<Event>, WebRtcClientError> {
         loop {
             match self.rtc.poll_output()? {
                 Output::Timeout(t) => {
@@ -183,20 +172,14 @@ impl RtcClient {
                         log::warn!("[rtc-client] Failed to send to {}: {}", dest, e);
                     }
                 }
-                Output::Event(e) => match e {
-                    Event::Connected => return Ok(Some(RtcEvent::Connected)),
-                    Event::ChannelOpen(id, label) => return Ok(Some(RtcEvent::ChannelOpen(id, label))),
-                    Event::ChannelData(data) => {
-                        return Ok(Some(RtcEvent::ChannelData { id: data.id, data: data.data }));
-                    }
-                    Event::IceConnectionStateChange(state) => {
+                Output::Event(e) => {
+                    if let Event::IceConnectionStateChange(state) = e {
                         if matches!(state, IceConnectionState::Disconnected) {
                             self.rtc.disconnect();
                         }
-                        return Ok(Some(RtcEvent::IceConnectionStateChange(state)));
                     }
-                    _ => {}
-                },
+                    return Ok(Some(e));
+                }
             }
         }
     }
@@ -247,10 +230,17 @@ impl RtcClient {
         }
     }
 
-    async fn poll_loop(&mut self) -> Result<RtcEvent, WebRtcClientError> {
+    pub fn is_alive(&self) -> bool {
+        self.rtc.is_alive()
+    }
+
+    async fn poll_loop(&mut self) -> Result<Event, WebRtcClientError> {
         loop {
             if let Some(event) = self.poll_event().await? {
                 return Ok(event);
+            }
+            if !self.rtc.is_alive() {
+                return Err(WebRtcClientError::Signalling("RTC connection closed".into()));
             }
             let timeout = self.timeout_duration();
             self.wait_for_input(timeout).await?;
