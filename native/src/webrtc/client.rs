@@ -1,12 +1,13 @@
-use std::collections::HashMap;
 use std::ops::DerefMut;
 use std::sync::Arc;
+use std::time::Duration;
 
 use core_services::utils::yield_container::{YieldContainer, YieldError};
 use futures::channel::mpsc;
 use futures::SinkExt;
 use futures_util::select_biased;
 use futures_util::stream::StreamExt;
+use futures_util::FutureExt;
 use prost::Message;
 use schema::devlog::bitbridge::peer_message_body::{Request, Response};
 use schema::devlog::bitbridge::view_session_detail_response::Result as SessionDetailResult;
@@ -22,9 +23,9 @@ use shared::entities::local_resource::{LocalResource, LocalResourcePath};
 use shared::entities::peer::Peer;
 use shared::errors::CoreError;
 use shared::protocol::webrtc::errors::WebRtcErrors;
-use shared::protocol::webrtc::fec::{FecAction, FecSender};
+use shared::protocol::webrtc::fec::{FecAction, FecSender, CHUNK_SIZE};
 use shared::protocol::webrtc::message_channel::DirectMessageChannel;
-use shared::protocol::webrtc::transfer::TransfersContext;
+use shared::protocol::webrtc::transfer::{TransfersContext, TransferDelimiterShema};
 use shared::repository::local_resource::LocalResourceRepository;
 use shared::shell::api::CoreRequest;
 
@@ -364,49 +365,113 @@ impl WebRtcClient {
         mut outbound_rx: mpsc::Receiver<(u16, Box<[u8]>, bool)>,
         mut feedback_rx: mpsc::UnboundedReceiver<Feedback>
     ) {
-        let mut fec_senders: HashMap<u16, FecSender> = HashMap::new();
+        let mut fec_sender = FecSender::new(1024);
+        let mut last_peer_block_id = 0u32;
+        const WINDOW_SIZE: u32 = 128;
+        const MAX_BUFFER_SIZE: usize = 1024 * 1024 * 5;
+        const MIN_BUFFER_SIZE: usize = CHUNK_SIZE;
+        let mut buff_counter = MAX_BUFFER_SIZE - CHUNK_SIZE;
 
         loop {
-            select_biased! {
-                res = outbound_rx.next() => {
-                    if let Some((transfer_id, data, is_reliable)) = res {
-                        if is_reliable {
-                            let _ = reliable_tx.send(data).await;
-                        } else {
-                            let fec = fec_senders.entry(transfer_id).or_insert_with(|| FecSender::new(64));
+            let (packet, feedback) = {
+                let can_send = fec_sender.block_id.wrapping_sub(last_peer_block_id) < WINDOW_SIZE;
+                let fb_fut = feedback_rx.next().fuse();
 
-                            if let Ok(FecAction::Framed(frames)) = fec.send(0, data) {
-                                for frame in frames {
-                                    let _ = unreliable_tx.send(frame.serialize()).await;
-                                }
-                            }
+                if can_send {
+                    let reader_fut = outbound_rx.next().fuse();
+                    futures::pin_mut!(fb_fut);
+                    futures::pin_mut!(reader_fut);
+                    select_biased! {
+                        r = reader_fut => {
+                            r.map(|it| (Some(it), None)).unwrap_or((None, None))
+                        },
+                        fb = fb_fut => {
+                            fb.map(|f| (None, Some(f))).unwrap_or((None, None))
+                        },
+                    }
+                } else {
+                    futures::pin_mut!(fb_fut);
+                    select_biased! {
+                        fb = fb_fut => {
+                            fb.map(|f| (None, Some(f))).unwrap_or((None, None))
+                        },
+                        _ = tokio::time::sleep(Duration::from_millis(5)).fuse() => {
+                            (None, None)
                         }
                     }
                 }
-                res = feedback_rx.next() => {
-                    if let Some(feedback) = res {
-                        match feedback {
-                            Feedback::Network(stats) => {
-                                for fec in fec_senders.values_mut() {
-                                    if let Some(rtt) = stats.rtt {
-                                        fec.set_rtt(rtt as u64);
-                                    }
-                                }
+            };
+
+            let (reliable, action) = match (packet, feedback) {
+                (Some((prefix, packet, reliable)), _) => match fec_sender.send(prefix, packet) {
+                    Ok(action) => (reliable, action),
+                    Err(e) => {
+                        log::error!("[webrtc-client] FEC send error: {e:?}");
+                        continue;
+                    }
+                },
+                (_, Some(fb)) => {
+                    use schema::devlog::bitbridge::fec_feedback::Feedback;
+                    match &fb {
+                        Feedback::Network(stats) => {
+                            if let Some(peer_block_id) = stats.current_block_id {
+                                last_peer_block_id = last_peer_block_id.max(peer_block_id);
                             }
-                            Feedback::Missing(blocks) => {
-                                for fec in fec_senders.values_mut() {
-                                    let action = fec.feedback(schema::devlog::bitbridge::fec_feedback::Feedback::Missing(blocks.clone()));
-                                    if let FecAction::Retransmit(frames) = action {
-                                        for frame in frames {
-                                            let _ = unreliable_tx.send(frame.serialize()).await;
-                                        }
-                                    }
-                                }
+                        }
+                        Feedback::Missing(missing) => {
+                            if let Some(first_block) = missing.blocks.first() {
+                                last_peer_block_id = last_peer_block_id.max(first_block.block_id);
                             }
                         }
                     }
+
+                    (true, fec_sender.feedback(fb))
                 }
-                complete => break,
+                _ => continue
+            };
+
+            match action {
+                FecAction::Framed(frames) => {
+                    for frame in frames {
+                        let packet = frame.serialize();
+                        buff_counter += packet.len();
+                        if reliable {
+                            let _ = reliable_tx.send(packet).await;
+                        } else {
+                            let _ = unreliable_tx.send(packet).await;
+                        }
+                    }
+                }
+                FecAction::Retransmit(frames) => {
+                    let frame_idx = frames.iter().map(|it| it.frame_idx).collect::<Vec<_>>();
+                    log::info!("Retransmit {:?} {:?}", frames.first().map(|it| it.block_id), frame_idx);
+                    for frame in frames {
+                        let packet = frame.serialize();
+                        buff_counter += packet.len();
+                        let _ = reliable_tx.send(packet).await;
+                    }
+                    buff_counter = buff_counter.max(MAX_BUFFER_SIZE / 2);
+                }
+                FecAction::Terminated => {
+                    log::info!("FEC sender terminated in sending_loop");
+                    break;
+                }
+                FecAction::Noop => {
+                    continue;
+                }
+                _ => {}
+            }
+
+            if buff_counter >= MAX_BUFFER_SIZE {
+                buff_counter = MIN_BUFFER_SIZE;
+
+                if let Ok(hold_delimiter) = TransferDelimiterShema::hold(1).as_bytes() {
+                    if let Ok(FecAction::Framed(frames)) = fec_sender.send(0, hold_delimiter.to_vec().into_boxed_slice()) {
+                        for frame in frames {
+                            let _ = reliable_tx.send(frame.serialize()).await;
+                        }
+                    }
+                }
             }
         }
     }
