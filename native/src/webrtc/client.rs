@@ -1,6 +1,7 @@
 use std::ops::DerefMut;
 use std::sync::Arc;
-use std::time::Duration;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::{Duration, Instant};
 
 use core_services::utils::cancellation::{FutureExtension, TaskErrors};
 use core_services::utils::yield_container::{YieldContainer, YieldError};
@@ -34,6 +35,9 @@ use crate::webrtc::rtc::RtcClient;
 use crate::webrtc::signalling::SignallingSender;
 use str0m::channel::ChannelId;
 use str0m::Event;
+
+static MAX_BUFFER_SIZE: usize = 1024 * 1024 * 5;
+static MIN_BUFFER_SIZE: usize = CHUNK_SIZE;
 
 #[derive(Debug, Error)]
 pub enum WebRtcClientError {
@@ -138,7 +142,8 @@ pub struct WebRtcClient {
     outbound_rx: YieldContainer<mpsc::Receiver<(u16, Vec<u8>, bool)>>,
     feedback_rx: YieldContainer<mpsc::UnboundedReceiver<Feedback>>,
     reliable_data_tx: YieldContainer<mpsc::Sender<Vec<u8>>>,
-    unreliable_data_tx: YieldContainer<mpsc::Sender<Vec<u8>>>
+    unreliable_data_tx: YieldContainer<mpsc::Sender<Vec<u8>>>,
+    bytes_sent_counter: Arc<AtomicUsize>
 }
 
 
@@ -264,7 +269,8 @@ impl WebRtcClient {
             outbound_rx: YieldContainer::new(outbound_rx),
             feedback_rx: YieldContainer::new(feedback_rx),
             reliable_data_tx: YieldContainer::new(reliable_data_tx),
-            unreliable_data_tx: YieldContainer::new(unreliable_data_tx)
+            unreliable_data_tx: YieldContainer::new(unreliable_data_tx),
+            bytes_sent_counter: Arc::new(AtomicUsize::new(0))
         };
 
         Ok(client)
@@ -362,9 +368,11 @@ impl WebRtcClient {
                 }
                 Some(data) = reliable_data_rx.next() => {
                     rtc.send(&data, cids.reliable);
+                    self.bytes_sent_counter.fetch_add(data.len(), Ordering::Relaxed);
                 }
                 Some(data) = unreliable_data_rx.next() => {
                     rtc.send(&data, cids.unreliable);
+                    self.bytes_sent_counter.fetch_add(data.len(), Ordering::Relaxed);
                 }
                 result = &mut sending_handle => {
                     log::info!("[webrtc-client] sending_loop finished: {:?}", result);
@@ -720,8 +728,6 @@ impl WebRtcClient {
         let mut fec_sender = FecSender::new(1024);
         let mut last_peer_block_id = 0u32;
         const WINDOW_SIZE: u32 = 128;
-        const MAX_BUFFER_SIZE: usize = 1024 * 1024 * 5;
-        const MIN_BUFFER_SIZE: usize = CHUNK_SIZE;
         let mut buff_counter = MAX_BUFFER_SIZE - CHUNK_SIZE;
 
         loop {
@@ -742,7 +748,6 @@ impl WebRtcClient {
                         },
                     }
                 } else {
-                    log::info!("Waiting for feedback");
                     futures::pin_mut!(fb_fut);
                     select_biased! {
                         fb = fb_fut => {
@@ -816,16 +821,36 @@ impl WebRtcClient {
             }
 
             if buff_counter >= MAX_BUFFER_SIZE {
+                let tick = Instant::now();
+                let stats_before = self.bytes_sent_counter.load(Ordering::Relaxed);
+                let timeout = Duration::from_millis(20 * fec_sender.rtt().max(100));
+
+                let deadline = Instant::now() + timeout;
+                loop {
+                    let sent_since = self.bytes_sent_counter.load(Ordering::Relaxed).saturating_sub(stats_before);
+                    if sent_since >= buff_counter.saturating_sub(MIN_BUFFER_SIZE) {
+                        break;
+                    }
+                    if Instant::now() >= deadline {
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_millis(5)).await;
+                }
                 buff_counter = MIN_BUFFER_SIZE;
 
                 if let Ok(hold_delimiter) = TransferDelimiterShema::hold(1).as_bytes() {
                     if let Ok(FecAction::Framed(frames)) = fec_sender.send(0, hold_delimiter) {
-                        log::info!("Sending hold delimiter");
                         for frame in frames {
                             let _ = reliable_tx.send(frame.serialize()).await;
                         }
                     }
                 }
+
+                let time = tick.elapsed().as_secs_f64().max(f64::MIN);
+                let stats_after = self.bytes_sent_counter.load(Ordering::Relaxed);
+                let total_sent = stats_after.saturating_sub(stats_before);
+                let bw = (total_sent as f64 / time) as u64;
+                let _bw_kbps = bw / 1000;
             }
         }
     }

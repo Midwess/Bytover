@@ -692,8 +692,7 @@ impl WebRtcClient {
                     next_check_time = Some(next_check);
 
                     let mut should_ack = false;
-                    for (prefix, raw) in packets_with_prefix {
-                        let packet = raw;
+                    for (prefix, packet) in packets_with_prefix {
                         if let Ok(hold) = TransferDelimiterShema::from_hold_packet(&packet) {
                             let network_stats = NetworkStats {
                                 current_block_id: Some(fec_receiver.current_block_id()),
