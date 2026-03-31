@@ -10,7 +10,7 @@ use tokio::net::UdpSocket;
 
 use schema::devlog::rpc_signalling::server::OfferMessage;
 
-use crate::webrtc::client::WebRtcClientError;
+use crate::webrtc::client::{MAX_BUFFER_SIZE, WebRtcClientError};
 use crate::webrtc::ice::IceAgent;
 use crate::webrtc::signalling::SignallingSender;
 
@@ -64,6 +64,7 @@ impl RtcClient {
         socket.set_only_v6(false)?;
         socket.set_nonblocking(true)?;
         socket.bind(&"[::]:0".parse::<SocketAddr>().unwrap().into())?;
+        let _ = socket.set_send_buffer_size(MAX_BUFFER_SIZE * 2);
         let std_socket: std::net::UdpSocket = socket.into();
         let socket = UdpSocket::from_std(std_socket)?;
         let socket = Arc::new(socket);
@@ -270,6 +271,11 @@ impl RtcClient {
         } else {
             log::warn!("[rtc-client] Channel {:?} not found, data dropped!", channel_id);
             false
+        }
+    }
+    pub fn set_buffered_amount_low_threshold(&mut self, channel_id: ChannelId, threshold: usize) {
+        if let Some(mut ch) = self.rtc.channel(channel_id) {
+            ch.set_buffered_amount_low_threshold(threshold);
         }
     }
 
