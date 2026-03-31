@@ -232,8 +232,8 @@ impl WebRtcServer {
                                 Err(e) => log::error!("[webrtc-server] Client connection failed: {:?}", e),
                             }
 
-                            if let Ok((client, channels)) = result {
-                                Some((Arc::new(client), channels, user))
+                            if let Ok(client) = result {
+                                Some((Arc::new(client), user))
                             } else {
                                 None
                             }
@@ -243,19 +243,17 @@ impl WebRtcServer {
 
                 Some(result) = connect_futs.next() => {
                     match result {
-                        Some((client, channels, _user)) => {
+                        Some((client, _user)) => {
                             let peer_id = client.peer_id().unwrap_or_default();
                             log::info!("[webrtc-server] Client connected and introduced as {peer_id}, registering");
                             self.clients.lock().await.insert(peer_id.clone(), Arc::downgrade(&client));
                             log::info!("[webrtc-server] Active clients: {}", self.clients.lock().await.len());
 
-                            log::info!("[webrtc-server] Spawning run loop");
                             client.start_core_stream(self.core_request.get().unwrap().clone());
                             let client_for_run = client.clone();
-                            let core_request = self.core_request.get().unwrap().clone();
-                            core_request.response(CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(client.peer_entity().unwrap()))).await;
                             tokio::spawn(async move {
-                                if let Err(e) = client_for_run.run(channels).await {
+                                log::info!("[webrtc-server] Spawning run loop");
+                                if let Err(e) = client_for_run.run().await {
                                     log::error!("[webrtc-server] Client run error: {e}");
                                 }
                             });

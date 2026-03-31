@@ -724,6 +724,7 @@ impl WebRtcClient {
                                 hold_counter: None
                             }))
                         };
+                        log::info!("Sending feedback stats");
                         let _ = unordered_msg_channel.notify(Request::FecFeedback(feedback)).await;
                     }
                 }

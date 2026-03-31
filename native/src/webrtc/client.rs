@@ -129,19 +129,18 @@ pub struct WebRtcClient {
     session_id: OnceCell<u64>,
 
     outbound_packet_sender: OnceCell<mpsc::Sender<(u16, Vec<u8>, bool)>>,
-    transfer_feedback_sender: OnceCell<mpsc::UnboundedSender<Feedback>>
+    transfer_feedback_sender: OnceCell<mpsc::UnboundedSender<Feedback>>,
+
+    ordered_msg_rx: YieldContainer<mpsc::Receiver<Vec<u8>>>,
+    unordered_msg_rx: YieldContainer<mpsc::Receiver<Vec<u8>>>,
+    reliable_data_rx: YieldContainer<mpsc::Receiver<Vec<u8>>>,
+    unreliable_data_rx: YieldContainer<mpsc::Receiver<Vec<u8>>>,
+    outbound_rx: YieldContainer<mpsc::Receiver<(u16, Vec<u8>, bool)>>,
+    feedback_rx: YieldContainer<mpsc::UnboundedReceiver<Feedback>>,
+    reliable_data_tx: YieldContainer<mpsc::Sender<Vec<u8>>>,
+    unreliable_data_tx: YieldContainer<mpsc::Sender<Vec<u8>>>
 }
 
-pub struct WebRtcEventChannels {
-    pub ordered_msg_rx: mpsc::Receiver<Vec<u8>>,
-    pub unordered_msg_rx: mpsc::Receiver<Vec<u8>>,
-    pub reliable_data_rx: mpsc::Receiver<Vec<u8>>,
-    pub unreliable_data_rx: mpsc::Receiver<Vec<u8>>,
-    pub outbound_rx: mpsc::Receiver<(u16, Vec<u8>, bool)>,
-    pub feedback_rx: mpsc::UnboundedReceiver<Feedback>,
-    pub reliable_data_tx: mpsc::Sender<Vec<u8>>,
-    pub unreliable_data_tx: mpsc::Sender<Vec<u8>>
-}
 
 impl std::fmt::Debug for WebRtcClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -156,7 +155,7 @@ impl WebRtcClient {
         signalling: &SignalingClient,
         request_id: String,
         resource_repo: Arc<dyn LocalResourceRepository>
-    ) -> Result<(Self, WebRtcEventChannels), WebRtcClientError> {
+    ) -> Result<Self, WebRtcClientError> {
         let Some(signalling_id) = me.signalling_id.clone() else {
             return Err(WebRtcClientError::Shared("Peer not introduced".to_string()));
         };
@@ -256,40 +255,45 @@ impl WebRtcClient {
             core_request: OnceCell::new(),
             resource_repo,
             outbound_packet_sender: outbound_packet_sender_cell,
-            transfer_feedback_sender: transfer_feedback_sender_cell
+            transfer_feedback_sender: transfer_feedback_sender_cell,
+            ordered_msg_rx: YieldContainer::new(ordered_msg_rx),
+            unordered_msg_rx: YieldContainer::new(unordered_msg_rx),
+            reliable_data_rx: YieldContainer::new(reliable_data_rx),
+            unreliable_data_rx: YieldContainer::new(unreliable_data_rx),
+            outbound_rx: YieldContainer::new(outbound_rx),
+            feedback_rx: YieldContainer::new(feedback_rx),
+            reliable_data_tx: YieldContainer::new(reliable_data_tx),
+            unreliable_data_tx: YieldContainer::new(unreliable_data_tx)
         };
 
-        Ok((
-            client,
-            WebRtcEventChannels {
-                ordered_msg_rx,
-                unordered_msg_rx,
-                reliable_data_rx,
-                unreliable_data_rx,
-                outbound_rx,
-                feedback_rx,
-                reliable_data_tx,
-                unreliable_data_tx
-            }
-        ))
+        Ok(client)
     }
 
-    pub async fn run(self: Arc<Self>, channels: WebRtcEventChannels) -> Result<(), WebRtcClientError> {
+    pub async fn run(self: Arc<Self>) -> Result<(), WebRtcClientError> {
         let mut rtc_container = self.rtc_client.retrieve().await?;
         let rtc = rtc_container.deref_mut();
 
         let cids = *rtc.channel_ids();
 
-        let WebRtcEventChannels {
-            mut ordered_msg_rx,
-            mut unordered_msg_rx,
-            mut reliable_data_rx,
-            mut unreliable_data_rx,
-            outbound_rx,
-            feedback_rx,
-            mut reliable_data_tx,
-            mut unreliable_data_tx
-        } = channels;
+        let (ordered_msg_rx_guard, unordered_msg_rx_guard, reliable_data_rx_guard, unreliable_data_rx_guard, outbound_rx_guard, feedback_rx_guard, reliable_data_tx_guard, unreliable_data_tx_guard) = futures::join!(
+            self.ordered_msg_rx.retrieve(),
+            self.unordered_msg_rx.retrieve(),
+            self.reliable_data_rx.retrieve(),
+            self.unreliable_data_rx.retrieve(),
+            self.outbound_rx.retrieve(),
+            self.feedback_rx.retrieve(),
+            self.reliable_data_tx.retrieve(),
+            self.unreliable_data_tx.retrieve()
+        );
+
+        let mut ordered_msg_rx = ordered_msg_rx_guard?.value.take().unwrap();
+        let mut unordered_msg_rx = unordered_msg_rx_guard?.value.take().unwrap();
+        let mut reliable_data_rx = reliable_data_rx_guard?.value.take().unwrap();
+        let mut unreliable_data_rx = unreliable_data_rx_guard?.value.take().unwrap();
+        let outbound_rx = outbound_rx_guard?.value.take().unwrap();
+        let feedback_rx = feedback_rx_guard?.value.take().unwrap();
+        let mut reliable_data_tx = reliable_data_tx_guard?.value.take().unwrap();
+        let mut unreliable_data_tx = unreliable_data_tx_guard?.value.take().unwrap();
 
         let (msg_tx, msg_rx) = mpsc::unbounded::<(String, Request)>();
 
@@ -316,7 +320,9 @@ impl WebRtcClient {
                                 let request_id = msg.request_id;
                                 if let Some(response) = msg.response {
                                     self.msg_channel().notify_response(request_id, response).await;
-                                } else if let Some(request) = msg.request {
+                                }
+                                else if let Some(request) = msg.request {
+                                    log::info!("received request {request:?}");
                                     let _ = msg_tx.unbounded_send((request_id, request));
                                 }
                             }
@@ -326,6 +332,7 @@ impl WebRtcClient {
                                     if let (Some(sender), Some(inner)) = (self.transfer_feedback_sender.get(), feedback.feedback) {
                                         match inner {
                                             schema::devlog::bitbridge::fec_feedback::Feedback::Network(stats) => {
+                                                log::info!("Received network stats {stats:?}");
                                                 let _ = sender.unbounded_send(Feedback::Network(stats));
                                             }
                                             schema::devlog::bitbridge::fec_feedback::Feedback::Missing(blocks) => {
@@ -378,6 +385,7 @@ impl WebRtcClient {
         while let Some((request_id, request)) = msg_rx.next().await {
             self.process_message_packet(request_id, request).await;
         }
+
         log::info!("[webrtc-client] msg_loop ended");
     }
 
@@ -732,6 +740,7 @@ impl WebRtcClient {
                         },
                     }
                 } else {
+                    log::info!("Waiting for feedback");
                     futures::pin_mut!(fb_fut);
                     select_biased! {
                         fb = fb_fut => {
@@ -809,6 +818,7 @@ impl WebRtcClient {
 
                 if let Ok(hold_delimiter) = TransferDelimiterShema::hold(1).as_bytes() {
                     if let Ok(FecAction::Framed(frames)) = fec_sender.send(0, hold_delimiter) {
+                        log::info!("Sending hold delimiter");
                         for frame in frames {
                             let _ = reliable_tx.send(frame.serialize()).await;
                         }
