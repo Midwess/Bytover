@@ -34,7 +34,7 @@ use shared::shell::api::CoreRequest;
 use crate::webrtc::ice::{IceAgent, IceError};
 use crate::webrtc::signaling::{SignalingClient, SignalingError};
 use crate::webrtc::web::channel_ids::*;
-use crate::webrtc::web::{RtcDataChannelWrapper, WebError, WebRtcApi};
+use crate::webrtc::web::{RtcConnectionWrapper, RtcDataChannelWrapper, WebError, WebRtcApi};
 
 pub struct WebRtcClient {
     transfers_context: TransfersContext,
@@ -48,7 +48,10 @@ pub struct WebRtcClient {
 
     msg_channel: OnceCell<DirectMessageChannel>,
     unordered_msg_channel: OnceCell<DirectMessageChannel>,
-    prefix_channels: Mutex<HashMap<u16, mpsc::Sender<Vec<u8>>>>
+    prefix_channels: Mutex<HashMap<u16, mpsc::Sender<Vec<u8>>>>,
+    connection: OnceCell<Arc<RtcConnectionWrapper>>,
+    reliable_channel: OnceCell<Arc<RtcDataChannelWrapper>>,
+    unreliable_channel: OnceCell<Arc<RtcDataChannelWrapper>>
 }
 
 fn spawn_outbound_sender(channel: Arc<RtcDataChannelWrapper>, mut rx: mpsc::Receiver<Vec<u8>>) {
@@ -124,8 +127,15 @@ impl WebRtcClient {
             inbound_data_receiver: YieldContainer::new(data_inbound_rx),
             msg_channel: OnceCell::new(),
             unordered_msg_channel: OnceCell::new(),
-            prefix_channels: Mutex::new(HashMap::new())
+            prefix_channels: Mutex::new(HashMap::new()),
+            connection: OnceCell::new(),
+            reliable_channel: OnceCell::new(),
+            unreliable_channel: OnceCell::new(),
         });
+
+        let _ = client.connection.set(connection);
+        let _ = client.reliable_channel.set(reliable_channel);
+        let _ = client.unreliable_channel.set(unreliable_channel);
 
         let _ = client.msg_channel.set(DirectMessageChannel::new(ordered_out_tx));
         let _ = client.unordered_msg_channel.set(DirectMessageChannel::new(unordered_out_tx));

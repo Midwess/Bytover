@@ -184,6 +184,7 @@ impl WebRtcClient {
                 if let Event::ChannelData(data) = event {
                     if data.id == cids.ordered_msg {
                         if let Ok(msg) = PeerMessageBody::decode(&data.data[..]) {
+                            log::info!("Got msg {:?}", msg);
                             let request_id = msg.request_id;
                             if let Some(Response::IntroduceResponse(res)) = msg.response {
                                 let p = Peer::from(res.peer);
