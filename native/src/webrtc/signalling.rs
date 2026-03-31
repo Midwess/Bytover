@@ -40,29 +40,13 @@ pub struct SignalingClient {
     run_handle: Option<JoinHandle<()>>
 }
 
-impl Clone for SignalingClient {
-    fn clone(&self) -> Self {
-        Self {
-            ws_url: self.ws_url.clone(),
-            http_url: self.http_url.clone(),
-            msg_rx: None,
-            msg_transfer_tx: self.msg_transfer_tx.clone(),
-            run_handle: None,
-        }
-    }
+#[derive(Clone)]
+pub struct SignallingSender {
+    http_url: String,
+    msg_transfer_tx: mpsc::Sender<Vec<u8>>,
 }
 
-impl SignalingClient {
-    pub fn new(ws_url: String, http_url: String) -> Self {
-        Self {
-            ws_url,
-            http_url,
-            msg_rx: None,
-            msg_transfer_tx: None,
-            run_handle: None
-        }
-    }
-
+impl SignallingSender {
     pub async fn fetch_relay_config(&self, key: &str) -> Result<IceConfig, SignallingError> {
         let url = format!("{}/relay/{}", self.http_url, key);
         let response = reqwest::get(&url).await.map_err(|e| SignallingError::HttpFailed(format!("{e:?}")))?;
@@ -77,6 +61,43 @@ impl SignalingClient {
         let bytes = response.bytes().await.map_err(|e| SignallingError::HttpFailed(format!("{e}")))?;
 
         IceConfig::decode(&bytes[..]).map_err(SignallingError::from)
+    }
+
+    pub async fn send_answer(&self, sdp: String, request_id: &str) -> Result<(), SignallingError> {
+        let msg = Message {
+            request_id: Some(request_id.to_string()),
+            answer: Some(AnswerMessage { sdp }),
+            ..Default::default()
+        };
+        self.send_message(&msg).await
+    }
+
+    async fn send_message(&self, msg: &Message) -> Result<(), SignallingError> {
+        let mut buf = Vec::new();
+        msg.encode(&mut buf)
+            .map_err(|e| SignallingError::ProtocolError(format!("Failed to encode message: {e}")))?;
+        self.msg_transfer_tx.send(buf).await.map_err(|_| SignallingError::NotConnected)?;
+        Ok(())
+    }
+}
+
+
+impl SignalingClient {
+    pub fn new(ws_url: String, http_url: String) -> Self {
+        Self {
+            ws_url,
+            http_url,
+            msg_rx: None,
+            msg_transfer_tx: None,
+            run_handle: None
+        }
+    }
+
+    pub fn get_sender(&self) -> Option<SignallingSender> {
+        self.msg_transfer_tx.clone().map(|tx| SignallingSender {
+            http_url: self.http_url.clone(),
+            msg_transfer_tx: tx,
+        })
     }
 
     pub async fn start(&mut self, key: String) {
@@ -182,23 +203,6 @@ impl SignalingClient {
         msg_rx.recv().await.ok_or(SignallingError::Stopped)?
     }
 
-    pub async fn send_answer(&self, sdp: String, request_id: &str) -> Result<(), SignallingError> {
-        let msg = Message {
-            request_id: Some(request_id.to_string()),
-            answer: Some(AnswerMessage { sdp }),
-            ..Default::default()
-        };
-        self.send_message(&msg).await
-    }
-
-    async fn send_message(&self, msg: &Message) -> Result<(), SignallingError> {
-        let tx = self.msg_transfer_tx.as_ref().ok_or(SignallingError::NotConnected)?;
-        let mut buf = Vec::new();
-        msg.encode(&mut buf)
-            .map_err(|e| SignallingError::ProtocolError(format!("Failed to encode message: {e}")))?;
-        tx.send(buf).await.map_err(|_| SignallingError::NotConnected)?;
-        Ok(())
-    }
 
     pub fn decode_message(data: &[u8]) -> Result<Message, SignallingError> {
         Message::decode(data).map_err(SignallingError::from)

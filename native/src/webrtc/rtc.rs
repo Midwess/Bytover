@@ -12,7 +12,7 @@ use schema::devlog::rpc_signalling::server::OfferMessage;
 
 use crate::webrtc::client::WebRtcClientError;
 use crate::webrtc::ice::IceAgent;
-use crate::webrtc::signalling::SignalingClient;
+use crate::webrtc::signalling::SignallingSender;
 
 /// The negotiated SCTP stream IDs shared with the WASM peer.
 /// These match the `channel_ids` constants on the WASM side.
@@ -46,7 +46,7 @@ impl RtcClient {
     pub async fn connect(
         signalling_id: &str,
         offer_message: OfferMessage,
-        signalling: &SignalingClient,
+        signalling: SignallingSender,
         request_id: &str
     ) -> Result<Self, WebRtcClientError> {
         let config = match signalling.fetch_relay_config(signalling_id).await {

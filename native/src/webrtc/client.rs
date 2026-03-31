@@ -31,7 +31,7 @@ use shared::shell::api::CoreRequest;
 use shared::utils::compression::is_compressible;
 
 use crate::webrtc::rtc::RtcClient;
-use crate::webrtc::signalling::SignalingClient;
+use crate::webrtc::signalling::SignallingSender;
 use str0m::channel::ChannelId;
 use str0m::Event;
 
@@ -152,7 +152,7 @@ impl WebRtcClient {
     pub async fn connect(
         me: Peer,
         offer_message: OfferMessage,
-        signalling: &SignalingClient,
+        signalling: SignallingSender,
         request_id: String,
         resource_repo: Arc<dyn LocalResourceRepository>
     ) -> Result<Self, WebRtcClientError> {
@@ -333,7 +333,6 @@ impl WebRtcClient {
                                     if let (Some(sender), Some(inner)) = (self.transfer_feedback_sender.get(), feedback.feedback) {
                                         match inner {
                                             schema::devlog::bitbridge::fec_feedback::Feedback::Network(stats) => {
-                                                log::info!("Received network stats {stats:?}");
                                                 let _ = sender.unbounded_send(Feedback::Network(stats));
                                             }
                                             schema::devlog::bitbridge::fec_feedback::Feedback::Missing(blocks) => {
@@ -488,11 +487,13 @@ impl WebRtcClient {
                         break;
                     }
                     let packet = data.to_vec();
+                    let size = packet.len();
                     outbound_packet_sender
                         .send((prefix, packet, false))
                         .with_cancel(&resource_token)
                         .await?
                         .map_err(|e| WebRtcClientError::Transfer(format!("Failed to send data packet: {e:?}")))?;
+                    log::info!("Sent {size} bytes");
                 }
                 None => break
             }

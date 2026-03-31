@@ -218,7 +218,7 @@ impl WebRtcServer {
                     if let Some(offer) = msg.offer {
                         let user = current_user.clone();
                         let repo = resource_repo.clone();
-                        let sig_clone = signalling.clone();
+                        let sig_sender = signalling.get_sender().expect("Signalling sender must be available");
                         let rid = request_id.clone();
                         let off = offer.clone();
 
@@ -226,7 +226,7 @@ impl WebRtcServer {
                             let result = WebRtcClient::connect(
                                 user.clone(),
                                 off,
-                                &sig_clone,
+                                sig_sender,
                                 rid,
                                 repo,
                             )
