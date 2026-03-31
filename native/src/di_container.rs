@@ -19,7 +19,6 @@ use crate::repository::shelf::ShelfRepositoryImpl;
 use crate::repository::transfer_session::TransferSessionRepositoryImpl;
 use crate::repository::RedbPoolProvider;
 use crate::webrtc::server::WebRtcServer;
-use crate::webrtc::signalling::SignalingClient;
 use core_services::utils::pool::allocator::{PoolAllocator, PoolBuilder, PoolResourceProvider};
 use core_services::utils::pool::request::PoolRequestBuilder;
 use devlog_sdk::distributed_id::init_scoped_id_generator;
@@ -171,10 +170,6 @@ impl DiContainer {
         *self.core_bridge.get().unwrap()
     }
 
-    pub fn get_signalling_client(&self) -> SignalingClient {
-        SignalingClient::new(get_signalling_server_ws_url(), get_signalling_server_http_url())
-    }
-
     pub fn get_native_executor(&'static self) -> &'static NativeExecutor {
         if let Some(executor) = self.native_executor.get() {
             return executor
@@ -185,7 +180,8 @@ impl DiContainer {
         let web_rtc_stub = Arc::new(WebRtc::new());
 
         let web_rtc_server = WebRtcServer::new(
-            self.get_signalling_client(),
+            get_signalling_server_ws_url(),
+            get_signalling_server_http_url(),
             local_resource_repo.clone()
         );
 

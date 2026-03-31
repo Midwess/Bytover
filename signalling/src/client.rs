@@ -45,6 +45,21 @@ impl Client {
         })
     }
 
+    pub async fn send_msg(&self, message: schema::devlog::rpc_signalling::server::Message) -> Result<(), ClientError> {
+        let mut buf = Vec::new();
+        message
+            .encode(&mut buf)
+            .map_err(|e| ClientError::Internal(e.to_string()))?;
+
+        let mut session = self.ws_session.lock().await;
+        session
+            .binary(Bytes::from(buf))
+            .await
+            .map_err(|_| ClientError::Disconnected)?;
+
+        Ok(())
+    }
+
     pub async fn request(
         self: &Arc<Self>,
         mut message: schema::devlog::rpc_signalling::server::Message,
@@ -59,16 +74,7 @@ impl Client {
             pending.insert(request_id.clone(), tx);
         }
 
-        let mut buf = Vec::new();
-        message
-            .encode(&mut buf)
-            .map_err(|e| ClientError::Internal(e.to_string()))?;
-
-        let mut session = self.ws_session.lock().await;
-        session
-            .binary(Bytes::from(buf))
-            .await
-            .map_err(|_| ClientError::Disconnected)?;
+        self.send_msg(message).await?;
 
         timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS), rx)
             .await

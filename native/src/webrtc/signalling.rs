@@ -2,11 +2,9 @@ use core_services::utils::yield_container::YieldError;
 use futures_util::{SinkExt, StreamExt};
 use prost::Message as ProstMessage;
 use schema::devlog::rpc_signalling::server::{AnswerMessage, IceConfig, Message};
-use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
-use tokio::spawn;
-use tokio::sync::{mpsc, Mutex, OnceCell};
+use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio_tungstenite::connect_async;
 
@@ -34,13 +32,24 @@ pub enum SignallingError {
     YieldError(#[from] YieldError)
 }
 
-#[derive(Clone)]
 pub struct SignalingClient {
     ws_url: String,
     http_url: String,
-    msg_rx: Arc<OnceCell<Mutex<mpsc::Receiver<Result<Message, SignallingError>>>>>,
-    msg_transfer_tx: Arc<OnceCell<mpsc::Sender<Vec<u8>>>>,
-    run_handle: Arc<Mutex<Option<JoinHandle<()>>>>
+    msg_rx: Option<mpsc::Receiver<Result<Message, SignallingError>>>,
+    msg_transfer_tx: Option<mpsc::Sender<Vec<u8>>>,
+    run_handle: Option<JoinHandle<()>>
+}
+
+impl Clone for SignalingClient {
+    fn clone(&self) -> Self {
+        Self {
+            ws_url: self.ws_url.clone(),
+            http_url: self.http_url.clone(),
+            msg_rx: None,
+            msg_transfer_tx: self.msg_transfer_tx.clone(),
+            run_handle: None,
+        }
+    }
 }
 
 impl SignalingClient {
@@ -48,9 +57,9 @@ impl SignalingClient {
         Self {
             ws_url,
             http_url,
-            msg_rx: Default::default(),
-            msg_transfer_tx: Default::default(),
-            run_handle: Default::default()
+            msg_rx: None,
+            msg_transfer_tx: None,
+            run_handle: None
         }
     }
 
@@ -70,8 +79,8 @@ impl SignalingClient {
         IceConfig::decode(&bytes[..]).map_err(SignallingError::from)
     }
 
-    pub async fn start(&self, key: String) {
-        if self.run_handle.lock().await.is_some() {
+    pub async fn start(&mut self, key: String) {
+        if self.run_handle.is_some() {
             log::warn!("[signalling] Already running");
             return;
         }
@@ -79,10 +88,10 @@ impl SignalingClient {
         let url = format!("{}/server/{}", self.ws_url, key);
         let (tx, new_rx) = mpsc::channel(128);
         let (transfer_tx, transfer_rx) = mpsc::channel(128);
-        let _ = self.msg_rx.set(Mutex::new(new_rx));
-        let _ = self.msg_transfer_tx.set(transfer_tx);
+        self.msg_rx = Some(new_rx);
+        self.msg_transfer_tx = Some(transfer_tx);
 
-        self.run_handle.lock().await.replace(tokio::spawn(async move {
+        self.run_handle = Some(tokio::spawn(async move {
             Self::run_loop(url, transfer_rx, tx).await;
         }));
     }
@@ -168,9 +177,8 @@ impl SignalingClient {
         }
     }
 
-    pub async fn next(&self) -> Result<Message, SignallingError> {
-        let msg_rx = self.msg_rx.get().ok_or(SignallingError::NotConnected)?;
-        let mut msg_rx = msg_rx.lock().await;
+    pub async fn next(&mut self) -> Result<Message, SignallingError> {
+        let msg_rx = self.msg_rx.as_mut().ok_or(SignallingError::NotConnected)?;
         msg_rx.recv().await.ok_or(SignallingError::Stopped)?
     }
 
@@ -184,7 +192,7 @@ impl SignalingClient {
     }
 
     async fn send_message(&self, msg: &Message) -> Result<(), SignallingError> {
-        let tx = self.msg_transfer_tx.get().ok_or(SignallingError::NotConnected)?;
+        let tx = self.msg_transfer_tx.as_ref().ok_or(SignallingError::NotConnected)?;
         let mut buf = Vec::new();
         msg.encode(&mut buf)
             .map_err(|e| SignallingError::ProtocolError(format!("Failed to encode message: {e}")))?;
@@ -199,11 +207,8 @@ impl SignalingClient {
 
 impl Drop for SignalingClient {
     fn drop(&mut self) {
-        let handle = self.run_handle.clone();
-        spawn(async move {
-            if let Some(handle) = handle.lock().await.take() {
-                handle.abort();
-            }
-        });
+        if let Some(handle) = self.run_handle.take() {
+            handle.abort();
+        }
     }
 }

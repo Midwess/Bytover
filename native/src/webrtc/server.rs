@@ -56,7 +56,8 @@ impl From<WebRtcServerError> for CoreError {
 
 
 pub struct WebRtcServer {
-    signalling: SignalingClient,
+    ws_url: String,
+    http_url: String,
     clients: Mutex<HashMap<String, Weak<WebRtcClient>>>,
     resource_repo: Arc<dyn LocalResourceRepository>,
     current_user: OnceCell<PeerEntity>,
@@ -66,11 +67,13 @@ pub struct WebRtcServer {
 
 impl WebRtcServer {
     pub fn new(
-        signalling: SignalingClient,
+        ws_url: String,
+        http_url: String,
         resource_repo: Arc<dyn LocalResourceRepository>
     ) -> Arc<Self> {
         Arc::new(Self {
-            signalling,
+            ws_url,
+            http_url,
             clients: Mutex::new(HashMap::new()),
             resource_repo,
             current_user: Default::default(),
@@ -183,13 +186,14 @@ impl WebRtcServer {
             )))
         };
 
-        self.signalling.start(key.clone()).await;
+        let mut signalling = SignalingClient::new(self.ws_url.clone(), self.http_url.clone());
+        signalling.start(key.clone()).await;
         log::info!("[webrtc-server] Signalling background task started");
 
         let mut connect_futs: FuturesUnordered<_> = FuturesUnordered::new();
+        let mut run_handles: FuturesUnordered<_> = FuturesUnordered::new();
         let resource_repo = self.resource_repo.clone();
         let current_user = current_user.clone();
-        let server = self.clone();
 
         loop {
             if !self.is_running() {
@@ -197,7 +201,7 @@ impl WebRtcServer {
             }
 
             tokio::select! {
-                msg = self.signalling.next() => {
+                msg = signalling.next() => {
                     let msg = match msg {
                         Ok(m) => m,
                         Err(e) => {
@@ -210,10 +214,11 @@ impl WebRtcServer {
                         continue;
                     };
 
+                    log::info!("Received offer {:?}", msg.offer);
                     if let Some(offer) = msg.offer {
                         let user = current_user.clone();
                         let repo = resource_repo.clone();
-                        let srv = server.clone();
+                        let sig_clone = signalling.clone();
                         let rid = request_id.clone();
                         let off = offer.clone();
 
@@ -221,7 +226,7 @@ impl WebRtcServer {
                             let result = WebRtcClient::connect(
                                 user.clone(),
                                 off,
-                                &srv.signalling,
+                                &sig_clone,
                                 rid,
                                 repo,
                             )
@@ -241,25 +246,39 @@ impl WebRtcServer {
                     }
                 }
 
-                Some(result) = connect_futs.next() => {
+                Some(result) = connect_futs.next(), if !connect_futs.is_empty() => {
                     match result {
                         Some((client, _user)) => {
                             let peer_id = client.peer_id().unwrap_or_default();
                             log::info!("[webrtc-server] Client connected and introduced as {peer_id}, registering");
                             self.clients.lock().await.insert(peer_id.clone(), Arc::downgrade(&client));
-                            log::info!("[webrtc-server] Active clients: {}", self.clients.lock().await.len());
 
                             client.start_core_stream(self.core_request.get().unwrap().clone());
                             let client_for_run = client.clone();
-                            tokio::spawn(async move {
+                            let peer_id_for_run = peer_id.clone();
+                            
+                            run_handles.push(tokio::spawn(async move {
                                 log::info!("[webrtc-server] Spawning run loop");
                                 if let Err(e) = client_for_run.run().await {
                                     log::error!("[webrtc-server] Client run error: {e}");
                                 }
-                            });
+                                peer_id_for_run
+                            }));
                         }
                         None => {
                             continue;
+                        }
+                    }
+                }
+                
+                Some(res) = run_handles.next(), if !run_handles.is_empty() => {
+                    match res {
+                        Ok(peer_id) => {
+                            log::info!("[webrtc-server] Client {peer_id} run loop finished, removing from clients list");
+                            self.clients.lock().await.remove(&peer_id);
+                        }
+                        Err(e) => {
+                            log::error!("[webrtc-server] Client run task failed to join: {e}");
                         }
                     }
                 }
