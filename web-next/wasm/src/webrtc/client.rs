@@ -693,22 +693,6 @@ impl WebRtcClient {
 
                     let mut should_ack = false;
                     for (prefix, packet) in packets_with_prefix {
-                        if let Ok(hold) = TransferDelimiterShema::from_hold_packet(&packet) {
-                            let network_stats = NetworkStats {
-                                current_block_id: Some(fec_receiver.current_block_id()),
-                                rtt: Some(fec_receiver.rtt() as u32),
-                                loss_rate: fec_receiver.calculate_loss_rate(),
-                                hold_counter: hold.hold_counter().map(|it| it as u32)
-                            };
-
-                            let feedback = FecFeedback {
-                                feedback: Some(Feedback::Network(network_stats))
-                            };
-
-                            let _ = unordered_msg_channel.notify(Request::FecFeedback(feedback)).await;
-                            continue;
-                        }
-
                         let sender = {
                             let channels = self.prefix_channels.lock().await;
                             channels.get(&prefix).cloned()
@@ -734,7 +718,7 @@ impl WebRtcClient {
                             }))
                         };
 
-                        log::info!("Sending feedback stats");
+                        log::info!("Sending feedback stats {feedback:?}");
                         let _ = unordered_msg_channel.notify(Request::FecFeedback(feedback)).await;
                     }
                 }

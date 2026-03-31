@@ -2,9 +2,11 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use core_services::utils::cancellation::{CancellationToken, FutureExtension};
 use socket2::{Domain, Socket, Type};
 use str0m::channel::{ChannelConfig, ChannelId};
 use str0m::net::{Protocol, Receive};
+use str0m::rtp::StreamPaused;
 use str0m::{Event, IceConnectionState, Input, Output, Rtc};
 use tokio::net::UdpSocket;
 
@@ -206,8 +208,18 @@ impl RtcClient {
                 }
                 Output::Transmit(t) => {
                     let dest = to_v6_mapped(t.destination);
-                    if let Err(e) = self.socket.send_to(&t.contents, dest).await {
+                    let res = self.socket.send_to(&t.contents, dest)
+                        .with_cancel(&CancellationToken::timeout(Duration::from_secs(30)))
+                        .await;
+
+                    let final_res = match res {
+                        Ok(inner) => inner,
+                        Err(_) => Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "UDPSendTimeout")),
+                    };
+
+                    if let Err(e) = final_res {
                         log::warn!("[rtc-client] Failed to send to {}: {}", dest, e);
+                        return Err(WebRtcClientError::Signalling(format!("Failed to send packet: {:?}", e)));
                     }
                 }
                 Output::Event(e) => {

@@ -26,6 +26,7 @@ debug-assertions = false
 core-services = { path = "libs/core-services", default-features = false }
 devlog-sdk = { path = "libs/devlog-sdk", default-features = false }
 schema = { path = "libs/schema/rust", default-features = false }
+crossbeam = "0.8.4"
 anyhow = { version = "1.0.99", default-features = false }
 crux_core = { version = "0.16.1" }
 serde = { version = "1.0.219", default-features = false, features = ["derive"] }

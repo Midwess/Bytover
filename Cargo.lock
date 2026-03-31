@@ -5665,6 +5665,7 @@ dependencies = [
  "bincode",
  "bytes",
  "core-services",
+ "crossbeam",
  "crux_core",
  "devlog-sdk",
  "erased-serde",
