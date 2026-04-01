@@ -364,10 +364,6 @@ impl WebRtcClient {
                         log::info!("sent2 {}", data.len());
                         pending_data = None;
                     } else {
-                        // Buffer full: wait for incoming UDP (SCTP ACKs from peer) so the
-                        // congestion window advances and send() can succeed on the next try.
-                        // Using sleep() here skips wait_for_input(), starving the state machine
-                        // of ACKs and causing an infinite spin at 100% CPU.
                         handle.block_on(rtc.wait_for_input(timeout.max(Duration::from_millis(1))))?;
                     }
                     continue;
@@ -379,8 +375,7 @@ impl WebRtcClient {
                         Some(data) = unordered_msg_rx.next() => Ok(Some((cids.unordered_msg, data))),
                         Some(data) = reliable_data_rx.recv() => Ok(Some((cids.reliable, data))),
                         Some(data) = unreliable_data_rx.recv() => Ok(Some((cids.unreliable, data))),
-                        _ = tokio::time::sleep(timeout) => Ok(None),
-                        res = rtc.wait_for_input(Duration::from_millis(5)) => {
+                        res = rtc.wait_for_input(timeout.max(Duration::from_millis(1))) => {
                             res?;
                             Ok(None)
                         }
