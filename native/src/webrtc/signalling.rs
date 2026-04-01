@@ -63,6 +63,7 @@ impl SignallingSender {
         IceConfig::decode(&bytes[..]).map_err(SignallingError::from)
     }
 
+
     pub async fn send_answer(&self, sdp: String, request_id: &str) -> Result<(), SignallingError> {
         let msg = Message {
             request_id: Some(request_id.to_string()),
@@ -72,6 +73,7 @@ impl SignallingSender {
         self.send_message(&msg).await
     }
 
+
     async fn send_message(&self, msg: &Message) -> Result<(), SignallingError> {
         let mut buf = Vec::new();
         msg.encode(&mut buf)
@@ -79,6 +81,7 @@ impl SignallingSender {
         self.msg_transfer_tx.send(buf).await.map_err(|_| SignallingError::NotConnected)?;
         Ok(())
     }
+
 }
 
 

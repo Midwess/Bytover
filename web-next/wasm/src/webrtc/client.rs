@@ -90,8 +90,8 @@ impl WebRtcClient {
         let (ordered_out_tx, ordered_out_rx) = mpsc::channel(16);
         let (unordered_out_tx, unordered_out_rx) = mpsc::channel(16);
 
-        let reliable_channel = api.create_reliable_channel(connection.clone(), RELIABLE_DATA_CHANNEL_ID)?;
-        let unreliable_channel = api.create_unreliable_channel(connection.clone(), UNRELIABLE_DATA_CHANNEL_ID)?;
+        let reliable_channel = api.create_unordered_channel(connection.clone(), RELIABLE_DATA_CHANNEL_ID)?;
+        let unreliable_channel = api.create_unordered_channel(connection.clone(), UNRELIABLE_DATA_CHANNEL_ID)?;
         let unordered_channel = api.create_unordered_channel(connection.clone(), UNORDERED_MSG_CHANNEL_ID)?;
         let ordered_channel = api.create_ordered_channel(connection.clone(), ORDERED_MSG_CHANNEL_ID)?;
 
@@ -691,7 +691,6 @@ impl WebRtcClient {
                 FecAction::Constructed(packets_with_prefix, next_check) => {
                     next_check_time = Some(next_check);
 
-                    let mut should_ack = false;
                     for (prefix, packet) in packets_with_prefix {
                         let sender = {
                             let channels = self.prefix_channels.lock().await;
@@ -702,28 +701,25 @@ impl WebRtcClient {
                             if let Err(e) = sender.send(packet).await {
                                 log::warn!("Prefix channel {} dropped: {:?}", prefix, e);
                                 self.prefix_channels.lock().await.remove(&prefix);
-                            } else {
-                                should_ack = true;
                             }
                         }
                     }
 
-                    if should_ack {
-                        let feedback = FecFeedback {
-                            feedback: Some(Feedback::Network(NetworkStats {
-                                current_block_id: Some(fec_receiver.current_block_id()),
-                                rtt: Some(fec_receiver.rtt() as u32),
-                                loss_rate: fec_receiver.calculate_loss_rate(),
-                                hold_counter: None
-                            }))
-                        };
+                    let feedback = FecFeedback {
+                        feedback: Some(Feedback::Network(NetworkStats {
+                            current_block_id: Some(fec_receiver.fully_constructed_block()),
+                            rtt: Some(fec_receiver.rtt() as u32),
+                            loss_rate: fec_receiver.calculate_loss_rate(),
+                            hold_counter: None
+                        }))
+                    };
 
-                        log::info!("Sending feedback stats {feedback:?}");
-                        let _ = unordered_msg_channel.notify(Request::FecFeedback(feedback)).await;
-                    }
+                    log::info!("Sending constructed feedback stats {feedback:?}");
+                    let _ = unordered_msg_channel.notify(Request::FecFeedback(feedback)).await;
                 }
                 FecAction::Feedback(fb, next_check) => {
                     next_check_time = Some(next_check);
+                    log::info!("Sending missing feedback {:?} current: {:?}", fb, fec_receiver.current_block_id());
                     let _ = unordered_msg_channel.notify(Request::FecFeedback(fb)).await;
                 }
                 FecAction::Terminated => {
@@ -737,6 +733,7 @@ impl WebRtcClient {
             }
         }
 
+        log::info!("Receiving loop stopped");
         Ok(())
     }
 }

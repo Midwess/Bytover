@@ -1,14 +1,10 @@
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use core_services::utils::cancellation::{CancellationToken, FutureExtension};
 use socket2::{Domain, Socket, Type};
 use str0m::channel::{ChannelConfig, ChannelId};
 use str0m::net::{Protocol, Receive};
-use str0m::rtp::StreamPaused;
 use str0m::{Event, IceConnectionState, Input, Output, Rtc};
-use tokio::net::UdpSocket;
 
 use schema::devlog::rpc_signalling::server::OfferMessage;
 
@@ -16,15 +12,11 @@ use crate::webrtc::client::{MAX_BUFFER_SIZE, WebRtcClientError};
 use crate::webrtc::ice::IceAgent;
 use crate::webrtc::signalling::SignallingSender;
 
-/// The negotiated SCTP stream IDs shared with the WASM peer.
-/// These match the `channel_ids` constants on the WASM side.
 pub const RELIABLE_STREAM_ID: u16 = 1;
 pub const UNRELIABLE_STREAM_ID: u16 = 2;
 pub const UNORDERED_MSG_STREAM_ID: u16 = 3;
 pub const ORDERED_MSG_STREAM_ID: u16 = 4;
 
-/// Actual str0m ChannelIds assigned at runtime.
-/// ChannelId is an opaque sequential counter — NOT the SCTP stream id.
 #[derive(Debug, Clone, Copy)]
 pub struct ChannelIds {
     pub reliable: ChannelId,
@@ -35,7 +27,7 @@ pub struct ChannelIds {
 
 pub struct RtcClient {
     rtc: Rtc,
-    socket: UdpSocket,
+    socket: tokio::net::UdpSocket,
     local_addr: SocketAddr,
     local_v4_addr: Option<SocketAddr>,
     local_v6_addr: Option<SocketAddr>,
@@ -67,13 +59,12 @@ impl RtcClient {
         socket.set_nonblocking(true)?;
         socket.bind(&"[::]:0".parse::<SocketAddr>().unwrap().into())?;
         let _ = socket.set_send_buffer_size(MAX_BUFFER_SIZE * 2);
-        let std_socket: std::net::UdpSocket = socket.into();
-        let socket = UdpSocket::from_std(std_socket)?;
-        let socket = Arc::new(socket);
+        let socket: std::net::UdpSocket = socket.into();
+        let socket = tokio::net::UdpSocket::from_std(socket)?;
 
         let local_addr = socket.local_addr()?;
 
-        let (candidates, _relay_client) = IceAgent::gather_candidates(socket.clone(), &config)
+        let (candidates, _relay_client) = IceAgent::gather_candidates(&socket, &config)
             .await
             .map_err(|e| WebRtcClientError::Signalling(format!("{e}")))?;
 
@@ -89,19 +80,20 @@ impl RtcClient {
             rtc.add_local_candidate(candidate);
         }
 
-        let offer_sdp = IceAgent::resolve_remote_candidates(&offer_message.sdp).await;
+        let offer_sdp = IceAgent::resolve_remote_candidates(&offer_message.sdp);
         log::info!("Received offer sdp: {offer_sdp}");
         let offer = str0m::change::SdpOffer::from_sdp_string(&offer_sdp).map_err(|e| WebRtcClientError::SdpParse(format!("{e}")))?;
 
         let reliable_id = rtc.direct_api().create_data_channel(ChannelConfig {
             label: "reliable".to_string(),
-            ordered: true,
+            ordered: false,
             negotiated: Some(RELIABLE_STREAM_ID),
             ..Default::default()
         });
         let unreliable_id = rtc.direct_api().create_data_channel(ChannelConfig {
             label: "unreliable".to_string(),
             ordered: false,
+            // reliability: str0m::channel::Reliability::MaxRetransmits { retransmits: 0 },
             negotiated: Some(UNRELIABLE_STREAM_ID),
             ..Default::default()
         });
@@ -123,7 +115,6 @@ impl RtcClient {
             unordered_msg: unordered_msg_id,
             ordered_msg: ordered_msg_id
         };
-        log::info!("[rtc-client] Channel IDs assigned: {:?}", channel_ids);
 
         let answer = rtc.sdp_api().accept_offer(offer).map_err(WebRtcClientError::Rtc)?;
 
@@ -132,11 +123,9 @@ impl RtcClient {
             .await
             .map_err(|e| WebRtcClientError::Signalling(format!("{e}")))?;
 
-        log::info!("[rtc-client] Answer sent, waiting for connection");
-
         let mut client = Self {
             rtc,
-            socket: Arc::try_unwrap(socket).expect("socket Arc should have single owner after gather"),
+            socket,
             local_addr,
             local_v4_addr,
             local_v6_addr,
@@ -147,11 +136,10 @@ impl RtcClient {
 
         let mut connected = false;
         loop {
-            let event_opt = client.poll_event().await?;
-            if let Some(event) = event_opt {
+            if let Some(event) = client.poll_event().await? {
                 match event {
                     Event::Connected => {
-                        log::info!("[rtc-client] DTLS Connected, waiting for SCTP channels to open");
+                        log::info!("[rtc-client] DTLS Connected");
                         connected = true;
                     }
                     Event::IceConnectionStateChange(state) => {
@@ -160,17 +148,7 @@ impl RtcClient {
                             return Err(WebRtcClientError::Signalling("Peer disconnected during setup".into()));
                         }
                     }
-                    Event::ChannelOpen(cid, name) => {
-                        log::info!("[rtc-client] ChannelOpen event: {:?} {}", cid, name);
-                    }
-                    Event::ChannelData(data) => {
-                        // If we ever get channel data here, the channels must be ready.
-                        // We shouldn't drop it. But we don't expect it before channels are ready.
-                        log::warn!("[rtc-client] Unexpected ChannelData during connect on {:?}", data.id);
-                    }
-                    e => {
-                        log::info!("[rtc-client] event during connect: {:?}", e);
-                    }
+                    _ => {}
                 }
             }
 
@@ -208,16 +186,11 @@ impl RtcClient {
                 }
                 Output::Transmit(t) => {
                     let dest = to_v6_mapped(t.destination);
-                    let res = self.socket.send_to(&t.contents, dest)
-                        .with_cancel(&CancellationToken::timeout(Duration::from_secs(30)))
-                        .await;
+                    if t.contents.len() > 1110 {
+                        log::info!("Sent3 {}", t.contents.len());
+                    }
 
-                    let final_res = match res {
-                        Ok(inner) => inner,
-                        Err(_) => Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "UDPSendTimeout")),
-                    };
-
-                    if let Err(e) = final_res {
+                    if let Err(e) = self.socket.send_to(&t.contents, dest).await {
                         log::warn!("[rtc-client] Failed to send to {}: {}", dest, e);
                         return Err(WebRtcClientError::Signalling(format!("Failed to send packet: {:?}", e)));
                     }
@@ -244,28 +217,27 @@ impl RtcClient {
             return Ok(());
         }
 
-        tokio::select! {
-            res = self.socket.recv_from(&mut self.buf[..]) => {
-                if let Ok((n, mut source)) = res {
-                    source = from_v6_mapped(source);
-                    let local = if source.is_ipv4() {
-                        self.local_v4_addr.unwrap_or(self.local_addr)
-                    } else {
-                        self.local_v6_addr.unwrap_or(self.local_addr)
-                    };
-                    match Receive::new(Protocol::Udp, source, local, &self.buf[..n]) {
-                        Ok(receive) => {
-                            if let Err(e) = self.rtc.handle_input(Input::Receive(Instant::now(), receive)) {
-                                log::warn!("[rtc-client] Input handle packet drop: {}", e);
-                            }
+        match tokio::time::timeout(timeout, self.socket.recv_from(&mut self.buf[..])).await {
+            Ok(Ok((n, mut source))) => {
+                source = from_v6_mapped(source);
+                let local = if source.is_ipv4() {
+                    self.local_v4_addr.unwrap_or(self.local_addr)
+                } else {
+                    self.local_v6_addr.unwrap_or(self.local_addr)
+                };
+                match Receive::new(Protocol::Udp, source, local, &self.buf[..n]) {
+                    Ok(receive) => {
+                        if let Err(e) = self.rtc.handle_input(Input::Receive(Instant::now(), receive)) {
+                            log::warn!("[rtc-client] Input handle packet drop: {}", e);
                         }
-                        Err(e) => {
-                            log::warn!("[rtc-client] Failed to parse Receive: {}", e);
-                        }
+                    }
+                    Err(e) => {
+                        log::warn!("[rtc-client] Failed to parse Receive: {}", e);
                     }
                 }
             }
-            _ = tokio::time::sleep(timeout) => {
+            Ok(Err(e)) => return Err(e.into()),
+            Err(_) => {
                 self.rtc.handle_input(Input::Timeout(Instant::now()))?;
             }
         }
@@ -274,17 +246,13 @@ impl RtcClient {
 
     pub fn send(&mut self, data: &[u8], channel_id: ChannelId) -> bool {
         if let Some(mut ch) = self.rtc.channel(channel_id) {
-            if let Err(e) = ch.write(true, data) {
-                log::warn!("Cannot send data {e:?}");
-                false
-            } else {
-                true
-            }
+            ch.write(true, data).unwrap_or_default()
         } else {
             log::warn!("[rtc-client] Channel {:?} not found, data dropped!", channel_id);
             false
         }
     }
+
     pub fn set_buffered_amount_low_threshold(&mut self, channel_id: ChannelId, threshold: usize) {
         if let Some(mut ch) = self.rtc.channel(channel_id) {
             ch.set_buffered_amount_low_threshold(threshold);
@@ -311,11 +279,7 @@ fn from_v6_mapped(addr: SocketAddr) -> SocketAddr {
     match addr {
         SocketAddr::V6(v6) => {
             let octets = v6.ip().octets();
-            if octets[0..12] ==
-                [
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff
-                ]
-            {
+            if octets[0..12] == [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff] {
                 let v4 = std::net::Ipv4Addr::new(octets[12], octets[13], octets[14], octets[15]);
                 SocketAddr::new(v4.into(), v6.port())
             } else {

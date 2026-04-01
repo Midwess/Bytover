@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
 
-pub const CHUNK_SIZE: usize = 1095;
+pub const CHUNK_SIZE: usize = 1110;
 pub const DATA_SHARDS_DEFAULT: usize = 100;
 pub const MIN_PARITY_SHARDS: usize = 2;
 pub const MAX_PARITY_SHARDS: usize = 10;
@@ -548,7 +548,7 @@ impl FecSender {
                 }
 
                 if all_frames.is_empty() {
-                    FecAction::Terminated
+                    FecAction::Noop
                 } else {
                     FecAction::Retransmit(all_frames)
                 }
@@ -640,6 +640,8 @@ impl LossDetector {
 
     fn detect_lost_frames(
         &self,
+        block_id: u32,
+        highest_received_block: u32,
         received_frames: &[Option<Vec<u8>>],
         since: u64,
         now: u64,
@@ -647,6 +649,15 @@ impl LossDetector {
         quick_loss_threshold: usize
     ) -> Vec<u8> {
         if since.saturating_add(time_threshold_us) <= now {
+            // This is not last block, and not receive any frame yet
+            if received_frames.iter().all(|f| f.is_none()) && highest_received_block > block_id {
+                if !self.is_requested(0) {
+                    return vec![0]
+                }
+                
+                return vec![]
+            }
+
             let time_lost: Vec<u8> = received_frames
                 .iter()
                 .enumerate()
@@ -674,7 +685,6 @@ impl LossDetector {
     }
 }
 
-#[derive(Default)]
 struct ReceiverBlock {
     data_shards: usize,
     total_size: usize,
@@ -691,7 +701,7 @@ struct ReceiverBlock {
     is_placeholder: bool,
     prefix: u16,
 
-    loss_detector: Option<LossDetector>
+    loss_detector: LossDetector
 }
 
 impl ReceiverBlock {
@@ -699,11 +709,11 @@ impl ReceiverBlock {
         let now = now_micros();
         Self {
             is_placeholder: true,
-            data_shards: DATA_SHARDS_DEFAULT,
-            shards: vec![None; DATA_SHARDS_DEFAULT + MIN_PARITY_SHARDS],
-            frame_send_times: vec![0; DATA_SHARDS_DEFAULT + MIN_PARITY_SHARDS],
-            parity_shards: MIN_PARITY_SHARDS,
-            total_shards: DATA_SHARDS_DEFAULT + MIN_PARITY_SHARDS,
+            data_shards: 1,
+            shards: vec![None; 1],
+            frame_send_times: vec![0; 1],
+            parity_shards: 0,
+            total_shards: 1,
             received: 0,
             data_received: 0,
             first_ts: now,
@@ -712,7 +722,7 @@ impl ReceiverBlock {
             is_complete: false,
             total_size: 0,
             prefix: 0,
-            loss_detector: None
+            loss_detector: LossDetector::new(1)
         }
     }
 
@@ -734,7 +744,7 @@ impl ReceiverBlock {
             last_ping_ts: now,
             is_complete: false,
             prefix,
-            loss_detector: Some(LossDetector::new(total))
+            loss_detector: LossDetector::new(total)
         }
     }
 
@@ -756,7 +766,7 @@ impl ReceiverBlock {
             self.prefix = prefix;
             self.last_ping_ts = now;
             self.is_complete = false;
-            self.loss_detector = Some(LossDetector::new(total));
+            self.loss_detector = LossDetector::new(total);
         }
     }
 
@@ -818,10 +828,11 @@ impl ReceiverBlock {
             match rs.reconstruct(&mut self.shards) {
                 Ok(()) => {
                     self.is_complete = true;
+                    log::info!("Successfully reconstructed block through Reed-Solomon");
                     Ok(true)
                 }
                 Err(e) => {
-                    log::warn!("Reed-Solomon reconstruction failed: {:?}", e);
+                    log::warn!("Reed-Solomon reconstruction failed for block: {:?}", e);
                     Ok(false)
                 }
             }
@@ -863,6 +874,7 @@ pub struct FecReceiver {
     false_retransmit: u64,
     retransmit_count: u64,
     next_block_id: u32,
+    highest_received_block_id: u32,
     total_frames_received: u64,
     total_lost_frames: u64,
     decoders: HashMap<(usize, usize), ReedSolomon>,
@@ -879,7 +891,7 @@ impl Default for FecReceiver {
 
 impl FecReceiver {
     pub fn new() -> Self {
-        Self::with_window_size(256)
+        Self::with_window_size(2048)
     }
 
     pub fn with_window_size(window_size: usize) -> Self {
@@ -891,6 +903,7 @@ impl FecReceiver {
             retransmit_count: 0,
             rtt_estimator: RttEstimator::new(),
             next_block_id: 0,
+            highest_received_block_id: 0,
             total_frames_received: 0,
             total_lost_frames: 0,
             decoders: HashMap::new(),
@@ -920,6 +933,10 @@ impl FecReceiver {
     #[inline]
     pub fn current_block_id(&self) -> u32 {
         self.next_block_id
+    }
+
+    pub fn fully_constructed_block(&self) -> u32 {
+        self.next_block_id - 1
     }
 
     #[inline]
@@ -969,6 +986,7 @@ impl FecReceiver {
             }
 
             let block_id = frame.block_id;
+            self.highest_received_block_id = self.highest_received_block_id.max(block_id);
 
             // Get or create block
             if self.blocks.get(block_id).is_none() {
@@ -1139,8 +1157,10 @@ impl FecReceiver {
                     continue;
                 }
 
-                if let Some(ref mut detector) = &mut block.loss_detector {
+                let detector = &mut block.loss_detector;
                     let lost_frames = detector.detect_lost_frames(
+                        *block_id,
+                        self.highest_received_block_id,
                         &block.shards,
                         block.last_ping_ts,
                         now,
@@ -1168,21 +1188,20 @@ impl FecReceiver {
                             all_missing_blocks.last().unwrap().frames.len()
                         );
                     }
-                }
             }
         }
 
         let next_check = self.calculate_next_check_time();
 
         if !all_missing_blocks.is_empty() {
-            return Ok(FecAction::Feedback(
-                FecFeedback {
-                    feedback: Some(Feedback::Missing(MissingBlocks {
-                        blocks: all_missing_blocks
-                    }))
-                },
-                next_check
-            ));
+            // return Ok(FecAction::Feedback(
+            //     FecFeedback {
+            //         feedback: Some(Feedback::Missing(MissingBlocks {
+            //             blocks: all_missing_blocks
+            //         }))
+            //     },
+            //     next_check
+            // ));
         }
 
         Ok(FecAction::Queued(next_check))

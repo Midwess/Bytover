@@ -1,7 +1,6 @@
 use std::collections::HashSet;
-use std::net::{IpAddr, SocketAddr};
-use std::sync::Arc;
-use std::time::Duration;
+use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
+use std::time::{Duration, Instant};
 
 use str0m::Candidate;
 use stun_proto::agent::{StunAgent, StunAgentPollRet};
@@ -11,7 +10,6 @@ use stun_proto::types::prelude::*;
 use stun_proto::types::TransportType;
 use stun_proto::Instant as StunInstant;
 use thiserror::Error;
-use tokio::net::UdpSocket;
 
 use schema::devlog::rpc_signalling::server::IceConfig;
 
@@ -84,7 +82,7 @@ fn extract_mapped_addr(msg: &Message<'_>) -> Option<SocketAddr> {
 pub struct IceAgent;
 
 impl IceAgent {
-    pub async fn resolve_remote_candidates(sdp: &str) -> String {
+    pub fn resolve_remote_candidates(sdp: &str) -> String {
         let mut resolved_lines = Vec::new();
         for line in sdp.lines() {
             if line.contains("candidate:") {
@@ -94,7 +92,7 @@ impl IceAgent {
                     if hostname.parse::<std::net::IpAddr>().is_err() {
                         let port = parts[5];
                         let lookup = format!("{}:{}", hostname, port);
-                        match tokio::net::lookup_host(lookup).await {
+                        match lookup.to_socket_addrs() {
                             Ok(mut addrs) => {
                                 if let Some(resolved) = addrs.next() {
                                     let mut new_parts = parts;
@@ -117,7 +115,7 @@ impl IceAgent {
     }
 
     pub async fn gather_candidates(
-        socket: Arc<UdpSocket>,
+        socket: &tokio::net::UdpSocket,
         config: &IceConfig
     ) -> Result<(Vec<Candidate>, Option<turn_client_proto::udp::TurnClientUdp>), IceError> {
         log::info!("[ice] Gathering candidates using config {config:?}");
@@ -147,14 +145,14 @@ impl IceAgent {
         if !stun_urls.is_empty() {
             let local_addr = socket.local_addr().unwrap_or_else(|_| SocketAddr::new(std::net::Ipv4Addr::UNSPECIFIED.into(), 0));
 
-            let stun_base = std::time::Instant::now();
+            let stun_base = Instant::now();
             let stun_now = || StunInstant::from_std(stun_base);
 
             let mut pending: Vec<(StunAgent, SocketAddr)> = Vec::new();
 
             for url_str in &stun_urls {
                 if let Some(host_port) = stun_url_to_host_port(url_str) {
-                    if let Ok(addrs) = tokio::net::lookup_host(&host_port).await {
+                    if let Ok(addrs) = host_port.to_socket_addrs() {
                         for stun_addr in addrs {
                             let send_addr = to_v6_mapped(stun_addr);
                             let mut agent = StunAgent::builder(TransportType::Udp, local_addr).remote_addr(send_addr).build();
@@ -176,7 +174,7 @@ impl IceAgent {
                 }
             }
 
-            let start = tokio::time::Instant::now();
+            let start = Instant::now();
             let mut buf = [0u8; STUN_MAX_PACKET];
 
             while !pending.is_empty() && start.elapsed() < STUN_TIMEOUT {
@@ -185,9 +183,8 @@ impl IceAgent {
                     break;
                 }
 
-                tokio::select! {
-                    result = socket.recv_from(&mut buf) => {
-                        let Ok((n, src)) = result else { break; };
+                match tokio::time::timeout(remaining, socket.recv_from(&mut buf)).await {
+                    Ok(Ok((n, src))) => {
                         if let Ok(msg) = Message::from_bytes(&buf[..n]) {
                             if msg.is_response() {
                                 let mut matched = None;
@@ -218,7 +215,7 @@ impl IceAgent {
                             }
                         }
                     }
-                    _ = tokio::time::sleep(Duration::from_millis(500).min(remaining)) => {}
+                    _ => {}
                 }
 
                 let now = stun_now();
@@ -231,22 +228,20 @@ impl IceAgent {
                 });
 
                 let now = stun_now();
-                for (agent, stun_addr) in pending.iter_mut() {
+                for (agent, _stun_addr) in pending.iter_mut() {
                     let mut retransmits = Vec::new();
                     while let Some(t) = agent.poll_transmit(now) {
                         retransmits.push((t.data.to_vec(), t.to));
                     }
                     for (data, to) in retransmits {
-                        if let Err(e) = socket.send_to(&data, to).await {
-                            log::warn!("[ice] Retransmit to {stun_addr}: {e}");
-                        }
+                        let _ = socket.send_to(&data, to).await;
                     }
                 }
             }
         }
 
         let mut relay_client = None;
-        if let Ok(Some((relay_cand, client))) = Self::connect_relay(&socket, config).await {
+        if let Some((relay_cand, client)) = Self::connect_relay(socket, config).await? {
             candidates.insert(relay_cand);
             relay_client = Some(client);
         }
@@ -257,66 +252,51 @@ impl IceAgent {
     }
 
     async fn connect_relay(
-        socket: &Arc<UdpSocket>,
+        socket: &tokio::net::UdpSocket,
         config: &IceConfig
     ) -> Result<Option<(Candidate, turn_client_proto::udp::TurnClientUdp)>, IceError> {
-        let username = match &config.username {
-            Some(u) => u.as_str(),
-            None => return Ok(None)
+        let (username, password) = match (&config.username, &config.credential) {
+            (Some(u), Some(p)) => (u.as_str(), p.as_str()),
+            _ => return Ok(None)
         };
-        let password = match &config.credential {
-            Some(p) => p.as_str(),
-            None => return Ok(None)
-        };
+
         let turn_urls: Vec<String> = config.urls.iter().filter(|u| u.starts_with("turn:")).cloned().collect();
-        if turn_urls.is_empty() {
-            return Ok(None);
-        }
+        if turn_urls.is_empty() { return Ok(None); }
+
         let local_addr = socket.local_addr().unwrap_or_else(|_| SocketAddr::new(std::net::Ipv4Addr::UNSPECIFIED.into(), 0));
         let credentials = turn_types::TurnCredentials::new(username, password);
         let turn_config = turn_client_proto::api::TurnConfig::new(credentials);
 
         let mut turn_addr = None;
         for url_str in &turn_urls {
-            let stripped = url_str.strip_prefix("turn:").unwrap();
-            let stripped = if let Some(idx) = stripped.find('?') {
-                &stripped[..idx]
-            } else {
-                stripped
-            };
-            let host_port = if stripped.contains(':') {
-                stripped.to_string()
-            } else {
-                format!("{}:3478", stripped)
-            };
-            log::info!("[ice] Looking up TURN host: {}", host_port);
-            if let Ok(mut addrs) = tokio::net::lookup_host(host_port.as_str()).await {
+            let stripped = url_str.strip_prefix("turn:").unwrap().split('?').next().unwrap();
+            let host_port = if stripped.contains(':') { stripped.to_string() } else { format!("{}:3478", stripped) };
+            if let Ok(mut addrs) = host_port.to_socket_addrs() {
                 if let Some(addr) = addrs.next() {
                     turn_addr = Some(to_v6_mapped(addr));
                     break;
                 }
             };
         }
-        let send_addr = match turn_addr {
+        
+        let send_addr = turn_addr.ok_or_else(|| {
+            log::warn!("[ice] Failed to resolve any TURN servers");
+            IceError::Timeout
+        }).ok();
+        
+        let send_addr = match send_addr {
             Some(a) => a,
-            None => {
-                log::warn!("[ice] Failed to resolve any TURN servers");
-                return Ok(None);
-            }
+            None => return Ok(None)
         };
 
         let mut client = turn_client_proto::udp::TurnClientUdp::allocate(local_addr, send_addr, turn_config);
-        let start = tokio::time::Instant::now();
-        let stun_base = std::time::Instant::now();
+        let start = Instant::now();
+        let stun_base = Instant::now();
         let mut buf = [0u8; STUN_MAX_PACKET];
 
         while start.elapsed() < STUN_TIMEOUT {
             let now = stun_proto::Instant::from_std(stun_base);
-            let _lowest_wait = match turn_client_proto::api::TurnClientApi::poll(&mut client, now) {
-                turn_client_proto::api::TurnPollRet::WaitUntil(wait) => wait,
-                turn_client_proto::api::TurnPollRet::Closed => break,
-                _ => now
-            };
+            let _ = turn_client_proto::api::TurnClientApi::poll(&mut client, now);
 
             if let Some(event) = turn_client_proto::api::TurnClientApi::poll_event(&mut client) {
                 if let turn_client_proto::api::TurnEvent::AllocationCreated(_, addr) = event {
@@ -333,18 +313,9 @@ impl IceAgent {
             }
 
             let remaining = STUN_TIMEOUT.saturating_sub(start.elapsed());
-            if remaining.is_zero() {
-                break;
-            }
-
-            tokio::select! {
-                result = socket.recv_from(&mut buf) => {
-                    if let Ok((n, src)) = result {
-                        let transmit = stun_proto::agent::Transmit::new(&buf[..n], stun_proto::types::TransportType::Udp, src, local_addr);
-                        let _ = turn_client_proto::api::TurnClientApi::recv(&mut client, transmit, stun_proto::Instant::from_std(stun_base));
-                    }
-                }
-                _ = tokio::time::sleep(Duration::from_millis(500).min(remaining)) => {}
+            if let Ok(Ok((n, src))) = tokio::time::timeout(remaining, socket.recv_from(&mut buf)).await {
+                let transmit = stun_proto::agent::Transmit::new(&buf[..n], stun_proto::types::TransportType::Udp, src, local_addr);
+                let _ = turn_client_proto::api::TurnClientApi::recv(&mut client, transmit, stun_proto::Instant::from_std(stun_base));
             }
         }
         Ok(None)
