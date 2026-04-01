@@ -1,6 +1,5 @@
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
-
 use socket2::{Domain, Socket, Type};
 use str0m::channel::{ChannelConfig, ChannelId};
 use str0m::net::{Protocol, Receive};
@@ -190,9 +189,18 @@ impl RtcClient {
                         log::info!("Sent3 {}", t.contents.len());
                     }
 
-                    if let Err(e) = self.socket.send_to(&t.contents, dest).await {
-                        log::warn!("[rtc-client] Failed to send to {}: {}", dest, e);
-                        return Err(WebRtcClientError::Signalling(format!("Failed to send packet: {:?}", e)));
+                    let res = tokio::time::timeout(Duration::from_secs(10), self.socket.send_to(&t.contents, dest)).await;
+
+                    match res {
+                        Ok(Err(e)) => {
+                            log::warn!("[rtc-client] Failed to send to {}: {}", dest, e);
+                            return Err(WebRtcClientError::Signalling(format!("Failed to send packet: {:?}", e)));
+                        }
+                        Err(_) => {
+                            log::error!("[rtc-client] Timeout sending packet to {} after 10s", dest);
+                            return Err(WebRtcClientError::Signalling("Send packet timed out".to_string()));
+                        }
+                        _ => {}
                     }
                 }
                 Output::Event(e) => {
@@ -246,9 +254,16 @@ impl RtcClient {
 
     pub fn send(&mut self, data: &[u8], channel_id: ChannelId) -> bool {
         if let Some(mut ch) = self.rtc.channel(channel_id) {
-            ch.write(true, data).unwrap_or_default()
+            match ch.write(true, data) {
+                Ok(true) => true,
+                Ok(false) => false, 
+                Err(e) => {
+                    log::error!("[rtc-client] Failed to write to channel {:?}: {:?}", channel_id, e);
+                    false
+                }
+            }
         } else {
-            log::warn!("[rtc-client] Channel {:?} not found, data dropped!", channel_id);
+            log::warn!("[rtc-client] Channel {:?} not found", channel_id);
             false
         }
     }

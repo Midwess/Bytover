@@ -150,7 +150,6 @@ pub struct WebRtcClient {
     reliable_data_tx: YieldContainer<mpsc::Sender<Vec<u8>>>,
     unreliable_data_tx: YieldContainer<mpsc::Sender<Vec<u8>>>,
     bytes_sent_counter: Arc<AtomicUsize>,
-    buffer_low_notify: Arc<Notify>
 }
 
 
@@ -277,7 +276,6 @@ impl WebRtcClient {
             reliable_data_tx: YieldContainer::new(reliable_data_tx),
             unreliable_data_tx: YieldContainer::new(unreliable_data_tx),
             bytes_sent_counter: Arc::new(AtomicUsize::new(0)),
-            buffer_low_notify: Arc::new(Notify::new())
         };
 
         Ok(client)
@@ -350,9 +348,6 @@ impl WebRtcClient {
                                 }
                             }
                         }
-                        Event::ChannelBufferedAmountLow(_cid) => {
-                            this.buffer_low_notify.notify_one();
-                        }
                         Event::IceConnectionStateChange(state) => {
                             log::info!("[webrtc-client] ICE state: {:?}", state);
                         }
@@ -370,7 +365,6 @@ impl WebRtcClient {
                         pending_data = None;
                     }
 
-                    yield_now();
                     continue;
                 }
 
@@ -392,7 +386,6 @@ impl WebRtcClient {
                 if let Some((cid, data)) = res {
                     if !rtc.send(&data, cid) {
                         pending_data = Some((data, cid));
-                        yield_now();
                         continue;
                     }
 
@@ -826,10 +819,14 @@ impl WebRtcClient {
                         for frame in frames {
                             let packet = frame.serialize();
                             if reliable {
-                                let _ = reliable_tx.try_send(packet);
+                                if let Err(e) = reliable_tx.try_send(packet) {
+                                    log::warn!("[webrtc-client] Failed to send to reliable_tx: {:?}", e);
+                                }
                             } else {
                                 log::info!("sent1 {}", packet.len());
-                                let _ = unreliable_tx.try_send(packet);
+                                if let Err(e) = unreliable_tx.try_send(packet) {
+                                    log::warn!("[webrtc-client] Failed to send to unreliable_tx: {:?}", e);
+                                }
                             }
                         }
                     }
@@ -838,7 +835,9 @@ impl WebRtcClient {
                         log::info!("Retransmit {:?} {:?}", frames.first().map(|it| it.block_id), frame_idx);
                         for frame in frames {
                             let packet = frame.serialize();
-                            let _ = reliable_tx.try_send(packet);
+                            if let Err(e) = reliable_tx.try_send(packet) {
+                                log::warn!("[webrtc-client] Failed to retransmit to reliable_tx: {:?}", e);
+                            }
                         }
                     }
                     FecAction::Terminated => {
