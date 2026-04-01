@@ -1194,14 +1194,14 @@ impl FecReceiver {
         let next_check = self.calculate_next_check_time();
 
         if !all_missing_blocks.is_empty() {
-            // return Ok(FecAction::Feedback(
-            //     FecFeedback {
-            //         feedback: Some(Feedback::Missing(MissingBlocks {
-            //             blocks: all_missing_blocks
-            //         }))
-            //     },
-            //     next_check
-            // ));
+            return Ok(FecAction::Feedback(
+                FecFeedback {
+                    feedback: Some(Feedback::Missing(MissingBlocks {
+                        blocks: all_missing_blocks
+                    }))
+                },
+                next_check
+            ));
         }
 
         Ok(FecAction::Queued(next_check))

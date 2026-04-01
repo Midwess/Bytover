@@ -91,7 +91,7 @@ impl WebRtcClient {
         let (unordered_out_tx, unordered_out_rx) = mpsc::channel(16);
 
         let reliable_channel = api.create_unordered_channel(connection.clone(), RELIABLE_DATA_CHANNEL_ID)?;
-        let unreliable_channel = api.create_unordered_channel(connection.clone(), UNRELIABLE_DATA_CHANNEL_ID)?;
+        let unreliable_channel = api.create_unreliable_channel(connection.clone(), UNRELIABLE_DATA_CHANNEL_ID)?;
         let unordered_channel = api.create_unordered_channel(connection.clone(), UNORDERED_MSG_CHANNEL_ID)?;
         let ordered_channel = api.create_ordered_channel(connection.clone(), ORDERED_MSG_CHANNEL_ID)?;
 
@@ -714,7 +714,6 @@ impl WebRtcClient {
                         }))
                     };
 
-                    log::info!("Sending constructed feedback stats {feedback:?}");
                     let _ = unordered_msg_channel.notify(Request::FecFeedback(feedback)).await;
                 }
                 FecAction::Feedback(fb, next_check) => {

@@ -92,7 +92,7 @@ impl RtcClient {
         let unreliable_id = rtc.direct_api().create_data_channel(ChannelConfig {
             label: "unreliable".to_string(),
             ordered: false,
-            // reliability: str0m::channel::Reliability::MaxRetransmits { retransmits: 0 },
+            reliability: str0m::channel::Reliability::MaxRetransmits { retransmits: 0 },
             negotiated: Some(UNRELIABLE_STREAM_ID),
             ..Default::default()
         });
@@ -185,10 +185,6 @@ impl RtcClient {
                 }
                 Output::Transmit(t) => {
                     let dest = to_v6_mapped(t.destination);
-                    if t.contents.len() > 1110 {
-                        log::info!("Sent3 {}", t.contents.len());
-                    }
-
                     let res = tokio::time::timeout(Duration::from_secs(10), self.socket.send_to(&t.contents, dest)).await;
 
                     match res {
