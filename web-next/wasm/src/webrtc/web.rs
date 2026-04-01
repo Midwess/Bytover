@@ -204,7 +204,6 @@ impl WebRtcApi {
             Closure::wrap(Box::new(move |event: MessageEvent| {
                 if let Ok(arraybuf) = event.data().dyn_into::<ArrayBuffer>() {
                     let packet: Vec<u8> = Uint8Array::new(&arraybuf).to_vec();
-                    log::info!("Received {}", packet.len());
                     if let Err(e) = inbound_tx.unbounded_send(packet) {
                         log::warn!("Failed to send inbound packet: {:?}", e);
                     }

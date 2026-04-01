@@ -2,7 +2,6 @@ use std::ops::DerefMut;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::thread::yield_now;
 use std::time::Duration;
 
 use tokio::sync::Notify;
@@ -359,16 +358,21 @@ impl WebRtcClient {
                     break;
                 }
 
+                let timeout = rtc.timeout_duration();
                 if let Some((ref data, cid)) = pending_data {
                     if rtc.send(data, cid.clone()) {
                         log::info!("sent2 {}", data.len());
                         pending_data = None;
+                    } else {
+                        // Buffer full: wait for incoming UDP (SCTP ACKs from peer) so the
+                        // congestion window advances and send() can succeed on the next try.
+                        // Using sleep() here skips wait_for_input(), starving the state machine
+                        // of ACKs and causing an infinite spin at 100% CPU.
+                        handle.block_on(rtc.wait_for_input(timeout.max(Duration::from_millis(1))))?;
                     }
-
                     continue;
                 }
 
-                let timeout = rtc.timeout_duration();
                 let res = handle.block_on(async {
                     tokio::select! {
                         Some(data) = ordered_msg_rx.next() => Ok::<_, WebRtcClientError>(Some((cids.ordered_msg, data))),
@@ -385,6 +389,7 @@ impl WebRtcClient {
 
                 if let Some((cid, data)) = res {
                     if !rtc.send(&data, cid) {
+                        log::info!("Putting data to pending {}bytes", data.len());
                         pending_data = Some((data, cid));
                         continue;
                     }
