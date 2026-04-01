@@ -2,6 +2,7 @@ use std::ops::DerefMut;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::thread::yield_now;
 use std::time::Duration;
 
 use tokio::sync::Notify;
@@ -318,6 +319,7 @@ impl WebRtcClient {
             let mut unordered_msg_rx = unordered_msg_rx_guard.value.take().unwrap();
             let mut reliable_data_rx = reliable_data_rx_guard.value.take().unwrap();
             let mut unreliable_data_rx = unreliable_data_rx_guard.value.take().unwrap();
+            let mut pending_data: Option<(Vec<u8>, ChannelId)> = None;
 
             rtc.set_buffered_amount_low_threshold(cids.reliable, MIN_BUFFER_SIZE);
             rtc.set_buffered_amount_low_threshold(cids.unreliable, MIN_BUFFER_SIZE);
@@ -358,6 +360,20 @@ impl WebRtcClient {
                     }
                 }
 
+                if sending_handle.is_finished() || msg_handle.is_finished() {
+                    break;
+                }
+
+                if let Some((ref data, cid)) = pending_data {
+                    if rtc.send(data, cid.clone()) {
+                        log::info!("sent2 {}", data.len());
+                        pending_data = None;
+                    }
+
+                    yield_now();
+                    continue;
+                }
+
                 let timeout = rtc.timeout_duration();
                 let res = handle.block_on(async {
                     tokio::select! {
@@ -375,17 +391,15 @@ impl WebRtcClient {
 
                 if let Some((cid, data)) = res {
                     if !rtc.send(&data, cid) {
-                        log::warn!("Buffer full, data dropped");
+                        pending_data = Some((data, cid));
+                        yield_now();
+                        continue;
                     }
 
                     log::info!("sent2 {}", data.len());
                     if cid == cids.reliable || cid == cids.unreliable {
                         this.bytes_sent_counter.fetch_add(data.len(), Ordering::Relaxed);
                     }
-                }
-
-                if sending_handle.is_finished() || msg_handle.is_finished() {
-                    break;
                 }
             }
 
