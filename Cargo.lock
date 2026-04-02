@@ -2603,9 +2603,9 @@ dependencies = [
 
 [[package]]
 name = "dimpl"
-version = "0.4.3"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8da42827f6904e69bf1cc78ddcb74fab007a2b476099ab0a42e8cacf1ea1f6c0"
+checksum = "5ffb781459bc33976be951aa31815deadcd74fb63781da5a4dc48f7001e567d3"
 dependencies = [
  "arrayvec",
  "aws-lc-rs",
@@ -4901,6 +4901,17 @@ checksum = "dbc5ebe9c3a1a7a5127f920a418f7585e9e758e911d0466ed004f393b0e380b2"
 dependencies = [
  "memchr",
  "serde",
+]
+
+[[package]]
+name = "is"
+version = "0.8.0"
+dependencies = [
+ "crc",
+ "serde",
+ "str0m-proto",
+ "subtle",
+ "tracing",
 ]
 
 [[package]]
@@ -8137,9 +8148,9 @@ dependencies = [
 
 [[package]]
 name = "sctp-proto"
-version = "0.8.1"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2213ed8f5ff249a7cf15be660536310010f34a79495fe9f1aadf789495ede24"
+checksum = "2fa56c3ed91240d1659d269815d4e181f66c6f52bcfd60f89d3e7e3911aa6085"
 dependencies = [
  "bytes",
  "crc",
@@ -9219,15 +9230,14 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "str0m"
-version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08b32b81e0d4e1a4306349937692c9ecd1732c4f40c5e0a0169ad9a11c20140b"
+version = "0.18.0"
 dependencies = [
  "arrayvec",
+ "base64ct",
  "combine",
- "crc",
  "dimpl",
  "fastrand",
+ "is",
  "sctp-proto",
  "serde",
  "str0m-aws-lc-rs",
@@ -9239,9 +9249,7 @@ dependencies = [
 
 [[package]]
 name = "str0m-aws-lc-rs"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c185d1420a61ccbdae4bb72474503a7e81d17aed2265a8510a5208ec9fd5b5e8"
+version = "0.3.0"
 dependencies = [
  "aws-lc-rs",
  "dimpl",
@@ -9251,12 +9259,12 @@ dependencies = [
 
 [[package]]
 name = "str0m-proto"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d56148c44ad19dac97abd26279c0ec29e02838c304f717068cacfb8073f8ae0"
+version = "0.4.0"
 dependencies = [
  "base64ct",
  "dimpl",
+ "fastrand",
+ "serde",
  "subtle",
  "time",
 ]

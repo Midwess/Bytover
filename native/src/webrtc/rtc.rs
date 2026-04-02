@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 use socket2::{Domain, Socket, Type};
 use str0m::channel::{ChannelConfig, ChannelId};
 use str0m::net::{Protocol, Receive};
-use str0m::{Event, IceConnectionState, Input, Output, Rtc};
+use str0m::{Event, IceConnectionState, Input, Output, Rtc, RtcConfig};
 
 use schema::devlog::rpc_signalling::server::OfferMessage;
 
@@ -67,7 +67,11 @@ impl RtcClient {
             .await
             .map_err(|e| WebRtcClientError::Signalling(format!("{e}")))?;
 
-        let mut rtc = Rtc::new(Instant::now());
+        let config = RtcConfig::default()
+            .set_sctp_max_message_size(256 * 1024)
+            .set_sctp_buffer_size(8 * 1024 * 1024);
+
+        let mut rtc = config.build(Instant::now());
         let mut local_v4_addr = None;
         let mut local_v6_addr = None;
         for candidate in candidates {

@@ -12,7 +12,6 @@ use futures::channel::mpsc as futures_mpsc;
 use tokio::sync::mpsc;
 use futures::SinkExt;
 use futures_util::stream::StreamExt;
-use futures_util::FutureExt;
 use prost::Message;
 use schema::devlog::bitbridge::peer_message_body::{Request, Response};
 use schema::devlog::bitbridge::view_session_detail_response::Result as SessionDetailResult;
@@ -28,7 +27,6 @@ use shared::entities::local_resource::{LocalResource, LocalResourcePath, Resourc
 use shared::entities::peer::Peer;
 use shared::errors::CoreError;
 use shared::protocol::webrtc::errors::WebRtcErrors;
-use shared::protocol::webrtc::fec::CHUNK_SIZE;
 use shared::protocol::webrtc::message_channel::DirectMessageChannel;
 use shared::protocol::webrtc::transfer::{TransferDelimiterShema, TransfersContext};
 use shared::repository::local_resource::LocalResourceRepository;
@@ -41,6 +39,7 @@ use crate::webrtc::signalling::SignallingSender;
 use str0m::channel::ChannelId;
 use str0m::Event;
 
+pub static CHUNK_SIZE: usize = 256 * 1024;
 pub static MAX_BUFFER_SIZE: usize = 1024 * 1024 * 5;
 pub static MIN_BUFFER_SIZE: usize = CHUNK_SIZE;
 
@@ -479,7 +478,7 @@ impl WebRtcClient {
             .await?
             .map_err(|e| WebRtcClientError::Transfer(format!("Failed to send start delimiter: {e:?}")))?;
 
-        let chunk_size = (CHUNK_SIZE * 50) as u64;
+        let chunk_size = CHUNK_SIZE;
 
         let mut cursor = self.resource_repo.read(resource.path.clone(), chunk_size as usize, compressed).await?;
 

@@ -1,5 +1,4 @@
 use crate::errors::CoreError;
-use crate::protocol::webrtc::fec::FecError;
 use crate::repository::errors::PersistenceError;
 use core_services::utils::cancellation::TaskErrors;
 use core_services::utils::yield_container::YieldError;
@@ -49,8 +48,6 @@ pub enum WebRtcErrors {
 
     #[error("System error, yield error")]
     YieldError(#[from] YieldError),
-    #[error("Data corrupted")]
-    FecError(#[from] FecError),
 
     #[error("Panic")]
     Panic(#[from] JoinError),
