@@ -142,10 +142,8 @@ pub struct WebRtcClient {
     ordered_msg_rx: YieldContainer<futures_mpsc::Receiver<Vec<u8>>>,
     unordered_msg_rx: YieldContainer<futures_mpsc::Receiver<Vec<u8>>>,
     reliable_data_rx: YieldContainer<mpsc::Receiver<Vec<u8>>>,
-    unreliable_data_rx: YieldContainer<mpsc::Receiver<Vec<u8>>>,
     outbound_rx: YieldContainer<futures_mpsc::Receiver<(u16, u64, Vec<u8>, bool)>>,
     reliable_data_tx: YieldContainer<mpsc::Sender<Vec<u8>>>,
-    unreliable_data_tx: YieldContainer<mpsc::Sender<Vec<u8>>>,
     bytes_sent_counter: Arc<AtomicUsize>,
 }
 
@@ -263,10 +261,8 @@ impl WebRtcClient {
             ordered_msg_rx: YieldContainer::new(ordered_msg_rx),
             unordered_msg_rx: YieldContainer::new(unordered_msg_rx),
             reliable_data_rx: YieldContainer::new(reliable_data_rx),
-            unreliable_data_rx: YieldContainer::new(unreliable_data_rx),
             outbound_rx: YieldContainer::new(outbound_rx),
             reliable_data_tx: YieldContainer::new(reliable_data_tx),
-            unreliable_data_tx: YieldContainer::new(unreliable_data_tx),
             bytes_sent_counter: Arc::new(AtomicUsize::new(0)),
         };
 
@@ -279,18 +275,14 @@ impl WebRtcClient {
         let mut unordered_msg_rx_guard = self.unordered_msg_rx.retrieve().await?;
         let mut outbound_rx_guard = self.outbound_rx.retrieve().await?;
         let mut reliable_data_tx_guard = self.reliable_data_tx.retrieve().await?;
-        let mut unreliable_data_tx_guard = self.unreliable_data_tx.retrieve().await?;
 
         let (msg_tx, msg_rx) = mpsc::unbounded_channel::<(String, Request)>();
 
         let mut reliable_data_rx_guard = self.reliable_data_rx.retrieve().await?;
-        let mut unreliable_data_rx_guard = self.unreliable_data_rx.retrieve().await?;
         let reliable_data_tx = reliable_data_tx_guard.value.take().unwrap();
-        let unreliable_data_tx = unreliable_data_tx_guard.value.take().unwrap();
         let outbound_rx = outbound_rx_guard.value.take().unwrap();
         let reliable_data_rx = reliable_data_rx_guard.value.take().unwrap();
-        let unreliable_data_rx = unreliable_data_rx_guard.value.take().unwrap();
-        let sending_handle = tokio::spawn(self.clone().sending_loop(reliable_data_tx, unreliable_data_tx, outbound_rx));
+        let sending_handle = tokio::spawn(self.clone().sending_loop(reliable_data_tx, outbound_rx));
 
         let this_msg = self.clone();
         let msg_handle = tokio::spawn(async move {
@@ -303,11 +295,9 @@ impl WebRtcClient {
         let mut ordered_msg_rx = ordered_msg_rx_guard.value.take().unwrap();
         let mut unordered_msg_rx = unordered_msg_rx_guard.value.take().unwrap();
         let mut reliable_data_rx = reliable_data_rx;
-        let mut unreliable_data_rx = unreliable_data_rx;
         let mut pending_data: Option<(Vec<u8>, ChannelId)> = None;
 
         rtc.set_buffered_amount_low_threshold(cids.reliable, MIN_BUFFER_SIZE);
-        rtc.set_buffered_amount_low_threshold(cids.unreliable, MIN_BUFFER_SIZE);
 
         while rtc.is_alive() {
             while let Some(event) = rtc.poll_event().await? {
@@ -360,10 +350,6 @@ impl WebRtcClient {
                     let d: Vec<u8> = d;
                     Ok(Some((cids.reliable, d)))
                 },
-                Some(d) = unreliable_data_rx.recv() => {
-                    let d: Vec<u8> = d;
-                    Ok(Some((cids.unreliable, d)))
-                },
                 res = rtc.wait_for_input(timeout.max(Duration::from_millis(1))) => {
                     res?;
                     Ok::<_, WebRtcClientError>(None)
@@ -376,7 +362,7 @@ impl WebRtcClient {
                     continue;
                 }
 
-                if cid == cids.reliable || cid == cids.unreliable {
+                if cid == cids.reliable {
                     self.bytes_sent_counter.fetch_add(d.len(), Ordering::Relaxed);
                 }
             }
@@ -710,7 +696,6 @@ impl WebRtcClient {
     async fn sending_loop(
         self: Arc<Self>,
         reliable_tx: mpsc::Sender<Vec<u8>>,
-        _unreliable_tx: mpsc::Sender<Vec<u8>>,
         mut outbound_rx: futures_mpsc::Receiver<(u16, u64, Vec<u8>, bool)>
     ) {
         loop {

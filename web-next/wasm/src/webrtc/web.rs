@@ -91,10 +91,8 @@ impl Default for ChannelConfig {
 
 pub mod channel_ids {
     pub const RELIABLE_DATA_CHANNEL_ID: u16 = 1;
-    pub const UNRELIABLE_DATA_CHANNEL_ID: u16 = 2;
-    pub const UNORDERED_MSG_CHANNEL_ID: u16 = 3;
-
-    pub const ORDERED_MSG_CHANNEL_ID: u16 = 4;
+    pub const UNORDERED_MSG_CHANNEL_ID: u16 = 2;
+    pub const ORDERED_MSG_CHANNEL_ID: u16 = 3;
 }
 
 pub struct WebRtcApi {
@@ -176,7 +174,7 @@ impl WebRtcApi {
         channel_id: u16
     ) -> Result<Arc<RtcDataChannelWrapper>, WebError> {
         let config = RtcDataChannelInit::new();
-        config.set_ordered(true);
+        config.set_ordered(false);
         config.set_negotiated(true);
         config.set_id(channel_id);
         let channel = connection.create_data_channel_with_data_channel_dict("ordered-msg", &config);

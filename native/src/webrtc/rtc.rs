@@ -12,14 +12,12 @@ use crate::webrtc::ice::IceAgent;
 use crate::webrtc::signalling::SignallingSender;
 
 pub const RELIABLE_STREAM_ID: u16 = 1;
-pub const UNRELIABLE_STREAM_ID: u16 = 2;
-pub const UNORDERED_MSG_STREAM_ID: u16 = 3;
-pub const ORDERED_MSG_STREAM_ID: u16 = 4;
+pub const UNORDERED_MSG_STREAM_ID: u16 = 2;
+pub const ORDERED_MSG_STREAM_ID: u16 = 3;
 
 #[derive(Debug, Clone, Copy)]
 pub struct ChannelIds {
     pub reliable: ChannelId,
-    pub unreliable: ChannelId,
     pub unordered_msg: ChannelId,
     pub ordered_msg: ChannelId
 }
@@ -93,13 +91,6 @@ impl RtcClient {
             negotiated: Some(RELIABLE_STREAM_ID),
             ..Default::default()
         });
-        let unreliable_id = rtc.direct_api().create_data_channel(ChannelConfig {
-            label: "unreliable".to_string(),
-            ordered: false,
-            reliability: str0m::channel::Reliability::MaxRetransmits { retransmits: 0 },
-            negotiated: Some(UNRELIABLE_STREAM_ID),
-            ..Default::default()
-        });
         let unordered_msg_id = rtc.direct_api().create_data_channel(ChannelConfig {
             label: "unordered_msg".to_string(),
             ordered: false,
@@ -114,7 +105,6 @@ impl RtcClient {
         });
         let channel_ids = ChannelIds {
             reliable: reliable_id,
-            unreliable: unreliable_id,
             unordered_msg: unordered_msg_id,
             ordered_msg: ordered_msg_id
         };
@@ -158,7 +148,6 @@ impl RtcClient {
             if connected {
                 let ready = [
                     channel_ids.reliable,
-                    channel_ids.unreliable,
                     channel_ids.unordered_msg,
                     channel_ids.ordered_msg
                 ]

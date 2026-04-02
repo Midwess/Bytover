@@ -47,7 +47,6 @@ pub struct WebRtcClient {
     prefix_channels: Mutex<HashMap<u16, mpsc::Sender<(u64, Vec<u8>)>>>,
     connection: OnceCell<Arc<RtcConnectionWrapper>>,
     reliable_channel: OnceCell<Arc<RtcDataChannelWrapper>>,
-    unreliable_channel: OnceCell<Arc<RtcDataChannelWrapper>>
 }
 
 fn spawn_outbound_sender(channel: Arc<RtcDataChannelWrapper>, mut rx: mpsc::Receiver<Vec<u8>>) {
@@ -87,12 +86,10 @@ impl WebRtcClient {
         let (unordered_out_tx, unordered_out_rx) = mpsc::channel(16);
 
         let reliable_channel = api.create_unordered_channel(connection.clone(), RELIABLE_DATA_CHANNEL_ID)?;
-        let unreliable_channel = api.create_unreliable_channel(connection.clone(), UNRELIABLE_DATA_CHANNEL_ID)?;
         let unordered_channel = api.create_unordered_channel(connection.clone(), UNORDERED_MSG_CHANNEL_ID)?;
         let ordered_channel = api.create_ordered_channel(connection.clone(), ORDERED_MSG_CHANNEL_ID)?;
 
         api.setup_channel_handlers(reliable_channel.clone(), data_inbound_tx.clone())?;
-        api.setup_channel_handlers(unreliable_channel.clone(), data_inbound_tx)?;
         api.setup_channel_handlers(unordered_channel.clone(), msg_inbound_tx.clone())?;
         api.setup_channel_handlers(ordered_channel.clone(), msg_inbound_tx)?;
 
@@ -126,12 +123,10 @@ impl WebRtcClient {
             prefix_channels: Mutex::new(HashMap::new()),
             connection: OnceCell::new(),
             reliable_channel: OnceCell::new(),
-            unreliable_channel: OnceCell::new(),
         });
 
         let _ = client.connection.set(connection);
         let _ = client.reliable_channel.set(reliable_channel);
-        let _ = client.unreliable_channel.set(unreliable_channel);
 
         let _ = client.msg_channel.set(DirectMessageChannel::new(ordered_out_tx));
         let _ = client.unordered_msg_channel.set(DirectMessageChannel::new(unordered_out_tx));
