@@ -9,6 +9,11 @@ pub const WITH_SSL: Option<&str> = option_env!("BYTOVER_WITH_SSL");
 pub const LOCATOR_URL: Option<&str> = option_env!("BYTOVER_LOCATOR_URL");
 pub const GATEWAY_HTTP1_HOST: Option<&str> = option_env!("BYTOVER_PUBLIC_HTTP1_GATEWAY_HOST");
 pub const GATEWAY_HTTP1_PORT: Option<&str> = option_env!("BYTOVER_PUBLIC_HTTP1_GATEWAY_PORT");
+pub const RELAY_ONLY: Option<&str> = option_env!("BYTOVER_RELAY_ONLY");
+
+pub fn is_relay_only() -> bool {
+    RELAY_ONLY == Some("1")
+}
 
 pub struct HostInfo {
     pub host: String,

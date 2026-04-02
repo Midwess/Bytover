@@ -4,6 +4,7 @@ pub const WITH_SSL: Option<&str> = option_env!("BYTOVER_WITH_SSL");
 pub const LOCATOR_URL: Option<&str> = option_env!("BYTOVER_LOCATOR_URL");
 pub const GATEWAY_HTTP1_HOST: Option<&str> = option_env!("BYTOVER_PUBLIC_HTTP1_GATEWAY_HOST");
 pub const GATEWAY_HTTP1_PORT: Option<&str> = option_env!("BYTOVER_PUBLIC_HTTP1_GATEWAY_PORT");
+pub const RELAY_ONLY: Option<&str> = option_env!("BYTOVER_RELAY_ONLY");
 
 pub fn get_gateway_grpc_url() -> String {
     let gateway_host = GATEWAY_HOST.unwrap_or("localhost");
@@ -56,4 +57,8 @@ pub fn get_updater_url() -> String {
     } else {
         format!("http://{gateway_host}{gateway_port}/bitbridge/api/v1/update")
     }
+}
+
+pub fn is_relay_only() -> bool {
+    RELAY_ONLY == Some("1") || std::env::var("BYTOVER_RELAY_ONLY").ok().map(|v| v == "1").unwrap_or(false)
 }

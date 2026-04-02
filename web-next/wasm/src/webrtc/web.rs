@@ -15,6 +15,7 @@ use web_sys::{
     RtcDataChannelInit,
     RtcDataChannelType,
     RtcIceServer,
+    RtcIceTransportPolicy,
     RtcPeerConnection,
     RtcSdpType,
     RtcSessionDescriptionInit
@@ -121,6 +122,11 @@ impl WebRtcApi {
         }
         
         config.set_ice_servers(&ice_servers_array);
+
+        if crate::config::is_relay_only() {
+            config.set_ice_transport_policy(RtcIceTransportPolicy::Relay);
+        }
+
         let conn = RtcPeerConnection::new_with_configuration(&config).map_err(|e| WebError::Connection(format!("{:?}", e)))?;
         Ok(RtcConnectionWrapper::new(conn))
     }

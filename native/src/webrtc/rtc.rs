@@ -77,7 +77,9 @@ impl RtcClient {
         let mut rtc = config.build(Instant::now());
         let mut local_v4_addr = None;
         let mut local_v6_addr = None;
+        log::info!("[rtc-client] Adding {} gathered candidates to RTC engine", candidates.len());
         for candidate in candidates {
+            log::debug!("[rtc-client] Adding candidate: {}", candidate);
             if candidate.addr().is_ipv4() && local_v4_addr.is_none() {
                 local_v4_addr = Some(candidate.addr());
             } else if candidate.addr().is_ipv6() && local_v6_addr.is_none() {
