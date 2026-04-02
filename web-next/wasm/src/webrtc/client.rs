@@ -7,24 +7,19 @@ use core_services::utils::cancellation::{FutureExtension, TaskErrors};
 use core_services::utils::yield_container::{YieldContainer, YieldError};
 use futures::channel::mpsc;
 use futures::channel::mpsc::unbounded;
+use futures::select_biased;
 use futures::stream::StreamExt;
-use futures_timer::Delay;
 use futures_util::lock::Mutex;
-use futures_util::{select_biased, FutureExt, SinkExt};
-use n0_future::time::Instant;
+use futures_util::{FutureExt, SinkExt};
 use once_cell::sync::OnceCell;
-use schema::devlog::bitbridge::fec_feedback::Feedback;
 use schema::devlog::bitbridge::peer_message_body::{Request, Response};
-use schema::devlog::bitbridge::{
-    FecFeedback, NetworkStats, P2pCancelSessionRequest, ResourceTypeMessage, VoidResponseMessage
-};
+use schema::devlog::bitbridge::{P2pCancelSessionRequest, ResourceTypeMessage, VoidResponseMessage};
 use shared::app::operations::p2p::P2POperationOutput;
 use shared::app::operations::transfer::TransferOperationOutput;
 use shared::app::operations::CoreOperationOutput;
 use shared::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use shared::entities::peer::Peer as PeerEntity;
 use shared::entities::transfer_session::TransferProgress;
-use shared::protocol::webrtc::fec::{FecAction, FecReceiver, Frame};
 use shared::protocol::webrtc::message_channel::DirectMessageChannel;
 use shared::protocol::webrtc::transfer::{TransferDelimiterShema, TransfersContext};
 use shared::repository::local_resource::LocalResourceRepository;
@@ -637,98 +632,31 @@ impl WebRtcClient {
     async fn data_receiving_loop(&self) -> Result<(), WebRtcClientError> {
         log::info!("Starting data receiving loop");
 
-        let mut fec_receiver = FecReceiver::new();
         let mut data_rx = self.inbound_data_receiver.retrieve().await?;
 
-        let unordered_msg_channel = self
-            .unordered_msg_channel
-            .get()
-            .ok_or_else(|| WebRtcClientError::Connection("No unordered message channel".to_string()))?;
-
-        let mut next_check_time: Option<Instant> = None;
-
         loop {
-            let frames = {
-                let mut frames = Vec::new();
-
-                let check_time = next_check_time.take().unwrap_or_else(|| fec_receiver.calculate_next_check_time());
-                let now = Instant::now();
-                let timeout_duration = if check_time > now {
-                    check_time.duration_since(now)
-                } else {
-                    Duration::from_millis(50)
-                };
-
-                let packet_result = {
-                    select_biased! {
-                        packet = data_rx.next().fuse() => packet,
-                        _ = Delay::new(timeout_duration).fuse() => None,
-                    }
-                };
-
-                if let Some(packet) = packet_result {
-                    if let Some(frame) = Frame::deserialize(&packet) {
-                        frames.push(frame);
-                    }
-                }
-
-                while let Some(packet) = data_rx.try_next().ok().flatten() {
-                    if let Some(frame) = Frame::deserialize(&packet) {
-                        frames.push(frame);
-                    }
-                }
-
-                frames
+            let packet = match data_rx.next().await {
+                Some(p) => p,
+                None => break,
             };
 
-            let action = if frames.is_empty() {
-                fec_receiver.ping().map_err(|e| WebRtcClientError::Transfer(e.to_string()))?
-            } else {
-                fec_receiver.receive(frames).map_err(|e| WebRtcClientError::Transfer(e.to_string()))?
+            if packet.len() < 2 {
+                continue;
+            }
+
+            let prefix = u16::from_le_bytes([packet[0], packet[1]]);
+            let payload = packet[2..].to_vec();
+
+            let sender = {
+                let channels = self.prefix_channels.lock().await;
+                channels.get(&prefix).cloned()
             };
 
-            match action {
-                FecAction::Constructed(packets_with_prefix, next_check) => {
-                    next_check_time = Some(next_check);
-
-                    for (prefix, packet) in packets_with_prefix {
-                        let sender = {
-                            let channels = self.prefix_channels.lock().await;
-                            channels.get(&prefix).cloned()
-                        };
-
-                        if let Some(mut sender) = sender {
-                            if let Err(e) = sender.send(packet).await {
-                                log::warn!("Prefix channel {} dropped: {:?}", prefix, e);
-                                self.prefix_channels.lock().await.remove(&prefix);
-                            }
-                        }
-                    }
-
-                    let feedback = FecFeedback {
-                        feedback: Some(Feedback::Network(NetworkStats {
-                            current_block_id: Some(fec_receiver.fully_constructed_block()),
-                            rtt: Some(fec_receiver.rtt() as u32),
-                            loss_rate: fec_receiver.calculate_loss_rate(),
-                            hold_counter: None
-                        }))
-                    };
-
-                    let _ = unordered_msg_channel.notify(Request::FecFeedback(feedback)).await;
+            if let Some(mut sender) = sender {
+                if let Err(e) = sender.send(payload).await {
+                    log::warn!("Prefix channel {} dropped: {:?}", prefix, e);
+                    self.prefix_channels.lock().await.remove(&prefix);
                 }
-                FecAction::Feedback(fb, next_check) => {
-                    next_check_time = Some(next_check);
-                    log::info!("Sending missing feedback {:?} current: {:?}", fb, fec_receiver.current_block_id());
-                    let _ = unordered_msg_channel.notify(Request::FecFeedback(fb)).await;
-                }
-                FecAction::Terminated => {
-                    log::warn!("FEC receiver terminated");
-                    break;
-                }
-                FecAction::Queued(time) => {
-                    next_check_time = Some(time);
-                }
-                _ => {}
             }
         }
 
