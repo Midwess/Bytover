@@ -16,6 +16,18 @@ use schema::devlog::rpc_signalling::server::IceConfig;
 const STUN_TIMEOUT: Duration = Duration::from_millis(1500);
 const STUN_MAX_PACKET: usize = 512;
 
+pub struct TurnRelayInfo {
+    pub client: turn_client_proto::udp::TurnClientUdp,
+    pub server_addr: SocketAddr,
+    pub relay_addr: SocketAddr,
+    pub stun_base: Instant,
+}
+
+struct ConnectRelayResult {
+    candidate: Candidate,
+    relay: TurnRelayInfo,
+}
+
 #[derive(Debug, Error)]
 pub enum IceError {
     #[error("Candidate parsing error: {0}")]
@@ -117,7 +129,7 @@ impl IceAgent {
     pub async fn gather_candidates(
         socket: &tokio::net::UdpSocket,
         config: &IceConfig
-    ) -> Result<(Vec<Candidate>, Option<turn_client_proto::udp::TurnClientUdp>), IceError> {
+    ) -> Result<(Vec<Candidate>, Option<TurnRelayInfo>), IceError> {
         log::info!("[ice] Gathering candidates using config {config:?}");
 
         let mut candidates: HashSet<Candidate> = HashSet::new();
@@ -240,21 +252,21 @@ impl IceAgent {
             }
         }
 
-        let mut relay_client = None;
-        if let Some((relay_cand, client)) = Self::connect_relay(socket, config).await? {
-            candidates.insert(relay_cand);
-            relay_client = Some(client);
+        let mut relay_info = None;
+        if let Some(info) = Self::connect_relay(socket, config).await? {
+            candidates.insert(info.candidate);
+            relay_info = Some(info.relay);
         }
 
         let result: Vec<Candidate> = candidates.into_iter().collect();
         log::info!("[ice] Gathered {:?} candidates", result);
-        Ok((result, relay_client))
+        Ok((result, relay_info))
     }
 
     async fn connect_relay(
         socket: &tokio::net::UdpSocket,
         config: &IceConfig
-    ) -> Result<Option<(Candidate, turn_client_proto::udp::TurnClientUdp)>, IceError> {
+    ) -> Result<Option<ConnectRelayResult>, IceError> {
         let (username, password) = match (&config.username, &config.credential) {
             (Some(u), Some(p)) => (u.as_str(), p.as_str()),
             _ => return Ok(None)
@@ -301,7 +313,15 @@ impl IceAgent {
             if let Some(event) = turn_client_proto::api::TurnClientApi::poll_event(&mut client) {
                 if let turn_client_proto::api::TurnEvent::AllocationCreated(_, addr) = event {
                     if let Ok(c) = Candidate::relayed(addr, local_addr, "udp") {
-                        return Ok(Some((c, client)));
+                        return Ok(Some(ConnectRelayResult {
+                            candidate: c,
+                            relay: TurnRelayInfo {
+                                client,
+                                server_addr: send_addr,
+                                relay_addr: addr,
+                                stun_base: stun_base,
+                            },
+                        }));
                     }
                 } else if let turn_client_proto::api::TurnEvent::AllocationCreateFailed(_) = event {
                     break;

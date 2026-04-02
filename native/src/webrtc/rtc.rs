@@ -1,9 +1,10 @@
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::time::{Duration, Instant};
 use socket2::{Domain, Socket, Type};
 use str0m::channel::{ChannelConfig, ChannelId};
 use str0m::net::{Protocol, Receive};
 use str0m::{Event, IceConnectionState, Input, Output, Rtc, RtcConfig};
+use turn_client_proto::api::{TurnClientApi, TurnEvent, TurnPollRet, TurnRecvRet};
 
 use schema::devlog::rpc_signalling::server::OfferMessage;
 
@@ -30,7 +31,11 @@ pub struct RtcClient {
     local_v6_addr: Option<SocketAddr>,
     buf: Vec<u8>,
     cached_timeout: Instant,
-    channel_ids: ChannelIds
+    channel_ids: ChannelIds,
+    turn_client: Option<turn_client_proto::udp::TurnClientUdp>,
+    turn_stun_base: Instant,
+    relay_addr: Option<SocketAddr>,
+    turn_server_addr: Option<SocketAddr>,
 }
 
 impl RtcClient {
@@ -61,7 +66,7 @@ impl RtcClient {
 
         let local_addr = socket.local_addr()?;
 
-        let (candidates, _relay_client) = IceAgent::gather_candidates(&socket, &config)
+        let (candidates, relay_info) = IceAgent::gather_candidates(&socket, &config)
             .await
             .map_err(|e| WebRtcClientError::Signalling(format!("{e}")))?;
 
@@ -83,6 +88,9 @@ impl RtcClient {
 
         let offer_sdp = IceAgent::resolve_remote_candidates(&offer_message.sdp);
         log::info!("Received offer sdp: {offer_sdp}");
+
+        let remote_ips = extract_remote_candidate_ips(&offer_sdp);
+
         let offer = str0m::change::SdpOffer::from_sdp_string(&offer_sdp).map_err(|e| WebRtcClientError::SdpParse(format!("{e}")))?;
 
         let reliable_id = rtc.direct_api().create_data_channel(ChannelConfig {
@@ -116,6 +124,11 @@ impl RtcClient {
             .await
             .map_err(|e| WebRtcClientError::Signalling(format!("{e}")))?;
 
+        let (turn_client, turn_stun_base, relay_addr, turn_server_addr) = match relay_info {
+            Some(info) => (Some(info.client), info.stun_base, Some(info.relay_addr), Some(info.server_addr)),
+            None => (None, Instant::now(), None, None),
+        };
+
         let mut client = Self {
             rtc,
             socket,
@@ -124,8 +137,14 @@ impl RtcClient {
             local_v6_addr,
             buf: vec![0u8; 2000],
             cached_timeout: Instant::now(),
-            channel_ids
+            channel_ids,
+            turn_client,
+            turn_stun_base,
+            relay_addr,
+            turn_server_addr,
         };
+
+        client.create_turn_permissions(&remote_ips);
 
         let mut connected = false;
         loop {
@@ -171,25 +190,30 @@ impl RtcClient {
 
     pub async fn poll_event(&mut self) -> Result<Option<Event>, WebRtcClientError> {
         loop {
+            self.drive_turn_transmits().await;
+
             match self.rtc.poll_output()? {
                 Output::Timeout(t) => {
                     self.cached_timeout = t;
                     return Ok(None);
                 }
                 Output::Transmit(t) => {
-                    let dest = to_v6_mapped(t.destination);
-                    let res = tokio::time::timeout(Duration::from_secs(10), self.socket.send_to(&t.contents, dest)).await;
-
-                    match res {
-                        Ok(Err(e)) => {
-                            log::warn!("[rtc-client] Failed to send to {}: {}", dest, e);
-                            return Err(WebRtcClientError::Signalling(format!("Failed to send packet: {:?}", e)));
+                    if self.is_relay_source(t.source) {
+                        self.send_via_turn(t.destination, &t.contents).await;
+                    } else {
+                        let dest = to_v6_mapped(t.destination);
+                        let res = tokio::time::timeout(Duration::from_secs(10), self.socket.send_to(&t.contents, dest)).await;
+                        match res {
+                            Ok(Err(e)) => {
+                                log::warn!("[rtc-client] Failed to send to {}: {}", dest, e);
+                                return Err(WebRtcClientError::Signalling(format!("Failed to send packet: {:?}", e)));
+                            }
+                            Err(_) => {
+                                log::error!("[rtc-client] Timeout sending packet to {} after 10s", dest);
+                                return Err(WebRtcClientError::Signalling("Send packet timed out".to_string()));
+                            }
+                            _ => {}
                         }
-                        Err(_) => {
-                            log::error!("[rtc-client] Timeout sending packet to {} after 10s", dest);
-                            return Err(WebRtcClientError::Signalling("Send packet timed out".to_string()));
-                        }
-                        _ => {}
                     }
                 }
                 Output::Event(e) => {
@@ -211,25 +235,30 @@ impl RtcClient {
     pub async fn wait_for_input(&mut self, timeout: Duration) -> Result<(), WebRtcClientError> {
         if timeout.is_zero() {
             self.rtc.handle_input(Input::Timeout(Instant::now()))?;
+            self.drive_turn();
             return Ok(());
         }
 
         match tokio::time::timeout(timeout, self.socket.recv_from(&mut self.buf[..])).await {
-            Ok(Ok((n, mut source))) => {
-                source = from_v6_mapped(source);
-                let local = if source.is_ipv4() {
-                    self.local_v4_addr.unwrap_or(self.local_addr)
+            Ok(Ok((n, source))) => {
+                let source = from_v6_mapped(source);
+                if self.is_from_turn_server(source) {
+                    self.handle_turn_recv(source, n);
                 } else {
-                    self.local_v6_addr.unwrap_or(self.local_addr)
-                };
-                match Receive::new(Protocol::Udp, source, local, &self.buf[..n]) {
-                    Ok(receive) => {
-                        if let Err(e) = self.rtc.handle_input(Input::Receive(Instant::now(), receive)) {
-                            log::warn!("[rtc-client] Input handle packet drop: {}", e);
+                    let local = if source.is_ipv4() {
+                        self.local_v4_addr.unwrap_or(self.local_addr)
+                    } else {
+                        self.local_v6_addr.unwrap_or(self.local_addr)
+                    };
+                    match Receive::new(Protocol::Udp, source, local, &self.buf[..n]) {
+                        Ok(receive) => {
+                            if let Err(e) = self.rtc.handle_input(Input::Receive(Instant::now(), receive)) {
+                                log::warn!("[rtc-client] Input handle packet drop: {}", e);
+                            }
                         }
-                    }
-                    Err(e) => {
-                        log::warn!("[rtc-client] Failed to parse Receive: {}", e);
+                        Err(e) => {
+                            log::warn!("[rtc-client] Failed to parse Receive: {}", e);
+                        }
                     }
                 }
             }
@@ -238,6 +267,7 @@ impl RtcClient {
                 self.rtc.handle_input(Input::Timeout(Instant::now()))?;
             }
         }
+        self.drive_turn();
         Ok(())
     }
 
@@ -270,6 +300,135 @@ impl RtcClient {
     pub fn is_alive(&self) -> bool {
         self.rtc.is_alive()
     }
+
+    fn is_relay_source(&self, source: SocketAddr) -> bool {
+        self.relay_addr.map_or(false, |r| r == source)
+    }
+
+    fn is_from_turn_server(&self, source: SocketAddr) -> bool {
+        let Some(server) = self.turn_server_addr else { return false };
+        let mapped = to_v6_mapped(source);
+        mapped == server || source == server
+    }
+
+    fn handle_turn_recv(&mut self, source: SocketAddr, n: usize) {
+        let Some(ref mut client) = self.turn_client else { return };
+        let now = stun_proto::Instant::from_std(self.turn_stun_base);
+        let data = self.buf[..n].to_vec();
+        let transmit = stun_proto::agent::Transmit::new(
+            data,
+            stun_proto::types::TransportType::Udp,
+            to_v6_mapped(source),
+            self.local_addr,
+        );
+
+        match TurnClientApi::recv(client, transmit, now) {
+            TurnRecvRet::PeerData(peer_data) => {
+                let peer = peer_data.peer;
+                let relay = self.relay_addr.unwrap_or(self.local_addr);
+                match Receive::new(Protocol::Udp, peer, relay, peer_data.data()) {
+                    Ok(receive) => {
+                        if let Err(e) = self.rtc.handle_input(Input::Receive(Instant::now(), receive)) {
+                            log::warn!("[rtc-client] TURN peer data handle error: {}", e);
+                        }
+                    }
+                    Err(e) => log::warn!("[rtc-client] TURN peer data parse error: {}", e),
+                }
+            }
+            TurnRecvRet::Handled => {}
+            TurnRecvRet::Ignored(_) => {
+                match Receive::new(Protocol::Udp, source, self.local_addr, &self.buf[..n]) {
+                    Ok(receive) => {
+                        if let Err(e) = self.rtc.handle_input(Input::Receive(Instant::now(), receive)) {
+                            log::warn!("[rtc-client] Input handle packet drop: {}", e);
+                        }
+                    }
+                    Err(e) => log::warn!("[rtc-client] Failed to parse Receive: {}", e),
+                }
+            }
+            TurnRecvRet::PeerIcmp { .. } => {}
+        }
+    }
+
+    async fn send_via_turn(&mut self, destination: SocketAddr, contents: &[u8]) {
+        let Some(ref mut client) = self.turn_client else { return };
+        let now = stun_proto::Instant::from_std(self.turn_stun_base);
+
+        if !TurnClientApi::have_permission(client, stun_proto::types::TransportType::Udp, destination.ip()) {
+            if let Err(e) = TurnClientApi::create_permission(
+                client,
+                stun_proto::types::TransportType::Udp,
+                destination.ip(),
+                now,
+            ) {
+                log::warn!("[rtc-client] TURN create_permission for {}: {:?}", destination.ip(), e);
+            }
+        }
+
+        match TurnClientApi::send_to(client, stun_proto::types::TransportType::Udp, destination, contents, now) {
+            Ok(Some(transmit_build)) => {
+                let built = transmit_build.build();
+                let _ = self.socket.send_to(&built.data, built.to).await;
+            }
+            Ok(None) => {}
+            Err(e) => log::warn!("[rtc-client] TURN send_to {}: {:?}", destination, e),
+        }
+    }
+
+    fn drive_turn(&mut self) {
+        let Some(ref mut client) = self.turn_client else { return };
+        let now = stun_proto::Instant::from_std(self.turn_stun_base);
+
+        while let Some(ev) = TurnClientApi::poll_event(client) {
+            match ev {
+                TurnEvent::PermissionCreated(_, ip) => {
+                    log::debug!("[rtc-client] TURN permission created for {}", ip);
+                }
+                TurnEvent::PermissionCreateFailed(_, ip) => {
+                    log::warn!("[rtc-client] TURN permission failed for {}", ip);
+                }
+                TurnEvent::AllocationCreateFailed(_) => {
+                    log::warn!("[rtc-client] TURN allocation failed");
+                }
+                _ => {}
+            }
+        }
+
+        match TurnClientApi::poll(client, now) {
+            TurnPollRet::Closed => {
+                log::warn!("[rtc-client] TURN client closed");
+                self.turn_client = None;
+                self.relay_addr = None;
+                self.turn_server_addr = None;
+            }
+            _ => {}
+        }
+    }
+
+    async fn drive_turn_transmits(&mut self) {
+        let Some(ref mut client) = self.turn_client else { return };
+        let now = stun_proto::Instant::from_std(self.turn_stun_base);
+
+        while let Some(t) = TurnClientApi::poll_transmit(client, now) {
+            let _ = self.socket.send_to(&t.data, t.to).await;
+        }
+    }
+
+    fn create_turn_permissions(&mut self, remote_ips: &[IpAddr]) {
+        let Some(ref mut client) = self.turn_client else { return };
+        let now = stun_proto::Instant::from_std(self.turn_stun_base);
+
+        for ip in remote_ips {
+            if let Err(e) = TurnClientApi::create_permission(
+                client,
+                stun_proto::types::TransportType::Udp,
+                *ip,
+                now,
+            ) {
+                log::warn!("[rtc-client] TURN create_permission for {}: {:?}", ip, e);
+            }
+        }
+    }
 }
 
 fn to_v6_mapped(addr: SocketAddr) -> SocketAddr {
@@ -292,4 +451,22 @@ fn from_v6_mapped(addr: SocketAddr) -> SocketAddr {
         }
         _ => addr
     }
+}
+
+fn extract_remote_candidate_ips(sdp: &str) -> Vec<IpAddr> {
+    let mut ips = Vec::new();
+    for line in sdp.lines() {
+        if !line.contains("candidate:") {
+            continue;
+        }
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() > 4 {
+            if let Ok(ip) = parts[4].parse::<IpAddr>() {
+                if !ips.contains(&ip) {
+                    ips.push(ip);
+                }
+            }
+        }
+    }
+    ips
 }
