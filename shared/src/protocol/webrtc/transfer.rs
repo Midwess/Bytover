@@ -19,7 +19,8 @@ pub enum TransferDelimiterShema {
     },
     End {
         session_id: u64,
-        resource_id: u64
+        resource_id: u64,
+        total_size: u64
     },
     Hold(u8)
 }
@@ -34,8 +35,8 @@ impl TransferDelimiterShema {
         }
     }
 
-    pub fn end(session_id: u64, resource_id: u64, _compressed: bool) -> Self {
-        Self::End { session_id, resource_id }
+    pub fn end(session_id: u64, resource_id: u64, total_size: u64) -> Self {
+        Self::End { session_id, resource_id, total_size }
     }
 
     pub fn hold(counter: u8) -> Self {
@@ -54,6 +55,14 @@ impl TransferDelimiterShema {
         match self {
             Self::Start { resource_id, .. } => Some(*resource_id),
             Self::End { resource_id, .. } => Some(*resource_id),
+            Self::Hold(_) => None
+        }
+    }
+
+    pub fn total_size(&self) -> Option<u64> {
+        match self {
+            Self::Start { total_size, .. } => *total_size,
+            Self::End { total_size, .. } => Some(*total_size),
             Self::Hold(_) => None
         }
     }

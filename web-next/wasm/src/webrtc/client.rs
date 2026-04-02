@@ -357,15 +357,31 @@ impl WebRtcClient {
             .await
             .map_err(|e| WebRtcClientError::Transfer(format!("Failed to create writer: {:?}", e)))?;
 
+        let mut expected_size: Option<u64> = None;
         loop {
             match rx.next().with_cancel(&resource_token).await? {
                 Some((offset, packet)) => {
-                    if TransferDelimiterShema::from_end_packet(&packet, session_order_id).is_ok() {
-                        progress.success();
-                        core_request
-                            .response(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
-                            .await;
-                        break;
+                    if let Ok(delimiter) = TransferDelimiterShema::from_bytes(&packet) {
+                        if matches!(delimiter, TransferDelimiterShema::End { .. }) && delimiter.session_id() == Some(session_order_id) {
+                            expected_size = delimiter.total_size();
+
+                            if let Some(target) = expected_size {
+                                if progress.total_bytes() >= target {
+                                    progress.success();
+                                    core_request
+                                        .response(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
+                                        .await;
+                                    break;
+                                }
+                            } else {
+                                progress.success();
+                                core_request
+                                    .response(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
+                                    .await;
+                                break;
+                            }
+                            continue;
+                        }
                     }
 
                     // Stop tracking transfer if context is cancelled
@@ -379,11 +395,21 @@ impl WebRtcClient {
                         core_request
                             .response_throttle(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
                             .await;
+
+                        if let Some(target) = expected_size {
+                            if progress.total_bytes() >= target {
+                                progress.success();
+                                core_request
+                                    .response(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
+                                    .await;
+                                break;
+                            }
+                        }
                     }
                 }
                 None => {
                     self.prefix_channels.lock().await.remove(&transfer_id);
-                    return Err(WebRtcClientError::Transfer("Channel closed before end delimiter".into()));
+                    return Err(WebRtcClientError::Transfer("Channel closed before completion".into()));
                 }
             }
         }

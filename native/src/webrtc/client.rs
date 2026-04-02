@@ -172,8 +172,7 @@ impl WebRtcClient {
 
         let (ordered_msg_tx, mut ordered_msg_rx) = futures_mpsc::channel::<Vec<u8>>(64);
         let (_unordered_msg_tx, unordered_msg_rx) = futures_mpsc::channel::<Vec<u8>>(64);
-        let (reliable_data_tx, reliable_data_rx) = mpsc::channel::<Vec<u8>>(MAX_BUFFER_SIZE/CHUNK_SIZE + 1);
-        let (unreliable_data_tx, unreliable_data_rx) = mpsc::channel::<Vec<u8>>(MAX_BUFFER_SIZE/CHUNK_SIZE + 1);
+        let (reliable_data_tx, reliable_data_rx) = mpsc::channel::<Vec<u8>>(MAX_BUFFER_SIZE / CHUNK_SIZE + 1);
         let (outbound_tx, outbound_rx) = futures_mpsc::channel::<(u16, u64, Vec<u8>, bool)>(32);
 
         let msg_channel = DirectMessageChannel::new(ordered_msg_tx);
@@ -488,7 +487,7 @@ impl WebRtcClient {
             }
         }
 
-        let end_delimiter = TransferDelimiterShema::end(session_id, resource_id, compressed);
+        let end_delimiter = TransferDelimiterShema::end(session_id, resource_id, current_offset);
         let end_packet = end_delimiter.as_bytes()?;
         outbound_packet_sender
             .send((prefix, 0, end_packet, true))
