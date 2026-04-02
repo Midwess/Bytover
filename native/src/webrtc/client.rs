@@ -28,6 +28,7 @@ use shared::entities::peer::Peer;
 use shared::errors::CoreError;
 use shared::protocol::webrtc::errors::WebRtcErrors;
 use shared::protocol::webrtc::message_channel::DirectMessageChannel;
+use shared::protocol::webrtc::packet::WebRtcPacket;
 use shared::protocol::webrtc::transfer::{TransferDelimiterShema, TransfersContext};
 use shared::repository::local_resource::LocalResourceRepository;
 use shared::shell::api::CoreRequest;
@@ -39,7 +40,7 @@ use crate::webrtc::signalling::SignallingSender;
 use str0m::channel::ChannelId;
 use str0m::Event;
 
-pub static CHUNK_SIZE: usize = 256 * 1024;
+pub static CHUNK_SIZE: usize = 250 * 1024;
 pub static MAX_BUFFER_SIZE: usize = 1024 * 1024 * 5;
 pub static MIN_BUFFER_SIZE: usize = CHUNK_SIZE;
 
@@ -136,13 +137,13 @@ pub struct WebRtcClient {
     resource_repo: Arc<dyn LocalResourceRepository>,
     session_id: OnceCell<u64>,
 
-    outbound_packet_sender: OnceCell<futures_mpsc::Sender<(u16, Vec<u8>, bool)>>,
+    outbound_packet_sender: OnceCell<futures_mpsc::Sender<(u16, u64, Vec<u8>, bool)>>,
 
     ordered_msg_rx: YieldContainer<futures_mpsc::Receiver<Vec<u8>>>,
     unordered_msg_rx: YieldContainer<futures_mpsc::Receiver<Vec<u8>>>,
     reliable_data_rx: YieldContainer<mpsc::Receiver<Vec<u8>>>,
     unreliable_data_rx: YieldContainer<mpsc::Receiver<Vec<u8>>>,
-    outbound_rx: YieldContainer<futures_mpsc::Receiver<(u16, Vec<u8>, bool)>>,
+    outbound_rx: YieldContainer<futures_mpsc::Receiver<(u16, u64, Vec<u8>, bool)>>,
     reliable_data_tx: YieldContainer<mpsc::Sender<Vec<u8>>>,
     unreliable_data_tx: YieldContainer<mpsc::Sender<Vec<u8>>>,
     bytes_sent_counter: Arc<AtomicUsize>,
@@ -175,7 +176,7 @@ impl WebRtcClient {
         let (_unordered_msg_tx, unordered_msg_rx) = futures_mpsc::channel::<Vec<u8>>(64);
         let (reliable_data_tx, reliable_data_rx) = mpsc::channel::<Vec<u8>>(MAX_BUFFER_SIZE/CHUNK_SIZE + 1);
         let (unreliable_data_tx, unreliable_data_rx) = mpsc::channel::<Vec<u8>>(MAX_BUFFER_SIZE/CHUNK_SIZE + 1);
-        let (outbound_tx, outbound_rx) = futures_mpsc::channel::<(u16, Vec<u8>, bool)>(32);
+        let (outbound_tx, outbound_rx) = futures_mpsc::channel::<(u16, u64, Vec<u8>, bool)>(32);
 
         let msg_channel = DirectMessageChannel::new(ordered_msg_tx);
         let cids = *rtc_client.channel_ids();
@@ -473,29 +474,29 @@ impl WebRtcClient {
             .clone();
 
         outbound_packet_sender
-            .send((prefix, start_packet, true))
+            .send((prefix, 0, start_packet, true))
             .with_cancel(&resource_token)
             .await?
             .map_err(|e| WebRtcClientError::Transfer(format!("Failed to send start delimiter: {e:?}")))?;
 
-        let chunk_size = CHUNK_SIZE;
-
-        let mut cursor = self.resource_repo.read(resource.path.clone(), chunk_size as usize, compressed).await?;
+        let mut cursor = self.resource_repo.read(resource.path.clone(), CHUNK_SIZE, compressed).await?;
+        let mut current_offset: u64 = 0;
 
         loop {
             match cursor.c_next(None).await? {
-                Some((data, _raw_size)) => {
+                Some((data, raw_size)) => {
                     if data.is_empty() {
                         log::warn!("[webrtc-client] Cursor returned empty data");
                         break;
                     }
                     let packet = data.to_vec();
-                    let _size = packet.len();
                     outbound_packet_sender
-                        .send((prefix, packet, false))
+                        .send((prefix, current_offset, packet, false))
                         .with_cancel(&resource_token)
                         .await?
                         .map_err(|e| WebRtcClientError::Transfer(format!("Failed to send data packet: {e:?}")))?;
+
+                    current_offset += raw_size as u64;
                 }
                 None => break
             }
@@ -504,7 +505,7 @@ impl WebRtcClient {
         let end_delimiter = TransferDelimiterShema::end(session_id, resource_id, compressed);
         let end_packet = end_delimiter.as_bytes()?;
         outbound_packet_sender
-            .send((prefix, end_packet, true))
+            .send((prefix, 0, end_packet, true))
             .with_cancel(&resource_token)
             .await?
             .map_err(|e| WebRtcClientError::Transfer(format!("Failed to send end delimiter: {e:?}")))?;
@@ -710,17 +711,15 @@ impl WebRtcClient {
         self: Arc<Self>,
         reliable_tx: mpsc::Sender<Vec<u8>>,
         _unreliable_tx: mpsc::Sender<Vec<u8>>,
-        mut outbound_rx: futures_mpsc::Receiver<(u16, Vec<u8>, bool)>
+        mut outbound_rx: futures_mpsc::Receiver<(u16, u64, Vec<u8>, bool)>
     ) {
         loop {
-            let (prefix, packet, _reliable) = match outbound_rx.next().await {
+            let (prefix, offset, packet, _reliable) = match outbound_rx.next().await {
                 Some(it) => it,
                 None => break,
             };
 
-            let mut data = Vec::with_capacity(packet.len() + 2);
-            data.extend_from_slice(&prefix.to_le_bytes());
-            data.extend_from_slice(&packet);
+            let data = WebRtcPacket::serialize(prefix, offset, &packet);
 
             if let Err(e) = reliable_tx.send(data).await {
                 log::warn!("[webrtc-client] Failed to send to reliable_tx: {:?}", e);

@@ -288,16 +288,15 @@ impl IOWriterOpfsImpl {
         }
     }
 }
-
 impl IOWriterOpfsImpl {
-    async fn opfs_write(&mut self, data: &[u8], decompress: bool) -> Result<usize> {
+    async fn opfs_write_at(&mut self, data: &[u8], position: usize, decompress: bool) -> Result<usize> {
         let uint8_array = Uint8Array::from(data);
 
         let msg = WorkerMessage::new(OpfsOperation {
             file_path: self.path.to_string_lossy().to_string(),
             operation: FileOperation::Write {
                 data: uint8_array,
-                position: self.position,
+                position,
                 decompress
             }
         });
@@ -306,12 +305,16 @@ impl IOWriterOpfsImpl {
 
         match response.message {
             OpfsOperationOutput::Written(written) => {
-                self.position += written;
+                self.position = self.position.max(position + written);
                 Ok(written)
             }
             OpfsOperationOutput::Error(e) => Err(anyhow::anyhow!("Write error: {:?}", e)),
             _ => Err(anyhow::anyhow!("Unexpected response"))
         }
+    }
+
+    async fn opfs_write(&mut self, data: &[u8], decompress: bool) -> Result<usize> {
+        self.opfs_write_at(data, self.position, decompress).await
     }
 }
 
@@ -353,6 +356,23 @@ impl DIOWriter for IOWriterOpfsImpl {
             self.opfs_write(&data[1..], compressed).await.map(Some)
         } else {
             self.write(data).await.map(Some)
+        }
+    }
+
+    async fn d_write_at(&mut self, data: Bytes, offset: u64) -> anyhow::Result<Option<usize>> {
+        if self.compression_support {
+            if data.is_empty() {
+                return Err(anyhow::anyhow!(
+                    "Data too short for compression flag (expected at least 1 byte, got {})",
+                    data.len()
+                ));
+            }
+
+            let compressed = data[0] == 1;
+
+            self.opfs_write_at(&data[1..], offset as usize, compressed).await.map(Some)
+        } else {
+            self.opfs_write_at(&data, offset as usize, false).await.map(Some)
         }
     }
 }

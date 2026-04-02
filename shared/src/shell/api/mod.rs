@@ -27,6 +27,9 @@ pub enum IOWriterError {
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 pub trait IOWriter: Send + Sync {
     async fn write(&mut self, data: bytes::Bytes) -> anyhow::Result<usize>;
+    async fn write_at(&mut self, _data: bytes::Bytes, _offset: u64) -> anyhow::Result<usize> {
+        Err(anyhow::anyhow!("write_at not implemented for this IOWriter"))
+    }
     async fn flush(&mut self) -> anyhow::Result<()> {
         Ok(())
     }
@@ -51,6 +54,10 @@ pub trait DIOWriter: IOWriter {
     /// Receive a compressed chunk
     /// return an amount data that written (uncompressed size)
     async fn d_write(&mut self, data: Bytes) -> anyhow::Result<Option<usize>>;
+
+    /// Receive a compressed chunk and write it at a specific offset
+    /// return an amount data that written (uncompressed size)
+    async fn d_write_at(&mut self, data: Bytes, offset: u64) -> anyhow::Result<Option<usize>>;
 }
 
 pub enum CruxRequest {

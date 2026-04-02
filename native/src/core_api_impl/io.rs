@@ -25,6 +25,12 @@ impl IOWriter for FileEntryWriter {
         self.file.write(data.into()).await?;
         Ok(len)
     }
+
+    async fn write_at(&mut self, data: bytes::Bytes, offset: u64) -> anyhow::Result<usize> {
+        let len = data.len();
+        self.file.write_at(data.into(), offset).await?;
+        Ok(len)
+    }
 }
 
 impl DIOWriterWrapper<FileEntryWriter> {
@@ -71,6 +77,27 @@ impl<W: IOWriter> DIOWriter for DIOWriterWrapper<W> {
             Ok(Some(written))
         } else {
             let written = self.inner.write(data).await?;
+            Ok(Some(written))
+        }
+    }
+
+    async fn d_write_at(&mut self, data: Bytes, offset: u64) -> Result<Option<usize>> {
+        if self.compression_support {
+            let compressed = data[0] == 1;
+            let data_to_write = if compressed {
+                let data_slice = data[1..].to_vec();
+                tokio::task::spawn_blocking(move || decompress_size_prepended(&data_slice))
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Decompression task failed: {}", e))?
+                    .map_err(|e| anyhow::anyhow!("Decompression failed: {}", e))?
+            } else {
+                data[1..].to_vec()
+            };
+            let written = data_to_write.len();
+            self.inner.write_at(Bytes::from(data_to_write), offset).await?;
+            Ok(Some(written))
+        } else {
+            let written = self.inner.write_at(data, offset).await?;
             Ok(Some(written))
         }
     }

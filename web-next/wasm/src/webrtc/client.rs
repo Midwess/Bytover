@@ -21,6 +21,7 @@ use shared::entities::local_resource::{LocalResource, LocalResourcePath, Resourc
 use shared::entities::peer::Peer as PeerEntity;
 use shared::entities::transfer_session::TransferProgress;
 use shared::protocol::webrtc::message_channel::DirectMessageChannel;
+use shared::protocol::webrtc::packet::WebRtcPacket;
 use shared::protocol::webrtc::transfer::{TransferDelimiterShema, TransfersContext};
 use shared::repository::local_resource::LocalResourceRepository;
 use shared::repository::transfer_session::TransferSessionRepository;
@@ -43,7 +44,7 @@ pub struct WebRtcClient {
 
     msg_channel: OnceCell<DirectMessageChannel>,
     unordered_msg_channel: OnceCell<DirectMessageChannel>,
-    prefix_channels: Mutex<HashMap<u16, mpsc::Sender<Vec<u8>>>>,
+    prefix_channels: Mutex<HashMap<u16, mpsc::Sender<(u64, Vec<u8>)>>>,
     connection: OnceCell<Arc<RtcConnectionWrapper>>,
     reliable_channel: OnceCell<Arc<RtcDataChannelWrapper>>,
     unreliable_channel: OnceCell<Arc<RtcDataChannelWrapper>>
@@ -317,7 +318,7 @@ impl WebRtcClient {
             transfer_id: transfer_id as u32
         };
 
-        let (tx, mut rx) = mpsc::channel::<Vec<u8>>(64);
+        let (tx, mut rx) = mpsc::channel::<(u64, Vec<u8>)>(10);
         self.prefix_channels.lock().await.insert(transfer_id, tx);
 
         let resource_token = self
@@ -342,7 +343,7 @@ impl WebRtcClient {
 
         let start_delimiter = loop {
             match rx.next().with_cancel(&resource_token).await? {
-                Some(packet) => {
+                Some((_, packet)) => {
                     if let Ok(v) = TransferDelimiterShema::from_start_packet(&packet, session_order_id) {
                         break v;
                     }
@@ -363,7 +364,7 @@ impl WebRtcClient {
 
         loop {
             match rx.next().with_cancel(&resource_token).await? {
-                Some(packet) => {
+                Some((offset, packet)) => {
                     if TransferDelimiterShema::from_end_packet(&packet, session_order_id).is_ok() {
                         progress.success();
                         core_request
@@ -372,8 +373,13 @@ impl WebRtcClient {
                         break;
                     }
 
+                    // Stop tracking transfer if context is cancelled
+                    if resource_token.is_cancelled() {
+                        break;
+                    }
+
                     let bytes = Bytes::from(packet.to_vec());
-                    if let Some(written) = writer.d_write(bytes).await.map_err(|e| WebRtcClientError::Transfer(e.to_string()))? {
+                    if let Some(written) = writer.d_write_at(bytes, offset).await.map_err(|e| WebRtcClientError::Transfer(e.to_string()))? {
                         progress.update_progress(written as u64);
                         core_request
                             .response_throttle(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
@@ -632,30 +638,15 @@ impl WebRtcClient {
     async fn data_receiving_loop(&self) -> Result<(), WebRtcClientError> {
         log::info!("Starting data receiving loop");
 
-        let mut data_rx = self.inbound_data_receiver.retrieve().await?;
+        let mut inbound_data_receiver = self.inbound_data_receiver.retrieve().await?;
 
-        loop {
-            let packet = match data_rx.next().await {
-                Some(p) => p,
-                None => break,
-            };
-
-            if packet.len() < 2 {
-                continue;
-            }
-
-            let prefix = u16::from_le_bytes([packet[0], packet[1]]);
-            let payload = packet[2..].to_vec();
-
-            let sender = {
-                let channels = self.prefix_channels.lock().await;
-                channels.get(&prefix).cloned()
-            };
-
-            if let Some(mut sender) = sender {
-                if let Err(e) = sender.send(payload).await {
+        while let Some(data) = inbound_data_receiver.next().await {
+            let (prefix, offset, payload) = WebRtcPacket::deserialize(data);
+            let mut channels = self.prefix_channels.lock().await;
+            if let Some(tx) = channels.get_mut(&prefix) {
+                if let Err(e) = tx.send((offset, payload)).await {
                     log::warn!("Prefix channel {} dropped: {:?}", prefix, e);
-                    self.prefix_channels.lock().await.remove(&prefix);
+                    channels.remove(&prefix);
                 }
             }
         }
