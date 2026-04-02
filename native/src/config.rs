@@ -62,3 +62,7 @@ pub fn get_updater_url() -> String {
 pub fn is_relay_only() -> bool {
     RELAY_ONLY == Some("1") || std::env::var("BYTOVER_RELAY_ONLY").ok().map(|v| v == "1").unwrap_or(false)
 }
+
+pub fn get_relay_server_override() -> Option<String> {
+    std::env::var("BYTOVER_RELAY_SERVER").ok().filter(|s| !s.is_empty())
+}

@@ -10,9 +10,27 @@ pub const LOCATOR_URL: Option<&str> = option_env!("BYTOVER_LOCATOR_URL");
 pub const GATEWAY_HTTP1_HOST: Option<&str> = option_env!("BYTOVER_PUBLIC_HTTP1_GATEWAY_HOST");
 pub const GATEWAY_HTTP1_PORT: Option<&str> = option_env!("BYTOVER_PUBLIC_HTTP1_GATEWAY_PORT");
 pub const RELAY_ONLY: Option<&str> = option_env!("BYTOVER_RELAY_ONLY");
+pub const RELAY_SERVER: Option<&str> = option_env!("BYTOVER_RELAY_SERVER");
 
 pub fn is_relay_only() -> bool {
     RELAY_ONLY == Some("1")
+}
+
+pub fn get_relay_server_override() -> Option<String> {
+    if let Some(server) = RELAY_SERVER {
+        if !server.is_empty() {
+            return Some(server.to_string());
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Ok(server) = std::env::var("BYTOVER_RELAY_SERVER") {
+        if !server.is_empty() {
+            return Some(server);
+        }
+    }
+
+    None
 }
 
 pub struct HostInfo {

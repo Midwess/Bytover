@@ -48,6 +48,19 @@ pub struct SignallingSender {
 
 impl SignallingSender {
     pub async fn fetch_relay_config(&self, key: &str) -> Result<IceConfig, SignallingError> {
+        if let Some(server) = crate::config::get_relay_server_override() {
+            log::info!("[signalling] Using relay server override: {}", server);
+            return Ok(IceConfig {
+                urls: vec![
+                    format!("stun:{}", server),
+                    format!("turn:{}?transport=udp", server),
+                    format!("turn:{}?transport=tcp", server),
+                ],
+                username: Some("guest".to_string()),
+                credential: Some("guest".to_string()),
+            });
+        }
+
         let url = format!("{}/relay/{}", self.http_url, key);
         let response = reqwest::get(&url).await.map_err(|e| SignallingError::HttpFailed(format!("{e:?}")))?;
 

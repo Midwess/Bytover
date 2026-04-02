@@ -331,7 +331,7 @@ impl WebRtcClient {
                 if rtc.send(data, cid) {
                     pending_data = None;
                 } else {
-                    rtc.wait_for_input(timeout.max(Duration::from_millis(1))).await?;
+                    rtc.wait_for_input(timeout.max(Duration::from_millis(3))).await?;
                 }
                 continue;
             }
@@ -349,7 +349,7 @@ impl WebRtcClient {
                     let d: Vec<u8> = d;
                     Ok(Some((cids.reliable, d)))
                 },
-                res = rtc.wait_for_input(timeout.max(Duration::from_millis(1))) => {
+                res = rtc.wait_for_input(timeout.max(Duration::from_millis(3))) => {
                     res?;
                     Ok::<_, WebRtcClientError>(None)
                 }
