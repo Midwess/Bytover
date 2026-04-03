@@ -1,92 +1,81 @@
-use actix_web::{web, HttpMessage, HttpRequest, HttpResponse};
-use devlog_sdk::tcp::listener::find_tcp_listener;
-
-mod app_gateway;
+mod connection;
 mod di;
+mod grpc_service;
+mod grpc_middleware;
 mod locator_client;
-mod middleware;
 
-use di::DiContainer;
+use devlog_sdk::api_gateway::client::ApiGatewayClient;
+use devlog_sdk::api_gateway::kong::client::KongGatewayAdminClient;
+use devlog_sdk::api_gateway::service::{GatewayRouteBuilder, GatewayRouteExpression, GatewayServiceBuilder};
+use devlog_sdk::tcp::listener::{find_grpc_listener, GrpcConnection};
+use tonic::transport::Server;
+use tonic_middleware::InterceptorFor;
+use schema::devlog::bitbridge::relay_service_server::RelayServiceServer;
 
-pub struct RelayServer {
-    #[allow(dead_code)]
-    connections: Vec<String>,
+use crate::di::DiContainer;
+use crate::grpc_service::RelayServiceImpl;
+
+#[derive(thiserror::Error, Debug)]
+enum MainErrors {
+    #[error("Transport error {0}")]
+    TransportError(#[from] tonic::transport::Error),
+    #[error("DI container error {0}")]
+    DiContainerError(String),
+    #[error("Gateway error {0}")]
+    GatewayError(String),
 }
 
-impl Default for RelayServer {
-    fn default() -> Self {
-        Self {
-            connections: Vec::new(),
-        }
-    }
-}
-
-impl RelayServer {
-    pub async fn run(self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let di = DiContainer::init().await;
-        let public_ip = di.public_ip.clone();
-
-        let connection = find_tcp_listener(Some(9101)).await?;
-        let port = connection.port;
-        let std_listener = connection.listener.into_std()?;
-
-        let server = actix_web::HttpServer::new(move || {
-            let client = di.app_gateway_client();
-            actix_web::App::new()
-                .app_data(web::Data::new(client))
-                .wrap(crate::middleware::auth::Auth)
-                .route(
-                    "/connect",
-                    web::post().to(connect_handler),
-                )
-        })
-        .listen(std_listener)?
-        .run();
-
-        log::info!("Relay Server listening on {}:{}", public_ip, port);
-
-        server.await?;
-
-        Ok(())
-    }
-}
-
-async fn connect_handler(
-    req: HttpRequest,
-) -> HttpResponse {
-    let peer_addr = req
-        .connection_info()
-        .realip_remote_addr()
-        .unwrap_or("0.0.0.0")
-        .to_string();
-
-    let auth_context = match req.extensions().get::<app_gateway::client::AuthContext>() {
-        Some(auth) => auth.clone(),
-        None => {
-            log::error!("AuthContext not found in extensions for {}", peer_addr);
-            return HttpResponse::InternalServerError().json(serde_json::json!({
-                "error": "Internal server error"
-            }));
-        }
-    };
-
-    log::info!("Connect request from user {} ({}) at {}",
-        auth_context.user.user_name, auth_context.user.id.id, peer_addr);
-
-    HttpResponse::Ok().json(serde_json::json!({
-        "status": "connected",
-        "user_id": auth_context.user.id.id
-    }))
-}
-
-#[actix_web::main]
-async fn main() -> std::io::Result<()> {
+#[tokio::main]
+async fn main() -> Result<(), MainErrors> {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
 
     log::info!("Starting relay server...");
 
-    RelayServer::default()
-        .run()
-        .await
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+    let di = DiContainer::init().await;
+    let public_ip = di.public_ip.clone();
+
+    let connection = find_grpc_listener(Some(9101)).await.map_err(|e| MainErrors::DiContainerError(e.to_string()))?;
+    let port = connection.port;
+
+    setup_grpc_gateway(&connection).await?;
+
+    log::info!("Relay Server listening on {}:{}", public_ip, port);
+
+    Server::builder()
+        .add_service(InterceptorFor::new(
+            RelayServiceServer::new(RelayServiceImpl::new(di.proxy_manager.clone())),
+            di.get_auth_middleware()
+        ))
+        .serve_with_incoming(connection.listener)
+        .await?;
+
+    Ok(())
+}
+
+async fn setup_grpc_gateway(tcp: &GrpcConnection) -> Result<(), MainErrors> {
+    log::info!("Registering relay with gateway");
+    let api_gateway = KongGatewayAdminClient::new(devlog_sdk::config::CONFIGS.kong.admin_url.clone());
+
+    let service = GatewayServiceBuilder::new()
+        .grpc(tcp.public_host.clone(), tcp.port)
+        .name("bitbridge-relay-server")
+        .enable_cors(true)
+        .routes(vec![
+            GatewayRouteBuilder::new()
+                .grpc()
+                .grpc_web()
+                .path(GatewayRouteExpression::proto_namespace("devlog.bitbridge"))
+                .priority(10)
+                .strip_path(false)
+                .public(true)
+                .preserve_host(false)
+                .name("bitbridge-relay-server-path")
+                .build(),
+        ])
+        .build();
+
+    log::info!("Register relay service {service:?}");
+    api_gateway.register(service).await.map_err(|e| MainErrors::GatewayError(e.to_string()))?;
+
+    Ok(())
 }

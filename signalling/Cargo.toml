@@ -19,6 +19,7 @@ prost = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
 actix-web = "4.11.0"
 thiserror = { workspace = true }
+tonic = { workspace = true }
 h3ron = "0.18.0"
 serde = { workspace = true, features = ["derive"] }
 geo-types = "0.7"

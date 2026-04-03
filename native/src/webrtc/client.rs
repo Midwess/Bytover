@@ -158,6 +158,7 @@ impl WebRtcClient {
     pub async fn connect(
         me: Peer,
         offer_message: OfferMessage,
+        session_id: String,
         signalling: SignallingSender,
         request_id: String,
         resource_repo: Arc<dyn LocalResourceRepository>
@@ -166,7 +167,13 @@ impl WebRtcClient {
             return Err(WebRtcClientError::Shared("Peer not introduced".to_string()));
         };
 
-        let mut rtc_client = RtcClient::connect(&signalling_id, offer_message, signalling, &request_id).await?;
+        let p2p_fut: std::pin::Pin<Box<dyn std::future::Future<Output = Result<RtcClient, WebRtcClientError>> + Send>> = Box::pin(RtcClient::connect(&signalling_id, offer_message.clone(), signalling.clone(), &request_id));
+        let relay_fut: std::pin::Pin<Box<dyn std::future::Future<Output = Result<RtcClient, WebRtcClientError>> + Send>> = Box::pin(RtcClient::connect_relay(&signalling_id, &session_id, signalling));
+
+        let mut rtc_client = match futures::future::select_ok(vec![p2p_fut, relay_fut]).await {
+            Ok((client, _)) => client,
+            Err(e) => return Err(WebRtcClientError::Signalling(format!("Both connection legs failed: {:?}", e))),
+        };
 
         log::info!("[webrtc-client] RTC connected, creating client");
 

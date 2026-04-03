@@ -41,10 +41,16 @@ impl SignallingServer {
         let client_manager_for_closure1 = Arc::clone(&self.client_manager);
         let client_manager_for_closure2 = Arc::clone(&self.client_manager);
         let client_manager_for_closure3 = Arc::clone(&self.client_manager);
+        let client_manager_for_closure4 = Arc::clone(&self.client_manager);
         let turn_manager_for_closure = Arc::clone(&self.turn_manager);
 
         let server = actix_web::HttpServer::new(move || {
             let geoip_reader = geoip_reader.clone();
+            
+            let turn_manager_route1 = Arc::clone(&turn_manager_for_closure);
+            let turn_manager_route2 = Arc::clone(&turn_manager_for_closure);
+            let turn_manager_route3 = Arc::clone(&turn_manager_for_closure);
+            let turn_manager_route4 = Arc::clone(&turn_manager_for_closure);
 
             actix_web::App::new()
                 .route(
@@ -52,7 +58,7 @@ impl SignallingServer {
                     web::get().to({
                         let geoip_reader = geoip_reader.clone();
                         let client_manager = Arc::clone(&client_manager_for_closure1);
-                        let turn_manager = Arc::clone(&turn_manager_for_closure);
+                        let turn_manager = Arc::clone(&turn_manager_route1);
                         move |req: HttpRequest,
                               stream: web::Payload,
                               key: web::Path<String>| {
@@ -71,7 +77,7 @@ impl SignallingServer {
                     "/offer/{key}",
                     web::post().to({
                         let client_manager = Arc::clone(&client_manager_for_closure2);
-                        let turn_manager = Arc::clone(&turn_manager_for_closure);
+                        let turn_manager = Arc::clone(&turn_manager_route2);
                         move |key: web::Path<String>, body: Bytes| {
                             offer_handler(key.into_inner(), body, client_manager.clone(), turn_manager.clone())
                         }
@@ -81,9 +87,19 @@ impl SignallingServer {
                     "/relay/{key}",
                     web::get().to({
                         let client_manager = Arc::clone(&client_manager_for_closure3);
-                        let turn_manager = Arc::clone(&turn_manager_for_closure);
+                        let turn_manager = Arc::clone(&turn_manager_route3);
                         move |key: web::Path<String>| {
                             relay_handler(key.into_inner(), client_manager.clone(), turn_manager.clone())
+                        }
+                    }),
+                )
+                .route(
+                    "/relay/{key}",
+                    web::post().to({
+                        let client_manager = Arc::clone(&client_manager_for_closure4);
+                        let turn_manager = Arc::clone(&turn_manager_route4);
+                        move |key: web::Path<String>, body: Bytes| {
+                            relay_proxy_handler(key.into_inner(), body, client_manager.clone(), turn_manager.clone())
                         }
                     }),
                 )
@@ -261,6 +277,90 @@ async fn relay_handler(
         Err(e) => {
             HttpResponse::InternalServerError()
                 .body(format!("failed to encode response: {}", e))
+        }
+    }
+}
+
+async fn relay_proxy_handler(
+    key: String,
+    body: Bytes,
+    client_manager: Arc<ClientManager>,
+    turn_manager: Arc<TurnManager>,
+) -> HttpResponse {
+    use schema::devlog::bitbridge::relay_service_client::RelayServiceClient;
+    use base64::Engine;
+    use tonic::metadata::MetadataValue;
+
+    if client_manager.get(&key).await.is_none() {
+        return HttpResponse::ServiceUnavailable().body("client not connected");
+    }
+
+    let connect_req = match schema::devlog::bitbridge::ConnectRequest::decode(&body[..]) {
+        Ok(m) => m,
+        Err(e) => {
+            return HttpResponse::BadRequest().body(format!("failed to decode ConnectRequest: {}", e));
+        }
+    };
+
+    let url = match std::env::var("RELAY_SERVER_URL") {
+        Ok(u) => u,
+        Err(_) => {
+            let ice_config = match turn_manager.get_relay_config(&key).await {
+                Some(c) => c,
+                None => return HttpResponse::ServiceUnavailable().body("no relay config assigned to client"),
+            };
+
+            let turn_url = match ice_config.urls.iter().find(|u| u.starts_with("turn:")) {
+                Some(u) => u,
+                None => return HttpResponse::InternalServerError().body("no turn URL found in client config"),
+            };
+
+            // Parse domain from turn:domain:3478?transport=udp
+            let domain = turn_url
+                .strip_prefix("turn:")
+                .and_then(|s| s.split(':').next())
+                .unwrap_or("");
+
+            if domain.is_empty() {
+                return HttpResponse::InternalServerError().body("invalid TURN URL format");
+            }
+
+            format!("http://{}:9101", domain)
+        }
+    };
+    
+    let channel = match tonic::transport::Channel::from_shared(url) {
+        Ok(endpoint) => match endpoint.connect().await {
+            Ok(ch) => ch,
+            Err(e) => return HttpResponse::InternalServerError().body(format!("failed to connect to relay server channel: {}", e))
+        },
+        Err(e) => return HttpResponse::InternalServerError().body(format!("invalid relay server url: {}", e))
+    };
+    let mut client = RelayServiceClient::new(channel);
+
+    let secret = std::env::var("RELAY_SERVER_SECRET").unwrap_or_else(|_| "supersecret".to_string());
+    let auth_str = format!("user:{}", secret);
+    let b64_auth = base64::engine::general_purpose::STANDARD.encode(auth_str);
+    let header_value = format!("Basic {}", b64_auth);
+
+    let mut request = tonic::Request::new(connect_req);
+    if let Ok(meta_value) = MetadataValue::try_from(header_value) {
+        request.metadata_mut().insert("authorization", meta_value);
+    }
+
+    match client.connect(request).await {
+        Ok(response) => {
+            let mut buf = Vec::new();
+            let msg = response.into_inner();
+            if let Err(e) = ProstMessage::encode(&msg, &mut buf) {
+                return HttpResponse::InternalServerError().body(format!("failed to encode response: {}", e));
+            }
+            HttpResponse::Ok()
+                .content_type("application/octet-stream")
+                .body(buf)
+        }
+        Err(status) => {
+            HttpResponse::InternalServerError().body(format!("relay server gRPC error: {}", status))
         }
     }
 }

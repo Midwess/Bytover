@@ -1,14 +1,15 @@
 use tokio::sync::OnceCell;
 
-use crate::app_gateway::client::AppGatewayClient;
+use crate::grpc_middleware::auth::RelayAuthInterceptor;
 use crate::locator_client::LocatorClient;
-use devlog_sdk::grpc_gateway::channel::GrpcGatewayChannel;
 
 static DI_CONTAINER: OnceCell<DiContainer> = OnceCell::const_new();
+use std::sync::Arc;
+use crate::connection::proxy_manager::ProxyManager;
 
 pub struct DiContainer {
     pub public_ip: String,
-    pub grpc_gateway_channel: GrpcGatewayChannel,
+    pub proxy_manager: Arc<ProxyManager>,
 }
 
 impl DiContainer {
@@ -31,16 +32,17 @@ impl DiContainer {
                 }
             };
 
-            let grpc_gateway_channel = GrpcGatewayChannel::new();
+            let proxy_manager = ProxyManager::new();
+            proxy_manager.start();
 
             DiContainer {
                 public_ip,
-                grpc_gateway_channel,
+                proxy_manager,
             }
         }).await
     }
 
-    pub fn app_gateway_client(&self) -> AppGatewayClient {
-        AppGatewayClient::new(self.grpc_gateway_channel.clone())
+    pub fn get_auth_middleware(&self) -> RelayAuthInterceptor {
+        RelayAuthInterceptor::new()
     }
 }

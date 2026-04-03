@@ -15,7 +15,7 @@ impl SignalingClient {
         }
     }
 
-    pub async fn send_offer(&self, peer_id: &str, offer_sdp: &str) -> Result<String, SignalingError> {
+    pub async fn send_offer(&self, peer_id: &str, offer_sdp: &str, session_id: &str) -> Result<String, SignalingError> {
         let url = format!("{}/offer/{}", self.http_url.trim_end_matches('/'), peer_id);
 
         let offer_msg = Message {
@@ -25,7 +25,8 @@ impl SignalingClient {
             }),
             answer: None,
             error: None,
-            ice_config: None
+            ice_config: None,
+            session_id: Some(session_id.to_string())
         };
 
         let mut encoded = Vec::new();
@@ -81,6 +82,35 @@ impl SignalingClient {
         }
 
         IceConfig::decode(&bytes[..]).map_err(|e| SignalingError::Decoding(e.to_string()))
+    }
+
+    pub async fn relay_connect(&self, key: &str, session_id: &str, sdp: &str, channels: Vec<schema::devlog::bitbridge::DataChannel>) -> Result<schema::devlog::bitbridge::ConnectResponse, SignalingError> {
+        let url = format!("{}/relay/{}", self.http_url.trim_end_matches('/'), key);
+        let request = schema::devlog::bitbridge::ConnectRequest {
+            sdp: sdp.to_string(),
+            session_id: session_id.to_string(),
+            channels,
+        };
+        
+        let mut encoded = Vec::new();
+        prost::Message::encode(&request, &mut encoded).map_err(|e| SignalingError::Encoding(e.to_string()))?;
+
+        let (status, _headers, bytes) = HttpClient::new()
+            .method("POST")
+            .url(&url)
+            .header("Content-Type", "application/octet-stream")
+            .body_bytes(encoded)
+            .fetch()
+            .map_err(|e| SignalingError::Network(format!("{:?}", e)))?
+            .bytes()
+            .await
+            .map_err(|e| SignalingError::Network(format!("{:?}", e)))?;
+
+        if status != 200 {
+            return Err(SignalingError::Server(String::from_utf8_lossy(&bytes).to_string()));
+        }
+
+        schema::devlog::bitbridge::ConnectResponse::decode(&bytes[..]).map_err(|e| SignalingError::Decoding(e.to_string()))
     }
 }
 

@@ -5782,6 +5782,7 @@ dependencies = [
  "turn-types",
  "uniffi",
  "url",
+ "uuid",
 ]
 
 [[package]]
@@ -7775,8 +7776,9 @@ checksum = "7a2d987857b319362043e95f5353c0535c1f58eec5336fdfcf626430af7def58"
 name = "relay-server"
 version = "0.1.0"
 dependencies = [
- "actix-web",
  "anyhow",
+ "async-trait",
+ "base64 0.22.1",
  "devlog-sdk",
  "env_logger 0.11.10",
  "futures-util",
@@ -7785,11 +7787,12 @@ dependencies = [
  "reqwest",
  "schema",
  "serde",
- "serde_json",
  "socket2 0.6.3",
  "str0m",
+ "thiserror 2.0.18",
  "tokio",
  "tonic 0.13.1",
+ "tonic-middleware 0.3.0",
 ]
 
 [[package]]
@@ -8876,6 +8879,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-tungstenite",
+ "tonic 0.13.1",
  "uuid",
 ]
 
