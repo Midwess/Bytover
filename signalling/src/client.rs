@@ -11,8 +11,6 @@ use tokio::sync::{Mutex, oneshot};
 use tokio::time::timeout;
 use uuid::Uuid;
 
-use crate::turn_manager::TurnManager;
-
 const REQUEST_TIMEOUT_SECS: u64 = 30;
 
 #[derive(Error, Debug)]
@@ -32,16 +30,14 @@ pub struct Client {
     ws_session: Mutex<Session>,
     pending_requests:
         Mutex<HashMap<String, oneshot::Sender<schema::devlog::rpc_signalling::server::Message>>>,
-    turn_manager: Arc<TurnManager>,
 }
 
 impl Client {
-    pub fn new(key: String, session: Session, turn_manager: Arc<TurnManager>) -> Arc<Self> {
+    pub fn new(key: String, session: Session) -> Arc<Self> {
         Arc::new(Self {
             key,
             ws_session: Mutex::new(session),
             pending_requests: Mutex::new(HashMap::new()),
-            turn_manager,
         })
     }
 

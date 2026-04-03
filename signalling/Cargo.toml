@@ -4,27 +4,20 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-schema = { workspace = true, features = ["server", "client"] }
-core-services = { workspace = true, features = ["grpc-server", "host_machine", "services"] }
-devlog-sdk = { workspace = true, features = ["gateway", "grpc-server"] }
+serde = { workspace = true, features = ["derive"] }
+uuid = { workspace = true, features = ["v4"] }
+actix-web = "4.11.0"
+actix-ws = "0.3"
 tokio = { workspace = true, features = ["rt-multi-thread", "time", "sync"] }
+tokio-tungstenite = { workspace = true }
+futures-util = { workspace = true }
+prost = { workspace = true }
+tonic = { workspace = true }
+thiserror = { workspace = true }
 sha1 = "0.10.6"
 base64 = "0.22.1"
 hmac = "0.12.1"
 log = "0.4.27"
-tokio-tungstenite = { workspace = true }
-actix-ws = "0.3"
-futures-util = { workspace = true }
-prost = { workspace = true }
-uuid = { workspace = true, features = ["v4"] }
-actix-web = "4.11.0"
-thiserror = { workspace = true }
-tonic = { workspace = true }
-h3ron = "0.18.0"
-serde = { workspace = true, features = ["derive"] }
-geo-types = "0.7"
-chrono = { workspace = true }
-maxminddb = "0.24"
-jsonwebtoken = "9.3"
-reqwest = { workspace = true, features = ["json", "rustls-tls"] }
-str0m = { workspace = true }
+schema = { workspace = true, features = ["server", "client"] }
+core-services = { workspace = true, features = ["grpc-server", "host_machine", "services"] }
+devlog-sdk = { workspace = true, features = ["gateway", "grpc-server"] }

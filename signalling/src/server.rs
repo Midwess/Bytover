@@ -12,31 +12,24 @@ use crate::turn_manager::TurnManager;
 pub struct SignallingServer {
     client_manager: Arc<ClientManager>,
     turn_manager: Arc<TurnManager>,
-    geoip_reader: Option<Arc<maxminddb::Reader<Vec<u8>>>>,
 }
 
 impl SignallingServer {
     pub fn new(
         turn_manager: Arc<TurnManager>,
     ) -> Self {
-        let geoip_data = include_bytes!("../GeoLite2-Country.mmdb");
-        let geoip_reader =
-            maxminddb::Reader::from_source(geoip_data.to_vec()).ok().map(Arc::new);
-
         Self {
             client_manager: ClientManager::new(),
             turn_manager,
-            geoip_reader,
         }
     }
 
     pub async fn run(self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let connection = find_tcp_listener(Some(3000)).await?;
+        let connection = find_tcp_listener(Some(9102)).await?;
         let port = connection.port;
         let public_host = connection.public_host.clone();
         let std_listener = connection.listener.into_std()?;
 
-        let geoip_reader = self.geoip_reader.clone();
         let turn_manager_for_register = Arc::clone(&self.turn_manager);
         let client_manager_for_closure1 = Arc::clone(&self.client_manager);
         let client_manager_for_closure2 = Arc::clone(&self.client_manager);
@@ -45,18 +38,16 @@ impl SignallingServer {
         let turn_manager_for_closure = Arc::clone(&self.turn_manager);
 
         let server = actix_web::HttpServer::new(move || {
-            let geoip_reader = geoip_reader.clone();
-            
             let turn_manager_route1 = Arc::clone(&turn_manager_for_closure);
             let turn_manager_route2 = Arc::clone(&turn_manager_for_closure);
             let turn_manager_route3 = Arc::clone(&turn_manager_for_closure);
             let turn_manager_route4 = Arc::clone(&turn_manager_for_closure);
+            let turn_manager_route5 = Arc::clone(&turn_manager_for_closure);
 
             actix_web::App::new()
                 .route(
                     "/server/{key}",
                     web::get().to({
-                        let geoip_reader = geoip_reader.clone();
                         let client_manager = Arc::clone(&client_manager_for_closure1);
                         let turn_manager = Arc::clone(&turn_manager_route1);
                         move |req: HttpRequest,
@@ -68,7 +59,6 @@ impl SignallingServer {
                                 key.into_inner(),
                                 client_manager.clone(),
                                 turn_manager.clone(),
-                                geoip_reader.clone(),
                             )
                         }
                     }),
@@ -100,6 +90,15 @@ impl SignallingServer {
                         let turn_manager = Arc::clone(&turn_manager_route4);
                         move |key: web::Path<String>, body: Bytes| {
                             relay_proxy_handler(key.into_inner(), body, client_manager.clone(), turn_manager.clone())
+                        }
+                    }),
+                )
+                .route(
+                    "/register-relay",
+                    web::post().to({
+                        let turn_manager = Arc::clone(&turn_manager_route5);
+                        move |req: HttpRequest, body: web::Json<RegisterRelayRequest>| {
+                            register_relay_handler(req, body, turn_manager.clone())
                         }
                     }),
                 )
@@ -166,7 +165,6 @@ async fn ws_handler(
     key: String,
     client_manager: Arc<ClientManager>,
     turn_manager: Arc<TurnManager>,
-    geoip_reader: Option<Arc<maxminddb::Reader<Vec<u8>>>>,
 ) -> Result<HttpResponse, actix_web::Error> {
     let peer_addr = req
         .connection_info()
@@ -174,19 +172,16 @@ async fn ws_handler(
         .unwrap_or("0.0.0.0")
         .to_string();
 
-    let ip_address = extract_ip_from_request(&req, &peer_addr);
-    let continent =
-        crate::turn_manager::detect_continent(&ip_address, geoip_reader.as_ref().map(|r| r.as_ref()));
+    let _ip_address = extract_ip_from_request(&req, &peer_addr);
 
     let (response, session, msg_stream) = actix_ws::handle(&req, stream)?;
 
-    let client = Client::new(key.clone(), session, Arc::clone(&turn_manager));
+    let client = Client::new(key.clone(), session);
     let client = Arc::new(client);
 
     client_manager.register(key.clone(), &client).await;
-    turn_manager.register_client(key.clone(), continent).await;
 
-    if let Err(e) = turn_manager.assign_relay_for_client(&key, continent).await {
+    if let Err(e) = turn_manager.assign_relay_for_client(&key).await {
         log::warn!("Failed to assign relay for client {}: {}", key, e);
     }
 
@@ -385,4 +380,56 @@ fn extract_ip_from_request(req: &HttpRequest, peer_addr: &str) -> String {
     }
 
     peer_addr.to_string()
+}
+
+#[derive(serde::Deserialize)]
+struct RegisterRelayRequest {
+    stun_port: u16,
+    relay_port: u16,
+}
+
+async fn register_relay_handler(
+    req: HttpRequest,
+    body: web::Json<RegisterRelayRequest>,
+    turn_manager: Arc<TurnManager>,
+) -> HttpResponse {
+    use base64::Engine;
+
+    // Basic Auth Check
+    let auth_header = match req.headers().get("authorization").and_then(|h| h.to_str().ok()) {
+        Some(h) => h,
+        None => return HttpResponse::Unauthorized().body("missing authorization header"),
+    };
+
+    if !auth_header.starts_with("Basic ") {
+        return HttpResponse::Unauthorized().body("invalid authorization format");
+    }
+
+    let b64_part = &auth_header[6..];
+    let decoded = match base64::engine::general_purpose::STANDARD.decode(b64_part) {
+        Ok(d) => d,
+        Err(_) => return HttpResponse::Unauthorized().body("failed to decode base64 auth"),
+    };
+
+    let auth_str = String::from_utf8_lossy(&decoded);
+    let mut parts = auth_str.split(':');
+    let _user = parts.next().unwrap_or("");
+    let secret = parts.next().unwrap_or("");
+
+    let expected_secret = std::env::var("RELAY_SERVER_SECRET").unwrap_or_else(|_| "supersecret".to_string());
+    if secret != expected_secret {
+        return HttpResponse::Forbidden().body("invalid secret");
+    }
+
+    let peer_addr = req
+        .connection_info()
+        .realip_remote_addr()
+        .unwrap_or("0.0.0.0")
+        .to_string();
+    
+    let ip_address = extract_ip_from_request(&req, &peer_addr);
+
+    turn_manager.register_relay(ip_address, body.stun_port, body.relay_port).await;
+
+    HttpResponse::Ok().finish()
 }

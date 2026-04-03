@@ -1,188 +1,96 @@
 use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
-use std::net::IpAddr;
+use std::time::{SystemTime, UNIX_EPOCH, Instant, Duration};
 use base64::Engine;
 use base64::engine::general_purpose;
 use hmac::{Hmac, Mac};
 use tokio::sync::Mutex;
 use thiserror::Error;
-use maxminddb::geoip2;
 use schema::devlog::rpc_signalling::server::IceConfig;
 use sha1::Sha1;
 
-use crate::turn_server_registry::TurnServerRegistry;
-
 type HmacSha1 = Hmac<Sha1>;
-
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
-pub enum Continent {
-    AS,
-    NorthAS,
-    Tokyo,
-    Singapore,
-    HKG,
-    EU,
-    NA,
-    SJC,
-    SA,
-    OC,
-    AF,
-    Unknown,
-}
-
-impl Continent {
-    fn priority_order(&self) -> &'static [Continent] {
-        match self {
-            Continent::AS => &[Continent::AS, Continent::HKG, Continent::Singapore, Continent::Tokyo, Continent::NorthAS, Continent::OC, Continent::EU, Continent::NA, Continent::SJC, Continent::SA, Continent::AF],
-            Continent::NorthAS => &[Continent::NorthAS, Continent::Tokyo, Continent::AS, Continent::HKG, Continent::Singapore, Continent::EU, Continent::OC, Continent::NA, Continent::SJC, Continent::SA, Continent::AF],
-            Continent::Tokyo => &[Continent::Tokyo, Continent::NorthAS, Continent::AS, Continent::HKG, Continent::Singapore, Continent::OC, Continent::SJC, Continent::NA, Continent::EU, Continent::SA, Continent::AF],
-            Continent::Singapore => &[Continent::Singapore, Continent::HKG, Continent::AS, Continent::OC, Continent::Tokyo, Continent::NorthAS, Continent::EU, Continent::NA, Continent::SJC, Continent::AF, Continent::SA],
-            Continent::HKG => &[Continent::HKG, Continent::AS, Continent::Singapore, Continent::Tokyo, Continent::NorthAS, Continent::OC, Continent::EU, Continent::NA, Continent::SJC, Continent::SA, Continent::AF],
-            Continent::EU => &[Continent::EU, Continent::NorthAS, Continent::NA, Continent::AS, Continent::HKG, Continent::Tokyo, Continent::Singapore, Continent::SJC, Continent::AF, Continent::OC, Continent::SA],
-            Continent::NA => &[Continent::NA, Continent::SJC, Continent::SA, Continent::Tokyo, Continent::EU, Continent::NorthAS, Continent::Singapore, Continent::HKG, Continent::AS, Continent::OC, Continent::AF],
-            Continent::SJC => &[Continent::SJC, Continent::NA, Continent::Tokyo, Continent::SA, Continent::OC, Continent::EU, Continent::NorthAS, Continent::Singapore, Continent::HKG, Continent::AS, Continent::AF],
-            Continent::SA => &[Continent::SA, Continent::NA, Continent::SJC, Continent::EU, Continent::AF, Continent::AS, Continent::HKG, Continent::Singapore, Continent::NorthAS, Continent::Tokyo, Continent::OC],
-            Continent::OC => &[Continent::OC, Continent::Singapore, Continent::HKG, Continent::AS, Continent::Tokyo, Continent::SJC, Continent::NorthAS, Continent::NA, Continent::EU, Continent::SA, Continent::AF],
-            Continent::AF => &[Continent::AF, Continent::EU, Continent::Singapore, Continent::HKG, Continent::AS, Continent::Tokyo, Continent::NorthAS, Continent::NA, Continent::SJC, Continent::SA, Continent::OC],
-            Continent::Unknown => &[Continent::AS, Continent::HKG, Continent::Singapore, Continent::Tokyo, Continent::NorthAS, Continent::EU, Continent::NA, Continent::SJC, Continent::SA, Continent::OC, Continent::AF],
-        }
-    }
-}
-
-pub fn detect_continent(ip: &str, reader: Option<&maxminddb::Reader<Vec<u8>>>) -> Continent {
-    if let Some(reader) = reader {
-        if let Ok(addr) = ip.parse::<IpAddr>() {
-            if let Ok(city) = reader.lookup::<geoip2::City>(addr) {
-                if let Some(country_info) = city.country {
-                    if let Some(iso_code) = country_info.iso_code {
-                        if iso_code == "US" {
-                            if let Some(subdivisions) = &city.subdivisions {
-                                if let Some(first_sub) = subdivisions.first() {
-                                    if let Some(sub_code) = first_sub.iso_code {
-                                        return match sub_code {
-                                            "CA" | "OR" | "WA" | "NV" | "AZ" => Continent::SJC,
-                                            _ => Continent::NA,
-                                        };
-                                    }
-                                }
-                            }
-                            return Continent::NA;
-                        }
-
-                        return match iso_code {
-                            "JP" => Continent::Tokyo,
-                            "SG" | "MY" | "ID" | "TH" | "BN" => Continent::Singapore,
-                            "CN" | "KR" | "IN" | "VN" | "PH" | "TW" | "HK" | "MO" | "KH" | "LA" | "MM" | "BD" | "PK" | "LK" | "NP" | "BT" | "MV" | "AF" | "UZ" | "TM" | "TJ" | "KG" => Continent::AS,
-                            "RU" | "MN" | "KZ" => Continent::NorthAS,
-                            "GB" | "FR" | "DE" | "IT" | "ES" | "NL" | "BE" | "PL" | "RO" | "CZ" | "PT" | "GR" | "HU" | "SE" | "AT" | "BG" | "DK" | "FI" | "SK" | "NO" | "IE" | "HR" | "SI" | "LT" | "LV" | "EE" | "LU" | "MT" | "CY" | "IS" | "CH" | "UA" | "BY" | "MD" | "RS" | "BA" | "AL" | "MK" | "ME" | "XK" => Continent::EU,
-                            "CA" | "MX" => Continent::NA,
-                            "BR" | "AR" | "CO" | "PE" | "VE" | "CL" | "EC" | "BO" | "PY" | "UY" | "GY" | "SR" | "GF" => Continent::SA,
-                            "AU" | "NZ" | "PG" | "FJ" | "NC" | "PF" | "SB" | "VU" | "WS" | "KI" | "TO" | "FM" | "MH" | "PW" | "NR" | "TV" => Continent::OC,
-                            "ZA" | "EG" | "NG" | "KE" | "ET" | "GH" | "TZ" | "UG" | "DZ" | "SD" | "MA" | "AO" | "MZ" | "MG" | "CM" | "CI" | "NE" | "BF" | "ML" | "MW" | "ZM" | "SN" | "SO" | "TD" | "ZW" | "GN" | "RW" | "BJ" | "TN" | "BI" | "SS" | "TG" | "SL" | "LY" | "LR" | "MR" | "CF" | "ER" | "GM" | "BW" | "GA" | "GW" | "MU" | "SZ" | "DJ" | "RE" | "KM" | "CV" | "ST" | "SC" => Continent::AF,
-                            _ => Continent::Unknown,
-                        };
-                    }
-                }
-            }
-        }
-    }
-    Continent::Unknown
-}
 
 #[derive(Error, Debug)]
 pub enum TurnManagerErrors {
-    #[error("GeoIP error: {0}")]
-    GeoIpError(#[from] maxminddb::MaxMindDBError),
     #[error("BYTOVER_TURN_SECRET not configured")]
     NoTurnSecret,
     #[error("JWT generation error: {0}")]
     JwtError(String),
-    #[error("Registry error: {0}")]
-    RegistryError(#[from] crate::turn_server_registry::RegistryError),
+    #[error("No relays available")]
+    NoRelaysAvailable,
 }
 
 #[derive(Debug, Clone)]
-pub struct TurnServer {
+pub struct RegisteredRelay {
     pub ip: String,
-    pub domain: String,
-    pub continent: Continent,
+    pub stun_port: u16,
+    pub relay_port: u16,
+    pub last_ping: Instant,
     pub counter: Arc<AtomicUsize>,
 }
 
-impl Hash for TurnServer {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.ip.hash(state);
-        self.domain.hash(state);
-        self.continent.hash(state);
-    }
-}
-
-impl PartialEq for TurnServer {
-    fn eq(&self, other: &Self) -> bool {
-        self.ip == other.ip && self.domain == other.domain && self.continent == other.continent
-    }
-}
-
-impl Eq for TurnServer {}
-
 pub struct TurnManager {
-    server_registry: Arc<TurnServerRegistry>,
-    client_continents: Arc<Mutex<HashMap<String, Continent>>>,
+    relays: Arc<Mutex<HashMap<String, RegisteredRelay>>>,
     client_relay_configs: Arc<Mutex<HashMap<String, IceConfig>>>,
     turn_secret: Option<String>,
 }
 
 impl TurnManager {
     pub async fn new() -> Result<Self, TurnManagerErrors> {
-        let geoip_data = include_bytes!("../GeoLite2-City.mmdb");
-        let geoip_reader = maxminddb::Reader::from_source(geoip_data.to_vec())
-            .ok()
-            .map(Arc::new);
-
-        if geoip_reader.is_none() {
-            log::warn!("GeoIP database not found or invalid, continent detection will use Unknown");
-        }
-
         let turn_secret = std::env::var("BYTOVER_TURN_SECRET").ok();
         if turn_secret.is_none() {
             log::warn!("BYTOVER_TURN_SECRET not set, TURN credentials will not be generated");
         }
 
-        let cf_api_token = std::env::var("CLOUD_FLARE_API_TOKEN").ok();
-        let cf_zone_id = std::env::var("CLOUD_FLARE_ZONE_ID").ok();
-        if cf_api_token.is_none() || cf_zone_id.is_none() {
-            log::warn!("Cloudflare API credentials not set, TURN discovery will be disabled");
-        }
-
-        let server_registry = Arc::new(TurnServerRegistry::new(
-            cf_api_token,
-            cf_zone_id,
-            geoip_reader,
-        ));
-
-        Ok(Self {
-            server_registry,
-            client_continents: Arc::new(Mutex::new(HashMap::new())),
+        let manager = Self {
+            relays: Arc::new(Mutex::new(HashMap::new())),
             client_relay_configs: Arc::new(Mutex::new(HashMap::new())),
             turn_secret,
-        })
+        };
+
+        // Start background task to prune expired relays
+        let relays_clone = Arc::clone(&manager.relays);
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(10));
+            loop {
+                interval.tick().await;
+                let mut relays = relays_clone.lock().await;
+                let now = Instant::now();
+                relays.retain(|_, relay| {
+                    if now.duration_since(relay.last_ping) > Duration::from_secs(30) {
+                        log::info!("Relay {} timed out, removing", relay.ip);
+                        false
+                    } else {
+                        true
+                    }
+                });
+            }
+        });
+
+        Ok(manager)
     }
 
-    pub fn get_registry(&self) -> Arc<TurnServerRegistry> {
-        self.server_registry.clone()
-    }
-
-    pub async fn register_client(&self, client_id: String, continent: Continent) {
-        let mut continents = self.client_continents.lock().await;
-        continents.insert(client_id, continent);
+    pub async fn register_relay(&self, ip: String, stun_port: u16, relay_port: u16) {
+        let mut relays = self.relays.lock().await;
+        let entry = relays.entry(ip.clone()).or_insert_with(|| {
+            log::info!("New relay registered: {} (STUN: {}, Relay: {})", ip, stun_port, relay_port);
+            RegisteredRelay {
+                ip: ip.clone(),
+                stun_port,
+                relay_port,
+                last_ping: Instant::now(),
+                counter: Arc::new(AtomicUsize::new(0)),
+            }
+        });
+        
+        entry.stun_port = stun_port;
+        entry.relay_port = relay_port;
+        entry.last_ping = Instant::now();
     }
 
     pub async fn unregister_client(&self, client_id: &str) {
-        let mut continents = self.client_continents.lock().await;
-        continents.remove(client_id);
         let mut relay_configs = self.client_relay_configs.lock().await;
         relay_configs.remove(client_id);
     }
@@ -190,23 +98,25 @@ impl TurnManager {
     pub async fn assign_relay_for_client(
         &self,
         client_id: &str,
-        continent: Continent,
     ) -> Result<IceConfig, TurnManagerErrors> {
-        let servers_vec = self.server_registry.get_servers().await?;
+        let relays = self.relays.lock().await;
+        
+        // Simple load balancing: pick relay with lowest counter
+        let relay = relays.values()
+            .min_by_key(|r| r.counter.load(Ordering::Relaxed))
+            .ok_or(TurnManagerErrors::NoRelaysAvailable)?
+            .clone();
 
-        let stun_server = self.select_stun_for_peer(continent, &servers_vec);
-        let turn_server = self.select_turn_for_peer(continent, &servers_vec);
+        relay.counter.fetch_add(1, Ordering::Relaxed);
 
-        turn_server.counter.fetch_add(1, Ordering::Relaxed);
-
-        let turn_url_udp = format!("turn:{}:3478?transport=udp", turn_server.domain);
-        let turn_url_tcp = format!("turn:{}:3478?transport=tcp", turn_server.domain);
+        let turn_url_udp = format!("turn:{}:{}?transport=udp", relay.ip, relay.stun_port);
+        let turn_url_tcp = format!("turn:{}:{}?transport=tcp", relay.ip, relay.stun_port);
 
         let (username, credential, _ttl) = self.generate_turn_credential(client_id, "relay")?;
 
         let ice_config = IceConfig {
             urls: vec![
-                format!("stun:{}", stun_server.domain),
+                format!("stun:{}:{}", relay.ip, relay.stun_port),
                 turn_url_udp,
                 turn_url_tcp,
             ],
@@ -225,15 +135,6 @@ impl TurnManager {
         relay_configs.get(client_id).cloned()
     }
 
-    /// Generate TURN REST API credentials
-    ///
-    /// Uses the standard TURN REST API algorithm:
-    /// - username = "{expiry_timestamp}:{user_identifier}"
-    /// - password = base64(HMAC-SHA1(secret, username))
-    ///
-    /// The user_identifier is a short hash of the peer pair for uniqueness.
-    ///
-    /// Reference: http://tools.ietf.org/html/draft-uberti-behave-turn-rest-00
     pub fn generate_turn_credential(
         &self,
         p1_uuid: &str,
@@ -252,11 +153,11 @@ impl TurnManager {
             .as_secs()
             + ttl;
 
-        // Create short unique identifier from peer pair (12 chars, ~72 bits entropy)
+        // Create short unique identifier from peer pair
         let mut hasher = Sha1::new();
         hasher.update(format!("{p1_uuid}:{p2_uuid}").as_bytes());
         let hash = hasher.finalize();
-        let user_identifier = general_purpose::URL_SAFE_NO_PAD.encode(&hash[..9]); // 12 chars
+        let user_identifier = general_purpose::URL_SAFE_NO_PAD.encode(&hash[..9]);
 
         // Create time-limited username: {expiry_timestamp}:{user_identifier}
         let username = format!("{expiry}:{user_identifier}");
@@ -270,38 +171,5 @@ impl TurnManager {
         let password = general_purpose::STANDARD.encode(mac.finalize().into_bytes());
 
         Ok((username, password, ttl))
-    }
-
-    #[inline]
-    fn select_server_for_peer(&self, peer_continent: Continent, servers: &[TurnServer]) -> TurnServer {
-        let priority_order = peer_continent.priority_order();
-
-        for &target_continent in priority_order {
-            let candidates: Vec<&TurnServer> = servers.iter()
-                .filter(|s| s.continent == target_continent)
-                .collect();
-
-            if !candidates.is_empty() {
-                return (*candidates.iter()
-                    .min_by_key(|s| s.counter.load(Ordering::Relaxed))
-                    .unwrap())
-                    .clone();
-            }
-        }
-
-        servers.iter()
-            .min_by_key(|s| s.counter.load(Ordering::Relaxed))
-            .unwrap()
-            .clone()
-    }
-
-    #[inline]
-    fn select_stun_for_peer(&self, peer_continent: Continent, servers: &[TurnServer]) -> TurnServer {
-        self.select_server_for_peer(peer_continent, servers)
-    }
-
-    #[inline]
-    fn select_turn_for_peer(&self, peer_continent: Continent, servers: &[TurnServer]) -> TurnServer {
-        self.select_server_for_peer(peer_continent, servers)
     }
 }

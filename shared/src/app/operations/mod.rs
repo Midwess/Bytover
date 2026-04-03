@@ -1,6 +1,5 @@
 pub mod device;
 pub mod dialog;
-pub mod internet;
 pub mod p2p;
 pub mod persistent;
 pub mod rpc;
@@ -26,7 +25,6 @@ use crux_core::capability::Operation;
 use derive_more::{From, TryFrom, TryInto};
 use device::DeviceOperation;
 use dialog::DialogOperation;
-use internet::InternetOperation;
 use p2p::{P2POperation, P2POperationOutput};
 use persistent::PersistentOperation;
 use rpc::{RpcOperation, RpcOperationOutput};
@@ -44,7 +42,6 @@ pub enum CoreOperation {
     Persistent(PersistentOperation),
     Transfer(TransferOperation),
     P2P(P2POperation),
-    Internet(InternetOperation),
     Render,
     InitNativeExecutor,
     Notified(AppEvent),

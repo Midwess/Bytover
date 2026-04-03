@@ -1,6 +1,4 @@
-use shared::app::operations::internet::InternetOperation;
 use shared::app::operations::{CoreOperation, CoreOperationOutput};
-use shared::shell::api::network::InternetConnection;
 use shared::shell::api::CoreRequest;
 use shared::shell::executor::p2p::P2PNativeExecutor;
 use shared::shell::executor::persistent::NativePersistent;
@@ -14,7 +12,6 @@ pub struct NativeExecutor {
     pub persistent: Box<dyn NativePersistent>,
     pub transfer: Box<dyn TransferNative<Channel>>,
     pub p2p: Box<dyn P2PNativeExecutor>,
-    pub internet_connection: InternetConnection
 }
 
 impl NativeExecutor {
@@ -26,12 +23,6 @@ impl NativeExecutor {
             }
             CoreOperation::Persistent(database) => self.persistent.handle(database).await.into(),
             CoreOperation::Transfer(transfer) => self.transfer.handle(request, transfer).await.into(),
-            CoreOperation::Internet(internet) => match internet {
-                InternetOperation::Locate(geolocation) => match self.internet_connection.locate(geolocation).await {
-                    Ok(net) => CoreOperationOutput::DeviceAliases(net.finding_scopes()),
-                    Err(error) => CoreOperationOutput::Error(error)
-                }
-            },
             CoreOperation::P2P(p2p) => self.p2p.handle(request, p2p).await.into(),
             CoreOperation::Delay(duration) => {
                 sleep(duration).await;

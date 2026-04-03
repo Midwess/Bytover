@@ -6,7 +6,6 @@ use web_sys::window;
 pub const GATEWAY_HOST: Option<&str> = option_env!("BYTOVER_PUBLIC_GATEWAY_HOST");
 pub const GATEWAY_PORT: Option<&str> = option_env!("BYTOVER_PUBLIC_GATEWAY_PORT");
 pub const WITH_SSL: Option<&str> = option_env!("BYTOVER_WITH_SSL");
-pub const LOCATOR_URL: Option<&str> = option_env!("BYTOVER_LOCATOR_URL");
 pub const GATEWAY_HTTP1_HOST: Option<&str> = option_env!("BYTOVER_PUBLIC_HTTP1_GATEWAY_HOST");
 pub const GATEWAY_HTTP1_PORT: Option<&str> = option_env!("BYTOVER_PUBLIC_HTTP1_GATEWAY_PORT");
 pub const RELAY_ONLY: Option<&str> = option_env!("BYTOVER_RELAY_ONLY");
@@ -37,10 +36,6 @@ pub struct HostInfo {
     pub host: String,
     pub port: u16,
     pub is_with_ssl: bool
-}
-
-pub fn get_locator_url() -> String {
-    LOCATOR_URL.unwrap_or("https://bytover.com/locator").to_string()
 }
 
 pub fn get_host_info(http1: bool) -> Result<HostInfo, JsValue> {

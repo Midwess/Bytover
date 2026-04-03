@@ -1,6 +1,5 @@
 use crate::config::{
     get_gateway_grpc_url,
-    get_locator_url,
     get_signalling_server_http_url,
     get_signalling_server_ws_url,
     GATEWAY_HOST
@@ -32,7 +31,6 @@ use shared::repository::local_resource::LocalResourceRepository;
 use shared::repository::path_resolver::PathResolver;
 use shared::repository::shelf::ShelfRepository;
 use shared::repository::transfer_session::TransferSessionRepository;
-use shared::shell::api::network::InternetConnection;
 use shared::shell::api::{CoreBridge, NetStream};
 use shared::shell::executor::transfer::WebRtc;
 use std::sync::Arc;
@@ -193,7 +191,6 @@ impl DiContainer {
         };
 
         let executor = NativeExecutor {
-            internet_connection: InternetConnection::new(get_locator_url()),
             rpc: Box::new(NativeRpcImpl {
                 auth_server: self.get_authentication_server()
             }),

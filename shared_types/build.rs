@@ -15,7 +15,6 @@ use shared::app::authentication::module::{AuthenticationEvent, AuthenticationMod
 use shared::app::environment::module::{EnvironmentEvent, EnvironmentModel};
 use shared::app::operations::device::{DeviceOperation, GeoLocation};
 use shared::app::operations::dialog::{AlertDialog, DialogOperation, MessageReason};
-use shared::app::operations::internet::InternetOperation;
 use shared::app::operations::p2p::{P2POperation, P2POperationOutput};
 use shared::app::operations::persistent::{
     DeviceAliasPersistentOperation,
@@ -94,7 +93,6 @@ fn main() {
     gen.register_type::<ShelfPersistentOperation>().unwrap();
     gen.register_type::<DeviceAliasPersistentOperation>().unwrap();
     gen.register_type::<TransferSession>().unwrap();
-    gen.register_type::<InternetOperation>().unwrap();
     gen.register_type::<DeviceOperation>().unwrap();
     gen.register_type::<P2POperation>().unwrap();
     gen.register_type::<P2POperationOutput>().unwrap();

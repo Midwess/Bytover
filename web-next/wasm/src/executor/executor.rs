@@ -1,7 +1,5 @@
 use futures_timer::Delay;
-use shared::app::operations::internet::InternetOperation;
 use shared::app::operations::{CoreOperation, CoreOperationOutput};
-use shared::shell::api::network::InternetConnection;
 use shared::shell::api::CoreRequest;
 use shared::shell::executor::p2p::P2PNativeExecutor;
 use shared::shell::executor::persistent::NativePersistent;
@@ -16,7 +14,6 @@ pub struct NativeExecutor {
     pub persistent: Box<dyn NativePersistent>,
     pub transfer: Box<dyn TransferNative<Client>>,
     pub p2p: Box<dyn P2PNativeExecutor>,
-    pub internet_connection: InternetConnection
 }
 
 impl NativeExecutor {
@@ -28,12 +25,6 @@ impl NativeExecutor {
             }
             CoreOperation::Persistent(database) => self.persistent.handle(database).await.into(),
             CoreOperation::Transfer(transfer) => self.transfer.handle(request, transfer).await.into(),
-            CoreOperation::Internet(InternetOperation::Locate(geo_location)) => {
-                match self.internet_connection.locate(geo_location).await {
-                    Ok(net) => CoreOperationOutput::DeviceAliases(net.finding_scopes()),
-                    Err(error) => CoreOperationOutput::Error(error)
-                }
-            }
             CoreOperation::P2P(p2p) => self.p2p.handle(request, p2p).await.into(),
             CoreOperation::Delay(duration) => {
                 Delay::new(duration).await;

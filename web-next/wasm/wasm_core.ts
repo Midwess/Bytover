@@ -23,7 +23,6 @@ import {
     CoreOperationVariantRpc,
     CoreOperationVariantRender,
     CoreOperationVariantTransfer,
-    CoreOperationVariantInternet,
     CoreOperationVariantNotified,
     CoreOperationVariantDialog,
     AppEventVariantEnvironment,
@@ -400,9 +399,6 @@ export class WasmCore {
                 return await handle_response(request_id, serialize(new CoreOperationOutputVariantNone()))
             }
             case CoreOperationVariantTransfer: {
-                return await execute(request_id, serialize(coreOperation)) || new Uint8Array();
-            }
-            case CoreOperationVariantInternet: {
                 return await execute(request_id, serialize(coreOperation)) || new Uint8Array();
             }
             case CoreOperationVariantP2P: {
