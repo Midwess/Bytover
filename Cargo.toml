@@ -8,7 +8,8 @@ members = [
     "native",
     "web-next/wasm",
     "web-next/worker",
-    "signalling"
+    "signalling",
+    "relay-server"
 ]
 
 resolver = "2"
