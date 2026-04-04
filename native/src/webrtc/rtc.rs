@@ -335,8 +335,6 @@ impl RtcClient {
         let answer_sdp = relay_ans.sdp.ok_or_else(|| WebRtcClientError::Signalling("Missing SDP in successful relay reply".to_string()))?;
         let remote_offer = str0m::change::SdpAnswer::from_sdp_string(&answer_sdp).map_err(|e| WebRtcClientError::SdpParse(format!("{e}")))?;
         
-        let _remote_ips = extract_remote_candidate_ips(&answer_sdp);
-
         rtc.sdp_api().accept_answer(pending, remote_offer).map_err(|e| WebRtcClientError::Rtc(e))?;
 
         let client = Self {

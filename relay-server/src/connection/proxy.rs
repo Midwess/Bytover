@@ -1,7 +1,6 @@
 use std::sync::Arc;
 use tokio::sync::{Mutex, Notify};
 use str0m::Event;
-use std::collections::HashMap;
 
 use crate::connection::rtc::{RelayRtcClient, RelayRtcError};
 use schema::devlog::bitbridge::DataChannel;
@@ -23,21 +22,17 @@ impl ProxyInstance {
         })
     }
 
+    /// Accepts the first leg's SDP offer and returns the answer.
+    /// Does NOT spawn any background tasks — the caller is responsible for driving `run()`.
     pub async fn init(
         self: &Arc<Self>,
         sdp_offer: String,
         channels: Vec<DataChannel>,
-        proxies: Arc<Mutex<HashMap<String, Arc<ProxyInstance>>>>
     ) -> Result<String, RelayRtcError> {
         log::info!("[relay-server] Initializing ProxyInstance for session {}", self.session_id);
         let (client, answer_sdp) = RelayRtcClient::accept_offer(&sdp_offer, channels).await?;
         
         *self.leg1.lock().await = Some(client);
-
-        let self_clone = self.clone();
-        tokio::spawn(async move {
-            self_clone.run(proxies).await;
-        });
 
         Ok(answer_sdp)
     }
@@ -56,7 +51,10 @@ impl ProxyInstance {
         Ok(answer_sdp)
     }
 
-    async fn run(self: Arc<Self>, proxies: Arc<Mutex<HashMap<String, Arc<ProxyInstance>>>>) {
+    /// Drives the proxy forwarding loop. This consumes the Arc — the caller (ProxyManager run loop)
+    /// is the sole owner of the strong reference. The HashMap only holds Weak references.
+    /// Returns the session_id when done, so the caller can clean up.
+    pub async fn run(self: Arc<Self>) -> String {
         let session_id = self.session_id.clone();
         log::info!("[relay-server] Starting transparent forwarding loop for session {}", session_id);
 
@@ -65,8 +63,7 @@ impl ProxyInstance {
         let timeout = std::time::Duration::from_secs(300); // 5 mins timeout
         if let Err(e) = tokio::time::timeout(timeout, leg1.wait_for_connected()).await {
             log::error!("[relay-server] Leg 1 failed to connect (timeout = {}): {:?}", timeout.as_secs(), e);
-            proxies.lock().await.remove(&session_id);
-            return;
+            return session_id;
         }
 
         log::info!("[relay-server] Leg 1 connected for session {}", session_id);
@@ -83,8 +80,7 @@ impl ProxyInstance {
                         Ok(None) => {}
                         Err(e) => {
                             log::warn!("[relay-server] Leg 1 disconnect/error while waiting for Leg 2: {:?}", e);
-                            proxies.lock().await.remove(&session_id);
-                            return;
+                            return session_id;
                         }
                     }
                 }
@@ -134,8 +130,7 @@ impl ProxyInstance {
             }
             res => {
                 log::error!("[relay-server] Leg 2 failed to connect or Leg 1 dropped: {:?}", res);
-                proxies.lock().await.remove(&session_id);
-                return;
+                return session_id;
             }
         }
 
@@ -177,6 +172,6 @@ impl ProxyInstance {
         }
 
         log::info!("[relay-server] Tearing down proxy instance {}", session_id);
-        proxies.lock().await.remove(&session_id);
+        session_id
     }
 }

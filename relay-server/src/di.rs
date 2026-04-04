@@ -33,7 +33,12 @@ impl DiContainer {
             };
 
             let proxy_manager = ProxyManager::new();
-            proxy_manager.start();
+            {
+                let pm = proxy_manager.clone();
+                tokio::spawn(async move {
+                    pm.start().await;
+                });
+            }
 
             DiContainer {
                 public_ip,
