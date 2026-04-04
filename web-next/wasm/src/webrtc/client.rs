@@ -86,6 +86,7 @@ impl WebRtcClient {
             }
         });
 
+        log::info!("Using ice config {ice_config:?}");
         let session_id = uuid::Uuid::new_v4().to_string();
 
         let api = WebRtcApi::new(ice_config.clone());
@@ -164,7 +165,7 @@ impl WebRtcClient {
         let (p2p_res, relay_res) = futures::join!(p2p_fut, relay_fut);
 
         if let Ok(answer_sdp) = p2p_res {
-            log::info!("Got P2P answer from remote peer");
+            log::info!("Got P2P answer from remote peer {answer_sdp:?}");
             api.set_remote_description(&connection, &answer_sdp).await?;
         } else {
             log::warn!("P2P signalling failed: {:?}", p2p_res);
@@ -173,7 +174,7 @@ impl WebRtcClient {
         if let Ok(relay_ans) = relay_res {
             if relay_ans.success {
                 if let Some(answer_sdp) = relay_ans.sdp {
-                    log::info!("Got Relay Answer");
+                    log::info!("Got Relay Answer {answer_sdp:?}");
                     relay_api.set_remote_description(&relay_connection, &answer_sdp).await?;
                 }
             } else {

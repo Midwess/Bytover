@@ -10,12 +10,7 @@ use serde::Serialize;
 use base64::Engine;
 
 use std::env;
-use std::process::Command;
-
-use devlog_sdk::api_gateway::client::ApiGatewayClient;
-use devlog_sdk::api_gateway::kong::client::KongGatewayAdminClient;
-use devlog_sdk::api_gateway::service::{GatewayRouteBuilder, GatewayRouteExpression, GatewayServiceBuilder};
-use devlog_sdk::tcp::listener::{find_grpc_listener, GrpcConnection};
+use devlog_sdk::tcp::listener::find_grpc_listener;
 use tonic::transport::Server;
 use tonic_middleware::InterceptorFor;
 use schema::devlog::bitbridge::relay_service_server::RelayServiceServer;
@@ -30,89 +25,63 @@ enum MainErrors {
     TransportError(#[from] tonic::transport::Error),
     #[error("DI container error {0}")]
     DiContainerError(String),
-    #[error("Gateway error {0}")]
-    GatewayError(String),
+    #[error("Execution error {0}")]
+    ExecutionError(String),
 }
 
 #[tokio::main]
 async fn main() -> Result<(), MainErrors> {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
 
-    let args: Vec<String> = env::args().collect();
-    if args.iter().any(|arg| arg == "--stun") {
-        log::info!("Running as STUN server...");
-        let udp_conn = find_udp_socket(Some(3478)).await.map_err(|e| MainErrors::DiContainerError(e.to_string()))?;
-        stun_server::run_stun_server(udp_conn).await.map_err(|e| MainErrors::DiContainerError(e.to_string()))?;
-        return Ok(());
-    }
-
     log::info!("Starting relay server...");
-
-    // Start STUN server process
-    let exe = env::current_exe().map_err(|e| MainErrors::DiContainerError(e.to_string()))?;
-    log::info!("Spawning STUN server process: {:?}", exe);
-    let mut stun_child = Command::new(exe)
-        .arg("--stun")
-        .spawn()
-        .map_err(|e| MainErrors::DiContainerError(e.to_string()))?;
-
-    tokio::spawn(async move {
-        let status = stun_child.wait();
-        log::error!("STUN server process exited with status: {:?}", status);
-    });
 
     let di = DiContainer::init().await;
     let public_ip = di.public_ip.clone();
 
-    let connection = find_grpc_listener(Some(9101)).await.map_err(|e| MainErrors::DiContainerError(e.to_string()))?;
-    let port = connection.port;
+    // Prepare STUN server
+    let stun_port = 3478;
+    let udp_conn = find_udp_socket(Some(stun_port))
+        .await
+        .map_err(|e| MainErrors::DiContainerError(e.to_string()))?;
 
-    setup_grpc_gateway(&connection).await?;
+    // Prepare gRPC server
+    let connection = find_grpc_listener(Some(9101))
+        .await
+        .map_err(|e| MainErrors::DiContainerError(e.to_string()))?;
+    let relay_port = connection.port;
 
-    log::info!("Relay Server listening on {}:{}", public_ip, port);
+    log::info!("Relay Server listening on {}:{}", public_ip, relay_port);
 
     // Start registration loop
-    let stun_port = 3478; // Default, will be used by STUN child
-    let relay_port = port;
     tokio::spawn(async move {
         start_registration_loop(stun_port, relay_port).await;
     });
 
-    Server::builder()
+    let grpc_server = Server::builder()
         .add_service(InterceptorFor::new(
             RelayServiceServer::new(RelayServiceImpl::new(di.proxy_manager.clone())),
             di.get_auth_middleware()
         ))
-        .serve_with_incoming(connection.listener)
-        .await?;
+        .serve_with_incoming(connection.listener);
 
-    Ok(())
-}
+    let stun_server = stun_server::run_stun_server(udp_conn);
 
-async fn setup_grpc_gateway(tcp: &GrpcConnection) -> Result<(), MainErrors> {
-    log::info!("Registering relay with gateway");
-    let api_gateway = KongGatewayAdminClient::new(devlog_sdk::config::CONFIGS.kong.admin_url.clone());
-
-    let service = GatewayServiceBuilder::new()
-        .grpc(tcp.public_host.clone(), tcp.port)
-        .name("bitbridge-relay-server")
-        .enable_cors(true)
-        .routes(vec![
-            GatewayRouteBuilder::new()
-                .grpc()
-                .grpc_web()
-                .path(GatewayRouteExpression::proto_namespace("devlog.bitbridge"))
-                .priority(10)
-                .strip_path(false)
-                .public(true)
-                .preserve_host(false)
-                .name("bitbridge-relay-server-path")
-                .build(),
-        ])
-        .build();
-
-    log::info!("Register relay service {service:?}");
-    api_gateway.register(service).await.map_err(|e| MainErrors::GatewayError(e.to_string()))?;
+    tokio::select! {
+        res = grpc_server => {
+            if let Err(e) = res {
+                log::error!("gRPC server exited with error: {:?}", e);
+                return Err(MainErrors::TransportError(e));
+            }
+            log::info!("gRPC server stopped");
+        },
+        res = stun_server => {
+            if let Err(e) = res {
+                log::error!("STUN server exited with error: {:?}", e);
+                return Err(MainErrors::ExecutionError(e.to_string()));
+            }
+            log::info!("STUN server stopped");
+        }
+    }
 
     Ok(())
 }
@@ -124,7 +93,7 @@ struct RegisterRelayRequest {
 }
 
 async fn start_registration_loop(stun_port: u16, relay_port: u16) {
-    let signalling_url = env::var("SIGNALLING_URL").unwrap_or_else(|_| "http://localhost:9102".to_string());
+    let signalling_url = env::var("SIGNALLING_URL").unwrap_or_else(|_| "http://localhost:9221".to_string());
     
     let secret = env::var("RELAY_SERVER_SECRET").unwrap_or_else(|_| "supersecret".to_string());
     let auth_str = format!("user:{}", secret);

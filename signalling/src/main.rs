@@ -14,13 +14,7 @@ use devlog_sdk::distributed_id::init_scoped_id_generator;
 async fn main() {
     logger::setup();
     init_scoped_id_generator("rpc-signalling".to_string());
-    let turn_manager = match TurnManager::new().await {
-        Ok(manager) => manager,
-        Err(e) => {
-            log::error!("Failed to initialize TurnManager: {}", e);
-            return;
-        }
-    };
+    let turn_manager = TurnManager::new().await;
     let turn_manager = std::sync::Arc::new(turn_manager);
     let signalling_server = SignallingServer::new(Arc::clone(&turn_manager));
 

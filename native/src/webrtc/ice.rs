@@ -134,13 +134,11 @@ impl IceAgent {
         socket: &tokio::net::UdpSocket,
         config: &IceConfig
     ) -> Result<(Vec<Candidate>, Option<TurnRelayInfo>), IceError> {
-        let relay_only = crate::config::is_relay_only();
-        log::info!("[ice] Gathering candidates (relay_only={}) using config {config:?}", relay_only);
+        log::info!("[ice] Gathering candidates using config {config:?}");
 
         let mut candidates: HashSet<Candidate> = HashSet::new();
         let local_port = socket.local_addr().map(|a| a.port()).unwrap_or(0);
 
-        if !relay_only {
             if let Ok(ifaces) = if_addrs::get_if_addrs() {
                 for iface in ifaces {
                     if !is_usable_interface(&iface) {
@@ -158,12 +156,10 @@ impl IceAgent {
                     }
                 }
             }
-        } else {
-            log::info!("[ice] Skipping host candidate gathering due to relay_only mode");
-        }
+        
 
         let stun_urls = parse_stun_urls(config);
-        if !stun_urls.is_empty() && !relay_only {
+        if !stun_urls.is_empty() {
             let local_addr = socket.local_addr().unwrap_or_else(|_| SocketAddr::new(std::net::Ipv4Addr::UNSPECIFIED.into(), 0));
 
             let stun_base = Instant::now();

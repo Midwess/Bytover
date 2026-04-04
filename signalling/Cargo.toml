@@ -14,9 +14,7 @@ futures-util = { workspace = true }
 prost = { workspace = true }
 tonic = { workspace = true }
 thiserror = { workspace = true }
-sha1 = "0.10.6"
 base64 = "0.22.1"
-hmac = "0.12.1"
 log = "0.4.27"
 schema = { workspace = true, features = ["server", "client"] }
 core-services = { workspace = true, features = ["grpc-server", "host_machine", "services"] }

@@ -25,7 +25,7 @@ impl SignallingServer {
     }
 
     pub async fn run(self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let connection = find_tcp_listener(Some(9102)).await?;
+        let connection = find_tcp_listener(Some(9221)).await?;
         let port = connection.port;
         let public_host = connection.public_host.clone();
         let std_listener = connection.listener.into_std()?;
@@ -181,10 +181,6 @@ async fn ws_handler(
 
     client_manager.register(key.clone(), &client).await;
 
-    if let Err(e) = turn_manager.assign_relay_for_client(&key).await {
-        log::warn!("Failed to assign relay for client {}: {}", key, e);
-    }
-
     let client_manager_clone = Arc::clone(&client_manager);
     let turn_manager_clone = Arc::clone(&turn_manager);
     let key_clone = key.clone();
@@ -297,32 +293,27 @@ async fn relay_proxy_handler(
         }
     };
 
-    let url = match std::env::var("RELAY_SERVER_URL") {
-        Ok(u) => u,
-        Err(_) => {
-            let ice_config = match turn_manager.get_relay_config(&key).await {
-                Some(c) => c,
-                None => return HttpResponse::ServiceUnavailable().body("no relay config assigned to client"),
-            };
-
-            let turn_url = match ice_config.urls.iter().find(|u| u.starts_with("turn:")) {
-                Some(u) => u,
-                None => return HttpResponse::InternalServerError().body("no turn URL found in client config"),
-            };
-
-            // Parse domain from turn:domain:3478?transport=udp
-            let domain = turn_url
-                .strip_prefix("turn:")
-                .and_then(|s| s.split(':').next())
-                .unwrap_or("");
-
-            if domain.is_empty() {
-                return HttpResponse::InternalServerError().body("invalid TURN URL format");
-            }
-
-            format!("http://{}:9101", domain)
-        }
+    let ice_config = match turn_manager.get_relay_config(&key).await {
+        Some(c) => c,
+        None => return HttpResponse::ServiceUnavailable().body("no relay config assigned to client"),
     };
+
+    let stun_url = match ice_config.urls.iter().find(|u| u.starts_with("stun:")) {
+        Some(u) => u,
+        None => return HttpResponse::InternalServerError().body("no stun URL found in client config"),
+    };
+
+    // Parse domain from stun:domain:3478
+    let domain = stun_url
+        .strip_prefix("stun:")
+        .and_then(|s: &str| s.split(':').next())
+        .unwrap_or("");
+
+    if domain.is_empty() {
+        return HttpResponse::InternalServerError().body("invalid STUN URL format");
+    }
+
+    let url = format!("http://{}:9101", domain);
     
     let channel = match tonic::transport::Channel::from_shared(url) {
         Ok(endpoint) => match endpoint.connect().await {
@@ -379,7 +370,11 @@ fn extract_ip_from_request(req: &HttpRequest, peer_addr: &str) -> String {
         }
     }
 
-    peer_addr.to_string()
+    let mut ip = peer_addr.to_string();
+    if ip == "::1" || ip == "localhost" {
+        ip = "127.0.0.1".to_string();
+    }
+    ip
 }
 
 #[derive(serde::Deserialize)]

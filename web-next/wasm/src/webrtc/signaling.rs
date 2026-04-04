@@ -53,19 +53,6 @@ impl SignalingClient {
     }
 
     pub async fn fetch_relay_config(&self, key: &str) -> Result<IceConfig, SignalingError> {
-        if let Some(server) = crate::config::get_relay_server_override() {
-            log::info!("[signaling] Using relay server override: {}", server);
-            return Ok(IceConfig {
-                urls: vec![
-                    format!("stun:{}", server),
-                    format!("turn:{}?transport=udp", server),
-                    format!("turn:{}?transport=tcp", server),
-                ],
-                username: Some("guest".to_string()),
-                credential: Some("guest".to_string()),
-            });
-        }
-
         let url = format!("{}/relay/{}", self.http_url.trim_end_matches('/'), key);
 
         let (status, _headers, bytes) = HttpClient::new()
