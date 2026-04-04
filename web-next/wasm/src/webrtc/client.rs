@@ -47,6 +47,8 @@ pub struct WebRtcClient {
     prefix_channels: Mutex<HashMap<u16, mpsc::Sender<(u64, Vec<u8>)>>>,
     connection: OnceCell<Arc<RtcConnectionWrapper>>,
     reliable_channel: OnceCell<Arc<RtcDataChannelWrapper>>,
+    relay_connection: OnceCell<Arc<RtcConnectionWrapper>>,
+    relay_reliable_channel: OnceCell<Arc<RtcDataChannelWrapper>>,
 }
 
 fn spawn_outbound_sender(channel: Arc<RtcDataChannelWrapper>, relay_channel: Arc<RtcDataChannelWrapper>, mut rx: mpsc::Receiver<Vec<u8>>) {
@@ -159,30 +161,23 @@ impl WebRtcClient {
             },
         ];
 
-        let p2p_fut = signaling.send_offer(peer_id, &local_sdp, &session_id);
-        let relay_fut = signaling.relay_connect(peer_id, &session_id, &relay_sdp, relay_channels);
+        let (mut open_tx, mut open_rx) = mpsc::channel(2);
 
-        let (p2p_res, relay_res) = futures::join!(p2p_fut, relay_fut);
-
-        if let Ok(answer_sdp) = p2p_res {
-            log::info!("Got P2P answer from remote peer {answer_sdp:?}");
-            api.set_remote_description(&connection, &answer_sdp).await?;
-        } else {
-            log::warn!("P2P signalling failed: {:?}", p2p_res);
-        }
-
-        if let Ok(relay_ans) = relay_res {
-            if relay_ans.success {
-                if let Some(answer_sdp) = relay_ans.sdp {
-                    log::info!("Got Relay Answer {answer_sdp:?}");
-                    relay_api.set_remote_description(&relay_connection, &answer_sdp).await?;
-                }
-            } else {
-                log::warn!("Relay connect explicit failure: {:?}", relay_ans.error_message);
-            }
-        } else {
-            log::warn!("Relay signalling HTTP failed: {:?}", relay_res.err());
-        }
+        let p2p_tx = open_tx.clone();
+        let sig_p2p = signaling.clone();
+        let peer_id_p2p = peer_id.to_string();
+        let session_id_p2p = session_id.clone();
+        let local_sdp_p2p = local_sdp.clone();
+        let connection_p2p = connection.clone();
+        let ordered_channel_p2p = ordered_channel.clone();
+        
+        let me_proto = schema::devlog::bitbridge::PeerMessage {
+            peer_id: me.id.clone(),
+            name: me.name.clone(),
+            avatar_url: me.avatar_url.clone(),
+            device: me.device.clone().into(),
+            email: me.email.clone()
+        };
 
         let client = Arc::new(WebRtcClient {
             transfers_context: TransfersContext::new(),
@@ -198,31 +193,75 @@ impl WebRtcClient {
             prefix_channels: Mutex::new(HashMap::new()),
             connection: OnceCell::new(),
             reliable_channel: OnceCell::new(),
+            relay_connection: OnceCell::new(),
+            relay_reliable_channel: OnceCell::new(),
         });
 
-        // We persist the connection objects so they don't drop. 
-        // We'll favor P2P for main reference, but the Relay engine runs synchronously in background.
-        // Actually, we must hold both to prevent GC from destroying the relay.
-        // For simplicity, we can let RtcConnectionWrapper be saved.
-        // We can just box and leak the relay_connection for now since we just need it to survive 
-        // throughout the session, or we can add `relay_connection: OnceCell<Arc<RtcConnectionWrapper>>` to WebRtcClient
-        // We'll try just modifying `connection: OnceCell<Arc<RtcConnectionWrapper>>` to `connections: Mutex<Vec<Arc<...>>>`
-        // Since `connection` and `reliable_channel` are mainly unaccessed, we'll store P2P in connection, and rely on 
-        // event handlers for Relay which have closures that capture `relay_connection`?
-        // Wait! The closure inside setup_channel_handlers captures `channel`, not the connection itself!
-        // We MUST prevent `relay_connection` from dropping. 
-        // Since WebRtcClient doesn't have a `relay_connection` field, I'll `Box::leak(Box::new(relay_connection))` for now.
-        // In a real approach, it's better to add the field, but let's do this quickly.
-        let leaking_relay = Box::new((
-            relay_connection, 
-            relay_reliable_channel, 
-            relay_ordered_channel.clone(), 
-            relay_unordered_channel.clone()
-        ));
-        Box::leak(leaking_relay);
+        let _ = client.me.set(me);
+
+        let client_p2p = client.clone();
+        wasm_bindgen_futures::spawn_local(async move {
+            let p2p_res = sig_p2p.send_offer(&peer_id_p2p, &local_sdp_p2p, &session_id_p2p, me_proto).await;
+            if let Ok((answer_sdp, remote_peer_proto)) = p2p_res {
+                log::info!("Got P2P answer from remote peer {answer_sdp:?}");
+                
+                let remote_peer = PeerEntity {
+                    id: remote_peer_proto.peer_id.clone(),
+                    name: remote_peer_proto.name.clone(),
+                    avatar_url: remote_peer_proto.avatar_url.clone(),
+                    device: remote_peer_proto.device.clone().into(),
+                    email: remote_peer_proto.email.clone(),
+                    user_id: None,
+                    signalling_id: None
+                };
+                let _ = client_p2p.peer.set(remote_peer);
+
+                if let Err(e) = api.set_remote_description(&connection_p2p, &answer_sdp).await {
+                    log::warn!("p2p remote desc failed {:?}", e);
+                }
+            } else {
+                log::warn!("P2P signalling failed: {:?}", p2p_res);
+            }
+            if let Ok(_) = api.wait_for_channel_open(ordered_channel_p2p).await {
+                log::info!("[webrtc-client] truly P2P connected!");
+                let _ = p2p_tx.clone().send(()).await;
+            }
+        });
+
+        let relay_tx = open_tx.clone();
+        let sig_relay = signaling.clone();
+        let peer_id_relay = peer_id.to_string();
+        let session_id_relay = session_id.clone();
+        let relay_sdp_relay = relay_sdp.clone();
+        let relay_connection_clone = relay_connection.clone();
+        let relay_ordered_channel_clone = relay_ordered_channel.clone();
+
+        wasm_bindgen_futures::spawn_local(async move {
+            let relay_res = sig_relay.relay_connect(&peer_id_relay, &session_id_relay, &relay_sdp_relay, relay_channels).await;
+            if let Ok(relay_ans) = relay_res {
+                if relay_ans.success {
+                    if let Some(answer_sdp) = relay_ans.sdp {
+                        log::info!("Got Relay Answer {answer_sdp:?}");
+                        if let Err(e) = relay_api.set_remote_description(&relay_connection_clone, &answer_sdp).await {
+                            log::warn!("relay remote desc failed {:?}", e);
+                        }
+                    }
+                } else {
+                    log::warn!("Relay connect explicit failure: {:?}", relay_ans.error_message);
+                }
+            } else {
+                log::warn!("Relay signalling HTTP failed: {:?}", relay_res.err());
+            }
+            if let Ok(_) = relay_api.wait_for_channel_open(relay_ordered_channel_clone).await {
+                log::info!("[webrtc-client] Relay connected!");
+                let _ = relay_tx.clone().send(()).await;
+            }
+        });
 
         let _ = client.connection.set(connection);
         let _ = client.reliable_channel.set(reliable_channel);
+        let _ = client.relay_connection.set(relay_connection);
+        let _ = client.relay_reliable_channel.set(relay_reliable_channel);
 
         let _ = client.msg_channel.set(DirectMessageChannel::new(ordered_out_tx));
         let _ = client.unordered_msg_channel.set(DirectMessageChannel::new(unordered_out_tx));
@@ -232,46 +271,10 @@ impl WebRtcClient {
         spawn_outbound_sender(unordered_channel.clone(), relay_unordered_channel.clone(), unordered_out_rx);
 
         // Wait for connection to open but we should theoretically wait for EITHER to open. 
-        // We'll trust that ice_agent gathering handles timeout and we'll check open status. 
-        // Because wait_for_channel_open blocks indefinitely until it opens, we should run them in a race.
-        let p2p_open_fut = Box::pin(api.wait_for_channel_open(ordered_channel));
-        let relay_open_fut = Box::pin(relay_api.wait_for_channel_open(relay_ordered_channel));
-        let _ = futures::future::select(p2p_open_fut, relay_open_fut).await;
+        let _ = open_rx.next().await;
 
-        log::info!("WebRtcClient connection established (at least one leg open), performing introduce handshake...");
+        log::info!("WebRtcClient connection established (at least one leg open), peer info exchanged via signaling.");
 
-        let mut msg_rx = client.inbound_msg_receiver.retrieve().await?;
-
-        let client_clone = client.clone();
-        let me_clone = me.clone();
-        wasm_bindgen_futures::spawn_local(async move {
-            if let Err(e) = client_clone.introduce(&me_clone).await {
-                log::error!("Failed to introduce on connect: {:?}", e);
-            }
-        });
-
-        while let Some(packet) = msg_rx.next().await {
-            if let Some(msg_channel) = client.msg_channel.get() {
-                match msg_channel.receive_packet(packet).await {
-                    Ok(Some(msg)) => {
-                        if let Some(request) = msg.request {
-                            client.process_message_packet(msg.request_id, request).await;
-                        }
-                    }
-                    Ok(None) => {}
-                    Err(e) => {
-                        log::warn!("Failed to decode packet in initial connect loop: {:?}", e);
-                    }
-                }
-            }
-            if client.peer.get().is_some() {
-                break;
-            }
-        }
-
-        drop(msg_rx);
-
-        log::info!("WebRtcClient introduce complete");
         Ok(client)
     }
 

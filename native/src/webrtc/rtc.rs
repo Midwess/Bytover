@@ -1,7 +1,7 @@
 use std::net::{IpAddr, SocketAddr};
 use std::time::{Duration, Instant};
 use socket2::{Domain, Socket, Type};
-use str0m::channel::{ChannelConfig, ChannelId, Reliability};
+use str0m::channel::{ChannelConfig, ChannelId};
 use str0m::net::{Protocol, Receive};
 use str0m::{Event, IceConnectionState, Input, Output, Rtc, RtcConfig};
 use turn_client_proto::api::{TurnClientApi, TurnEvent, TurnPollRet, TurnRecvRet};
@@ -42,6 +42,7 @@ impl RtcClient {
     pub async fn connect(
         signalling_id: &str,
         offer_message: OfferMessage,
+        me: schema::devlog::bitbridge::PeerMessage,
         signalling: SignallingSender,
         request_id: &str
     ) -> Result<Self, WebRtcClientError> {
@@ -122,7 +123,7 @@ impl RtcClient {
         let answer = rtc.sdp_api().accept_offer(offer).map_err(WebRtcClientError::Rtc)?;
 
         signalling
-            .send_answer(answer.to_sdp_string(), request_id)
+            .send_answer(answer.to_sdp_string(), me, request_id)
             .await
             .map_err(|e| WebRtcClientError::Signalling(format!("{e}")))?;
 
@@ -148,7 +149,7 @@ impl RtcClient {
 
         client.create_turn_permissions(&remote_ips);
 
-        let mut connected = false;
+        let connected = false;
         // Same wait logic here
         client.wait_for_connected(connected).await
     }
@@ -280,7 +281,7 @@ impl RtcClient {
         };
 
         client.create_turn_permissions(&remote_ips);
-        let mut connected = false;
+        let connected = false;
 
         client.wait_for_connected(connected).await
     }
@@ -420,8 +421,8 @@ impl RtcClient {
                     false
                 }
             }
-        } else {
-            log::warn!("[rtc-client] Channel {:?} not found", channel_id);
+        }
+        else {
             false
         }
     }

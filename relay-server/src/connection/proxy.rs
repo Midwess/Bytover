@@ -77,9 +77,9 @@ impl ProxyInstance {
                 res1 = leg1.process_step() => {
                     match res1 {
                         Ok(Some(Event::ChannelData(_data))) => {
-                            log::debug!("[relay-server] Dropped early data from leg 1");
+                            log::info!("[relay-server] Dropped early data from leg 1");
                         }
-                        Ok(Some(event)) => log::trace!("[relay-server] Leg 1 Event: {:?}", event),
+                        Ok(Some(event)) => log::info!("[relay-server] Leg 1 Event: {:?}", event),
                         Ok(None) => {}
                         Err(e) => {
                             log::warn!("[relay-server] Leg 1 disconnect/error while waiting for Leg 2: {:?}", e);
@@ -106,9 +106,9 @@ impl ProxyInstance {
                         res1 = leg1.process_step() => {
                             match res1 {
                                 Ok(Some(Event::ChannelData(_data))) => {
-                                    log::debug!("[relay-server] Dropped early data from leg 1");
+                                    log::info!("[relay-server] Dropped early data from leg 1");
                                 }
-                                Ok(Some(event)) => log::trace!("[relay-server] Leg 1 Event: {:?}", event),
+                                Ok(Some(event)) => log::info!("[relay-server] Leg 1 Event: {:?}", event),
                                 Ok(None) => {}
                                 Err(e) => {
                                     log::warn!("[relay-server] Leg 1 disconnect/error while Leg 2 connecting: {:?}", e);
@@ -150,7 +150,7 @@ impl ProxyInstance {
                                 log::warn!("[relay-server] Failed to forward data to leg 2 on channel {:?}", data.id);
                             }
                         }
-                        Ok(Some(event)) => log::trace!("[relay-server] Leg 1 Event: {:?}", event),
+                        Ok(Some(event)) => log::info!("[relay-server] Leg 1 Event: {:?}", event),
                         Ok(None) => {}
                         Err(e) => {
                             log::warn!("[relay-server] Leg 1 disconnect/error: {:?}", e);
@@ -165,7 +165,7 @@ impl ProxyInstance {
                                 log::warn!("[relay-server] Failed to forward data to leg 1 on channel {:?}", data.id);
                             }
                         }
-                        Ok(Some(event)) => log::trace!("[relay-server] Leg 2 Event: {:?}", event),
+                        Ok(Some(event)) => log::info!("[relay-server] Leg 2 Event: {:?}", event),
                         Ok(None) => {}
                         Err(e) => {
                             log::warn!("[relay-server] Leg 2 disconnect/error: {:?}", e);

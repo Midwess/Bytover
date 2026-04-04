@@ -109,10 +109,10 @@ impl SignallingSender {
     }
 
 
-    pub async fn send_answer(&self, sdp: String, request_id: &str) -> Result<(), SignallingError> {
+    pub async fn send_answer(&self, sdp: String, peer: schema::devlog::bitbridge::PeerMessage, request_id: &str) -> Result<(), SignallingError> {
         let msg = Message {
             request_id: Some(request_id.to_string()),
-            answer: Some(AnswerMessage { sdp }),
+            answer: Some(AnswerMessage { sdp, peer: Some(peer) }),
             ..Default::default()
         };
         self.send_message(&msg).await

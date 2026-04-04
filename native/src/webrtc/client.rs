@@ -1,4 +1,4 @@
-use std::ops::DerefMut;
+
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -128,7 +128,9 @@ impl From<WebRtcClientError> for CoreError {
 pub struct WebRtcClient {
     msg_channel: OnceCell<DirectMessageChannel>,
 
-    rtc_client: YieldContainer<RtcClient>,
+    p2p_rtc: YieldContainer<Option<RtcClient>>,
+    relay_rtc: YieldContainer<Option<RtcClient>>,
+    new_rtc_rx: YieldContainer<tokio::sync::mpsc::Receiver<(bool, RtcClient)>>,
 
     peer: OnceCell<Peer>,
     me: Peer,
@@ -167,84 +169,65 @@ impl WebRtcClient {
             return Err(WebRtcClientError::Shared("Peer not introduced".to_string()));
         };
 
-        let p2p_fut: std::pin::Pin<Box<dyn std::future::Future<Output = Result<RtcClient, WebRtcClientError>> + Send>> = Box::pin(RtcClient::connect(&signalling_id, offer_message.clone(), signalling.clone(), &request_id));
-        let relay_fut: std::pin::Pin<Box<dyn std::future::Future<Output = Result<RtcClient, WebRtcClientError>> + Send>> = Box::pin(RtcClient::connect_relay(&signalling_id, &session_id, signalling));
+        let signalling_id_p2p = signalling_id.clone();
+        let signalling_p2p = signalling.clone();
+        let request_id_p2p = request_id.clone();
+        let offer_message_p2p = offer_message.clone();
 
-        let mut rtc_client = match futures::future::select_ok(vec![p2p_fut, relay_fut]).await {
-            Ok((client, _)) => client,
+        let signalling_id_relay = signalling_id.clone();
+        let signalling_relay = signalling.clone();
+        let session_id_relay = session_id.clone();
+
+        let me_proto = schema::devlog::bitbridge::PeerMessage::from(me.clone());
+        let me_proto_p2p = me_proto.clone();
+
+        let p2p_fut: std::pin::Pin<Box<dyn std::future::Future<Output = Result<(bool, RtcClient), WebRtcClientError>> + Send>> = Box::pin(async move {
+            RtcClient::connect(&signalling_id_p2p, offer_message_p2p, me_proto_p2p, signalling_p2p, &request_id_p2p)
+                .await
+                .map(|c| (true, c))
+        });
+
+        let relay_fut: std::pin::Pin<Box<dyn std::future::Future<Output = Result<(bool, RtcClient), WebRtcClientError>> + Send>> = Box::pin(async move {
+            RtcClient::connect_relay(&signalling_id_relay, &session_id_relay, signalling_relay)
+                .await
+                .map(|c| (false, c))
+        });
+
+        let (first_res, mut remaining) = match futures::future::select_ok(vec![p2p_fut, relay_fut]).await {
+            Ok((client, rem)) => (client, rem),
             Err(e) => return Err(WebRtcClientError::Signalling(format!("Both connection legs failed: {:?}", e))),
         };
 
-        log::info!("[webrtc-client] RTC connected, creating client");
+        let first_conn = if first_res.0 { "truly P2P" } else { "Relay" };
+        log::info!("[webrtc-client] First RTC connected (is_p2p: {}, type: {}), creating client", first_res.0, first_conn);
 
-        let (ordered_msg_tx, mut ordered_msg_rx) = futures_mpsc::channel::<Vec<u8>>(64);
+        let (new_rtc_tx, new_rtc_rx) = tokio::sync::mpsc::channel(1);
+        if let Some(rem_fut) = remaining.pop() {
+            tokio::spawn(async move {
+                if let Ok(c) = rem_fut.await {
+                    let second_conn = if c.0 { "truly P2P" } else { "Relay" };
+                    log::info!("[webrtc-client] Second RTC connected (is_p2p: {}, type: {})", c.0, second_conn);
+                    let _ = new_rtc_tx.send(c).await;
+                }
+            });
+        }
+
+        let (ordered_msg_tx, ordered_msg_rx) = futures_mpsc::channel::<Vec<u8>>(64);
         let (_unordered_msg_tx, unordered_msg_rx) = futures_mpsc::channel::<Vec<u8>>(64);
         let (reliable_data_tx, reliable_data_rx) = mpsc::channel::<Vec<u8>>(MAX_BUFFER_SIZE / CHUNK_SIZE + 1);
         let (outbound_tx, outbound_rx) = futures_mpsc::channel::<(u16, u64, Vec<u8>, bool)>(32);
 
         let msg_channel = DirectMessageChannel::new(ordered_msg_tx);
-        let cids = *rtc_client.channel_ids();
+        let first_rtc_client = first_res.1;
+        let is_p2p = first_res.0;
         let peer: OnceCell<Peer> = OnceCell::new();
-        let mut introduced = false;
-        // Responses queued during poll_event are buffered here and sent after the inner loop,
-        // since RtcClient::send() and poll_event() both require &mut self.
-        let mut pending_sends: Vec<(Vec<u8>, ChannelId)> = Vec::new();
 
-        loop {
-            while let Some(event) = rtc_client.poll_event().await? {
-                if let Event::ChannelData(data) = event {
-                    if data.id == cids.ordered_msg {
-                        if let Ok(msg) = PeerMessageBody::decode(&data.data[..]) {
-                            log::info!("Got msg {:?}", msg);
-                            let request_id = msg.request_id;
-                            if let Some(Response::IntroduceResponse(res)) = msg.response {
-                                let p = Peer::from(res.peer);
-                                log::info!("[webrtc-client] Peer introduced as {:?}", p.id);
-                                let _ = peer.set(p);
-                            } else if let Some(Request::IntroduceRequest(intro)) = msg.request {
-                                let p = Peer::from(intro.mine);
-                                log::info!("[webrtc-client] Remote peer: {:?}", p.id);
-                                let _ = peer.set(p);
-                                let mut bytes = vec![];
-                                let response_body = PeerMessageBody {
-                                    request_id,
-                                    response: Some(Response::IntroduceResponse(IntroduceResponseMessage {
-                                        peer: PeerMessage::from(me.clone())
-                                    })),
-                                    ..Default::default()
-                                };
-                                if response_body.encode(&mut bytes).is_ok() {
-                                    pending_sends.push((bytes, cids.ordered_msg));
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            for (data, channel_id) in pending_sends.drain(..) {
-                let _ = rtc_client.send(&data, channel_id);
-            }
-
-            if peer.get().is_some() {
-                break;
-            }
-
-            if !introduced {
-                log::info!("[webrtc-client] Introducing self to peer");
-                let _ = msg_channel
-                    .notify(Request::IntroduceRequest(IntroduceRequestMessage {
-                        mine: PeerMessage::from(me.clone())
-                    }))
-                    .await;
-                introduced = true;
-            }
-
-            let timeout = rtc_client.timeout_duration();
-            rtc_client.wait_for_input(timeout.min(Duration::from_millis(10))).await?;
-            if let Ok(Some(data)) = ordered_msg_rx.try_next() {
-                let _ = rtc_client.send(&data, cids.ordered_msg);
-            }
+        if let Some(remote_peer_proto) = offer_message.peer {
+            let p = Peer::from(remote_peer_proto);
+            log::info!("[webrtc-client] Peer info received from signaled offer: {:?}", p.id);
+            let _ = peer.set(p);
+        } else {
+            log::warn!("[webrtc-client] No peer info in signaled offer!");
         }
 
         let msg_channel_cell = OnceCell::new();
@@ -252,11 +235,19 @@ impl WebRtcClient {
         let outbound_packet_sender_cell = OnceCell::new();
         let _ = outbound_packet_sender_cell.set(outbound_tx);
 
-        // rtc_client goes directly into YieldContainer here — it was never retrieved,
-        // so run() can call retrieve() immediately without any async race.
+        let mut p2p_rtc_opt = None;
+        let mut relay_rtc_opt = None;
+        if is_p2p {
+            p2p_rtc_opt = Some(first_rtc_client);
+        } else {
+            relay_rtc_opt = Some(first_rtc_client);
+        }
+
         let client = Self {
             me,
-            rtc_client: YieldContainer::new(rtc_client),
+            p2p_rtc: YieldContainer::new(p2p_rtc_opt),
+            relay_rtc: YieldContainer::new(relay_rtc_opt),
+            new_rtc_rx: YieldContainer::new(new_rtc_rx),
             msg_channel: msg_channel_cell,
             peer,
             session_id: Default::default(),
@@ -272,11 +263,15 @@ impl WebRtcClient {
             bytes_sent_counter: Arc::new(AtomicUsize::new(0)),
         };
 
+        log::info!("[webrtc-client] connection established, peer info exchanged via signaling.");
+
         Ok(client)
     }
 
     pub async fn run(self: Arc<Self>) -> Result<(), WebRtcClientError> {
-        let mut rtc_container_guard = self.rtc_client.retrieve().await?;
+        let mut p2p_guard = self.p2p_rtc.retrieve().await?;
+        let mut relay_guard = self.relay_rtc.retrieve().await?;
+        let mut new_rtc_rx_guard = self.new_rtc_rx.retrieve().await?;
         let mut ordered_msg_rx_guard = self.ordered_msg_rx.retrieve().await?;
         let mut unordered_msg_rx_guard = self.unordered_msg_rx.retrieve().await?;
         let mut outbound_rx_guard = self.outbound_rx.retrieve().await?;
@@ -295,37 +290,91 @@ impl WebRtcClient {
             this_msg.msg_loop(msg_rx).await;
         });
 
-        let rtc = rtc_container_guard.deref_mut();
-        let cids = *rtc.channel_ids();
+        let mut new_rtc_rx = new_rtc_rx_guard.value.take().unwrap();
+        let mut p2p_rtc = p2p_guard.value.take().unwrap();
+        let mut relay_rtc = relay_guard.value.take().unwrap();
+
+        let cids = if let Some(ref rtc) = p2p_rtc {
+            *rtc.channel_ids()
+        } else if let Some(ref rtc) = relay_rtc {
+            *rtc.channel_ids()
+        } else {
+            return Err(WebRtcClientError::Shared("No connection available".to_string()));
+        };
 
         let mut ordered_msg_rx = ordered_msg_rx_guard.value.take().unwrap();
         let mut unordered_msg_rx = unordered_msg_rx_guard.value.take().unwrap();
         let mut reliable_data_rx = reliable_data_rx;
         let mut pending_data: Option<(Vec<u8>, ChannelId)> = None;
 
-        rtc.set_buffered_amount_low_threshold(cids.reliable, MIN_BUFFER_SIZE);
+        if let Some(ref mut rtc) = p2p_rtc {
+            rtc.set_buffered_amount_low_threshold(cids.reliable, MIN_BUFFER_SIZE);
+        }
+        if let Some(ref mut rtc) = relay_rtc {
+            rtc.set_buffered_amount_low_threshold(cids.reliable, MIN_BUFFER_SIZE);
+        }
 
-        while rtc.is_alive() {
-            while let Some(event) = rtc.poll_event().await? {
-                match event {
-                    Event::ChannelData(data) => {
-                        let id = data.id;
-                        let data = data.data;
-                        if id == cids.ordered_msg {
-                            if let Ok(msg) = PeerMessageBody::decode(&data[..]) {
-                                let request_id = msg.request_id;
-                                if let Some(response) = msg.response {
-                                    self.msg_channel().notify_response(request_id, response).await;
-                                } else if let Some(request) = msg.request {
-                                    let _ = msg_tx.send((request_id, request));
+        while p2p_rtc.as_ref().map_or(false, |r| r.is_alive()) || relay_rtc.as_ref().map_or(false, |r| r.is_alive()) || !new_rtc_rx.is_closed() {
+            // Check for second connection arriving from background
+            if let Ok(mut c) = new_rtc_rx.try_recv() {
+                c.1.set_buffered_amount_low_threshold(cids.reliable, MIN_BUFFER_SIZE);
+                if c.0 {
+                    log::info!("[webrtc-client] truly P2P joined the run loop");
+                    p2p_rtc = Some(c.1);
+                } else {
+                    log::info!("[webrtc-client] Relay joined the run loop");
+                    relay_rtc = Some(c.1);
+                }
+            }
+
+            // Poll events from P2P connection
+            if let Some(ref mut rtc) = p2p_rtc {
+                if rtc.is_alive() {
+                    while let Some(event) = rtc.poll_event().await? {
+                        match event {
+                            Event::ChannelData(data) => {
+                                if data.id == cids.ordered_msg {
+                                    if let Ok(msg) = PeerMessageBody::decode(&data.data[..]) {
+                                        if let Some(response) = msg.response {
+                                            self.msg_channel().notify_response(msg.request_id, response).await;
+                                        } else if let Some(request) = msg.request {
+                                            let _ = msg_tx.send((msg.request_id, request));
+                                        }
+                                    }
                                 }
                             }
+                            Event::IceConnectionStateChange(state) => {
+                                log::info!("[webrtc-client] truly P2P ICE state: {:?}", state);
+                            }
+                            _ => {}
                         }
                     }
-                    Event::IceConnectionStateChange(state) => {
-                        log::info!("[webrtc-client] ICE state: {:?}", state);
+                }
+            }
+
+            // Poll events from Relay connection
+            if let Some(ref mut rtc) = relay_rtc {
+                if rtc.is_alive() {
+                    log::info!("Polling relay");
+                    while let Some(event) = rtc.poll_event().await? {
+                        match event {
+                            Event::ChannelData(data) => {
+                                if data.id == cids.ordered_msg {
+                                    if let Ok(msg) = PeerMessageBody::decode(&data.data[..]) {
+                                        if let Some(response) = msg.response {
+                                            self.msg_channel().notify_response(msg.request_id, response).await;
+                                        } else if let Some(request) = msg.request {
+                                            let _ = msg_tx.send((msg.request_id, request));
+                                        }
+                                    }
+                                }
+                            }
+                            Event::IceConnectionStateChange(state) => {
+                                log::info!("[webrtc-client] Relay ICE state: {:?}", state);
+                            }
+                            _ => {}
+                        }
                     }
-                    _ => {}
                 }
             }
 
@@ -333,37 +382,78 @@ impl WebRtcClient {
                 break;
             }
 
-            let timeout = rtc.timeout_duration();
+            // Retry pending data — prioritize P2P, fallback to relay
             if let Some((ref data, cid)) = pending_data {
-                if rtc.send(data, cid) {
+                let mut sent = false;
+                if let Some(ref mut rtc) = p2p_rtc {
+                    if rtc.is_alive() && rtc.send(data, cid) { sent = true; }
+                }
+                if !sent {
+                    if let Some(ref mut rtc) = relay_rtc {
+                        if rtc.is_alive() && rtc.send(data, cid) { sent = true; }
+                    }
+                }
+                if sent {
                     pending_data = None;
                 } else {
-                    rtc.wait_for_input(timeout.max(Duration::from_millis(3))).await?;
+                    // Drive one connection forward briefly while waiting for buffer space
+                    let timeout = Duration::from_millis(3);
+                    if let Some(ref mut rtc) = p2p_rtc {
+                        let _ = rtc.wait_for_input(timeout).await;
+                    } else if let Some(ref mut rtc) = relay_rtc {
+                        let _ = rtc.wait_for_input(timeout).await;
+                    } else {
+                        tokio::time::sleep(timeout).await;
+                    }
+                    continue;
                 }
-                continue;
             }
 
+            // Compute per-connection timeouts (owned Copy values — no borrow held)
+            let p2p_timeout = p2p_rtc.as_ref()
+                .filter(|r| r.is_alive())
+                .map(|r| r.timeout_duration().max(Duration::from_millis(3)));
+            let relay_timeout = relay_rtc.as_ref()
+                .filter(|r| r.is_alive())
+                .map(|r| r.timeout_duration().max(Duration::from_millis(3)));
+
+            // Flat select — each wait_for_input is its own branch, no nested join!
             let res = tokio::select! {
+                biased;
                 Some(d) = ordered_msg_rx.next() => {
-                    let d: Vec<u8> = d;
-                    Ok::<_, WebRtcClientError>(Some((cids.ordered_msg, d)))
+                    Some((cids.ordered_msg, d))
                 },
                 Some(d) = unordered_msg_rx.next() => {
-                    let d: Vec<u8> = d;
-                    Ok(Some((cids.unordered_msg, d)))
+                    Some((cids.unordered_msg, d))
                 },
                 Some(d) = reliable_data_rx.recv() => {
-                    let d: Vec<u8> = d;
-                    Ok(Some((cids.reliable, d)))
+                    Some((cids.reliable, d))
                 },
-                res = rtc.wait_for_input(timeout.max(Duration::from_millis(3))) => {
-                    res?;
-                    Ok::<_, WebRtcClientError>(None)
-                }
-            }?;
+                _ = async {
+                    match (p2p_timeout, p2p_rtc.as_mut()) {
+                        (Some(t), Some(rtc)) => { let _ = rtc.wait_for_input(t).await; },
+                        _ => std::future::pending::<()>().await,
+                    }
+                } => None,
+                _ = async {
+                    match (relay_timeout, relay_rtc.as_mut()) {
+                        (Some(t), Some(rtc)) => { let _ = rtc.wait_for_input(t).await; },
+                        _ => tokio::time::sleep(Duration::from_millis(5)).await,
+                    }
+                } => None,
+            };
 
             if let Some((cid, d)) = res {
-                if !rtc.send(&d, cid) {
+                // Send: prioritize P2P, fallback to relay
+                let mut sent = false;
+                if let Some(ref mut rtc) = p2p_rtc {
+                    if rtc.is_alive() && rtc.send(&d, cid) { sent = true; }
+                }
+                else if let Some(ref mut rtc) = relay_rtc {
+                    if rtc.is_alive() && rtc.send(&d, cid) { sent = true; }
+                }
+
+                if !sent {
                     pending_data = Some((d, cid));
                     continue;
                 }

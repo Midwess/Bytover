@@ -209,20 +209,46 @@ async fn offer_handler(
         }
     };
 
-    let mut message = match schema::devlog::rpc_signalling::server::Message::decode(&body[..]) {
+    let offer_request = match schema::devlog::rpc_signalling::server::OfferRequest::decode(&body[..]) {
         Ok(m) => m,
         Err(e) => {
             return HttpResponse::BadRequest()
-                .body(format!("failed to decode message: {}", e));
+                .body(format!("failed to decode offer request: {}", e));
         }
+    };
+
+    let mut message = schema::devlog::rpc_signalling::server::Message {
+        offer: Some(schema::devlog::rpc_signalling::server::OfferMessage {
+            sdp: offer_request.offer.sdp,
+            peer: Some(offer_request.peer),
+        }),
+        session_id: offer_request.session_id,
+        ..Default::default()
     };
 
     message.ice_config = turn_manager.get_relay_config(&key).await;
 
     match client.request(message).await {
         Ok(response) => {
+            let answer = match response.answer {
+                Some(a) => a,
+                None => return HttpResponse::InternalServerError().body("no answer in response"),
+            };
+            let peer = match answer.peer.clone() {
+                Some(p) => p,
+                None => return HttpResponse::InternalServerError().body("no peer info in response"),
+            };
+
+            let offer_response = schema::devlog::rpc_signalling::server::OfferResponse {
+                answer: schema::devlog::rpc_signalling::server::AnswerMessage {
+                    sdp: answer.sdp,
+                    peer: Some(peer.clone()),
+                },
+                peer,
+            };
+
             let mut buf = Vec::new();
-            match response.encode(&mut buf) {
+            match offer_response.encode(&mut buf) {
                 Ok(()) => HttpResponse::Ok()
                     .content_type("application/octet-stream")
                     .body(buf),

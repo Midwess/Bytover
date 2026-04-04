@@ -1,7 +1,8 @@
 use prost::Message as ProstMessage;
 
 use core_services::wasm::http::HttpClient;
-use schema::devlog::rpc_signalling::server::{Message, OfferMessage, IceConfig};
+use schema::devlog::rpc_signalling::server::{OfferRequest, OfferResponse, OfferMessage, IceConfig};
+use schema::devlog::bitbridge::PeerMessage;
 
 #[derive(Debug, Clone)]
 pub struct SignalingClient {
@@ -15,22 +16,20 @@ impl SignalingClient {
         }
     }
 
-    pub async fn send_offer(&self, peer_id: &str, offer_sdp: &str, session_id: &str) -> Result<String, SignalingError> {
+    pub async fn send_offer(&self, peer_id: &str, offer_sdp: &str, session_id: &str, me: PeerMessage) -> Result<(String, PeerMessage), SignalingError> {
         let url = format!("{}/offer/{}", self.http_url.trim_end_matches('/'), peer_id);
 
-        let offer_msg = Message {
-            request_id: None,
-            offer: Some(OfferMessage {
-                sdp: offer_sdp.to_string()
-            }),
-            answer: None,
-            error: None,
-            ice_config: None,
+        let offer_req = OfferRequest {
+            offer: OfferMessage {
+                sdp: offer_sdp.to_string(),
+                peer: Some(me.clone()),
+            },
+            peer: me,
             session_id: Some(session_id.to_string())
         };
 
         let mut encoded = Vec::new();
-        prost::Message::encode(&offer_msg, &mut encoded).map_err(|e| SignalingError::Encoding(e.to_string()))?;
+        prost::Message::encode(&offer_req, &mut encoded).map_err(|e| SignalingError::Encoding(e.to_string()))?;
 
         let (status, _headers, bytes) = HttpClient::new()
             .method("POST")
@@ -47,9 +46,9 @@ impl SignalingClient {
             return Err(SignalingError::Server(String::from_utf8_lossy(&bytes).to_string()));
         }
 
-        let response_msg = Message::decode(&bytes[..]).map_err(|e| SignalingError::Decoding(format!("{:?}", e)))?;
+        let response_msg = OfferResponse::decode(&bytes[..]).map_err(|e| SignalingError::Decoding(format!("{:?}", e)))?;
 
-        response_msg.answer.ok_or(SignalingError::InvalidResponse).map(|a| a.sdp)
+        Ok((response_msg.answer.sdp, response_msg.peer))
     }
 
     pub async fn fetch_relay_config(&self, key: &str) -> Result<IceConfig, SignalingError> {
