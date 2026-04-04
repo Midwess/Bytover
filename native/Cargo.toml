@@ -52,8 +52,6 @@ socket2.workspace = true
 stun-proto = { workspace = true }
 if-addrs = { workspace = true }
 mdns-sd = { workspace = true }
-turn-client-proto = "0.7.0"
-turn-types = "0.7.0"
 uuid = { workspace = true, features = ["v4"] }
 [target.uniffi-bindgen.dependencies]
 uniffi = { workspace = true }
