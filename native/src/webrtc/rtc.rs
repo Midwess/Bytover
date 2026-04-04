@@ -23,7 +23,100 @@ pub struct ChannelIds {
     pub ordered_msg: ChannelId
 }
 
-pub struct RtcClient {
+/// Events emitted from the RTC thread to the outside world.
+pub enum RtcEvent {
+    Str0mEvent(Event),
+    Error(WebRtcClientError),
+    Closed,
+}
+
+/// Commands sent from outside into the RTC thread.
+pub enum RtcCommand {
+    Send { data: Vec<u8>, channel_id: ChannelId },
+    SetBufferedAmountLowThreshold { channel_id: ChannelId, threshold: usize },
+    Shutdown,
+}
+
+/// Async-friendly handle returned from connect(). Communicates with the
+/// dedicated OS thread that drives the RTC networking loop.
+pub struct RtcHandle {
+    event_rx: tokio::sync::mpsc::Receiver<RtcEvent>,
+    command_tx: tokio::sync::mpsc::Sender<RtcCommand>,
+    channel_ids: ChannelIds,
+    thread_handle: Option<std::thread::JoinHandle<()>>,
+}
+
+impl RtcHandle {
+    /// Connect to a peer via direct P2P, spawning the I/O thread on success.
+    pub async fn connect(
+        signalling_id: &str,
+        offer_message: OfferMessage,
+        me: schema::devlog::bitbridge::PeerMessage,
+        signalling: SignallingSender,
+        request_id: &str
+    ) -> Result<Self, WebRtcClientError> {
+        RtcClient::connect(signalling_id, offer_message, me, signalling, request_id).await
+    }
+
+    /// Connect to a peer via relay, spawning the I/O thread on success.
+    pub async fn connect_relay(
+        signalling_id: &str,
+        session_id: &str,
+        signalling: SignallingSender,
+    ) -> Result<Self, WebRtcClientError> {
+        RtcClient::connect_relay(signalling_id, session_id, signalling).await
+    }
+
+    /// Await the next event from the RTC thread.
+    pub async fn poll_event(&mut self) -> Option<RtcEvent> {
+        self.event_rx.recv().await
+    }
+
+    /// Try to receive an event without blocking.
+    pub fn try_poll_event(&mut self) -> Option<RtcEvent> {
+        self.event_rx.try_recv().ok()
+    }
+
+    /// Send data on a channel. Returns true if the command was queued.
+    pub fn send(&self, data: &[u8], channel_id: ChannelId) -> bool {
+        self.command_tx.try_send(RtcCommand::Send {
+            data: data.to_vec(),
+            channel_id,
+        }).is_ok()
+    }
+
+    pub fn set_buffered_amount_low_threshold(&self, channel_id: ChannelId, threshold: usize) {
+        let _ = self.command_tx.try_send(RtcCommand::SetBufferedAmountLowThreshold {
+            channel_id,
+            threshold,
+        });
+    }
+
+    pub fn channel_ids(&self) -> &ChannelIds {
+        &self.channel_ids
+    }
+
+    /// The handle is alive if the thread hasn't finished and the event channel is open.
+    pub fn is_alive(&self) -> bool {
+        !self.event_rx.is_closed()
+            && self.thread_handle.as_ref().map_or(false, |h| !h.is_finished())
+    }
+
+    pub fn shutdown(&self) {
+        let _ = self.command_tx.try_send(RtcCommand::Shutdown);
+    }
+}
+
+impl Drop for RtcHandle {
+    fn drop(&mut self) {
+        let _ = self.command_tx.try_send(RtcCommand::Shutdown);
+        if let Some(handle) = self.thread_handle.take() {
+            let _ = handle.join();
+        }
+    }
+}
+
+struct RtcClient {
     rtc: Rtc,
     socket: tokio::net::UdpSocket,
     local_addr: SocketAddr,
@@ -36,6 +129,7 @@ pub struct RtcClient {
     turn_stun_base: Instant,
     relay_addr: Option<SocketAddr>,
     turn_server_addr: Option<SocketAddr>,
+    pending_transmits: std::collections::VecDeque<(Vec<u8>, str0m::channel::ChannelId)>,
 }
 
 impl RtcClient {
@@ -45,7 +139,7 @@ impl RtcClient {
         me: schema::devlog::bitbridge::PeerMessage,
         signalling: SignallingSender,
         request_id: &str
-    ) -> Result<Self, WebRtcClientError> {
+    ) -> Result<RtcHandle, WebRtcClientError> {
         let config = match signalling.fetch_relay_config(signalling_id).await {
             Ok(c) => c,
             Err(e) => {
@@ -145,20 +239,21 @@ impl RtcClient {
             turn_stun_base,
             relay_addr,
             turn_server_addr,
+            pending_transmits: std::collections::VecDeque::new(),
         };
 
         client.create_turn_permissions(&remote_ips);
 
         let connected = false;
-        // Same wait logic here
-        client.wait_for_connected(connected).await
+        let client = client.wait_for_connected(connected).await?;
+        Ok(client.spawn_thread())
     }
 
     pub async fn connect_relay(
         signalling_id: &str,
         session_id: &str,
         signalling: SignallingSender,
-    ) -> Result<Self, WebRtcClientError> {
+    ) -> Result<RtcHandle, WebRtcClientError> {
         // Fetch relay config which will act as the ICE server config.
         let config = match signalling.fetch_relay_config(signalling_id).await {
             Ok(c) => c,
@@ -278,12 +373,141 @@ impl RtcClient {
             turn_stun_base,
             relay_addr,
             turn_server_addr,
+            pending_transmits: std::collections::VecDeque::new(),
         };
 
         client.create_turn_permissions(&remote_ips);
         let connected = false;
 
-        client.wait_for_connected(connected).await
+        let client = client.wait_for_connected(connected).await?;
+        Ok(client.spawn_thread())
+    }
+
+    /// Spawn the dedicated OS thread and return an RtcHandle.
+    fn spawn_thread(self) -> RtcHandle {
+        let channel_ids = self.channel_ids;
+        let (event_tx, event_rx) = tokio::sync::mpsc::channel::<RtcEvent>(5);
+        let (command_tx, command_rx) = tokio::sync::mpsc::channel::<RtcCommand>(16);
+
+        let thread_handle = std::thread::Builder::new()
+            .name("rtc-io".to_string())
+            .spawn(move || {
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .expect("Failed to build tokio runtime for RTC thread");
+
+                rt.block_on(async move {
+                    Self::run_loop(self, event_tx, command_rx).await;
+                });
+            })
+            .expect("Failed to spawn RTC I/O thread");
+
+        RtcHandle {
+            event_rx,
+            command_tx,
+            channel_ids,
+            thread_handle: Some(thread_handle),
+        }
+    }
+
+    /// The main event loop running on the dedicated OS thread.
+    async fn run_loop(
+        mut self,
+        event_tx: tokio::sync::mpsc::Sender<RtcEvent>,
+        mut command_rx: tokio::sync::mpsc::Receiver<RtcCommand>,
+    ) {
+        log::info!("[rtc-client] RTC I/O thread started");
+
+        while self.rtc.is_alive() {
+            // 0. Drain pending transmits
+            while let Some((data, channel_id)) = self.pending_transmits.pop_front() {
+                if !self.send(&data, channel_id) {
+                    self.pending_transmits.push_front((data, channel_id));
+                    break;
+                }
+            }
+
+            // 1. Drain pending commands (non-blocking), but only up to 16 to preserve mpsc backpressure
+            if self.pending_transmits.len() < 16 {
+                while let Ok(cmd) = command_rx.try_recv() {
+                    if self.handle_command(cmd) {
+                        log::info!("[rtc-client] RTC I/O thread shutdown by command");
+                        let _ = event_tx.send(RtcEvent::Closed).await;
+                        return;
+                    }
+                    if self.pending_transmits.len() >= 16 {
+                        break;
+                    }
+                }
+            }
+
+            // 2. Poll events from str0m, send to outside via event_tx
+            match self.poll_event().await {
+                Ok(Some(event)) => {
+                    if event_tx.send(RtcEvent::Str0mEvent(event)).await.is_err() {
+                        log::info!("[rtc-client] Event receiver dropped, stopping RTC I/O thread");
+                        return;
+                    }
+                    // After sending an event, loop again to drain more events before waiting
+                    continue;
+                }
+                Ok(None) => {
+                    // Timeout — fall through to wait_for_input
+                }
+                Err(e) => {
+                    log::warn!("[rtc-client] RTC poll_event error: {e:?}");
+                    let _ = event_tx.send(RtcEvent::Error(e)).await;
+                    let _ = event_tx.send(RtcEvent::Closed).await;
+                    return;
+                }
+            }
+
+            // 3. Wait for input (socket recv) OR new commands
+            let timeout = self.timeout_duration();
+            tokio::select! {
+                result = self.wait_for_input(timeout) => {
+                    if let Err(e) = result {
+                        log::warn!("[rtc-client] RTC wait_for_input error: {e:?}");
+                        let _ = event_tx.send(RtcEvent::Error(e)).await;
+                        let _ = event_tx.send(RtcEvent::Closed).await;
+                        return;
+                    }
+                }
+                Some(cmd) = command_rx.recv(), if self.pending_transmits.len() < 16 => {
+                    if self.handle_command(cmd) {
+                        log::info!("[rtc-client] RTC I/O thread shutdown by command");
+                        let _ = event_tx.send(RtcEvent::Closed).await;
+                        return;
+                    }
+                }
+            }
+        }
+
+        log::info!("[rtc-client] RTC connection no longer alive, stopping I/O thread");
+        let _ = event_tx.send(RtcEvent::Closed).await;
+    }
+
+    /// Handle a command. Returns true if the thread should stop.
+    fn handle_command(&mut self, cmd: RtcCommand) -> bool {
+        match cmd {
+            RtcCommand::Send { data, channel_id } => {
+                if self.pending_transmits.is_empty() && self.send(&data, channel_id) {
+                    // Sent successfully
+                } else {
+                    self.pending_transmits.push_back((data, channel_id));
+                }
+                false
+            }
+            RtcCommand::SetBufferedAmountLowThreshold { channel_id, threshold } => {
+                self.set_buffered_amount_low_threshold(channel_id, threshold);
+                false
+            }
+            RtcCommand::Shutdown => {
+                self.rtc.disconnect();
+                true
+            }
+        }
     }
 
     async fn wait_for_connected(mut self, mut connected: bool) -> Result<Self, WebRtcClientError> {
@@ -328,7 +552,7 @@ impl RtcClient {
         }
     }
 
-    pub async fn poll_event(&mut self) -> Result<Option<Event>, WebRtcClientError> {
+    async fn poll_event(&mut self) -> Result<Option<Event>, WebRtcClientError> {
         loop {
             self.drive_turn_transmits().await;
 
@@ -368,11 +592,11 @@ impl RtcClient {
         }
     }
 
-    pub fn timeout_duration(&self) -> Duration {
+    fn timeout_duration(&self) -> Duration {
         self.cached_timeout.saturating_duration_since(Instant::now())
     }
 
-    pub async fn wait_for_input(&mut self, timeout: Duration) -> Result<(), WebRtcClientError> {
+    async fn wait_for_input(&mut self, timeout: Duration) -> Result<(), WebRtcClientError> {
         if timeout.is_zero() {
             self.rtc.handle_input(Input::Timeout(Instant::now()))?;
             self.drive_turn();
@@ -411,7 +635,7 @@ impl RtcClient {
         Ok(())
     }
 
-    pub fn send(&mut self, data: &[u8], channel_id: ChannelId) -> bool {
+    fn send(&mut self, data: &[u8], channel_id: ChannelId) -> bool {
         if let Some(mut ch) = self.rtc.channel(channel_id) {
             match ch.write(true, data) {
                 Ok(true) => true,
@@ -427,18 +651,10 @@ impl RtcClient {
         }
     }
 
-    pub fn set_buffered_amount_low_threshold(&mut self, channel_id: ChannelId, threshold: usize) {
+    fn set_buffered_amount_low_threshold(&mut self, channel_id: ChannelId, threshold: usize) {
         if let Some(mut ch) = self.rtc.channel(channel_id) {
             ch.set_buffered_amount_low_threshold(threshold);
         }
-    }
-
-    pub fn channel_ids(&self) -> &ChannelIds {
-        &self.channel_ids
-    }
-
-    pub fn is_alive(&self) -> bool {
-        self.rtc.is_alive()
     }
 
     fn is_relay_source(&self, source: SocketAddr) -> bool {
