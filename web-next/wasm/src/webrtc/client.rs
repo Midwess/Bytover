@@ -145,19 +145,19 @@ impl WebRtcClient {
                 max_retransmit: 0,
                 ordered: false,
                 negotiate: RELIABLE_DATA_CHANNEL_ID as i32,
-                label: "unordered".to_string(),
+                label: "reliable".to_string(),
             },
             schema::devlog::bitbridge::DataChannel {
                 max_retransmit: 0,
                 ordered: false,
                 negotiate: UNORDERED_MSG_CHANNEL_ID as i32,
-                label: "unordered".to_string(),
+                label: "unordered_msg".to_string(),
             },
             schema::devlog::bitbridge::DataChannel {
                 max_retransmit: 0,
-                ordered: false,
+                ordered: true,
                 negotiate: ORDERED_MSG_CHANNEL_ID as i32,
-                label: "ordered-msg".to_string(),
+                label: "ordered_msg".to_string(),
             },
         ];
 
@@ -199,28 +199,31 @@ impl WebRtcClient {
 
         let _ = client.me.set(me);
 
-        let client_p2p = client.clone();
-        wasm_bindgen_futures::spawn_local(async move {
-            let p2p_res = sig_p2p.send_offer(&peer_id_p2p, &local_sdp_p2p, &session_id_p2p, me_proto).await;
-            if let Ok((answer_sdp, remote_peer_proto)) = p2p_res {
-                log::info!("Got P2P answer from remote peer {answer_sdp:?}");
-                
-                let remote_peer = PeerEntity {
-                    id: remote_peer_proto.peer_id.clone(),
-                    name: remote_peer_proto.name.clone(),
-                    avatar_url: remote_peer_proto.avatar_url.clone(),
-                    device: remote_peer_proto.device.clone().into(),
-                    email: remote_peer_proto.email.clone(),
-                    user_id: None,
-                    signalling_id: None
-                };
-                let _ = client_p2p.peer.set(remote_peer);
+        let p2p_res = sig_p2p.send_offer(&peer_id_p2p, &local_sdp_p2p, &session_id_p2p, me_proto).await;
+        let mut p2p_answer_sdp = None;
+        if let Ok((answer_sdp, remote_peer_proto)) = p2p_res {
+            log::info!("Got P2P answer from remote peer {answer_sdp:?}");
 
+            let remote_peer = PeerEntity {
+                id: remote_peer_proto.peer_id.clone(),
+                name: remote_peer_proto.name.clone(),
+                avatar_url: remote_peer_proto.avatar_url.clone(),
+                device: remote_peer_proto.device.clone().into(),
+                email: remote_peer_proto.email.clone(),
+                user_id: None,
+                signalling_id: None
+            };
+            let _ = client.peer.set(remote_peer);
+            p2p_answer_sdp = Some(answer_sdp);
+        } else {
+            log::warn!("P2P signalling failed: {:?}", p2p_res);
+        }
+
+        wasm_bindgen_futures::spawn_local(async move {
+            if let Some(answer_sdp) = p2p_answer_sdp {
                 if let Err(e) = api.set_remote_description(&connection_p2p, &answer_sdp).await {
                     log::warn!("p2p remote desc failed {:?}", e);
                 }
-            } else {
-                log::warn!("P2P signalling failed: {:?}", p2p_res);
             }
             if let Ok(_) = api.wait_for_channel_open(ordered_channel_p2p).await {
                 log::info!("[webrtc-client] truly P2P connected!");

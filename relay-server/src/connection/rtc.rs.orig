@@ -21,8 +21,6 @@ pub enum RelayRtcError {
     ConnectionClosed,
     #[error("Unauthorized packet source")]
     UnauthorizedSource,
-    #[error("ICE disconnected unexpectedly")]
-    IceDisconnected,
 }
 
 pub struct RelayRtcClient {
@@ -77,25 +75,11 @@ impl RelayRtcClient {
             channel_ids.push(id);
         }
 
-        let public_ip_str = std::env::var("BYTOVER_RELAY_PUBLIC_IP").unwrap_or_else(|_| "127.0.0.1".to_string());
-        let ip = match public_ip_str.parse::<IpAddr>() {
-            Ok(parsed) => parsed,
-            Err(e) => {
-                log::error!("[relay-rtc] Failed to parse BYTOVER_RELAY_PUBLIC_IP '{}': {}. Falling back to 127.0.0.1", public_ip_str, e);
-                "127.0.0.1".parse::<IpAddr>().unwrap()
+        let public_ip = std::env::var("BYTOVER_RELAY_PUBLIC_IP").unwrap_or_else(|_| "127.0.0.1".to_string());
+        if let Ok(ip) = public_ip.parse::<IpAddr>() {
+            if let Ok(candidate) = Candidate::host(SocketAddr::new(ip, local_addr.port()), Protocol::Udp) {
+                rtc.add_local_candidate(candidate);
             }
-        };
-
-        let candidate_addr = SocketAddr::new(ip, local_addr.port());
-        if let Ok(candidate) = Candidate::host(candidate_addr, Protocol::Udp) {
-            rtc.add_local_candidate(candidate);
-            if ip.is_ipv4() {
-                local_v4_addr = Some(candidate_addr);
-            } else {
-                local_v6_addr = Some(candidate_addr);
-            }
-        } else {
-            log::error!("[relay-rtc] Failed to create UDP host candidate for IP: {}", ip);
         }
 
         let offer = SdpOffer::from_sdp_string(sdp_offer).map_err(|e| RelayRtcError::Rtc(str0m::error::RtcError::RemoteSdp(e.to_string())))?;
@@ -121,14 +105,7 @@ impl RelayRtcClient {
                 if matches!(event, Event::Connected) {
                     log::info!("[relay-rtc] Reached Connected state");
                     return Ok(());
-                } else if let Event::IceConnectionStateChange(state) = event {
-                    if matches!(state, IceConnectionState::Disconnected) {
-                        return Err(RelayRtcError::IceDisconnected);
-                    }
                 }
-            }
-            if !self.rtc.is_alive() {
-                return Err(RelayRtcError::IceDisconnected);
             }
         }
     }
@@ -141,6 +118,7 @@ impl RelayRtcClient {
                     return Ok(None);
                 }
                 Output::Transmit(t) => {
+                    log::info!("Sending to {:?}", t.destination);
                     let dest = to_v6_mapped(t.destination);
                     let res = tokio::time::timeout(Duration::from_secs(10), self.socket.send_to(&t.contents, dest)).await;
                     match res {
@@ -154,7 +132,7 @@ impl RelayRtcClient {
                     }
                 }
                 Output::Event(e) => {
-                    log::info!("Received event {e:?}");
+                    log::info!("Event {e:?}");
                     if let Event::IceConnectionStateChange(state) = e {
                         if matches!(state, IceConnectionState::Disconnected) {
                             self.rtc.disconnect();

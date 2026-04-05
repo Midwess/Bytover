@@ -238,6 +238,7 @@ impl RtcClient {
         session_id: &str,
         signalling: SignallingSender,
     ) -> Result<RtcHandle, WebRtcClientError> {
+        log::info!("Connecting to relay");
         // Fetch relay config which will act as the ICE server config.
         let config = match signalling.fetch_relay_config(signalling_id).await {
             Ok(c) => c,
@@ -276,31 +277,36 @@ impl RtcClient {
             rtc.add_local_candidate(candidate);
         }
 
-        let reliable_id = rtc.direct_api().create_data_channel(ChannelConfig {
-            label: "reliable".to_string(),
-            ordered: false,
-            negotiated: Some(RELIABLE_STREAM_ID),
-            ..Default::default()
-        });
         let unordered_msg_id = rtc.direct_api().create_data_channel(ChannelConfig {
             label: "unordered_msg".to_string(),
             ordered: false,
             negotiated: Some(UNORDERED_MSG_STREAM_ID),
             ..Default::default()
         });
+
         let ordered_msg_id = rtc.direct_api().create_data_channel(ChannelConfig {
             label: "ordered_msg".to_string(),
             ordered: true,
             negotiated: Some(ORDERED_MSG_STREAM_ID),
             ..Default::default()
         });
+
+        let mut sdp_api = rtc.sdp_api();
+        let reliable_id = sdp_api.add_channel_with_config(ChannelConfig {
+            label: "reliable".to_string(),
+            ordered: false,
+            negotiated: Some(RELIABLE_STREAM_ID),
+            ..Default::default()
+        });
+
         let channel_ids = ChannelIds {
             reliable: reliable_id,
             unordered_msg: unordered_msg_id,
             ordered_msg: ordered_msg_id
         };
 
-        let (local_offer, pending) = rtc.sdp_api().apply().ok_or_else(|| WebRtcClientError::Signalling("Could not create local offer via apply()".into()))?;
+        let (local_offer, pending) = sdp_api.apply().ok_or_else(|| WebRtcClientError::Signalling("Could not create local offer via apply()".into()))?;
+        log::info!("Offer to relay {:?}", local_offer.to_sdp_string());
 
         let relay_channels = vec![
             schema::devlog::bitbridge::DataChannel {
@@ -327,6 +333,8 @@ impl RtcClient {
         let relay_ans = signalling.relay_connect(signalling_id, session_id, &sdp_string, relay_channels)
             .await
             .map_err(|e| WebRtcClientError::Signalling(format!("Relay connect explicit failure: {e:?}")))?;
+
+        log::info!("Got relay answer sdp {:?}", relay_ans);
 
         if !relay_ans.success {
             return Err(WebRtcClientError::Signalling(format!("Relay connect failure: {:?}", relay_ans.error_message)));

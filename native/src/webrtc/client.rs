@@ -204,10 +204,13 @@ impl WebRtcClient {
         let (new_rtc_tx, new_rtc_rx) = tokio::sync::mpsc::channel::<(bool, RtcHandle)>(1);
         if let Some(rem_fut) = remaining.pop() {
             tokio::spawn(async move {
-                if let Ok(c) = rem_fut.await {
-                    let second_conn = if c.0 { "truly P2P" } else { "Relay" };
-                    log::info!("[webrtc-client] Second RTC connected (is_p2p: {}, type: {})", c.0, second_conn);
-                    let _ = new_rtc_tx.send(c).await;
+                match rem_fut.await {
+                    Ok(c) => {
+                        let second_conn = if c.0 { "truly P2P" } else { "Relay" };
+                        log::info!("[webrtc-client] Second RTC connected (is_p2p: {}, type: {})", c.0, second_conn);
+                        let _ = new_rtc_tx.send(c).await;
+                    }
+                    Err(e) => log::error!("[webrtc-client] Remaining connection failed: {:?}", e),
                 }
             });
         }

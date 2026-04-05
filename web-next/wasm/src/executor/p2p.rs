@@ -130,7 +130,7 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                     }
                 });
 
-                let peer = client.peer_entity().ok_or_else(|| P2PError::WebRtc("Peer not set after introduce".into()))?;
+                let peer = client.peer_entity().ok_or_else(|| P2PError::WebRtc("Peer not set after signaling exchange".into()))?;
 
                 self.set_current_user(current_user).ok();
 
