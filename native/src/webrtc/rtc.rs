@@ -26,6 +26,12 @@ pub struct ChannelIds {
 /// str0m never emits Failed/Closed ICE states, so we need this timeout.
 const ICE_DISCONNECT_TIMEOUT: Duration = Duration::from_secs(8);
 
+/// Maximum number of UDP transmit packets flushed in a single `poll_event` call.
+/// Capping this prevents the polling loop from running unboundedly during large
+/// file-transfer bursts, which would otherwise cause a stack overflow on the
+/// rtc-io thread.
+const MAX_TRANSMITS_PER_POLL: usize = 8;
+
 /// Events emitted from the RTC thread to the outside world.
 pub enum RtcEvent {
     Str0mEvent(Event),
@@ -379,8 +385,10 @@ impl RtcClient {
         let (event_tx, event_rx) = tokio::sync::mpsc::channel::<RtcEvent>(5);
         let (command_tx, command_rx) = tokio::sync::mpsc::channel::<RtcCommand>(16);
 
+        // Use an 8 MB stack to avoid overflow during high-throughput transmit bursts.
         let thread_handle = std::thread::Builder::new()
             .name("rtc-io".to_string())
+            .stack_size(8 * 1024 * 1024)
             .spawn(move || {
                 let rt = tokio::runtime::Builder::new_current_thread()
                     .enable_all()
@@ -593,6 +601,7 @@ impl RtcClient {
     }
 
     async fn poll_event(&mut self) -> Result<Option<Event>, WebRtcClientError> {
+        let mut transmit_count = 0;
         loop {
             match self.rtc.poll_output()? {
                 Output::Timeout(t) => {
@@ -611,10 +620,12 @@ impl RtcClient {
                             log::error!("[rtc-client] Timeout sending packet to {} after 10s", dest);
                             return Err(WebRtcClientError::Signalling("Send packet timed out".to_string()));
                         }
-                        Ok(Ok(_)) => {
-                            // Yield after each transmit to prevent stack overflow during high-throughput
-                            tokio::task::yield_now().await;
-                        }
+                        Ok(Ok(_)) => {}
+                    }
+
+                    transmit_count += 1;
+                    if transmit_count >= MAX_TRANSMITS_PER_POLL {
+                        return Ok(None);
                     }
                 }
                 Output::Event(e) => {
