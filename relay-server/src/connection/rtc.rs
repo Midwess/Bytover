@@ -141,18 +141,18 @@ impl RelayRtcClient {
         let offer = SdpOffer::from_sdp_string(sdp_offer).map_err(|e| RelayRtcError::Rtc(str0m::error::RtcError::RemoteSdp(e.to_string())))?;
 
         let mut channel_ids = Vec::new();
-        let mut sdp_api = rtc.sdp_api();
         for channel_config in &channels {
-            let id = sdp_api.add_channel_with_config(ChannelConfig {
+            let id = rtc.direct_api().create_data_channel(ChannelConfig {
                 label: channel_config.label.clone(),
                 ordered: channel_config.ordered,
                 negotiated: Some(channel_config.negotiate as u16),
                 ..Default::default()
             });
+
             channel_ids.push(id);
         }
 
-        let sdp_answer = sdp_api.accept_offer(offer).map_err(RelayRtcError::Rtc)?;
+        let sdp_answer = rtc.sdp_api().accept_offer(offer).map_err(RelayRtcError::Rtc)?;
         let mut pending_events = vec![PendingEvent::Connected];
         for id in &channel_ids {
             pending_events.push(PendingEvent::ChannelOpen(*id));

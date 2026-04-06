@@ -1,4 +1,4 @@
-use std::net::{IpAddr, SocketAddr};
+use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 use socket2::{Domain, Socket, Type};
 use str0m::channel::{ChannelConfig, ChannelId};
@@ -183,19 +183,20 @@ impl RtcClient {
 
         let offer = str0m::change::SdpOffer::from_sdp_string(&offer_sdp).map_err(|e| WebRtcClientError::SdpParse(format!("{e}")))?;
 
-        let reliable_id = rtc.direct_api().create_data_channel(ChannelConfig {
+        let mut sdp_api = rtc.sdp_api();
+        let reliable_id = sdp_api.add_channel_with_config(ChannelConfig {
             label: "reliable".to_string(),
             ordered: false,
             negotiated: Some(RELIABLE_STREAM_ID),
             ..Default::default()
         });
-        let unordered_msg_id = rtc.direct_api().create_data_channel(ChannelConfig {
+        let unordered_msg_id = sdp_api.add_channel_with_config(ChannelConfig {
             label: "unordered_msg".to_string(),
             ordered: false,
             negotiated: Some(UNORDERED_MSG_STREAM_ID),
             ..Default::default()
         });
-        let ordered_msg_id = rtc.direct_api().create_data_channel(ChannelConfig {
+        let ordered_msg_id = sdp_api.add_channel_with_config(ChannelConfig {
             label: "ordered_msg".to_string(),
             ordered: true,
             negotiated: Some(ORDERED_MSG_STREAM_ID),
@@ -207,7 +208,7 @@ impl RtcClient {
             ordered_msg: ordered_msg_id
         };
 
-        let answer = rtc.sdp_api().accept_offer(offer).map_err(WebRtcClientError::Rtc)?;
+        let answer = sdp_api.accept_offer(offer).map_err(WebRtcClientError::Rtc)?;
 
         signalling
             .send_answer(answer.to_sdp_string(), me, request_id)
@@ -502,7 +503,12 @@ impl RtcClient {
                             return Err(WebRtcClientError::Signalling("Peer disconnected during setup".into()));
                         }
                     }
-                    _ => {}
+                    Event::ChannelOpen(cid, _) => {
+                        log::info!("[rtc-client] Channel {:?} opened during connect phase", cid);
+                    }
+                    _ => {
+                        log::debug!("[rtc-client] Other event during connect: {:?}", event);
+                    }
                 }
             }
 
@@ -553,6 +559,7 @@ impl RtcClient {
                     }
                 }
                 Output::Event(e) => {
+                    log::info!("[rtc-client] str0m Event: {:?}", e);
                     if let Event::IceConnectionStateChange(state) = e {
                         if matches!(state, IceConnectionState::Disconnected) {
                             self.rtc.disconnect();
