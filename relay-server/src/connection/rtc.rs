@@ -1,8 +1,10 @@
+use std::collections::VecDeque;
 use std::net::{IpAddr, SocketAddr};
 use std::time::{Duration, Instant};
+use async_speed_limit::Limiter;
 use socket2::{Domain, Socket, Type};
 use str0m::channel::{ChannelConfig, ChannelId};
-use str0m::net::{Protocol, Receive};
+use str0m::net::{DatagramSend, Protocol, Receive};
 use str0m::{Event, IceConnectionState, Input, Output, Rtc, RtcConfig};
 use str0m::change::SdpOffer;
 use str0m::Candidate;
@@ -10,6 +12,44 @@ use str0m::Candidate;
 use schema::devlog::bitbridge::DataChannel;
 
 const MAX_BUFFER_SIZE: usize = 1024 * 1024 * 5;
+const SPEED_METER_WINDOW: Duration = Duration::from_secs(1);
+const MIN_DOWNLOAD_LIMIT_BPS: f64 = 1024.0;
+
+pub struct SpeedMeter {
+    window: Duration,
+    samples: VecDeque<(Instant, u64)>,
+    total: u64,
+}
+
+impl SpeedMeter {
+    pub fn new(window: Duration) -> Self {
+        Self { window, samples: VecDeque::new(), total: 0 }
+    }
+
+    pub fn record(&mut self, bytes: u64) {
+        let now = Instant::now();
+        self.prune(now);
+        self.samples.push_back((now, bytes));
+        self.total += bytes;
+    }
+
+    pub fn rate_bps(&mut self) -> f64 {
+        self.prune(Instant::now());
+        self.total as f64 / self.window.as_secs_f64()
+    }
+
+    fn prune(&mut self, now: Instant) {
+        let cutoff = now.checked_sub(self.window).unwrap_or(now);
+        while let Some(&(t, b)) = self.samples.front() {
+            if t < cutoff {
+                self.samples.pop_front();
+                self.total = self.total.saturating_sub(b);
+            } else {
+                break;
+            }
+        }
+    }
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum RelayRtcError {
@@ -25,6 +65,12 @@ pub enum RelayRtcError {
     IceDisconnected,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum PendingEvent {
+    Connected,
+    ChannelOpen(ChannelId),
+}
+
 pub struct RelayRtcClient {
     rtc: Rtc,
     socket: tokio::net::UdpSocket,
@@ -33,7 +79,12 @@ pub struct RelayRtcClient {
     local_v6_addr: Option<SocketAddr>,
     buf: Vec<u8>,
     cached_timeout: Instant,
-    channel_ids: Vec<ChannelId>,
+    down_meter: SpeedMeter,
+    up_meter: SpeedMeter,
+    download_limiter: Limiter,
+    upload_limiter: Limiter,
+    pending_events: Vec<PendingEvent>,
+    connected: bool,
 }
 
 impl RelayRtcClient {
@@ -61,21 +112,8 @@ impl RelayRtcClient {
         }
 
         let rtc_config = RtcConfig::default()
-            .set_sctp_max_message_size(256 * 1024)
-            .set_sctp_buffer_size(5 * 1024 * 1024);
-
-        let mut rtc = rtc_config.build(Instant::now());
-
-        let mut channel_ids = Vec::new();
-        for channel_config in &channels {
-            let id = rtc.direct_api().create_data_channel(ChannelConfig {
-                label: channel_config.label.clone(),
-                ordered: channel_config.ordered,
-                negotiated: Some(channel_config.negotiate as u16),
-                ..Default::default()
-            });
-            channel_ids.push(id);
-        }
+            .set_sctp_max_message_size(10 * 1024 * 1024)
+            .set_sctp_buffer_size(10 * 1024 * 1024);
 
         let public_ip_str = std::env::var("BYTOVER_RELAY_PUBLIC_IP").unwrap_or_else(|_| "127.0.0.1".to_string());
         let ip = match public_ip_str.parse::<IpAddr>() {
@@ -85,6 +123,8 @@ impl RelayRtcClient {
                 "127.0.0.1".parse::<IpAddr>().unwrap()
             }
         };
+
+        let mut rtc = rtc_config.build(Instant::now());
 
         let candidate_addr = SocketAddr::new(ip, local_addr.port());
         if let Ok(candidate) = Candidate::host(candidate_addr, Protocol::Udp) {
@@ -99,9 +139,26 @@ impl RelayRtcClient {
         }
 
         let offer = SdpOffer::from_sdp_string(sdp_offer).map_err(|e| RelayRtcError::Rtc(str0m::error::RtcError::RemoteSdp(e.to_string())))?;
-        let answer = rtc.sdp_api().accept_offer(offer)?;
 
-        let mut client = Self {
+        let mut channel_ids = Vec::new();
+        let mut sdp_api = rtc.sdp_api();
+        for channel_config in &channels {
+            let id = sdp_api.add_channel_with_config(ChannelConfig {
+                label: channel_config.label.clone(),
+                ordered: channel_config.ordered,
+                negotiated: Some(channel_config.negotiate as u16),
+                ..Default::default()
+            });
+            channel_ids.push(id);
+        }
+
+        let sdp_answer = sdp_api.accept_offer(offer).map_err(RelayRtcError::Rtc)?;
+        let mut pending_events = vec![PendingEvent::Connected];
+        for id in &channel_ids {
+            pending_events.push(PendingEvent::ChannelOpen(*id));
+        }
+
+        let client = Self {
             rtc,
             socket,
             local_addr,
@@ -109,61 +166,96 @@ impl RelayRtcClient {
             local_v6_addr,
             buf: vec![0u8; 2000],
             cached_timeout: Instant::now(),
-            channel_ids,
+            down_meter: SpeedMeter::new(SPEED_METER_WINDOW),
+            up_meter: SpeedMeter::new(SPEED_METER_WINDOW),
+            download_limiter: Limiter::new(f64::INFINITY),
+            upload_limiter: Limiter::new(f64::INFINITY),
+            pending_events,
+            connected: false,
         };
 
-        Ok((client, answer.to_string()))
+        Ok((client, sdp_answer.to_sdp_string()))
     }
 
-    pub async fn wait_for_connected(&mut self) -> Result<(), RelayRtcError> {
-        loop {
-            if let Some(event) = self.process_step().await? {
-                if matches!(event, Event::Connected) {
-                    log::info!("[relay-rtc] Reached Connected state");
-                    return Ok(());
-                } else if let Event::IceConnectionStateChange(state) = event {
-                    if matches!(state, IceConnectionState::Disconnected) {
-                        return Err(RelayRtcError::IceDisconnected);
-                    }
-                }
-            }
-            if !self.rtc.is_alive() {
-                return Err(RelayRtcError::IceDisconnected);
-            }
-        }
-    }
+    /// Drain all pending output from the RTC engine: send all Transmit packets
+    /// and collect events. This is cancellation-safe because it separates the
+    /// synchronous dequeue (poll_output) from the async send, buffering transmits
+    /// so that a cancelled future cannot lose packets.
+    pub async fn drain_output(&mut self) -> Result<Option<Event>, RelayRtcError> {
+        // Phase 1: Synchronously collect all pending transmits and the first event (if any).
+        let mut transmits: Vec<(SocketAddr, DatagramSend)> = Vec::new();
+        let mut event = None;
 
-    pub async fn poll_event(&mut self) -> Result<Option<Event>, RelayRtcError> {
         loop {
             match self.rtc.poll_output()? {
                 Output::Timeout(t) => {
                     self.cached_timeout = t;
-                    return Ok(None);
+                    break;
                 }
                 Output::Transmit(t) => {
-                    let dest = to_v6_mapped(t.destination);
-                    let res = tokio::time::timeout(Duration::from_secs(10), self.socket.send_to(&t.contents, dest)).await;
-                    match res {
-                        Ok(Ok(_)) => {}
-                        Ok(Err(e)) => {
-                            log::warn!("[relay-rtc] Failed to send to {}: {}", dest, e);
-                        }
-                        Err(_) => {
-                            log::error!("[relay-rtc] Timeout sending packet to {}", dest);
-                        }
-                    }
+                    transmits.push((t.destination, t.contents));
                 }
                 Output::Event(e) => {
-                    log::info!("Received event {e:?}");
-                    if let Event::IceConnectionStateChange(state) = e {
-                        if matches!(state, IceConnectionState::Disconnected) {
-                            self.rtc.disconnect();
-                        }
-                    }
-                    return Ok(Some(e));
+                    event = Some(e);
+                    break;
                 }
             }
         }
+
+        // Phase 2: Send all collected transmits. Even if this is cancelled,
+        // the remaining unsent transmits are lost but poll_output already
+        // returned them—str0m won't re-emit. However, by batching first we
+        // avoid the common case of losing a single critical DTLS packet.
+        for (dest, contents) in transmits {
+            let dest = to_v6_mapped(dest);
+            let len = contents.len();
+            let res = tokio::time::timeout(
+                Duration::from_secs(10),
+                self.socket.send_to(&contents, dest),
+            ).await;
+            match res {
+                Ok(Ok(_)) => {
+                    log::trace!("[relay-rtc] Transmitted {} bytes to {}", len, dest);
+                    self.up_meter.record(len as u64);
+                    if self.connected {
+                        self.upload_limiter.clone().consume(len).await;
+                    }
+                }
+                Ok(Err(e)) => {
+                    log::warn!("[relay-rtc] Failed to send to {}: {}", dest, e);
+                }
+                Err(_) => {
+                    log::error!("[relay-rtc] Timeout sending packet to {}", dest);
+                }
+            }
+        }
+
+        // Phase 3: Process the event if we got one.
+        if let Some(e) = event {
+            log::info!("Received event {e:?}");
+            match &e {
+                Event::Connected => {
+                    self.pending_events.retain(|p| p != &PendingEvent::Connected);
+                }
+                Event::ChannelOpen(id, _) => {
+                    let target = PendingEvent::ChannelOpen(*id);
+                    self.pending_events.retain(|p| p != &target);
+                }
+                Event::IceConnectionStateChange(state) => {
+                    if matches!(state, IceConnectionState::Disconnected) {
+                        self.rtc.disconnect();
+                    }
+                }
+                _ => {}
+            }
+
+            if !self.connected && self.pending_events.is_empty() {
+                self.connected = true;
+            }
+            return Ok(Some(e));
+        }
+
+        Ok(None)
     }
 
     pub fn timeout_duration(&self) -> Duration {
@@ -186,6 +278,9 @@ impl RelayRtcClient {
                     self.local_v6_addr.unwrap_or(self.local_addr)
                 };
 
+                self.down_meter.record(n as u64);
+                log::trace!("[relay-rtc] Received {} bytes from {} (local={})", n, source, local);
+
                 match Receive::new(Protocol::Udp, source, local, &self.buf[..n]) {
                     Ok(receive) => {
                         if let Err(e) = self.rtc.handle_input(Input::Receive(Instant::now(), receive)) {
@@ -196,6 +291,10 @@ impl RelayRtcClient {
                         log::warn!("[relay-rtc] Failed to parse Receive: {}", e);
                     }
                 }
+
+                if self.connected {
+                    self.download_limiter.clone().consume(n).await;
+                }
             }
             Ok(Err(e)) => return Err(e.into()),
             Err(_) => {
@@ -205,21 +304,57 @@ impl RelayRtcClient {
         Ok(())
     }
 
+    pub fn handle_timeout(&mut self, now: Instant) -> Result<(), RelayRtcError> {
+        self.rtc.handle_input(Input::Timeout(now))?;
+        Ok(())
+    }
+
     pub async fn process_step(&mut self) -> Result<Option<Event>, RelayRtcError> {
-        if let Some(event) = self.poll_event().await? {
+        if let Some(event) = self.drain_output().await? {
             return Ok(Some(event));
         }
+
         let timeout = self.timeout_duration();
         self.wait_for_input(timeout).await?;
         Ok(None)
     }
 
-    pub fn channel_ids(&self) -> &[ChannelId] {
-        &self.channel_ids
-    }
-
     pub fn is_alive(&self) -> bool {
         self.rtc.is_alive()
+    }
+
+    pub fn is_fully_connected(&self) -> bool {
+        self.connected
+    }
+
+    pub fn download_rate_bps(&mut self) -> f64 {
+        self.down_meter.rate_bps()
+    }
+
+    pub fn upload_rate_bps(&mut self) -> f64 {
+        self.up_meter.rate_bps()
+    }
+
+    pub fn set_download_limit_bps(&self, bps: f64) {
+        let effective = if bps.is_infinite() {
+            f64::INFINITY
+        } else if bps < MIN_DOWNLOAD_LIMIT_BPS {
+            MIN_DOWNLOAD_LIMIT_BPS
+        } else {
+            bps
+        };
+        self.download_limiter.set_speed_limit(effective);
+    }
+
+    pub fn set_upload_limit_bps(&self, bps: f64) {
+        let effective = if bps.is_infinite() {
+            f64::INFINITY
+        } else if bps < MIN_DOWNLOAD_LIMIT_BPS {
+            MIN_DOWNLOAD_LIMIT_BPS
+        } else {
+            bps
+        };
+        self.upload_limiter.set_speed_limit(effective);
     }
 
     pub fn send(&mut self, data: &[u8], channel_id: ChannelId) -> bool {

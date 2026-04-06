@@ -181,8 +181,6 @@ impl RtcClient {
         let offer_sdp = IceAgent::resolve_remote_candidates(&offer_message.sdp);
         log::info!("Received offer sdp: {offer_sdp}");
 
-        let _remote_ips = extract_remote_candidate_ips(&offer_sdp);
-
         let offer = str0m::change::SdpOffer::from_sdp_string(&offer_sdp).map_err(|e| WebRtcClientError::SdpParse(format!("{e}")))?;
 
         let reliable_id = rtc.direct_api().create_data_channel(ChannelConfig {
@@ -277,21 +275,21 @@ impl RtcClient {
             rtc.add_local_candidate(candidate);
         }
 
-        let unordered_msg_id = rtc.direct_api().create_data_channel(ChannelConfig {
+        let mut sdp_api = rtc.sdp_api();
+        let unordered_msg_id = sdp_api.add_channel_with_config(ChannelConfig {
             label: "unordered_msg".to_string(),
             ordered: false,
             negotiated: Some(UNORDERED_MSG_STREAM_ID),
             ..Default::default()
         });
 
-        let ordered_msg_id = rtc.direct_api().create_data_channel(ChannelConfig {
+        let ordered_msg_id = sdp_api.add_channel_with_config(ChannelConfig {
             label: "ordered_msg".to_string(),
             ordered: true,
             negotiated: Some(ORDERED_MSG_STREAM_ID),
             ..Default::default()
         });
 
-        let mut sdp_api = rtc.sdp_api();
         let reliable_id = sdp_api.add_channel_with_config(ChannelConfig {
             label: "reliable".to_string(),
             ordered: false,
@@ -646,22 +644,4 @@ fn from_v6_mapped(addr: SocketAddr) -> SocketAddr {
         }
         _ => addr
     }
-}
-
-fn extract_remote_candidate_ips(sdp: &str) -> Vec<IpAddr> {
-    let mut ips = Vec::new();
-    for line in sdp.lines() {
-        if !line.contains("candidate:") {
-            continue;
-        }
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() > 4 {
-            if let Ok(ip) = parts[4].parse::<IpAddr>() {
-                if !ips.contains(&ip) {
-                    ips.push(ip);
-                }
-            }
-        }
-    }
-    ips
 }

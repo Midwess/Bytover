@@ -122,26 +122,39 @@ impl ProxyManager {
     ) -> Result<String, ProxyManagerError> {
         log::info!("[relay-server] Handling connect for session {}", session_id);
 
-        // Check for existing session (upgrade weak ref)
-        if let Some(proxy) = self.get_proxy(&session_id).await {
+        let (proxy, is_new) = {
+            let mut proxies = self.proxies.lock().await;
+            match proxies.get(&session_id).and_then(|w| w.upgrade()) {
+                Some(existing) => (existing, false),
+                None => {
+                    proxies.remove(&session_id);
+                    let proxy = ProxyInstance::new(session_id.clone());
+                    proxies.insert(session_id.clone(), Arc::downgrade(&proxy));
+                    (proxy, true)
+                }
+            }
+        };
+
+        if !is_new {
             log::info!("[relay-server] Joining existing ProxyInstance for session {}", session_id);
             let answer = proxy.proxy(sdp_offer, channels).await.map_err(ProxyManagerError::RelayRtc)?;
             return Ok(answer);
         }
 
-        // Create new proxy instance
         log::info!("[relay-server] Creating new ProxyInstance for session {}", session_id);
-        let proxy = ProxyInstance::new(session_id.clone());
-        let answer = proxy.init(sdp_offer, channels).await.map_err(ProxyManagerError::RelayRtc)?;
+        let answer = match proxy.init(sdp_offer, channels).await {
+            Ok(a) => a,
+            Err(e) => {
+                self.proxies.lock().await.remove(&session_id);
+                return Err(ProxyManagerError::RelayRtc(e));
+            }
+        };
 
-        // Store Weak reference in the map — the run loop will hold the only strong Arc
-        self.proxies.lock().await.insert(session_id.clone(), Arc::downgrade(&proxy));
-
-        // Send to the run loop to spawn the run task
         if let Some(tx) = self.run_tx.lock().await.as_ref() {
             let _ = tx.send(proxy);
         } else {
             log::error!("[relay-server] ProxyManager run loop not started, cannot spawn proxy for {session_id}");
+            self.proxies.lock().await.remove(&session_id);
         }
 
         Ok(answer)

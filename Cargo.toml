@@ -61,6 +61,7 @@ futures-timer = { version = "3.0.3", default-features = false, features = ["wasm
 n0-future = { version = "0.3.1", default-features = false }
 http = { version = "1.3.1", default-features = false }
 async-stream = { version = "0.3.6", default-features = false }
+async-speed-limit = { version = "0.4.2" }
 once_cell = { version = "1.21.3", default-features = false }
 futures = {version = "0.3.31", default-features = false }
 http-body = { version = "1.0.1", default-features = false }
@@ -73,7 +74,7 @@ sea-orm = { version = "1.1.17", features = ["macros", "runtime-tokio-rustls", "s
 image = "0.25.8"
 tempfile = "3.23.0"
 tokio-cron-scheduler = { version = "0.15.1", default-features = false }
-str0m = { git = "https://github.com/midwess/str0m.git" }
+str0m = { path = "../str0m" }
 tokio-tungstenite = "0.29.0"
 socket2 = "0.6.3"
 sha1 = "0.10.6"

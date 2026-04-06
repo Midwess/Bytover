@@ -193,14 +193,6 @@ impl WebRtcApi {
         channel: Arc<RtcDataChannelWrapper>,
         inbound_tx: mpsc::UnboundedSender<Vec<u8>>
     ) -> Result<(), WebError> {
-        let onopen = {
-            let channel = channel.clone();
-            Closure::wrap(Box::new(move |_event: JsValue| {
-                log::info!("Data channel {} opened", channel.id().unwrap_or(0));
-            }) as Box<dyn FnMut(JsValue)>)
-        };
-        channel.clone().set_onopen(Some(onopen.as_ref().unchecked_ref()));
-        onopen.forget();
 
         let onmessage = {
             let inbound_tx = inbound_tx.clone();
@@ -268,17 +260,20 @@ impl WebRtcApi {
     }
 
     pub async fn wait_for_channel_open(&self, channel: Arc<RtcDataChannelWrapper>) -> Result<(), WebError> {
-        if channel.0.ready_state() == web_sys::RtcDataChannelState::Open {
+        let channel_id = channel.id().unwrap_or(0);
+        if channel.ready_state() == web_sys::RtcDataChannelState::Open {
+            log::info!("Data channel {} is already open", channel_id);
             return Ok(());
         }
 
         let (tx, mut rx) = mpsc::channel::<()>(1);
-        let onopen = Closure::wrap(Box::new(move || {
+        let onopen = Closure::wrap(Box::new(move |_v: JsValue| {
             let _ = tx.clone().try_send(());
-        }) as Box<dyn FnMut()>);
-        channel.0.set_onopen(Some(onopen.as_ref().unchecked_ref()));
-        onopen.forget();
+        }) as Box<dyn FnMut(JsValue)>);
+        channel.set_onopen(Some(onopen.as_ref().unchecked_ref()));
         rx.next().await;
+        channel.set_onopen(None);
+        log::info!("Data channel {} opened", channel_id);
         Ok(())
     }
 }

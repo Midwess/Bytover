@@ -161,7 +161,7 @@ impl WebRtcClient {
             },
         ];
 
-        let (mut open_tx, mut open_rx) = mpsc::channel(2);
+        let (open_tx, mut open_rx) = mpsc::channel(2);
 
         let p2p_tx = open_tx.clone();
         let sig_p2p = signaling.clone();
@@ -169,6 +169,8 @@ impl WebRtcClient {
         let session_id_p2p = session_id.clone();
         let local_sdp_p2p = local_sdp.clone();
         let connection_p2p = connection.clone();
+        let reliable_channel_p2p = reliable_channel.clone();
+        let unordered_channel_p2p = unordered_channel.clone();
         let ordered_channel_p2p = ordered_channel.clone();
         
         let me_proto = schema::devlog::bitbridge::PeerMessage {
@@ -213,6 +215,7 @@ impl WebRtcClient {
                 user_id: None,
                 signalling_id: None
             };
+
             let _ = client.peer.set(remote_peer);
             p2p_answer_sdp = Some(answer_sdp);
         } else {
@@ -225,6 +228,8 @@ impl WebRtcClient {
                     log::warn!("p2p remote desc failed {:?}", e);
                 }
             }
+            let _ = api.wait_for_channel_open(reliable_channel_p2p).await;
+            let _ = api.wait_for_channel_open(unordered_channel_p2p).await;
             if let Ok(_) = api.wait_for_channel_open(ordered_channel_p2p).await {
                 log::info!("[webrtc-client] truly P2P connected!");
                 let _ = p2p_tx.clone().send(()).await;
@@ -237,6 +242,8 @@ impl WebRtcClient {
         let session_id_relay = session_id.clone();
         let relay_sdp_relay = relay_sdp.clone();
         let relay_connection_clone = relay_connection.clone();
+        let relay_reliable_channel_clone = relay_reliable_channel.clone();
+        let relay_unordered_channel_clone = relay_unordered_channel.clone();
         let relay_ordered_channel_clone = relay_ordered_channel.clone();
 
         wasm_bindgen_futures::spawn_local(async move {
@@ -255,6 +262,8 @@ impl WebRtcClient {
             } else {
                 log::warn!("Relay signalling HTTP failed: {:?}", relay_res.err());
             }
+            let _ = relay_api.wait_for_channel_open(relay_reliable_channel_clone).await;
+            let _ = relay_api.wait_for_channel_open(relay_unordered_channel_clone).await;
             if let Ok(_) = relay_api.wait_for_channel_open(relay_ordered_channel_clone).await {
                 log::info!("[webrtc-client] Relay connected!");
                 let _ = relay_tx.clone().send(()).await;

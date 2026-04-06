@@ -448,6 +448,23 @@ impl WebRtcClient {
                         }
                     }
                 }
+                str0m::Event::ChannelOpen(cid, _) => {
+                    let label = if cid == cids.reliable {
+                        "reliable"
+                    } else if cid == cids.unordered_msg {
+                        "unordered_msg"
+                    } else if cid == cids.ordered_msg {
+                        "ordered_msg"
+                    } else {
+                        "unknown"
+                    };
+                    log::info!(
+                        "[webrtc-client] {} Data channel {} ({:?}) opened",
+                        if is_p2p { "truly P2P" } else { "Relay" },
+                        label,
+                        cid
+                    );
+                }
                 str0m::Event::IceConnectionStateChange(state) => {
                     log::info!("[webrtc-client] {} ICE state: {:?}", if is_p2p {"truly P2P"} else {"Relay"}, state);
                 }

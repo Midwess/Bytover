@@ -663,6 +663,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-speed-limit"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97c1688bb8e4eb3dcd68a8b0e5a81deae887c67362bb482a902b785e83ac2edc"
+dependencies = [
+ "futures-core",
+ "futures-io",
+ "futures-timer",
+ "pin-project-lite",
+]
+
+[[package]]
 name = "async-stream"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4817,7 +4829,6 @@ dependencies = [
 [[package]]
 name = "is"
 version = "0.8.0"
-source = "git+https://github.com/midwess/str0m.git#cf1f991f63a2b79829400f37dd8a70f2c377615f"
 dependencies = [
  "crc",
  "serde",
@@ -7625,8 +7636,10 @@ name = "relay-server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-speed-limit",
  "async-trait",
  "base64 0.22.1",
+ "core-services",
  "devlog-sdk",
  "env_logger 0.11.10",
  "futures-util",
@@ -9155,7 +9168,6 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 [[package]]
 name = "str0m"
 version = "0.18.0"
-source = "git+https://github.com/midwess/str0m.git#cf1f991f63a2b79829400f37dd8a70f2c377615f"
 dependencies = [
  "arrayvec",
  "base64ct",
@@ -9175,7 +9187,6 @@ dependencies = [
 [[package]]
 name = "str0m-aws-lc-rs"
 version = "0.3.0"
-source = "git+https://github.com/midwess/str0m.git#cf1f991f63a2b79829400f37dd8a70f2c377615f"
 dependencies = [
  "aws-lc-rs",
  "dimpl",
@@ -9186,7 +9197,6 @@ dependencies = [
 [[package]]
 name = "str0m-proto"
 version = "0.4.0"
-source = "git+https://github.com/midwess/str0m.git#cf1f991f63a2b79829400f37dd8a70f2c377615f"
 dependencies = [
  "base64ct",
  "dimpl",
