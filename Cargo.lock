@@ -4829,6 +4829,7 @@ dependencies = [
 [[package]]
 name = "is"
 version = "0.8.0"
+source = "git+https://github.com/Midwess/str0m#e51bb979f32533f6ebcb9940e70beac9df31e9c9"
 dependencies = [
  "crc",
  "serde",
@@ -9168,6 +9169,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 [[package]]
 name = "str0m"
 version = "0.18.0"
+source = "git+https://github.com/Midwess/str0m#e51bb979f32533f6ebcb9940e70beac9df31e9c9"
 dependencies = [
  "arrayvec",
  "base64ct",
@@ -9187,6 +9189,7 @@ dependencies = [
 [[package]]
 name = "str0m-aws-lc-rs"
 version = "0.3.0"
+source = "git+https://github.com/Midwess/str0m#e51bb979f32533f6ebcb9940e70beac9df31e9c9"
 dependencies = [
  "aws-lc-rs",
  "dimpl",
@@ -9197,6 +9200,7 @@ dependencies = [
 [[package]]
 name = "str0m-proto"
 version = "0.4.0"
+source = "git+https://github.com/Midwess/str0m#e51bb979f32533f6ebcb9940e70beac9df31e9c9"
 dependencies = [
  "base64ct",
  "dimpl",
