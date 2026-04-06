@@ -98,8 +98,8 @@ impl RelayRtcClient {
         let mut local_v6_addr = local_addr;
 
         let rtc_config = RtcConfig::default()
-            .set_sctp_max_message_size(10 * 1024 * 1024)
-            .set_sctp_buffer_size(10 * 1024 * 1024);
+            .set_sctp_max_message_size(5 * 1024 * 1024)
+            .set_sctp_buffer_size(5 * 1024 * 1024);
 
         let mut rtc = rtc_config.build(Instant::now());
 
@@ -298,6 +298,14 @@ impl RelayRtcClient {
         self.connected
     }
 
+    pub fn is_alive(&self) -> bool {
+        self.rtc.is_alive()
+    }
+
+    pub fn disconnect(&mut self) {
+        self.rtc.disconnect();
+    }
+
     pub fn download_rate_bps(&mut self) -> f64 {
         self.down_meter.rate_bps()
     }
@@ -305,8 +313,6 @@ impl RelayRtcClient {
     pub fn upload_rate_bps(&mut self) -> f64 {
         self.up_meter.rate_bps()
     }
-
-
 
     pub fn send(&mut self, data: &[u8], channel_id: ChannelId) -> bool {
         if let Some(mut ch) = self.rtc.channel(channel_id) {

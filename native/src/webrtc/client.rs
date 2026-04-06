@@ -439,9 +439,6 @@ impl WebRtcClient {
                 str0m::Event::IceConnectionStateChange(state) => {
                     let label = if is_p2p { "truly P2P" } else { "Relay" };
                     log::info!("[webrtc-client] {} ICE state: {:?}", label, state);
-                    if matches!(state, str0m::IceConnectionState::Disconnected) {
-                        log::warn!("[webrtc-client] {} ICE disconnected (transient, not tearing down)", label);
-                    }
                 }
                 _ => {}
             },
