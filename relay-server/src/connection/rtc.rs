@@ -68,7 +68,8 @@ enum PendingEvent {
 pub struct RelayRtcClient {
     rtc: Rtc,
     socket: tokio::net::UdpSocket,
-    local_addr: SocketAddr,
+    local_v4_addr: SocketAddr,
+    local_v6_addr: SocketAddr,
     buf: Vec<u8>,
     cached_timeout: Instant,
     down_meter: SpeedMeter,
@@ -85,35 +86,50 @@ impl RelayRtcClient {
         channels: Vec<DataChannel>,
     ) -> Result<(Box<Self>, String), RelayRtcError> {
 
-        let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(socket2::Protocol::UDP))?;
+        let socket = Socket::new(Domain::IPV6, Type::DGRAM, Some(socket2::Protocol::UDP))?;
+        socket.set_only_v6(false)?;
         socket.set_nonblocking(true)?;
-        socket.bind(&"0.0.0.0:0".parse::<SocketAddr>().unwrap().into())?;
+        socket.bind(&"[::]:0".parse::<SocketAddr>().unwrap().into())?;
         let _ = socket.set_send_buffer_size(MAX_BUFFER_SIZE * 2);
         let socket: std::net::UdpSocket = socket.into();
         let socket = tokio::net::UdpSocket::from_std(socket)?;
 
         let local_addr = socket.local_addr()?;
+        let mut local_v4_addr = local_addr;
+        let mut local_v6_addr = local_addr;
 
         let rtc_config = RtcConfig::default()
             .set_sctp_max_message_size(10 * 1024 * 1024)
             .set_sctp_buffer_size(10 * 1024 * 1024);
 
-        let public_ip_str = std::env::var("BYTOVER_RELAY_PUBLIC_IP").unwrap_or_else(|_| "127.0.0.1".to_string());
-        let ip: Ipv4Addr = match public_ip_str.parse() {
-            Ok(parsed) => parsed,
-            Err(e) => {
-                log::error!("[relay-rtc] Failed to parse BYTOVER_RELAY_PUBLIC_IP '{}': {}. Falling back to 127.0.0.1", public_ip_str, e);
-                Ipv4Addr::LOCALHOST
-            }
-        };
-
         let mut rtc = rtc_config.build(Instant::now());
 
-        let candidate_addr = SocketAddr::new(ip.into(), local_addr.port());
-        if let Ok(candidate) = Candidate::host(candidate_addr, Protocol::Udp) {
-            rtc.add_local_candidate(candidate);
-        } else {
-            log::error!("[relay-rtc] Failed to create UDP host candidate for IP: {}", ip);
+        let public_ip_v4 = std::env::var("BYTOVER_RELAY_PUBLIC_IP").ok().and_then(|s| s.parse::<std::net::Ipv4Addr>().ok());
+        let public_ip_v6 = std::env::var("BYTOVER_RELAY_PUBLIC_IP_V6").ok().and_then(|s| s.parse::<std::net::Ipv6Addr>().ok());
+
+        if let Some(ip4) = public_ip_v4 {
+            let addr = SocketAddr::new(ip4.into(), local_addr.port());
+            if let Ok(c) = Candidate::host(addr, Protocol::Udp) {
+                rtc.add_local_candidate(c);
+            }
+            local_v4_addr = addr;
+        }
+
+        if let Some(ip6) = public_ip_v6 {
+            let addr = SocketAddr::new(ip6.into(), local_addr.port());
+            if let Ok(c) = Candidate::host(addr, Protocol::Udp) {
+                rtc.add_local_candidate(c);
+            }
+            local_v6_addr = addr;
+        }
+
+        if public_ip_v4.is_none() && public_ip_v6.is_none() {
+            log::warn!("[relay-rtc] No public IPs configured (BYTOVER_RELAY_PUBLIC_IP or BYTOVER_RELAY_PUBLIC_IP_V6). ICE gathering may fail.");
+            let addr = SocketAddr::new(std::net::Ipv4Addr::LOCALHOST.into(), local_addr.port());
+            if let Ok(c) = Candidate::host(addr, Protocol::Udp) {
+                rtc.add_local_candidate(c);
+            }
+            local_v4_addr = addr;
         }
 
         let offer = SdpOffer::from_sdp_string(sdp_offer).map_err(|e| RelayRtcError::Rtc(str0m::error::RtcError::RemoteSdp(e.to_string())))?;
@@ -139,7 +155,8 @@ impl RelayRtcClient {
         let client = Box::new(Self {
             rtc,
             socket,
-            local_addr,
+            local_v4_addr,
+            local_v6_addr,
             buf: vec![0u8; 2000],
             cached_timeout: Instant::now(),
             down_meter: SpeedMeter::new(SPEED_METER_WINDOW),
@@ -180,6 +197,7 @@ impl RelayRtcClient {
 
         // Phase 2: Send all collected transmits.
         for (dest, contents) in transmits {
+            let dest = to_v6_mapped(dest);
             let len = contents.len();
             let res = tokio::time::timeout(
                 Duration::from_secs(10),
@@ -247,10 +265,16 @@ impl RelayRtcClient {
 
         match tokio::time::timeout(timeout, self.socket.recv_from(&mut self.buf[..])).await {
             Ok(Ok((n, source))) => {
+                let source = from_v6_mapped(source);
+                let local = if source.is_ipv4() {
+                    self.local_v4_addr
+                } else {
+                    self.local_v6_addr
+                };
                 self.down_meter.record(n as u64);
                 log::trace!("[relay-rtc] Received {} bytes from {}", n, source);
 
-                match Receive::new(Protocol::Udp, source, self.local_addr, &self.buf[..n]) {
+                match Receive::new(Protocol::Udp, source, local, &self.buf[..n]) {
                     Ok(receive) => {
                         if let Err(e) = self.rtc.handle_input(Input::Receive(Instant::now(), receive)) {
                             log::warn!("[relay-rtc] Input handle packet drop: {}", e);
@@ -336,5 +360,27 @@ impl RelayRtcClient {
             log::warn!("[relay-rtc] Channel {:?} not found", channel_id);
             false
         }
+    }
+}
+
+fn from_v6_mapped(addr: SocketAddr) -> SocketAddr {
+    match addr {
+        SocketAddr::V6(v6) => {
+            let octets = v6.ip().octets();
+            if octets[0..12] == [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff] {
+                let v4 = std::net::Ipv4Addr::new(octets[12], octets[13], octets[14], octets[15]);
+                SocketAddr::new(v4.into(), v6.port())
+            } else {
+                addr
+            }
+        }
+        _ => addr
+    }
+}
+
+fn to_v6_mapped(addr: SocketAddr) -> SocketAddr {
+    match addr {
+        SocketAddr::V4(v4) => SocketAddr::new(v4.ip().to_ipv6_mapped().into(), v4.port()),
+        v6 => v6
     }
 }
