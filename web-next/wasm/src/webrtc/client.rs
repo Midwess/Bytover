@@ -844,3 +844,9 @@ impl From<shared::errors::CoreError> for WebRtcClientError {
         WebRtcClientError::Transfer(err.to_string())
     }
 }
+
+impl From<WebRtcClientError> for shared::errors::CoreError {
+    fn from(error: WebRtcClientError) -> Self {
+        shared::errors::CoreError::BrowserError(error.to_string())
+    }
+}

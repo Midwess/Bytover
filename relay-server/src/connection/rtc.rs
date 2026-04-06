@@ -16,7 +16,12 @@ const SPEED_METER_WINDOW: Duration = Duration::from_secs(1);
 
 /// How long ICE can stay in `Disconnected` before we treat it as a real disconnect.
 /// str0m never emits Failed/Closed ICE states, so we need this timeout.
-const ICE_DISCONNECT_TIMEOUT: Duration = Duration::from_secs(8);
+const ICE_DISCONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Maximum number of UDP transmit packets processed in a single `poll_output` call.
+/// Capping this prevents the async future state machine from growing too deep
+/// during file-transfer bursts, avoiding a stack overflow in the Tokio worker.
+const MAX_TRANSMITS_PER_POLL: usize = 8;
 
 pub struct SpeedMeter {
     window: Duration,
@@ -188,6 +193,7 @@ impl RelayRtcClient {
         }
 
         let mut event = None;
+        let mut transmit_count = 0;
 
         loop {
             match self.rtc.poll_output()? {
@@ -198,21 +204,17 @@ impl RelayRtcClient {
                 Output::Transmit(t) => {
                     let dest = to_v6_mapped(t.destination);
                     let len = t.contents.len();
-                    let res = tokio::time::timeout(
-                        Duration::from_secs(10),
-                        self.socket.send_to(&t.contents, dest),
-                    ).await;
-                    match res {
-                        Ok(Ok(_)) => {
-                            log::trace!("[relay-rtc] Transmitted {} bytes to {}", len, dest);
-                            self.up_meter.record(len as u64);
-                        }
-                        Ok(Err(e)) => {
-                            log::warn!("[relay-rtc] Failed to send to {}: {}", dest, e);
-                        }
-                        Err(_) => {
-                            log::error!("[relay-rtc] Timeout sending packet to {}", dest);
-                        }
+
+                    if let Err(e) = self.socket.send_to(&t.contents, dest).await {
+                        log::warn!("[relay-rtc] Failed to send to {}: {}", dest, e);
+                    } else {
+                        log::trace!("[relay-rtc] Transmitted {} bytes to {}", len, dest);
+                        self.up_meter.record(len as u64);
+                    }
+
+                    transmit_count += 1;
+                    if transmit_count >= MAX_TRANSMITS_PER_POLL {
+                        break;
                     }
                 }
                 Output::Event(e) => {

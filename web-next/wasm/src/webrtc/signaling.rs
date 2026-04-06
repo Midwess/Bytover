@@ -22,7 +22,7 @@ impl SignalingClient {
         let offer_req = OfferRequest {
             offer: OfferMessage {
                 sdp: offer_sdp.to_string(),
-                peer: Some(me.clone()),
+                peer: me.clone(),
             },
             peer: me,
             session_id: Some(session_id.to_string())

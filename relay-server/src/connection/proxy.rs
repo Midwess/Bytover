@@ -117,32 +117,35 @@ impl ProxyInstance {
 
             // Drain pending output (Transmits) BEFORE entering select!.
             if leg1.is_alive() {
-                match leg1.poll_output().await {
-                    Ok(Some(event)) => {
-                        if let Event::ChannelData(data) = event {
-                            depth_to_2 += 1;
-                            if tx_to_2.send((data.id, data.data)).is_err() {
-                                log::warn!("[relay-server] tx_to_2 closed");
-                                break;
+                loop {
+                    match leg1.poll_output().await {
+                        Ok(Some(event)) => {
+                            if let Event::ChannelData(data) = event {
+                                depth_to_2 += 1;
+                                if tx_to_2.send((data.id, data.data)).is_err() {
+                                    log::warn!("[relay-server] tx_to_2 closed");
+                                    return session_id;
+                                }
+                            } else {
+                                log::debug!("[relay-server] Leg 1 Event: {:?}", event);
                             }
-                        } else {
-                            log::debug!("[relay-server] Leg 1 Event: {:?}", event);
-                        }
-                        if !leg1_connected && leg1.is_fully_connected() {
-                            leg1_connected = true;
-                            log::info!("[relay-server] Leg 1 fully connected for session {}", session_id);
-                            if leg2_connected {
-                                both_connected = true;
-                                log::info!("[relay-server] Both legs connected for session {}", session_id);
+                            if !leg1_connected && leg1.is_fully_connected() {
+                                leg1_connected = true;
+                                log::info!("[relay-server] Leg 1 fully connected for session {}", session_id);
+                                if leg2_connected {
+                                    both_connected = true;
+                                    log::info!("[relay-server] Both legs connected for session {}", session_id);
+                                }
                             }
                         }
-                    }
-                    Ok(None) => {}
-                    Err(e) => {
-                        log::warn!("[relay-server] Leg 1 drain error: {:?}", e);
-                        leg1.disconnect();
-                        if let Some(leg2) = leg2_opt.as_mut() {
-                            leg2.disconnect();
+                        Ok(None) => break,
+                        Err(e) => {
+                            log::warn!("[relay-server] Leg 1 drain error: {:?}", e);
+                            leg1.disconnect();
+                            if let Some(leg2) = leg2_opt.as_mut() {
+                                leg2.disconnect();
+                            }
+                            break;
                         }
                     }
                 }
@@ -150,31 +153,34 @@ impl ProxyInstance {
 
             if let Some(leg2) = leg2_opt.as_mut() {
                 if leg2.is_alive() {
-                    match leg2.poll_output().await {
-                        Ok(Some(event)) => {
-                            if let Event::ChannelData(data) = event {
-                                depth_to_1 += 1;
-                                if tx_to_1.send((data.id, data.data)).is_err() {
-                                    log::warn!("[relay-server] tx_to_1 closed");
-                                    break;
+                    loop {
+                        match leg2.poll_output().await {
+                            Ok(Some(event)) => {
+                                if let Event::ChannelData(data) = event {
+                                    depth_to_1 += 1;
+                                    if tx_to_1.send((data.id, data.data)).is_err() {
+                                        log::warn!("[relay-server] tx_to_1 closed");
+                                        return session_id;
+                                    }
+                                } else {
+                                    log::debug!("[relay-server] Leg 2 Event: {:?}", event);
                                 }
-                            } else {
-                                log::debug!("[relay-server] Leg 2 Event: {:?}", event);
-                            }
-                            if !leg2_connected && leg2.is_fully_connected() {
-                                leg2_connected = true;
-                                log::info!("[relay-server] Leg 2 fully connected for session {}", session_id);
-                                if leg1_connected {
-                                    both_connected = true;
-                                    log::info!("[relay-server] Both legs connected for session {}", session_id);
+                                if !leg2_connected && leg2.is_fully_connected() {
+                                    leg2_connected = true;
+                                    log::info!("[relay-server] Leg 2 fully connected for session {}", session_id);
+                                    if leg1_connected {
+                                        both_connected = true;
+                                        log::info!("[relay-server] Both legs connected for session {}", session_id);
+                                    }
                                 }
                             }
-                        }
-                        Ok(None) => {}
-                        Err(e) => {
-                            log::warn!("[relay-server] Leg 2 drain error: {:?}", e);
-                            leg2.disconnect();
-                            leg1.disconnect();
+                            Ok(None) => break,
+                            Err(e) => {
+                                log::warn!("[relay-server] Leg 2 drain error: {:?}", e);
+                                leg2.disconnect();
+                                leg1.disconnect();
+                                break;
+                            }
                         }
                     }
                 }

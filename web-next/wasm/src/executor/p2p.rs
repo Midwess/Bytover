@@ -123,16 +123,10 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 client.start_core_stream(request);
                 self.set_client(client.clone()).map_err(|_| P2PError::AlreadyConnected)?;
 
-                let client_clone = client.clone();
-                wasm_bindgen_futures::spawn_local(async move {
-                    if let Err(e) = client_clone.run().await {
-                        log::error!("WebRtcClient run error: {:?}", e);
-                    }
-                });
-
                 let peer = client.peer_entity().ok_or_else(|| P2PError::WebRtc("Peer not set after signaling exchange".into()))?;
-
                 self.set_current_user(current_user).ok();
+
+                client.run().await?;
 
                 Ok(CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(peer)))
             }
@@ -202,17 +196,7 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 let core_request = request.clone();
 
                 let resource_clone = resource.clone();
-                wasm_bindgen_futures::spawn_local(async move {
-                    match client.request_resource_download(core_request, session_id, resource_clone.clone(), progress).await {
-                        Ok(_) => {
-                            log::info!("Resource download completed for resource {}", resource_clone.order_id);
-                        }
-                        Err(e) => {
-                            log::error!("Resource download failed for resource {}: {:?}", resource_clone.order_id, e);
-                        }
-                    }
-                });
-
+                client.request_resource_download(core_request, session_id, resource_clone.clone(), progress).await?;
                 Ok(CoreOperationOutput::None)
             }
 
@@ -233,16 +217,7 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 let client = self.get_client_or_not_connected()?;
                 let core_request = request.clone();
 
-                wasm_bindgen_futures::spawn_local(async move {
-                    match client.download_all_resources(core_request, session_id, session_path, resources).await {
-                        Ok(_) => {
-                            log::info!("Download all resources completed for session {}", session_id);
-                        }
-                        Err(e) => {
-                            log::error!("Download all resources failed for session {}: {:?}", session_id, e);
-                        }
-                    }
-                });
+                client.download_all_resources(core_request, session_id, session_path, resources).await?;
 
                 Ok(CoreOperationOutput::None)
             }
