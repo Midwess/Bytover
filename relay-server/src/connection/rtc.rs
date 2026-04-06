@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use socket2::{Domain, Socket, Type};
 use str0m::channel::{ChannelConfig, ChannelId};
-use str0m::net::{DatagramSend, Protocol, Receive};
+use str0m::net::{Protocol, Receive};
 use str0m::{Event, Input, Output, Rtc, RtcConfig};
 use str0m::change::SdpOffer;
 use str0m::Candidate;
@@ -168,13 +168,10 @@ impl RelayRtcClient {
         Ok((client, sdp_answer.to_sdp_string()))
     }
 
-    /// Drain all pending output from the RTC engine: send all Transmit packets
-    /// and collect events. This is cancellation-safe because it separates the
-    /// synchronous dequeue (poll_output) from the async send, buffering transmits
-    /// so that a cancelled future cannot lose packets.
-    pub async fn drain_output(&mut self) -> Result<Option<Event>, RelayRtcError> {
-        // Phase 1: Synchronously collect all pending transmits and the first event (if any).
-        let mut transmits: Vec<(SocketAddr, DatagramSend)> = Vec::new();
+    /// Poll the RTC engine for output. Each Transmit is sent immediately to avoid
+    /// stacking (which causes stack overflow under high load). Stops at the first Event
+    /// or Timeout, returning it for processing.
+    pub async fn poll_output(&mut self) -> Result<Option<Event>, RelayRtcError> {
         let mut event = None;
 
         loop {
@@ -184,7 +181,24 @@ impl RelayRtcClient {
                     break;
                 }
                 Output::Transmit(t) => {
-                    transmits.push((t.destination, t.contents));
+                    let dest = to_v6_mapped(t.destination);
+                    let len = t.contents.len();
+                    let res = tokio::time::timeout(
+                        Duration::from_secs(10),
+                        self.socket.send_to(&t.contents, dest),
+                    ).await;
+                    match res {
+                        Ok(Ok(_)) => {
+                            log::trace!("[relay-rtc] Transmitted {} bytes to {}", len, dest);
+                            self.up_meter.record(len as u64);
+                        }
+                        Ok(Err(e)) => {
+                            log::warn!("[relay-rtc] Failed to send to {}: {}", dest, e);
+                        }
+                        Err(_) => {
+                            log::error!("[relay-rtc] Timeout sending packet to {}", dest);
+                        }
+                    }
                 }
                 Output::Event(e) => {
                     event = Some(e);
@@ -193,29 +207,6 @@ impl RelayRtcClient {
             }
         }
 
-        // Phase 2: Send all collected transmits.
-        for (dest, contents) in transmits {
-            let dest = to_v6_mapped(dest);
-            let len = contents.len();
-            let res = tokio::time::timeout(
-                Duration::from_secs(10),
-                self.socket.send_to(&contents, dest),
-            ).await;
-            match res {
-                Ok(Ok(_)) => {
-                    log::trace!("[relay-rtc] Transmitted {} bytes to {}", len, dest);
-                    self.up_meter.record(len as u64);
-                }
-                Ok(Err(e)) => {
-                    log::warn!("[relay-rtc] Failed to send to {}: {}", dest, e);
-                }
-                Err(_) => {
-                    log::error!("[relay-rtc] Timeout sending packet to {}", dest);
-                }
-            }
-        }
-
-        // Phase 3: Process the event if we got one.
         if let Some(e) = event {
             match &e {
                 Event::ChannelData(data) => {
@@ -294,7 +285,7 @@ impl RelayRtcClient {
     }
 
     pub async fn process_step(&mut self) -> Result<Option<Event>, RelayRtcError> {
-        if let Some(event) = self.drain_output().await? {
+        if let Some(event) = self.poll_output().await? {
             return Ok(Some(event));
         }
 

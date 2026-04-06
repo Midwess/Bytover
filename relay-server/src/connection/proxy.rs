@@ -95,7 +95,7 @@ impl ProxyInstance {
             // This is critical: inside select!, a cancelled future would lose
             // any Transmit that was already dequeued from the RTC engine but
             // not yet sent over the socket — breaking DTLS/ICE handshakes.
-            match leg1.drain_output().await {
+            match leg1.poll_output().await {
                 Ok(Some(event)) => {
                     if let Event::ChannelData(data) = event {
                         depth_to_2 += 1;
@@ -122,7 +122,7 @@ impl ProxyInstance {
                 }
             }
             if let Some(leg2) = leg2_opt.as_mut() {
-                match leg2.drain_output().await {
+                match leg2.poll_output().await {
                     Ok(Some(event)) => {
                         if let Event::ChannelData(data) = event {
                             depth_to_1 += 1;
