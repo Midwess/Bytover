@@ -125,6 +125,9 @@ struct RtcClient {
     cached_timeout: Instant,
     channel_ids: ChannelIds,
     pending_transmits: std::collections::VecDeque<(Vec<u8>, str0m::channel::ChannelId)>,
+    /// Events received during the connect/handshake phase that need to be
+    /// replayed once the run loop starts (e.g. early ChannelData).
+    early_events: Vec<Event>,
 }
 
 impl RtcClient {
@@ -183,20 +186,19 @@ impl RtcClient {
 
         let offer = str0m::change::SdpOffer::from_sdp_string(&offer_sdp).map_err(|e| WebRtcClientError::SdpParse(format!("{e}")))?;
 
-        let mut sdp_api = rtc.sdp_api();
-        let reliable_id = sdp_api.add_channel_with_config(ChannelConfig {
+        let reliable_id = rtc.direct_api().create_data_channel(ChannelConfig {
             label: "reliable".to_string(),
             ordered: false,
             negotiated: Some(RELIABLE_STREAM_ID),
             ..Default::default()
         });
-        let unordered_msg_id = sdp_api.add_channel_with_config(ChannelConfig {
+        let unordered_msg_id = rtc.direct_api().create_data_channel(ChannelConfig {
             label: "unordered_msg".to_string(),
             ordered: false,
             negotiated: Some(UNORDERED_MSG_STREAM_ID),
             ..Default::default()
         });
-        let ordered_msg_id = sdp_api.add_channel_with_config(ChannelConfig {
+        let ordered_msg_id = rtc.direct_api().create_data_channel(ChannelConfig {
             label: "ordered_msg".to_string(),
             ordered: true,
             negotiated: Some(ORDERED_MSG_STREAM_ID),
@@ -208,7 +210,7 @@ impl RtcClient {
             ordered_msg: ordered_msg_id
         };
 
-        let answer = sdp_api.accept_offer(offer).map_err(WebRtcClientError::Rtc)?;
+        let answer = rtc.sdp_api().accept_offer(offer).map_err(WebRtcClientError::Rtc)?;
 
         signalling
             .send_answer(answer.to_sdp_string(), me, request_id)
@@ -225,10 +227,12 @@ impl RtcClient {
             cached_timeout: Instant::now(),
             channel_ids,
             pending_transmits: std::collections::VecDeque::new(),
+            early_events: Vec::new(),
         };
 
         let connected = false;
         let client = client.wait_for_connected(connected).await?;
+        log::info!("Connected to p2p");
         Ok(client.spawn_thread())
     }
 
@@ -354,11 +358,13 @@ impl RtcClient {
             cached_timeout: Instant::now(),
             channel_ids,
             pending_transmits: std::collections::VecDeque::new(),
+            early_events: Vec::new(),
         };
 
         let connected = false;
 
         let client = client.wait_for_connected(connected).await?;
+        log::info!("Connected to relay");
         Ok(client.spawn_thread())
     }
 
@@ -397,6 +403,15 @@ impl RtcClient {
         mut command_rx: tokio::sync::mpsc::Receiver<RtcCommand>,
     ) {
         log::info!("[rtc-client] RTC I/O thread started");
+
+        // Replay any events (e.g. ChannelData) that arrived during the connect handshake
+        for event in std::mem::take(&mut self.early_events) {
+            log::info!("[rtc-client] Replaying early event: {:?}", event);
+            if event_tx.send(RtcEvent::Str0mEvent(event)).await.is_err() {
+                log::info!("[rtc-client] Event receiver dropped during early event replay");
+                return;
+            }
+        }
 
         while self.rtc.is_alive() {
             // 0. Drain pending transmits
@@ -505,6 +520,10 @@ impl RtcClient {
                     }
                     Event::ChannelOpen(cid, _) => {
                         log::info!("[rtc-client] Channel {:?} opened during connect phase", cid);
+                    }
+                    Event::ChannelData(_) => {
+                        log::info!("[rtc-client] Buffering early ChannelData during connect phase");
+                        self.early_events.push(event);
                     }
                     _ => {
                         log::debug!("[rtc-client] Other event during connect: {:?}", event);
