@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use socket2::{Domain, Socket, Type};
 use str0m::channel::{ChannelConfig, ChannelId};
 use str0m::net::{Protocol, Receive};
-use str0m::{Event, Input, Output, Rtc, RtcConfig};
+use str0m::{Event, IceConnectionState, Input, Output, Rtc, RtcConfig};
 use str0m::change::SdpOffer;
 use str0m::Candidate;
 
@@ -14,6 +14,9 @@ use schema::devlog::bitbridge::DataChannel;
 const MAX_BUFFER_SIZE: usize = 1024 * 1024 * 5;
 const SPEED_METER_WINDOW: Duration = Duration::from_secs(1);
 
+/// How long ICE can stay in `Disconnected` before we treat it as a real disconnect.
+/// str0m never emits Failed/Closed ICE states, so we need this timeout.
+const ICE_DISCONNECT_TIMEOUT: Duration = Duration::from_secs(8);
 
 pub struct SpeedMeter {
     window: Duration,
@@ -77,6 +80,7 @@ pub struct RelayRtcClient {
 
     pending_events: Vec<PendingEvent>,
     connected: bool,
+    ice_disconnected_since: Option<Instant>,
 }
 
 impl RelayRtcClient {
@@ -163,6 +167,7 @@ impl RelayRtcClient {
 
             pending_events,
             connected: false,
+            ice_disconnected_since: None,
         });
 
         Ok((client, sdp_answer.to_sdp_string()))
@@ -172,6 +177,16 @@ impl RelayRtcClient {
     /// stacking (which causes stack overflow under high load). Stops at the first Event
     /// or Timeout, returning it for processing.
     pub async fn poll_output(&mut self) -> Result<Option<Event>, RelayRtcError> {
+        // Check ICE disconnect timeout before polling
+        if let Some(since) = self.ice_disconnected_since {
+            if since.elapsed() >= ICE_DISCONNECT_TIMEOUT {
+                log::info!("[relay-rtc] ICE disconnected for {:?}, tearing down", ICE_DISCONNECT_TIMEOUT);
+                self.rtc.disconnect();
+                self.ice_disconnected_since = None;
+                return Ok(None);
+            }
+        }
+
         let mut event = None;
 
         loop {
@@ -226,6 +241,21 @@ impl RelayRtcClient {
                 }
                 Event::IceConnectionStateChange(state) => {
                     log::info!("[relay-rtc] ICE state changed to {:?}", state);
+                    match state {
+                        IceConnectionState::Disconnected => {
+                            if self.ice_disconnected_since.is_none() {
+                                log::info!("[relay-rtc] ICE disconnected, starting {:?} timeout", ICE_DISCONNECT_TIMEOUT);
+                                self.ice_disconnected_since = Some(Instant::now());
+                            }
+                        }
+                        IceConnectionState::Connected | IceConnectionState::Completed => {
+                            if self.ice_disconnected_since.is_some() {
+                                log::info!("[relay-rtc] ICE recovered, clearing disconnect timer");
+                            }
+                            self.ice_disconnected_since = None;
+                        }
+                        _ => {}
+                    }
                 }
                 _ => {}
             }
@@ -240,7 +270,13 @@ impl RelayRtcClient {
     }
 
     pub fn timeout_duration(&self) -> Duration {
-        self.cached_timeout.saturating_duration_since(Instant::now())
+        let timeout = self.cached_timeout.saturating_duration_since(Instant::now());
+        // Cap wait time when ICE is disconnected so we re-check the timeout sooner
+        if self.ice_disconnected_since.is_some() {
+            timeout.min(Duration::from_secs(1))
+        } else {
+            timeout
+        }
     }
 
     pub async fn wait_for_input(&mut self, timeout: Duration) -> Result<(), RelayRtcError> {
@@ -287,6 +323,10 @@ impl RelayRtcClient {
     pub async fn process_step(&mut self) -> Result<Option<Event>, RelayRtcError> {
         if let Some(event) = self.poll_output().await? {
             return Ok(Some(event));
+        }
+
+        if !self.rtc.is_alive() {
+            return Ok(None);
         }
 
         let timeout = self.timeout_duration();

@@ -446,10 +446,6 @@ impl WebRtcClient {
                 log::warn!("[webrtc-client] {} RTC error: {e:?}", if is_p2p {"P2P"} else {"Relay"});
                 return false;
             }
-            RtcEvent::Closed => {
-                log::info!("[webrtc-client] {} RTC closed", if is_p2p {"P2P"} else {"Relay"});
-                return false;
-            }
         }
 
         true

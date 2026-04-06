@@ -22,11 +22,14 @@ pub struct ChannelIds {
     pub ordered_msg: ChannelId
 }
 
+/// How long ICE can stay in `Disconnected` before we treat it as a real disconnect.
+/// str0m never emits Failed/Closed ICE states, so we need this timeout.
+const ICE_DISCONNECT_TIMEOUT: Duration = Duration::from_secs(8);
+
 /// Events emitted from the RTC thread to the outside world.
 pub enum RtcEvent {
     Str0mEvent(Event),
     Error(WebRtcClientError),
-    Closed,
 }
 
 /// Commands sent from outside into the RTC thread.
@@ -415,7 +418,20 @@ impl RtcClient {
             }
         }
 
+        // Track when ICE entered Disconnected state.
+        // str0m never emits Failed/Closed, so we use a timeout to detect a truly-gone peer.
+        let mut ice_disconnected_since: Option<Instant> = None;
+
         while self.rtc.is_alive() {
+            // Check ICE disconnect timeout
+            if let Some(since) = ice_disconnected_since {
+                if since.elapsed() >= ICE_DISCONNECT_TIMEOUT {
+                    log::info!("[rtc-client] ICE disconnected for {:?}, tearing down", ICE_DISCONNECT_TIMEOUT);
+                    self.rtc.disconnect();
+                    break;
+                }
+            }
+
             // 0. Try to send pending transmit if any
             if let Some((data, channel_id)) = self.pending_transmit.take() {
                 if self.send(&data, channel_id) {
@@ -431,7 +447,6 @@ impl RtcClient {
                 while let Ok(cmd) = command_rx.try_recv() {
                     if self.handle_command(cmd) {
                         log::info!("[rtc-client] RTC I/O thread shutdown by command");
-                        let _ = event_tx.send(RtcEvent::Closed).await;
                         return;
                     }
                     // If we now have a pending (backpressure), stop processing more commands
@@ -444,6 +459,25 @@ impl RtcClient {
             // 2. Poll events from str0m, send to outside via event_tx
             match self.poll_event().await {
                 Ok(Some(event)) => {
+                    // Track ICE state for disconnect detection
+                    if let Event::IceConnectionStateChange(state) = &event {
+                        match state {
+                            IceConnectionState::Disconnected => {
+                                if ice_disconnected_since.is_none() {
+                                    log::info!("[rtc-client] ICE disconnected, starting {:?} timeout", ICE_DISCONNECT_TIMEOUT);
+                                    ice_disconnected_since = Some(Instant::now());
+                                }
+                            }
+                            IceConnectionState::Connected | IceConnectionState::Completed => {
+                                if ice_disconnected_since.is_some() {
+                                    log::info!("[rtc-client] ICE recovered, clearing disconnect timer");
+                                }
+                                ice_disconnected_since = None;
+                            }
+                            _ => {}
+                        }
+                    }
+
                     if event_tx.send(RtcEvent::Str0mEvent(event)).await.is_err() {
                         log::info!("[rtc-client] Event receiver dropped, stopping RTC I/O thread");
                         return;
@@ -454,26 +488,28 @@ impl RtcClient {
                 Err(e) => {
                     log::warn!("[rtc-client] RTC poll_event error: {e:?}");
                     let _ = event_tx.send(RtcEvent::Error(e)).await;
-                    let _ = event_tx.send(RtcEvent::Closed).await;
                     return;
                 }
             }
 
             // 3. Wait for input (socket recv) OR new commands
-            let timeout = self.timeout_duration();
+            // If ICE is disconnected, cap the wait to 1s so we can re-check the timeout
+            let timeout = if ice_disconnected_since.is_some() {
+                self.timeout_duration().min(Duration::from_secs(1))
+            } else {
+                self.timeout_duration()
+            };
             tokio::select! {
                 result = self.wait_for_input(timeout) => {
                     if let Err(e) = result {
                         log::warn!("[rtc-client] RTC wait_for_input error: {e:?}");
                         let _ = event_tx.send(RtcEvent::Error(e)).await;
-                        let _ = event_tx.send(RtcEvent::Closed).await;
                         return;
                     }
                 }
                 Some(cmd) = command_rx.recv(), if self.pending_transmit.is_none() => {
                     if self.handle_command(cmd) {
                         log::info!("[rtc-client] RTC I/O thread shutdown by command");
-                        let _ = event_tx.send(RtcEvent::Closed).await;
                         return;
                     }
                 }
@@ -481,7 +517,6 @@ impl RtcClient {
         }
 
         log::info!("[rtc-client] RTC connection no longer alive, stopping I/O thread");
-        let _ = event_tx.send(RtcEvent::Closed).await;
     }
 
     /// Handle a command. Returns true if the thread should stop.
