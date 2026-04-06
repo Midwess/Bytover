@@ -124,7 +124,7 @@ struct RtcClient {
     buf: Vec<u8>,
     cached_timeout: Instant,
     channel_ids: ChannelIds,
-    pending_transmits: std::collections::VecDeque<(Vec<u8>, str0m::channel::ChannelId)>,
+    pending_transmit: Option<(Vec<u8>, str0m::channel::ChannelId)>,
     /// Events received during the connect/handshake phase that need to be
     /// replayed once the run loop starts (e.g. early ChannelData).
     early_events: Vec<Event>,
@@ -226,7 +226,7 @@ impl RtcClient {
             buf: vec![0u8; 2000],
             cached_timeout: Instant::now(),
             channel_ids,
-            pending_transmits: std::collections::VecDeque::new(),
+            pending_transmit: None,
             early_events: Vec::new(),
         };
 
@@ -359,7 +359,7 @@ impl RtcClient {
             buf: vec![0u8; 2000],
             cached_timeout: Instant::now(),
             channel_ids,
-            pending_transmits: std::collections::VecDeque::new(),
+            pending_transmit: None,
             early_events: Vec::new(),
         };
 
@@ -416,23 +416,26 @@ impl RtcClient {
         }
 
         while self.rtc.is_alive() {
-            // 0. Drain pending transmits
-            while let Some((data, channel_id)) = self.pending_transmits.pop_front() {
-                if !self.send(&data, channel_id) {
-                    self.pending_transmits.push_front((data, channel_id));
-                    break;
+            // 0. Try to send pending transmit if any
+            if let Some((data, channel_id)) = self.pending_transmit.take() {
+                if self.send(&data, channel_id) {
+                    // Sent successfully, pending is now None
+                } else {
+                    // Backpressure, put it back
+                    self.pending_transmit = Some((data, channel_id));
                 }
             }
 
-            // 1. Drain pending commands (non-blocking), but only up to 16 to preserve mpsc backpressure
-            if self.pending_transmits.len() < 16 {
+            // 1. If no pending, process commands (non-blocking)
+            if self.pending_transmit.is_none() {
                 while let Ok(cmd) = command_rx.try_recv() {
                     if self.handle_command(cmd) {
                         log::info!("[rtc-client] RTC I/O thread shutdown by command");
                         let _ = event_tx.send(RtcEvent::Closed).await;
                         return;
                     }
-                    if self.pending_transmits.len() >= 16 {
+                    // If we now have a pending (backpressure), stop processing more commands
+                    if self.pending_transmit.is_some() {
                         break;
                     }
                 }
@@ -445,12 +448,9 @@ impl RtcClient {
                         log::info!("[rtc-client] Event receiver dropped, stopping RTC I/O thread");
                         return;
                     }
-                    // After sending an event, loop again to drain more events before waiting
                     continue;
                 }
-                Ok(None) => {
-                    // Timeout — fall through to wait_for_input
-                }
+                Ok(None) => {}
                 Err(e) => {
                     log::warn!("[rtc-client] RTC poll_event error: {e:?}");
                     let _ = event_tx.send(RtcEvent::Error(e)).await;
@@ -470,7 +470,7 @@ impl RtcClient {
                         return;
                     }
                 }
-                Some(cmd) = command_rx.recv(), if self.pending_transmits.len() < 16 => {
+                Some(cmd) = command_rx.recv(), if self.pending_transmit.is_none() => {
                     if self.handle_command(cmd) {
                         log::info!("[rtc-client] RTC I/O thread shutdown by command");
                         let _ = event_tx.send(RtcEvent::Closed).await;
@@ -488,10 +488,10 @@ impl RtcClient {
     fn handle_command(&mut self, cmd: RtcCommand) -> bool {
         match cmd {
             RtcCommand::Send { data, channel_id } => {
-                if self.pending_transmits.is_empty() && self.send(&data, channel_id) {
+                if self.pending_transmit.is_none() && self.send(&data, channel_id) {
                     // Sent successfully
                 } else {
-                    self.pending_transmits.push_back((data, channel_id));
+                    self.pending_transmit = Some((data, channel_id));
                 }
                 false
             }
@@ -576,7 +576,10 @@ impl RtcClient {
                             log::error!("[rtc-client] Timeout sending packet to {} after 10s", dest);
                             return Err(WebRtcClientError::Signalling("Send packet timed out".to_string()));
                         }
-                        _ => {}
+                        Ok(Ok(_)) => {
+                            // Yield after each transmit to prevent stack overflow during high-throughput
+                            tokio::task::yield_now().await;
+                        }
                     }
                 }
                 Output::Event(e) => {
