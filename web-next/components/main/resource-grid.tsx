@@ -90,7 +90,7 @@ export function ResourceGrid({ session }: ResourceGridProps) {
                                             {section.count.toString().padStart(2, '0')} Items
                                         </span>
                                         <span className={cn(
-                                            "text-[10px] font-bold uppercase tracking-widest leading-none transition-all duration-500",
+                                            "text-xs font-bold uppercase tracking-widest leading-none transition-all duration-500",
                                             isActive ? "text-white translate-x-0" : "text-zinc-600 translate-x-1 group-hover:text-zinc-400"
                                         )}>
                                             {section.label}

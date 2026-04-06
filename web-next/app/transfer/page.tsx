@@ -92,7 +92,7 @@ export default function TransferBoard() {
                                 initial={{ opacity: 0, y: 10 }}
                                 whileInView={{ opacity: 1, y: 0 }}
                                 viewport={{ once: true }}
-                                className="px-3 py-1 rounded-full text-[10px] font-bold tracking-[0.2em] uppercase bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                                className="px-3 py-1 rounded-full text-xs font-bold tracking-[0.2em] uppercase bg-blue-500/10 text-blue-400 border border-blue-500/20"
                             >
                                 Performance Edge
                             </motion.span>

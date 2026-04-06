@@ -14,7 +14,7 @@ export function ShelfManagement() {
                             initial={{ opacity: 0, y: 10 }}
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true }}
-                            className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold tracking-[0.2em] uppercase bg-blue-500/10 text-blue-500 border border-blue-500/20"
+                            className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold tracking-[0.2em] uppercase bg-blue-500/10 text-blue-500 border border-blue-500/20"
                         >
                             The Shelf
                         </motion.div>

@@ -80,11 +80,11 @@ export function ResourceCard(props: {
                         {model.name}
                     </h3>
                     <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">
+                        <span className="text-xs font-bold text-zinc-600 uppercase tracking-widest">
                             {displaySize}
                         </span>
                         <span className="w-1 h-1 rounded-full bg-zinc-800" />
-                        <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">
+                        <span className="text-xs font-bold text-zinc-600 uppercase tracking-widest">
                             {isFolder ? "Folder" : isVideo ? "Video" : isImage ? "Image" : "File"}
                         </span>
                     </div>

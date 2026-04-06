@@ -85,14 +85,14 @@ export default function Footer(props: {className?: string | undefined, isFullWid
                     isLight ? "border-zinc-100" : "border-white/5"
                 )}>
                     <p className={cn(
-                        "text-[10px] font-bold uppercase tracking-[0.2em]",
+                        "text-xs font-bold uppercase tracking-[0.2em]",
                         isLight ? "text-zinc-400" : "text-zinc-600"
                     )}>
                         © {new Date().getFullYear()} Bytover. All rights reserved.
                     </p>
                     <div className="flex items-center gap-6">
                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-                         <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-500">All systems operational</span>
+                         <span className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-500">All systems operational</span>
                     </div>
                 </div>
             </div>

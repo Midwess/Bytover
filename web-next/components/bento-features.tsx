@@ -45,7 +45,7 @@ const BentoItem = ({ title, description, icon: Icon, video, className }: BentoIt
                 <div className="flex-1 flex items-end pt-8">
                      <ul className="space-y-2">
                         {["Fast", "Secure", "Reliable"].map((item) => (
-                            <li key={item} className="flex items-center gap-2 text-[10px] font-bold text-zinc-600 uppercase tracking-[0.2em]">
+                            <li key={item} className="flex items-center gap-2 text-xs font-bold text-zinc-600 uppercase tracking-[0.2em]">
                                 <Check className="w-3 h-3 text-blue-500" />
                                 {item}
                             </li>

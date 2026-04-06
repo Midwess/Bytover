@@ -176,14 +176,14 @@ function Window() {
                                     <div className="p-3.5 rounded-2xl border border-white/5 bg-white/5">
                                         <MousePointer2 className="w-5 h-5" />
                                     </div>
-                                    <p className="text-[10px] uppercase tracking-[0.2em] font-bold">Shake mouse</p>
+                                    <p className="text-xs uppercase tracking-[0.2em] font-bold">Shake mouse</p>
                                 </div>
                                 <div className="text-lg font-light opacity-30 italic">or</div>
                                 <div className="flex flex-col items-center gap-2">
                                     <div className="p-3.5 rounded-2xl border border-white/5 bg-white/5">
                                         <Keyboard className="w-5 h-5" />
                                     </div>
-                                    <p className="text-[10px] uppercase tracking-[0.2em] font-bold">Hold Shift</p>
+                                    <p className="text-xs uppercase tracking-[0.2em] font-bold">Hold Shift</p>
                                 </div>
                             </div>
                         </section>

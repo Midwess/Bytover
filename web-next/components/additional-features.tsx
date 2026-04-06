@@ -58,7 +58,7 @@ export function AdditionalFeatures() {
                         initial={{ opacity: 0, y: 10 }}
                         whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true }}
-                        className="px-3 py-1 rounded-full text-[10px] font-bold tracking-[0.2em] uppercase bg-zinc-900 text-zinc-500 border border-zinc-800"
+                        className="px-3 py-1 rounded-full text-xs font-bold tracking-[0.2em] uppercase bg-zinc-900 text-zinc-500 border border-zinc-800"
                     >
                         Features
                     </motion.div>

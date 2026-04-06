@@ -103,7 +103,7 @@ export default function DownloadButtonWithProgress({
                                 <circle cx="20" cy="20" r="18" stroke="currentColor" strokeWidth="2.5" fill="transparent" className="text-white/5" />
                                 <circle cx="20" cy="20" r="18" stroke="currentColor" strokeWidth="2.5" fill="transparent" strokeDasharray={113.1} strokeDashoffset={113.1 - (113.1 * progress)} strokeLinecap="round" className="text-white transition-all duration-300" />
                             </svg>
-                            <span className="relative z-10 text-[10px] font-bold text-white tabular-nums">{Math.round(progress * 100)}%</span>
+                            <span className="relative z-10 text-xs font-bold text-white tabular-nums">{Math.round(progress * 100)}%</span>
                         </>
                     ) : (
                         <div className="w-full space-y-1.5">
@@ -125,7 +125,7 @@ export default function DownloadButtonWithProgress({
 
             {state === 'waiting' && (
                 <div className={cn(commonClasses, "bg-white/5 border border-white/10 animate-pulse")}>
-                    <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">...</span>
+                    <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">...</span>
                 </div>
             )}
 

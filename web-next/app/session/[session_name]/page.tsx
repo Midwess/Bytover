@@ -204,11 +204,11 @@ export default function SessionPage() {
                                 <div className="flex flex-wrap items-center justify-center gap-6 md:gap-10">
                                     <div className="flex items-center gap-3.5">
                                         <div className="flex flex-col items-end">
-                                            <span className="text-[10px] font-bold text-white uppercase tracking-[0.2em] leading-none mb-1">
-                                                {session.resources.length.toString().padStart(2, '0')} Items
+                                            <span className="text-xs text font-bold text-white uppercase tracking-[0.2em] leading-none mb-1">
+                                                {session.resources.length}
                                             </span>
-                                            <span className="text-[8px] font-bold text-zinc-600 uppercase tracking-widest leading-none">
-                                                Available
+                                            <span className="text-xs font-bold text-zinc-600 uppercase tracking-widest leading-none">
+                                                {session.resources.length > 1 ? 'Items' : 'Item'}
                                             </span>
                                         </div>
 
@@ -216,11 +216,11 @@ export default function SessionPage() {
                                             <>
                                                 <div className="w-px h-6 bg-white/10" />
                                                 <div className="flex flex-col items-start">
-                                                    <span className="text-[10px] font-bold text-white uppercase tracking-[0.2em] leading-none mb-1">
+                                                    <span className="text-xs font-bold text-white uppercase tracking-[0.2em] leading-none mb-1">
                                                         {session.display_download_speed}
                                                     </span>
-                                                    <span className="text-[8px] font-bold text-zinc-600 uppercase tracking-widest leading-none">
-                                                        Network Speed
+                                                    <span className="text-xs font-bold text-zinc-600 uppercase tracking-widest leading-none">
+                                                        Status
                                                     </span>
                                                 </div>
                                             </>
@@ -231,7 +231,7 @@ export default function SessionPage() {
                                         <div className="flex items-center">
                                             <DownloadAllButton
                                                 session={session as ReceiveSessionViewModel}
-                                                containerClass="rounded-full bg-gradient-to-r from-bluePrimary to-bluePrimary/80 text-white hover:opacity-90 transition-all duration-500 px-6 py-2.5 h-auto text-[10px] font-bold tracking-[0.2em] uppercase border-0"
+                                                containerClass="rounded-full bg-gradient-to-r from-bluePrimary to-bluePrimary/80 text-white hover:opacity-90 transition-all duration-500 px-6 py-2.5 h-auto text-xs font-bold tracking-[0.2em] uppercase border-0"
                                             />
                                         </div>
                                     )}
@@ -240,7 +240,7 @@ export default function SessionPage() {
                         </div>
                     </div>
 
-                    <main className="flex flex-col items-center px-6 relative z-10 pb-12 md:pb-0">
+                    <main className="flex flex-col items-center px-6 relative z-10 pb-12 md:pb-0 min-h-screen">
                         <div className="w-full max-w-6xl flex flex-col animate-in fade-in duration-1000 slide-in-from-bottom-8">
                             <div className="w-full">
                                 {isLoading && (!session.resources || session.resources.length === 0) ? (

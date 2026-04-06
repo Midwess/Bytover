@@ -46,7 +46,7 @@ export function BitBridgeFlow() {
                             initial={{ opacity: 0, y: 10 }}
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true }}
-                            className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold tracking-[0.2em] uppercase bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
+                            className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold tracking-[0.2em] uppercase bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
                         >
                             Direct Peer-to-Peer
                         </motion.div>
@@ -134,7 +134,7 @@ export function BitBridgeFlow() {
                                     </div>
                                     <div className="flex items-center gap-1.5">
                                         <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                                        <span className="text-[10px] text-emerald-500 font-bold uppercase tracking-wider">Live</span>
+                                        <span className="text-xs text-emerald-500 font-bold uppercase tracking-wider">Live</span>
                                     </div>
                                 </div>
                             </div>
@@ -154,7 +154,7 @@ export function BitBridgeFlow() {
                                             {/* Diagonal Strike */}
                                             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-0.5 bg-red-500/60 rotate-45" />
                                         </div>
-                                        <span className="text-[8px] font-bold text-zinc-400 uppercase tracking-[0.2em] whitespace-nowrap">Bypassed Cloud</span>
+                                        <span className="text-xs font-bold text-zinc-400 uppercase tracking-[0.2em] whitespace-nowrap">Bypassed Cloud</span>
                                     </div>
                                 </motion.div>
 
@@ -178,21 +178,21 @@ export function BitBridgeFlow() {
                                             <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0">
                                                 <Zap className="w-3 h-3 text-black fill-current" />
                                             </div>
-                                            <span className="text-[10px] font-black text-white uppercase tracking-wider">Direct P2P</span>
+                                            <span className="text-xs font-black text-white uppercase tracking-wider">Direct P2P</span>
                                         </div>
                                         <div className="space-y-2 pt-2 border-t border-white/5">
                                             <div className="flex justify-between items-center gap-4">
-                                                <span className="text-[8px] font-bold text-zinc-500 uppercase">Speed</span>
-                                                <span className="text-[10px] font-mono text-emerald-400">1.2 Gbps</span>
+                                                <span className="text-xs font-bold text-zinc-500 uppercase">Speed</span>
+                                                <span className="text-xs font-mono text-emerald-400">1.2 Gbps</span>
                                             </div>
                                             <div className="flex justify-between items-center gap-4">
-                                                <span className="text-[8px] font-bold text-zinc-500 uppercase">Latency</span>
-                                                <span className="text-[10px] font-mono text-emerald-400">&lt;2ms</span>
+                                                <span className="text-xs font-bold text-zinc-500 uppercase">Latency</span>
+                                                <span className="text-xs font-mono text-emerald-400">&lt;2ms</span>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-1.5 pt-1">
                                             <ShieldCheck className="w-3 h-3 text-emerald-500" />
-                                            <span className="text-[8px] font-bold text-emerald-500/80 uppercase">E2E Secure</span>
+                                            <span className="text-xs font-bold text-emerald-500/80 uppercase">E2E Secure</span>
                                         </div>
                                     </div>
                                 </motion.div>
