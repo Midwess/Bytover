@@ -11,13 +11,13 @@ use core_services::utils::yield_container::{YieldContainer, Yieldable};
 const SOFT_LIMIT: usize = 100;
 const HARD_CEILING: usize = SOFT_LIMIT * 10;
 const THROTTLE_MIN_INTERVAL: Duration = Duration::from_millis(100);
-const STATS_TICK: Duration = Duration::from_secs(10);
+const STATS_TICK: Duration = Duration::from_secs(30);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(45);
 
 pub struct ProxyInstance {
     pub session_id: String,
-    leg1: YieldContainer<RelayRtcClient>,
-    leg2: YieldContainer<RelayRtcClient>,
+    leg1: YieldContainer<Box<RelayRtcClient>>,
+    leg2: YieldContainer<Box<RelayRtcClient>>,
     notify_leg2: Notify,
 }
 
@@ -63,7 +63,7 @@ impl ProxyInstance {
         log::info!("[relay-server] Starting unified run loop for session {}", session_id);
 
         let mut leg1 = self.leg1.retrieve().await.expect("Leg 1 must exist on run()");
-        let mut leg2_opt: Option<Yieldable<RelayRtcClient>> = None;
+        let mut leg2_opt: Option<Yieldable<Box<RelayRtcClient>>> = None;
 
         let mut leg1_connected = false;
         let mut leg2_connected = false;

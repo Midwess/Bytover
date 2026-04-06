@@ -280,7 +280,16 @@ impl RtcClient {
             rtc.add_local_candidate(candidate);
         }
 
+        // IMPORTANT: add channels in the same order as connect() (reliable, unordered, ordered)
+        // so that ChannelIds match and the run loop can use one set of cids for both connections.
         let mut sdp_api = rtc.sdp_api();
+        let reliable_id = sdp_api.add_channel_with_config(ChannelConfig {
+            label: "reliable".to_string(),
+            ordered: false,
+            negotiated: Some(RELIABLE_STREAM_ID),
+            ..Default::default()
+        });
+
         let unordered_msg_id = sdp_api.add_channel_with_config(ChannelConfig {
             label: "unordered_msg".to_string(),
             ordered: false,
@@ -292,13 +301,6 @@ impl RtcClient {
             label: "ordered_msg".to_string(),
             ordered: true,
             negotiated: Some(ORDERED_MSG_STREAM_ID),
-            ..Default::default()
-        });
-
-        let reliable_id = sdp_api.add_channel_with_config(ChannelConfig {
-            label: "reliable".to_string(),
-            ordered: false,
-            negotiated: Some(RELIABLE_STREAM_ID),
             ..Default::default()
         });
 
@@ -579,11 +581,6 @@ impl RtcClient {
                 }
                 Output::Event(e) => {
                     log::info!("[rtc-client] str0m Event: {:?}", e);
-                    if let Event::IceConnectionStateChange(state) = e {
-                        if matches!(state, IceConnectionState::Disconnected) {
-                            self.rtc.disconnect();
-                        }
-                    }
                     return Ok(Some(e));
                 }
             }

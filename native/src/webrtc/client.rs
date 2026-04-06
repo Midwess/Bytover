@@ -64,12 +64,6 @@ pub enum WebRtcClientError {
     #[error("Message decode error: {0}")]
     MessageDecode(#[from] prost::DecodeError),
 
-    #[error("Failed to introduce peer")]
-    FailedToIntroducePeer,
-
-    #[error("Peer not introduced")]
-    PeerNotIntroduced,
-
     #[error("Message channel error: {0}")]
     MessageChannel(String),
 
@@ -133,7 +127,6 @@ pub struct WebRtcClient {
     new_rtc_rx: YieldContainer<tokio::sync::mpsc::Receiver<(bool, RtcHandle)>>,
 
     peer: OnceCell<Peer>,
-    me: Peer,
     transfers_context: TransfersContext,
     core_request: OnceCell<CoreRequest>,
     resource_repo: Arc<dyn LocalResourceRepository>,
@@ -166,7 +159,7 @@ impl WebRtcClient {
         resource_repo: Arc<dyn LocalResourceRepository>
     ) -> Result<Self, WebRtcClientError> {
         let Some(signalling_id) = me.signalling_id.clone() else {
-            return Err(WebRtcClientError::Shared("Peer not introduced".to_string()));
+            return Err(WebRtcClientError::Signalling("No signalling ID".to_string()));
         };
 
         let signalling_id_p2p = signalling_id.clone();
@@ -225,13 +218,9 @@ impl WebRtcClient {
         let is_p2p = first_res.0;
         let peer: OnceCell<Peer> = OnceCell::new();
 
-        if let Some(remote_peer_proto) = offer_message.peer {
-            let p = Peer::from(remote_peer_proto);
-            log::info!("[webrtc-client] Peer info received from signaled offer: {:?}", p.id);
-            let _ = peer.set(p);
-        } else {
-            log::warn!("[webrtc-client] No peer info in signaled offer!");
-        }
+        let p = Peer::from(offer_message.peer);
+        log::info!("[webrtc-client] Peer info received from signaled offer: {:?}", p.id);
+        let _ = peer.set(p);
 
         let msg_channel_cell = OnceCell::new();
         let _ = msg_channel_cell.set(msg_channel);
@@ -247,7 +236,6 @@ impl WebRtcClient {
         }
 
         let client = Self {
-            me,
             p2p_rtc: YieldContainer::new(p2p_rtc_opt),
             relay_rtc: YieldContainer::new(relay_rtc_opt),
             new_rtc_rx: YieldContainer::new(new_rtc_rx),
@@ -449,7 +437,12 @@ impl WebRtcClient {
                     }
                 }
                 str0m::Event::IceConnectionStateChange(state) => {
-                    log::info!("[webrtc-client] {} ICE state: {:?}", if is_p2p {"truly P2P"} else {"Relay"}, state);
+                    let label = if is_p2p { "truly P2P" } else { "Relay" };
+                    log::info!("[webrtc-client] {} ICE state: {:?}", label, state);
+                    if matches!(state, str0m::IceConnectionState::Disconnected) {
+                        log::warn!("[webrtc-client] {} ICE disconnected, shutting down this leg", label);
+                        return false;
+                    }
                 }
                 _ => {}
             },
@@ -490,29 +483,6 @@ impl WebRtcClient {
         self.peer.get().cloned()
     }
 
-    pub async fn introduce(&self, current_user: &Peer) -> Result<(), WebRtcClientError> {
-        let introduce_request = IntroduceRequestMessage {
-            mine: PeerMessage::from(current_user.clone())
-        };
-
-        log::info!("[webrtc-client] Introducing self to peer");
-
-        let response = self
-            .msg_channel()
-            .send(Request::IntroduceRequest(introduce_request), None)
-            .await
-            .map_err(|e| WebRtcClientError::MessageChannel(format!("{e}")))?;
-
-        match response {
-            Response::IntroduceResponse(res) => {
-                let peer = Peer::from(res.peer);
-                log::info!("[webrtc-client] Peer introduced as {:?}", peer.id);
-                let _ = self.peer.set(peer);
-                Ok(())
-            }
-            _ => Err(WebRtcClientError::InvalidResponse("Expected Introduce response".into()))
-        }
-    }
 
     pub async fn stream_resource(&self, session_id: u64, transfer_id: u16, resource: LocalResource) -> Result<(), WebRtcClientError> {
         let resource_id = resource.order_id;
@@ -718,17 +688,6 @@ impl WebRtcClient {
                 } else {
                     self.transfers_context.cancel_transfer(req.session_id).await;
                 }
-            }
-            Request::IntroduceRequest(msg) => {
-                log::info!("[webrtc-client] Received introduce request from peer");
-                let peer = Peer::from(msg.mine);
-                log::info!("[webrtc-client] Remote peer: {:?}", peer.id);
-                let _ = self.peer.set(peer);
-
-                let response = IntroduceResponseMessage {
-                    peer: PeerMessage::from(self.me.clone())
-                };
-                let _ = self.msg_channel().send_response(request_id, Response::IntroduceResponse(response)).await;
             }
             Request::FecFeedback(_) => {}
             request => {

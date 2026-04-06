@@ -29,9 +29,18 @@ enum MainErrors {
     ExecutionError(String),
 }
 
-#[tokio::main]
-async fn main() -> Result<(), MainErrors> {
+fn main() -> Result<(), MainErrors> {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
+
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .thread_stack_size(8 * 1024 * 1024) // 8 MB — str0m Rtc state machines are large
+        .build()
+        .expect("Failed to build tokio runtime")
+        .block_on(async_main())
+}
+
+async fn async_main() -> Result<(), MainErrors> {
 
     log::info!("Starting relay server...");
 

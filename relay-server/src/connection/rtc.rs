@@ -1,11 +1,11 @@
 use std::collections::VecDeque;
-use std::net::{IpAddr, SocketAddr};
+use std::net::{Ipv4Addr, SocketAddr};
 use std::time::{Duration, Instant};
 use async_speed_limit::Limiter;
 use socket2::{Domain, Socket, Type};
 use str0m::channel::{ChannelConfig, ChannelId};
 use str0m::net::{DatagramSend, Protocol, Receive};
-use str0m::{Event, IceConnectionState, Input, Output, Rtc, RtcConfig};
+use str0m::{Event, Input, Output, Rtc, RtcConfig};
 use str0m::change::SdpOffer;
 use str0m::Candidate;
 
@@ -57,12 +57,6 @@ pub enum RelayRtcError {
     Socket(#[from] std::io::Error),
     #[error("RTC error: {0}")]
     Rtc(#[from] str0m::error::RtcError),
-    #[error("Connection closed")]
-    ConnectionClosed,
-    #[error("Unauthorized packet source")]
-    UnauthorizedSource,
-    #[error("ICE disconnected unexpectedly")]
-    IceDisconnected,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -75,8 +69,6 @@ pub struct RelayRtcClient {
     rtc: Rtc,
     socket: tokio::net::UdpSocket,
     local_addr: SocketAddr,
-    local_v4_addr: Option<SocketAddr>,
-    local_v6_addr: Option<SocketAddr>,
     buf: Vec<u8>,
     cached_timeout: Instant,
     down_meter: SpeedMeter,
@@ -91,49 +83,35 @@ impl RelayRtcClient {
     pub async fn accept_offer(
         sdp_offer: &str,
         channels: Vec<DataChannel>,
-    ) -> Result<(Self, String), RelayRtcError> {
+    ) -> Result<(Box<Self>, String), RelayRtcError> {
 
-        let socket = Socket::new(Domain::IPV6, Type::DGRAM, Some(socket2::Protocol::UDP))?;
-        socket.set_only_v6(false)?;
+        let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(socket2::Protocol::UDP))?;
         socket.set_nonblocking(true)?;
-        socket.bind(&"[::]:0".parse::<SocketAddr>().unwrap().into())?;
+        socket.bind(&"0.0.0.0:0".parse::<SocketAddr>().unwrap().into())?;
         let _ = socket.set_send_buffer_size(MAX_BUFFER_SIZE * 2);
         let socket: std::net::UdpSocket = socket.into();
         let socket = tokio::net::UdpSocket::from_std(socket)?;
 
         let local_addr = socket.local_addr()?;
-        let mut local_v4_addr = None;
-        let mut local_v6_addr = None;
-
-        if local_addr.is_ipv4() {
-            local_v4_addr = Some(local_addr);
-        } else {
-            local_v6_addr = Some(local_addr);
-        }
 
         let rtc_config = RtcConfig::default()
             .set_sctp_max_message_size(10 * 1024 * 1024)
             .set_sctp_buffer_size(10 * 1024 * 1024);
 
         let public_ip_str = std::env::var("BYTOVER_RELAY_PUBLIC_IP").unwrap_or_else(|_| "127.0.0.1".to_string());
-        let ip = match public_ip_str.parse::<IpAddr>() {
+        let ip: Ipv4Addr = match public_ip_str.parse() {
             Ok(parsed) => parsed,
             Err(e) => {
                 log::error!("[relay-rtc] Failed to parse BYTOVER_RELAY_PUBLIC_IP '{}': {}. Falling back to 127.0.0.1", public_ip_str, e);
-                "127.0.0.1".parse::<IpAddr>().unwrap()
+                Ipv4Addr::LOCALHOST
             }
         };
 
         let mut rtc = rtc_config.build(Instant::now());
 
-        let candidate_addr = SocketAddr::new(ip, local_addr.port());
+        let candidate_addr = SocketAddr::new(ip.into(), local_addr.port());
         if let Ok(candidate) = Candidate::host(candidate_addr, Protocol::Udp) {
             rtc.add_local_candidate(candidate);
-            if ip.is_ipv4() {
-                local_v4_addr = Some(candidate_addr);
-            } else {
-                local_v6_addr = Some(candidate_addr);
-            }
         } else {
             log::error!("[relay-rtc] Failed to create UDP host candidate for IP: {}", ip);
         }
@@ -158,12 +136,10 @@ impl RelayRtcClient {
             pending_events.push(PendingEvent::ChannelOpen(*id));
         }
 
-        let client = Self {
+        let client = Box::new(Self {
             rtc,
             socket,
             local_addr,
-            local_v4_addr,
-            local_v6_addr,
             buf: vec![0u8; 2000],
             cached_timeout: Instant::now(),
             down_meter: SpeedMeter::new(SPEED_METER_WINDOW),
@@ -172,7 +148,7 @@ impl RelayRtcClient {
             upload_limiter: Limiter::new(f64::INFINITY),
             pending_events,
             connected: false,
-        };
+        });
 
         Ok((client, sdp_answer.to_sdp_string()))
     }
@@ -202,12 +178,8 @@ impl RelayRtcClient {
             }
         }
 
-        // Phase 2: Send all collected transmits. Even if this is cancelled,
-        // the remaining unsent transmits are lost but poll_output already
-        // returned them—str0m won't re-emit. However, by batching first we
-        // avoid the common case of losing a single critical DTLS packet.
+        // Phase 2: Send all collected transmits.
         for (dest, contents) in transmits {
-            let dest = to_v6_mapped(dest);
             let len = contents.len();
             let res = tokio::time::timeout(
                 Duration::from_secs(10),
@@ -232,7 +204,14 @@ impl RelayRtcClient {
 
         // Phase 3: Process the event if we got one.
         if let Some(e) = event {
-            log::info!("Received event {e:?}");
+            match &e {
+                Event::ChannelData(data) => {
+                    log::trace!("[relay-rtc] ChannelData id={:?} len={}", data.id, data.data.len());
+                }
+                _ => {
+                    log::info!("[relay-rtc] Event: {e:?}");
+                }
+            }
             match &e {
                 Event::Connected => {
                     self.pending_events.retain(|p| p != &PendingEvent::Connected);
@@ -242,9 +221,7 @@ impl RelayRtcClient {
                     self.pending_events.retain(|p| p != &target);
                 }
                 Event::IceConnectionStateChange(state) => {
-                    if matches!(state, IceConnectionState::Disconnected) {
-                        self.rtc.disconnect();
-                    }
+                    log::info!("[relay-rtc] ICE state changed to {:?}", state);
                 }
                 _ => {}
             }
@@ -270,18 +247,10 @@ impl RelayRtcClient {
 
         match tokio::time::timeout(timeout, self.socket.recv_from(&mut self.buf[..])).await {
             Ok(Ok((n, source))) => {
-                let source = from_v6_mapped(source);
-
-                let local = if source.is_ipv4() {
-                    self.local_v4_addr.unwrap_or(self.local_addr)
-                } else {
-                    self.local_v6_addr.unwrap_or(self.local_addr)
-                };
-
                 self.down_meter.record(n as u64);
-                log::trace!("[relay-rtc] Received {} bytes from {} (local={})", n, source, local);
+                log::trace!("[relay-rtc] Received {} bytes from {}", n, source);
 
-                match Receive::new(Protocol::Udp, source, local, &self.buf[..n]) {
+                match Receive::new(Protocol::Udp, source, self.local_addr, &self.buf[..n]) {
                     Ok(receive) => {
                         if let Err(e) = self.rtc.handle_input(Input::Receive(Instant::now(), receive)) {
                             log::warn!("[relay-rtc] Input handle packet drop: {}", e);
@@ -317,10 +286,6 @@ impl RelayRtcClient {
         let timeout = self.timeout_duration();
         self.wait_for_input(timeout).await?;
         Ok(None)
-    }
-
-    pub fn is_alive(&self) -> bool {
-        self.rtc.is_alive()
     }
 
     pub fn is_fully_connected(&self) -> bool {
@@ -371,27 +336,5 @@ impl RelayRtcClient {
             log::warn!("[relay-rtc] Channel {:?} not found", channel_id);
             false
         }
-    }
-}
-
-fn to_v6_mapped(addr: SocketAddr) -> SocketAddr {
-    match addr {
-        SocketAddr::V4(v4) => SocketAddr::new(v4.ip().to_ipv6_mapped().into(), v4.port()),
-        v6 => v6
-    }
-}
-
-fn from_v6_mapped(addr: SocketAddr) -> SocketAddr {
-    match addr {
-        SocketAddr::V6(v6) => {
-            let octets = v6.ip().octets();
-            if octets[0..12] == [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff] {
-                let v4 = std::net::Ipv4Addr::new(octets[12], octets[13], octets[14], octets[15]);
-                SocketAddr::new(v4.into(), v6.port())
-            } else {
-                addr
-            }
-        }
-        _ => addr
     }
 }

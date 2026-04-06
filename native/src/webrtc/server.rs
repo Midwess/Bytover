@@ -252,7 +252,7 @@ impl WebRtcServer {
                     match result {
                         Some((client, _user)) => {
                             let peer_id = client.peer_id().unwrap_or_default();
-                            log::info!("[webrtc-server] Client connected and introduced as {peer_id}, registering");
+                            log::info!("[webrtc-server] Client {} connected, registering", peer_id);
                             self.clients.lock().await.insert(peer_id.clone(), Arc::downgrade(&client));
 
                             client.start_core_stream(self.core_request.get().unwrap().clone());
