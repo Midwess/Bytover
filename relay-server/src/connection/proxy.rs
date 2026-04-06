@@ -8,10 +8,8 @@ use crate::connection::rtc::{RelayRtcClient, RelayRtcError};
 use schema::devlog::bitbridge::DataChannel;
 use core_services::utils::yield_container::{YieldContainer, Yieldable};
 
-const SOFT_LIMIT: usize = 100;
-const HARD_CEILING: usize = SOFT_LIMIT * 10;
-const THROTTLE_MIN_INTERVAL: Duration = Duration::from_millis(100);
-const STATS_TICK: Duration = Duration::from_secs(30);
+
+const STATS_TICK: Duration = Duration::from_secs(5);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(45);
 
 pub struct ProxyInstance {
@@ -75,8 +73,7 @@ impl ProxyInstance {
         let mut depth_to_1: usize = 0;
         let mut pending_to_2: Option<(ChannelId, Vec<u8>)> = None;
         let mut pending_to_1: Option<(ChannelId, Vec<u8>)> = None;
-        let mut last_throttle_1 = Instant::now() - THROTTLE_MIN_INTERVAL;
-        let mut last_throttle_2 = Instant::now() - THROTTLE_MIN_INTERVAL;
+
         let mut stats_tick = tokio::time::interval(STATS_TICK);
         stats_tick.tick().await;
 
@@ -162,12 +159,7 @@ impl ProxyInstance {
                                 log::warn!("[relay-server] tx_to_2 closed");
                                 break;
                             }
-                            if depth_to_2 > HARD_CEILING {
-                                log::warn!("[relay-server] A->B queue hard ceiling reached: {}", depth_to_2);
-                            }
-                            if let Some(leg2) = leg2_opt.as_mut() {
-                                adjust_throttle(&mut leg1, leg2, depth_to_2, &mut last_throttle_1).await;
-                            }
+
                         }
                         Ok(Some(event)) => log::debug!("[relay-server] Leg 1 Event: {:?}", event),
                         Ok(None) => {}
@@ -194,12 +186,7 @@ impl ProxyInstance {
                                 log::warn!("[relay-server] tx_to_1 closed");
                                 break;
                             }
-                            if depth_to_1 > HARD_CEILING {
-                                log::warn!("[relay-server] B->A queue hard ceiling reached: {}", depth_to_1);
-                            }
-                            if let Some(leg2) = leg2_opt.as_mut() {
-                                adjust_throttle(leg2, &mut leg1, depth_to_1, &mut last_throttle_2).await;
-                            }
+
                         }
                         Ok(Some(event)) => log::debug!("[relay-server] Leg 2 Event: {:?}", event),
                         Ok(None) => {}
@@ -240,7 +227,7 @@ impl ProxyInstance {
                         if leg2.send(&buf, id) {
                             log::trace!("[relay-server] Forwarded data to leg 2 (ID: {:?}, len: {})", id, buf.len());
                             depth_to_2 = depth_to_2.saturating_sub(1);
-                            adjust_throttle(&mut leg1, leg2, depth_to_2, &mut last_throttle_1).await;
+
                         } else {
                             pending_to_2 = Some((id, buf));
                             retry_to_2.as_mut().reset(tokio::time::Instant::now() + Duration::from_millis(3));
@@ -265,9 +252,7 @@ impl ProxyInstance {
                     if leg1.send(&buf, id) {
                         log::trace!("[relay-server] Forwarded data to leg 1 (ID: {:?}, len: {})", id, buf.len());
                         depth_to_1 = depth_to_1.saturating_sub(1);
-                        if let Some(leg2) = leg2_opt.as_mut() {
-                            adjust_throttle(leg2, &mut leg1, depth_to_1, &mut last_throttle_2).await;
-                        }
+
                     } else {
                         pending_to_1 = Some((id, buf));
                         retry_to_1.as_mut().reset(tokio::time::Instant::now() + Duration::from_millis(3));
@@ -320,25 +305,4 @@ impl ProxyInstance {
     }
 }
 
-const MIN_THROTTLE_FACTOR: f64 = 2.0;
 
-async fn adjust_throttle(
-    sender: &mut RelayRtcClient,
-    receiver: &mut RelayRtcClient,
-    depth: usize,
-    last: &mut Instant,
-) {
-    if last.elapsed() < THROTTLE_MIN_INTERVAL {
-        return;
-    }
-    if depth > SOFT_LIMIT {
-        let drain = receiver.upload_rate_bps();
-        let base = if drain <= 0.0 { 1_000_000.0 } else { drain };
-        let factor = (depth as f64 / SOFT_LIMIT as f64).max(MIN_THROTTLE_FACTOR);
-        let target = base / factor;
-        sender.set_download_limit_bps(target);
-    } else {
-        sender.set_download_limit_bps(f64::INFINITY);
-    }
-    *last = Instant::now();
-}

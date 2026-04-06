@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
-use std::net::{Ipv4Addr, SocketAddr};
+use std::net::SocketAddr;
 use std::time::{Duration, Instant};
-use async_speed_limit::Limiter;
+
 use socket2::{Domain, Socket, Type};
 use str0m::channel::{ChannelConfig, ChannelId};
 use str0m::net::{DatagramSend, Protocol, Receive};
@@ -13,7 +13,7 @@ use schema::devlog::bitbridge::DataChannel;
 
 const MAX_BUFFER_SIZE: usize = 1024 * 1024 * 5;
 const SPEED_METER_WINDOW: Duration = Duration::from_secs(1);
-const MIN_DOWNLOAD_LIMIT_BPS: f64 = 1024.0;
+
 
 pub struct SpeedMeter {
     window: Duration,
@@ -74,8 +74,7 @@ pub struct RelayRtcClient {
     cached_timeout: Instant,
     down_meter: SpeedMeter,
     up_meter: SpeedMeter,
-    download_limiter: Limiter,
-    upload_limiter: Limiter,
+
     pending_events: Vec<PendingEvent>,
     connected: bool,
 }
@@ -161,8 +160,7 @@ impl RelayRtcClient {
             cached_timeout: Instant::now(),
             down_meter: SpeedMeter::new(SPEED_METER_WINDOW),
             up_meter: SpeedMeter::new(SPEED_METER_WINDOW),
-            download_limiter: Limiter::new(f64::INFINITY),
-            upload_limiter: Limiter::new(f64::INFINITY),
+
             pending_events,
             connected: false,
         });
@@ -207,9 +205,6 @@ impl RelayRtcClient {
                 Ok(Ok(_)) => {
                     log::trace!("[relay-rtc] Transmitted {} bytes to {}", len, dest);
                     self.up_meter.record(len as u64);
-                    if self.connected {
-                        self.upload_limiter.clone().consume(len).await;
-                    }
                 }
                 Ok(Err(e)) => {
                     log::warn!("[relay-rtc] Failed to send to {}: {}", dest, e);
@@ -284,10 +279,6 @@ impl RelayRtcClient {
                         log::warn!("[relay-rtc] Failed to parse Receive: {}", e);
                     }
                 }
-
-                if self.connected {
-                    self.download_limiter.clone().consume(n).await;
-                }
             }
             Ok(Err(e)) => return Err(e.into()),
             Err(_) => {
@@ -324,27 +315,7 @@ impl RelayRtcClient {
         self.up_meter.rate_bps()
     }
 
-    pub fn set_download_limit_bps(&self, bps: f64) {
-        let effective = if bps.is_infinite() {
-            f64::INFINITY
-        } else if bps < MIN_DOWNLOAD_LIMIT_BPS {
-            MIN_DOWNLOAD_LIMIT_BPS
-        } else {
-            bps
-        };
-        self.download_limiter.set_speed_limit(effective);
-    }
 
-    pub fn set_upload_limit_bps(&self, bps: f64) {
-        let effective = if bps.is_infinite() {
-            f64::INFINITY
-        } else if bps < MIN_DOWNLOAD_LIMIT_BPS {
-            MIN_DOWNLOAD_LIMIT_BPS
-        } else {
-            bps
-        };
-        self.upload_limiter.set_speed_limit(effective);
-    }
 
     pub fn send(&mut self, data: &[u8], channel_id: ChannelId) -> bool {
         if let Some(mut ch) = self.rtc.channel(channel_id) {
