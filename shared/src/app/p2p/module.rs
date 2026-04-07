@@ -25,7 +25,8 @@ pub struct P2PModule;
 pub enum P2PEvent {
     Launch,
     SetLaunched(bool),
-    UpdateMe { new_peer: Peer }
+    UpdateMe { new_peer: Peer },
+    PeerDisconnected { peer_id: String }
 }
 
 impl AppModule<BitBridge> for P2PModule {
@@ -53,6 +54,9 @@ impl AppModule<BitBridge> for P2PModule {
             }
             P2PEvent::UpdateMe { new_peer } => {
                 model.p2p.me = Some(new_peer);
+                Command::render()
+            }
+            P2PEvent::PeerDisconnected { .. } => {
                 Command::render()
             }
         }

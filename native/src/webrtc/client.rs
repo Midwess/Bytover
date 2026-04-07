@@ -260,6 +260,10 @@ impl WebRtcClient {
     }
 
     pub async fn run(self: Arc<Self>) -> Result<(), WebRtcClientError> {
+        if let (Some(core_req), Some(p)) = (self.core_request.get(), self.peer.get()) {
+            let _ = core_req.response(CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(p.clone()))).await;
+        }
+
         let mut p2p_guard = self.p2p_rtc.retrieve().await?;
         let mut relay_guard = self.relay_rtc.retrieve().await?;
         let mut new_rtc_rx_guard = self.new_rtc_rx.retrieve().await?;
@@ -312,6 +316,16 @@ impl WebRtcClient {
                 break;
             }
 
+            // Proactively clear dead connections so sends fall through to the live one
+            if p2p_rtc.as_ref().map_or(false, |r| !r.is_alive()) {
+                log::info!("[webrtc-client] P2P RTC no longer alive, clearing");
+                p2p_rtc = None;
+            }
+            if relay_rtc.as_ref().map_or(false, |r| !r.is_alive()) {
+                log::info!("[webrtc-client] Relay RTC no longer alive, clearing");
+                relay_rtc = None;
+            }
+
             let mut outbound_data = None;
 
             tokio::select! {
@@ -331,24 +345,36 @@ impl WebRtcClient {
 
                 // 2. Retry mechanism for pending outbound data blocked by backpressure
                 () = &mut retry_timer, if pending_data.is_some() => {
-                    let mut sent = false;
                     let (ref data, cid) = pending_data.as_ref().unwrap();
-                    if let Some(ref rtc) = p2p_rtc {
-                        if rtc.is_alive() && rtc.send(data, *cid) { sent = true; }
-                    }
-                    if !sent {
+                    let is_msg = *cid == cids.ordered_msg || *cid == cids.unordered_msg;
+                    let mut sent = false;
+
+                    if is_msg {
+                        if let Some(ref rtc) = p2p_rtc {
+                            if rtc.is_alive() { let _ = rtc.send(data, *cid); }
+                        }
                         if let Some(ref rtc) = relay_rtc {
+                            if rtc.is_alive() { let _ = rtc.send(data, *cid); }
+                        }
+                        sent = p2p_rtc.as_ref().map_or(false, |r| r.is_alive())
+                            || relay_rtc.as_ref().map_or(false, |r| r.is_alive());
+                    } else {
+                        if let Some(ref rtc) = p2p_rtc {
                             if rtc.is_alive() && rtc.send(data, *cid) { sent = true; }
+                        }
+                        if !sent {
+                            if let Some(ref rtc) = relay_rtc {
+                                if rtc.is_alive() && rtc.send(data, *cid) { sent = true; }
+                            }
                         }
                     }
 
                     if sent {
-                        if pending_data.as_ref().unwrap().1 == cids.reliable {
+                        if *cid == cids.reliable {
                             self.bytes_sent_counter.fetch_add(data.len(), Ordering::Relaxed);
                         }
                         pending_data = None;
                     } else {
-                        // Reset timer to retry again soon
                         retry_timer.as_mut().reset(tokio::time::Instant::now() + Duration::from_millis(3));
                     }
                 }
@@ -379,9 +405,11 @@ impl WebRtcClient {
 
                 // 5. Outbound sending from queues (only processed if no pending_data is blocking)
                 Some(d) = ordered_msg_rx.next(), if pending_data.is_none() => {
+                    log::info!("Received ordered msg request");
                     outbound_data = Some((cids.ordered_msg, d));
                 }
                 Some(d) = unordered_msg_rx.next(), if pending_data.is_none() => {
+                    log::info!("Received unordered msg request");
                     outbound_data = Some((cids.unordered_msg, d));
                 }
                 Some(d) = reliable_data_rx.recv(), if pending_data.is_none() => {
@@ -390,13 +418,29 @@ impl WebRtcClient {
             }
 
             if let Some((cid, d)) = outbound_data {
+                let is_msg = cid == cids.ordered_msg || cid == cids.unordered_msg;
                 let mut sent = false;
-                if let Some(ref rtc) = p2p_rtc {
-                    if rtc.is_alive() && rtc.send(&d, cid) { sent = true; }
-                }
-                if !sent {
+
+                if is_msg {
+                    // For messages: send on BOTH legs so the peer receives it
+                    // regardless of which connection is actually working end-to-end.
+                    if let Some(ref rtc) = p2p_rtc {
+                        if rtc.is_alive() { let _ = rtc.send(&d, cid); }
+                    }
                     if let Some(ref rtc) = relay_rtc {
+                        if rtc.is_alive() { let _ = rtc.send(&d, cid); }
+                    }
+                    sent = p2p_rtc.as_ref().map_or(false, |r| r.is_alive())
+                        || relay_rtc.as_ref().map_or(false, |r| r.is_alive());
+                } else {
+                    // For bulk data: prefer P2P, fall back to relay
+                    if let Some(ref rtc) = p2p_rtc {
                         if rtc.is_alive() && rtc.send(&d, cid) { sent = true; }
+                    }
+                    if !sent {
+                        if let Some(ref rtc) = relay_rtc {
+                            if rtc.is_alive() && rtc.send(&d, cid) { sent = true; }
+                        }
                     }
                 }
 

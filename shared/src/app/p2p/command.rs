@@ -80,6 +80,10 @@ impl AppCommand {
                 CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(connected)) => {
                     log::info!("Peer connected {connected:?}");
                 }
+                CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected(peer)) => {
+                    log::info!("Peer disconnected {peer:?}");
+                    self.notify_event(P2PEvent::PeerDisconnected { peer_id: peer.id });
+                }
                 e => {
                     log::warn!("Unexpected output from nearby server, output: {e:?}");
                 }

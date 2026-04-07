@@ -62,7 +62,7 @@ pub struct WebRtcServer {
     resource_repo: Arc<dyn LocalResourceRepository>,
     current_user: OnceCell<PeerEntity>,
     core_request: OnceCell<CoreRequest>,
-    running: AtomicBool
+    running: AtomicBool,
 }
 
 impl WebRtcServer {
@@ -78,7 +78,7 @@ impl WebRtcServer {
             resource_repo,
             current_user: Default::default(),
             core_request: Default::default(),
-            running: AtomicBool::new(false)
+            running: AtomicBool::new(false),
         })
     }
 
@@ -276,8 +276,17 @@ impl WebRtcServer {
                 Some(res) = run_handles.next(), if !run_handles.is_empty() => {
                     match res {
                         Ok(peer_id) => {
-                            log::info!("[webrtc-server] Client {peer_id} run loop finished, removing from clients list");
+                            log::info!("[webrtc-server] Client {peer_id} run loop finished");
+                            let peer = {
+                                let clients = self.clients.lock().await;
+                                clients.get(&peer_id).and_then(|c| c.upgrade()).map(|c| c.peer_entity()).flatten()
+                            };
                             self.clients.lock().await.remove(&peer_id);
+                            if let Some(p) = peer {
+                                if let Some(req) = self.core_request.get() {
+                                    let _ = req.response(CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected(p))).await;
+                                }
+                            }
                         }
                         Err(e) => {
                             log::error!("[webrtc-server] Client run task failed to join: {e}");

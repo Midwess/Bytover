@@ -152,6 +152,9 @@ pub enum TransferEvent {
         session_id: u64,
         peer: Peer
     },
+    PeerDisconnected {
+        peer_id: String
+    },
 
     #[serde(skip)]
     ModelEvent(TransferSessionModelEvent)
@@ -360,6 +363,19 @@ impl AppModule<BitBridge> for TransferModule {
                         *connection_state = P2PConnectionState::Connected;
                     }
                 }
+                Command::render()
+            }
+            TransferEvent::PeerDisconnected { peer_id } => {
+                model.transfer.sessions.retain(|s| {
+                    if matches!(s.transfer_type, TransferType::Receive) {
+                        if let TransferTarget::P2P { from_peer, .. } = &s.target {
+                            if let Some(p) = from_peer {
+                                return p.id != peer_id;
+                            }
+                        }
+                    }
+                    true
+                });
                 Command::render()
             }
             TransferEvent::ModelEvent(event) => {

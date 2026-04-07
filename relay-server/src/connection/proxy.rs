@@ -4,7 +4,7 @@ use tokio::sync::Notify;
 use str0m::channel::ChannelId;
 use str0m::Event;
 
-use crate::connection::rtc::{RelayRtcClient, RelayRtcError};
+use crate::connection::rtc::{RelayRtcClient, RelayRtcError, PollOutcome};
 use schema::devlog::bitbridge::DataChannel;
 use core_services::utils::yield_container::{YieldContainer, Yieldable};
 
@@ -119,7 +119,7 @@ impl ProxyInstance {
             if leg1.is_alive() {
                 loop {
                     match leg1.poll_output().await {
-                        Ok(Some(event)) => {
+                        Ok(PollOutcome::Event(event)) => {
                             if let Event::ChannelData(data) = event {
                                 depth_to_2 += 1;
                                 if tx_to_2.send((data.id, data.data)).is_err() {
@@ -138,7 +138,8 @@ impl ProxyInstance {
                                 }
                             }
                         }
-                        Ok(None) => break,
+                        Ok(PollOutcome::MorePending) => continue,
+                        Ok(PollOutcome::Idle(_)) => break,
                         Err(e) => {
                             log::warn!("[relay-server] Leg 1 drain error: {:?}", e);
                             leg1.disconnect();
@@ -155,7 +156,7 @@ impl ProxyInstance {
                 if leg2.is_alive() {
                     loop {
                         match leg2.poll_output().await {
-                            Ok(Some(event)) => {
+                            Ok(PollOutcome::Event(event)) => {
                                 if let Event::ChannelData(data) = event {
                                     depth_to_1 += 1;
                                     if tx_to_1.send((data.id, data.data)).is_err() {
@@ -174,7 +175,8 @@ impl ProxyInstance {
                                     }
                                 }
                             }
-                            Ok(None) => break,
+                            Ok(PollOutcome::MorePending) => continue,
+                            Ok(PollOutcome::Idle(_)) => break,
                             Err(e) => {
                                 log::warn!("[relay-server] Leg 2 drain error: {:?}", e);
                                 leg2.disconnect();

@@ -293,6 +293,10 @@ impl WebRtcClient {
     pub async fn run(self: Arc<Self>) -> Result<(), WebRtcClientError> {
         log::info!("WebRtcClient run loop starting");
 
+        if let (Some(core_req), Some(p)) = (self.core_request.get(), self.peer.get()) {
+            let _ = core_req.response(CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(p.clone()))).await;
+        }
+
         let msg_future = self.message_loop();
         let data_future = self.data_receiving_loop();
 

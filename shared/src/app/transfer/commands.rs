@@ -227,6 +227,11 @@ impl AppCommand {
                         });
                         return Ok(());
                     }
+                    CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected(peer)) => {
+                        log::info!("Peer disconnected during transfer session: {:?}", peer.id);
+                        self.update_model(TransferEvent::PeerDisconnected { peer_id: peer.id });
+                        return Ok(());
+                    }
                     _ => {}
                 }
             }

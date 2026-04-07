@@ -38,6 +38,14 @@ pub enum RtcEvent {
     Error(WebRtcClientError),
 }
 
+/// Outcome of a single poll operation
+#[derive(Debug)]
+pub enum RtcOutcome {
+    Event(Event),
+    Idle(Instant),
+    MorePending,
+}
+
 /// Commands sent from outside into the RTC thread.
 pub enum RtcCommand {
     Send { data: Vec<u8>, channel_id: ChannelId },
@@ -465,8 +473,17 @@ impl RtcClient {
             }
 
             // 2. Poll events from str0m, send to outside via event_tx
-            match self.poll_event().await {
-                Ok(Some(event)) => {
+            let outcome = match self.poll_event().await {
+                Ok(o) => o,
+                Err(e) => {
+                    log::warn!("[rtc-client] RTC poll_event error: {e:?}");
+                    let _ = event_tx.send(RtcEvent::Error(e)).await;
+                    return;
+                }
+            };
+
+            match outcome {
+                RtcOutcome::Event(event) => {
                     // Track ICE state for disconnect detection
                     if let Event::IceConnectionStateChange(state) = &event {
                         match state {
@@ -492,12 +509,11 @@ impl RtcClient {
                     }
                     continue;
                 }
-                Ok(None) => {}
-                Err(e) => {
-                    log::warn!("[rtc-client] RTC poll_event error: {e:?}");
-                    let _ = event_tx.send(RtcEvent::Error(e)).await;
-                    return;
+                RtcOutcome::MorePending => {
+                    // Cap reached, loop back immediately to keep processing output
+                    continue;
                 }
+                RtcOutcome::Idle(_) => {}
             }
 
             // 3. Wait for input (socket recv) OR new commands
@@ -551,7 +567,7 @@ impl RtcClient {
 
     async fn wait_for_connected(mut self, mut connected: bool) -> Result<Self, WebRtcClientError> {
         loop {
-            if let Some(event) = self.poll_event().await? {
+            if let RtcOutcome::Event(event) = self.poll_event().await? {
                 match event {
                     Event::Connected => {
                         log::info!("[rtc-client] DTLS Connected");
@@ -600,13 +616,13 @@ impl RtcClient {
         }
     }
 
-    async fn poll_event(&mut self) -> Result<Option<Event>, WebRtcClientError> {
+    async fn poll_event(&mut self) -> Result<RtcOutcome, WebRtcClientError> {
         let mut transmit_count = 0;
         loop {
             match self.rtc.poll_output()? {
                 Output::Timeout(t) => {
                     self.cached_timeout = t;
-                    return Ok(None);
+                    return Ok(RtcOutcome::Idle(t));
                 }
                 Output::Transmit(t) => {
                     let dest = to_v6_mapped(t.destination);
@@ -617,12 +633,12 @@ impl RtcClient {
 
                     transmit_count += 1;
                     if transmit_count >= MAX_TRANSMITS_PER_POLL {
-                        return Ok(None);
+                        return Ok(RtcOutcome::MorePending);
                     }
                 }
                 Output::Event(e) => {
                     log::info!("[rtc-client] str0m Event: {:?}", e);
-                    return Ok(Some(e));
+                    return Ok(RtcOutcome::Event(e));
                 }
             }
         }

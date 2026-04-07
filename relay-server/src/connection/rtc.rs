@@ -67,6 +67,13 @@ pub enum RelayRtcError {
     Rtc(#[from] str0m::error::RtcError),
 }
 
+#[derive(Debug)]
+pub enum PollOutcome {
+    Event(Event),
+    Idle(Instant),
+    MorePending,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum PendingEvent {
     Connected,
@@ -181,24 +188,26 @@ impl RelayRtcClient {
     /// Poll the RTC engine for output. Each Transmit is sent immediately to avoid
     /// stacking (which causes stack overflow under high load). Stops at the first Event
     /// or Timeout, returning it for processing.
-    pub async fn poll_output(&mut self) -> Result<Option<Event>, RelayRtcError> {
+    pub async fn poll_output(&mut self) -> Result<PollOutcome, RelayRtcError> {
         // Check ICE disconnect timeout before polling
         if let Some(since) = self.ice_disconnected_since {
             if since.elapsed() >= ICE_DISCONNECT_TIMEOUT {
                 log::info!("[relay-rtc] ICE disconnected for {:?}, tearing down", ICE_DISCONNECT_TIMEOUT);
                 self.rtc.disconnect();
                 self.ice_disconnected_since = None;
-                return Ok(None);
+                return Ok(PollOutcome::Idle(Instant::now() + Duration::from_secs(3600)));
             }
         }
 
         let mut event = None;
         let mut transmit_count = 0;
+        let mut outcome = None;
 
         loop {
             match self.rtc.poll_output()? {
                 Output::Timeout(t) => {
                     self.cached_timeout = t;
+                    outcome = Some(PollOutcome::Idle(t));
                     break;
                 }
                 Output::Transmit(t) => {
@@ -214,6 +223,7 @@ impl RelayRtcClient {
 
                     transmit_count += 1;
                     if transmit_count >= MAX_TRANSMITS_PER_POLL {
+                        outcome = Some(PollOutcome::MorePending);
                         break;
                     }
                 }
@@ -265,10 +275,10 @@ impl RelayRtcClient {
             if !self.connected && self.pending_events.is_empty() {
                 self.connected = true;
             }
-            return Ok(Some(e));
+            return Ok(PollOutcome::Event(e));
         }
 
-        Ok(None)
+        Ok(outcome.unwrap_or(PollOutcome::Idle(self.cached_timeout)))
     }
 
     pub fn timeout_duration(&self) -> Duration {
@@ -323,8 +333,12 @@ impl RelayRtcClient {
     }
 
     pub async fn process_step(&mut self) -> Result<Option<Event>, RelayRtcError> {
-        if let Some(event) = self.poll_output().await? {
-            return Ok(Some(event));
+        loop {
+            match self.poll_output().await? {
+                PollOutcome::Event(e) => return Ok(Some(e)),
+                PollOutcome::MorePending => continue,
+                PollOutcome::Idle(_) => break,
+            }
         }
 
         if !self.rtc.is_alive() {

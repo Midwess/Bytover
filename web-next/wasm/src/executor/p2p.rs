@@ -18,13 +18,11 @@ use crate::webrtc::signaling::SignalingClient;
 ///
 /// This implementation uses the WebRTC client for receiving data from peers.
 /// WASM acts as a client that connects to a single peer (not a host).
-///
-/// The client is stored in a `OnceCell` since there's only one active connection.
 pub struct P2PNativeExecutorImpl {
     pub web_rtc: OnceCell<Arc<WebRtc>>,
     pub client: OnceCell<Arc<WebRtcClient>>,
     pub signalling: OnceCell<SignalingClient>,
-    pub current_user: OnceCell<PeerEntity>
+    pub current_user: OnceCell<PeerEntity>,
 }
 
 /// Errors that can occur in P2P operations
@@ -107,7 +105,7 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
             } => {
                 log::info!("ConnectPeer called for WASM with key {}", signalling_key);
 
-                if self.client.get().is_some() {
+                if self.is_connected() {
                     return Err(P2PError::AlreadyConnected.into());
                 }
 
@@ -128,11 +126,11 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
 
                 client.run().await?;
 
-                Ok(CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(peer)))
+                Ok(CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected(peer)))
             }
 
             P2POperation::IsRunning => {
-                let running = self.client.get().is_some();
+                let running = self.is_connected();
                 log::debug!("IsRunning called on WASM: {}", running);
                 Ok(CoreOperationOutput::None)
             }
