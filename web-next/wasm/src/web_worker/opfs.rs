@@ -560,7 +560,7 @@ impl OpfsWorker {
                     }
 
                     let remove_options = FileSystemRemoveOptions::new();
-                    let _ = root.remove_entry_with_options(&zip_filename, &remove_options);
+                    let _ = JsFuture::from(root.remove_entry_with_options(&zip_filename, &remove_options)).await;
 
                     let sync_handle = root.open_file(&zip_filename).await?;
                     let zip_writer = OpfsZipWriter::new(sync_handle);
