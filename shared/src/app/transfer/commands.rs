@@ -242,6 +242,14 @@ impl AppCommand {
                             peer_id
                         });
                     }
+                    CoreOperationOutput::P2P(P2POperationOutput::CancelSessionRequest { session_id }) => {
+                        log::info!("Peer canceled session {session_id}");
+                        self.update_model(TransferSessionModelEvent::Remove(TransferSessionId {
+                            order_id: Some(session_id.to_string()),
+                            transfer_type: Some(TransferType::Receive)
+                        }));
+                        return Ok(());
+                    }
                     CoreOperationOutput::Error(e) => {
                         log::error!("Failed to connect to peer: {e:?}");
                         self.update_model(TransferEvent::UpdateConnectionState {
@@ -525,7 +533,19 @@ impl AppCommand {
                 ));
             }
             Err(e) => {
-                log::error!("Failed to stream resource to peer: {e:?}");
+                let is_canceled = match &e {
+                    CoreError::Network(message) => {
+                        let lower = message.to_ascii_lowercase();
+                        lower.contains("task cancelled") || lower.contains("canceled")
+                    }
+                    _ => false
+                };
+
+                if is_canceled {
+                    log::info!("Peer canceled resource {resource_order_id} in session {session_id}");
+                } else {
+                    log::error!("Failed to stream resource to peer: {e:?}");
+                }
             }
         }
 

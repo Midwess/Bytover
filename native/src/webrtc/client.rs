@@ -1,6 +1,6 @@
 
 
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -18,7 +18,7 @@ use schema::devlog::bitbridge::view_session_detail_response::Result as SessionDe
 use schema::devlog::bitbridge::*;
 use schema::devlog::rpc_signalling::server::OfferMessage;
 use thiserror::Error;
-use tokio::sync::OnceCell;
+use tokio::sync::{Notify, OnceCell};
 
 
 use shared::app::operations::p2p::P2POperationOutput;
@@ -140,6 +140,8 @@ pub struct WebRtcClient {
     outbound_rx: YieldContainer<futures_mpsc::Receiver<(u16, u64, Vec<u8>, bool)>>,
     reliable_data_tx: YieldContainer<mpsc::Sender<Vec<u8>>>,
     bytes_sent_counter: Arc<AtomicUsize>,
+    disconnect_requested: AtomicBool,
+    disconnect_notify: Notify,
 }
 
 
@@ -252,6 +254,8 @@ impl WebRtcClient {
             outbound_rx: YieldContainer::new(outbound_rx),
             reliable_data_tx: YieldContainer::new(reliable_data_tx),
             bytes_sent_counter: Arc::new(AtomicUsize::new(0)),
+            disconnect_requested: AtomicBool::new(false),
+            disconnect_notify: Notify::new(),
         };
 
         log::info!("[webrtc-client] connection established, peer info exchanged via signaling.");
@@ -310,6 +314,17 @@ impl WebRtcClient {
                 break;
             }
 
+            if self.disconnect_requested.load(Ordering::SeqCst) {
+                log::info!("[webrtc-client] Disconnect requested, stopping run loop");
+                if let Some(mut rtc) = p2p_rtc.take() {
+                    rtc.shutdown();
+                }
+                if let Some(mut rtc) = relay_rtc.take() {
+                    rtc.shutdown();
+                }
+                break;
+            }
+
             // Proactively clear dead connections so sends fall through to the live one
             if p2p_rtc.as_ref().map_or(false, |r| !r.is_alive()) {
                 log::info!("[webrtc-client] P2P RTC no longer alive, clearing");
@@ -324,6 +339,17 @@ impl WebRtcClient {
 
             tokio::select! {
                 biased;
+
+                _ = self.disconnect_notify.notified() => {
+                    log::info!("[webrtc-client] Disconnect notification received");
+                    if let Some(mut rtc) = p2p_rtc.take() {
+                        rtc.shutdown();
+                    }
+                    if let Some(mut rtc) = relay_rtc.take() {
+                        rtc.shutdown();
+                    }
+                    break;
+                }
 
                 // 1. New RTC connection arrivals from background racing
                 Some(c) = new_rtc_rx.recv(), if !new_rtc_rx.is_closed() => {
@@ -494,13 +520,30 @@ impl WebRtcClient {
         self.peer.get().cloned()
     }
 
+    pub fn session_id(&self) -> Option<u64> {
+        self.session_id.get().copied()
+    }
+
+    pub fn disconnect(&self) {
+        if self.disconnect_requested.swap(true, Ordering::SeqCst) {
+            return;
+        }
+
+        log::info!("[webrtc-client] Disconnect requested for peer {:?}", self.peer_id());
+        self.disconnect_notify.notify_one();
+    }
+
 
     pub async fn stream_resource(&self, session_id: u64, transfer_id: u16, resource: LocalResource) -> Result<(), WebRtcClientError> {
         let resource_id = resource.order_id;
         let result = self.stream_resource_inner(session_id, transfer_id, resource).await;
         if let Err(ref e) = result {
-            log::warn!("[webrtc-client] stream_resource failed for resource {resource_id}: {e:?}");
-            self.cancel_resource_transfer(session_id, resource_id).await;
+            if matches!(e, WebRtcClientError::TaskCancelled(_)) {
+                log::info!("[webrtc-client] stream_resource canceled for resource {resource_id}");
+            } else {
+                log::warn!("[webrtc-client] stream_resource failed for resource {resource_id}: {e:?}");
+                self.cancel_resource_transfer(session_id, resource_id).await;
+            }
         }
         result
     }

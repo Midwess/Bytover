@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -7,6 +8,7 @@ use core_services::utils::cancellation::{FutureExtension, TaskErrors};
 use core_services::utils::yield_container::{YieldContainer, YieldError};
 use futures::channel::mpsc;
 use futures::channel::mpsc::unbounded;
+use futures::channel::oneshot;
 use futures::select_biased;
 use futures::stream::StreamExt;
 use futures_util::lock::Mutex;
@@ -49,6 +51,9 @@ pub struct WebRtcClient {
     reliable_channel: OnceCell<Arc<RtcDataChannelWrapper>>,
     relay_connection: OnceCell<Arc<RtcConnectionWrapper>>,
     relay_reliable_channel: OnceCell<Arc<RtcDataChannelWrapper>>,
+    disconnect_signal: Mutex<Option<oneshot::Sender<()>>>,
+    disconnect_receiver: YieldContainer<oneshot::Receiver<()>>,
+    disconnect_requested: AtomicBool,
 }
 
 fn spawn_outbound_sender(channel: Arc<RtcDataChannelWrapper>, relay_channel: Arc<RtcDataChannelWrapper>, mut rx: mpsc::Receiver<Vec<u8>>) {
@@ -101,6 +106,7 @@ impl WebRtcClient {
         let (data_inbound_tx, data_inbound_rx) = unbounded();
         let (ordered_out_tx, ordered_out_rx) = mpsc::channel(16);
         let (unordered_out_tx, unordered_out_rx) = mpsc::channel(16);
+        let (disconnect_tx, disconnect_rx) = oneshot::channel();
 
         // Setup P2P channels
         let reliable_channel = api.create_unordered_channel(connection.clone(), RELIABLE_DATA_CHANNEL_ID)?;
@@ -197,6 +203,9 @@ impl WebRtcClient {
             reliable_channel: OnceCell::new(),
             relay_connection: OnceCell::new(),
             relay_reliable_channel: OnceCell::new(),
+            disconnect_signal: Mutex::new(Some(disconnect_tx)),
+            disconnect_receiver: YieldContainer::new(disconnect_rx),
+            disconnect_requested: AtomicBool::new(false),
         });
 
         let _ = client.me.set(me);
@@ -293,15 +302,22 @@ impl WebRtcClient {
     pub async fn run(self: Arc<Self>) -> Result<(), WebRtcClientError> {
         log::info!("WebRtcClient run loop starting");
 
-        if let (Some(core_req), Some(p)) = (self.core_request.get(), self.peer.get()) {
-            let _ = core_req.response(CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(p.clone()))).await;
-        }
+        let mut disconnect_receiver_guard = self.disconnect_receiver.retrieve().await?;
+        let disconnect_receiver = disconnect_receiver_guard
+            .value
+            .take()
+            .ok_or_else(|| WebRtcClientError::Connection("Disconnect receiver already taken".to_string()))?;
 
         let msg_future = self.message_loop();
         let data_future = self.data_receiving_loop();
+        let disconnect_future = async move {
+            let _ = disconnect_receiver.await;
+            Ok::<(), WebRtcClientError>(())
+        };
 
-        futures::pin_mut!(msg_future, data_future);
+        futures::pin_mut!(msg_future, data_future, disconnect_future);
         select_biased! {
+            r = disconnect_future.fuse() => r?,
             r = msg_future.fuse() => r?,
             r = data_future.fuse() => r?,
         }
@@ -622,6 +638,34 @@ impl WebRtcClient {
         self.core_request.get()
     }
 
+    pub async fn disconnect(&self) {
+        if self.disconnect_requested.swap(true, Ordering::SeqCst) {
+            return;
+        }
+
+        log::info!("Disconnecting WebRtcClient from peer {:?}", self.peer_id());
+
+        if let Some(channel) = self.reliable_channel.get() {
+            channel.close();
+        }
+
+        if let Some(channel) = self.relay_reliable_channel.get() {
+            channel.close();
+        }
+
+        if let Some(connection) = self.connection.get() {
+            connection.close();
+        }
+
+        if let Some(connection) = self.relay_connection.get() {
+            connection.close();
+        }
+
+        if let Some(signal) = self.disconnect_signal.lock().await.take() {
+            let _ = signal.send(());
+        }
+    }
+
     pub async fn process_message_packet(&self, request_id: String, msg: Request) {
         match msg {
             Request::IntroduceRequest(introduce_msg) => {
@@ -663,6 +707,14 @@ impl WebRtcClient {
                     self.transfers_context.cancel_resource(request.session_id, resource_id).await;
                 } else {
                     self.transfers_context.cancel_transfer(request.session_id).await;
+                    if let Some(core_request) = self.core_request() {
+                        core_request
+                            .response(CoreOperationOutput::P2P(P2POperationOutput::CancelSessionRequest {
+                                session_id: request.session_id
+                            }))
+                            .await;
+                    }
+                    self.disconnect().await;
                 }
             }
             Request::ResourceNotification(notification) => {

@@ -205,7 +205,7 @@ impl DiContainer {
             }),
             p2p: Box::new(P2PNativeExecutorImpl {
                 web_rtc: OnceCell::from(web_rtc),
-                client: OnceCell::new(),
+                client: std::sync::Arc::new(std::sync::Mutex::new(None)),
                 signalling: OnceCell::new(),
                 current_user: OnceCell::new()
             })

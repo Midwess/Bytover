@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
+use std::time::Duration;
 
 use futures_util::stream::FuturesUnordered;
 use futures_util::StreamExt;
@@ -115,22 +116,54 @@ impl WebRtcServer {
     pub async fn cancel_session(&self, peer_id: String, session_id: u64) -> Result<(), WebRtcServerError> {
         let client = self.get_client(&peer_id).await?;
         client.cancel_transfer(session_id).await;
+        tokio::time::sleep(Duration::from_millis(150)).await;
+        client.disconnect();
         Ok(())
     }
 
     pub async fn broadcast_cancel_session(&self, session_id: u64, resource_id: Option<u64>) -> Result<(), WebRtcServerError> {
-        let clients = self.clients.lock().await;
-        for client in clients.values() {
+        let mut clients = self.clients.lock().await;
+        let mut stale_peers = Vec::new();
+        let mut session_clients = Vec::new();
+
+        for (peer_id, client) in clients.iter() {
             let Some(client) = client.upgrade() else {
+                stale_peers.push(peer_id.clone());
                 continue;
             };
 
+            if client.session_id() == Some(session_id) {
+                session_clients.push(client);
+            }
+        }
+
+        for peer_id in stale_peers {
+            clients.remove(&peer_id);
+        }
+
+        drop(clients);
+
+        log::info!(
+            "[webrtc-server] Broadcasting cancel for session {} to {} matching peers",
+            session_id,
+            session_clients.len()
+        );
+
+        for client in &session_clients {
             if let Some(resource_id) = resource_id {
                 client.cancel_resource_transfer(session_id, resource_id).await;
             } else {
                 client.cancel_transfer(session_id).await;
             }
         }
+
+        if resource_id.is_none() && !session_clients.is_empty() {
+            tokio::time::sleep(Duration::from_millis(150)).await;
+            for client in session_clients {
+                client.disconnect();
+            }
+        }
+
         Ok(())
     }
 

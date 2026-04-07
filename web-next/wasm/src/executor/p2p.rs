@@ -1,5 +1,5 @@
 use once_cell::sync::OnceCell;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
 use shared::app::operations::p2p::{P2POperation, P2POperationOutput};
@@ -20,7 +20,7 @@ use crate::webrtc::signaling::SignalingClient;
 /// WASM acts as a client that connects to a single peer (not a host).
 pub struct P2PNativeExecutorImpl {
     pub web_rtc: OnceCell<Arc<WebRtc>>,
-    pub client: OnceCell<Arc<WebRtcClient>>,
+    pub client: Arc<Mutex<Option<Arc<WebRtcClient>>>>,
     pub signalling: OnceCell<SignalingClient>,
     pub current_user: OnceCell<PeerEntity>,
 }
@@ -57,18 +57,24 @@ impl P2PNativeExecutorImpl {
     pub fn new() -> Self {
         Self {
             web_rtc: OnceCell::new(),
-            client: OnceCell::new(),
+            client: Arc::new(Mutex::new(None)),
             signalling: OnceCell::new(),
             current_user: OnceCell::new()
         }
     }
 
     pub fn get_client(&self) -> Option<Arc<WebRtcClient>> {
-        self.client.get().cloned()
+        self.client.lock().unwrap().clone()
     }
 
     pub fn set_client(&self, client: Arc<WebRtcClient>) -> Result<(), Arc<WebRtcClient>> {
-        self.client.set(client)
+        let mut current = self.client.lock().unwrap();
+        if current.is_some() {
+            return Err(client);
+        }
+
+        current.replace(client);
+        Ok(())
     }
 
     pub fn set_signalling(&self, signalling: SignalingClient) -> Result<(), SignalingClient> {
@@ -80,7 +86,7 @@ impl P2PNativeExecutorImpl {
     }
 
     pub fn is_connected(&self) -> bool {
-        self.client.get().is_some()
+        self.client.lock().unwrap().is_some()
     }
 
     pub fn current_user(&self) -> Option<&PeerEntity> {
@@ -91,7 +97,7 @@ impl P2PNativeExecutorImpl {
 impl P2PNativeExecutorImpl {
     /// Helper to get client or return NotConnected error
     fn get_client_or_not_connected(&self) -> Result<Arc<WebRtcClient>, P2PError> {
-        self.client.get().cloned().ok_or(P2PError::NotConnected)
+        self.get_client().ok_or(P2PError::NotConnected)
     }
 }
 
@@ -118,15 +124,25 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                     .await
                     .map_err(|e| P2PError::WebRtc(e.to_string()))?;
 
-                client.start_core_stream(request);
+                client.start_core_stream(request.clone());
                 self.set_client(client.clone()).map_err(|_| P2PError::AlreadyConnected)?;
 
                 let peer = client.peer_entity().ok_or_else(|| P2PError::WebRtc("Peer not set after signaling exchange".into()))?;
                 self.set_current_user(current_user).ok();
 
                 let client_clone = client.clone();
+                let client_slot = self.client.clone();
+                let request_clone = request.clone();
                 wasm_bindgen_futures::spawn_local(async move {
-                    if let Err(e) = client_clone.run().await {
+                    let disconnected_peer = client_clone.peer_entity();
+                    let result = client_clone.run().await;
+                    if let Some(peer) = disconnected_peer {
+                        request_clone
+                            .response(CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected(peer)))
+                            .await;
+                    }
+                    client_slot.lock().unwrap().take();
+                    if let Err(e) = result {
                         log::error!("WebRtcClient run error: {:?}", e);
                     }
                 });

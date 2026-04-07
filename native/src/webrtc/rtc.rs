@@ -106,18 +106,17 @@ impl RtcHandle {
             && self.thread_handle.as_ref().map_or(false, |h| !h.is_finished())
     }
 
-    pub fn shutdown(&self) {
-        // No-op, the handle will shutdown on Drop or when the client closes.
+    pub fn shutdown(&mut self) {
+        drop(self.data_tx.take());
+        if let Some(handle) = self.thread_handle.take() {
+            let _ = handle.join();
+        }
     }
 }
 
 impl Drop for RtcHandle {
     fn drop(&mut self) {
-        // Signal shutdown by dropping the data sender
-        drop(self.data_tx.take());
-        if let Some(handle) = self.thread_handle.take() {
-            let _ = handle.join();
-        }
+        self.shutdown();
     }
 }
 
@@ -519,7 +518,8 @@ impl RtcClient {
                         Some(cmd) => self.handle_command(cmd),
                         None => {
                             log::info!("[rtc-client] RTC I/O thread shutdown: data channel closed");
-                            return;
+                            self.rtc.disconnect();
+                            break;
                         }
                     }
                 }

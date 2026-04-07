@@ -850,8 +850,12 @@ impl WebRtcPeer {
         let result = self.stream_resource_inner(session_id, transfer_id, resource).await;
 
         if let Err(ref e) = result {
-            log::warn!("stream_resource failed for resource {}, sending cancel: {:?}", resource_id, e);
-            self.cancel_resource_transfer(session_id, resource_id).await;
+            if matches!(e, WebRtcErrors::Canceled(_)) {
+                log::info!("stream_resource canceled for resource {}", resource_id);
+            } else {
+                log::warn!("stream_resource failed for resource {}, sending cancel: {:?}", resource_id, e);
+                self.cancel_resource_transfer(session_id, resource_id).await;
+            }
         }
 
         result
