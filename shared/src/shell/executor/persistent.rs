@@ -92,6 +92,10 @@ pub trait NativePersistent: Send + Sync {
 
                 Ok(CoreOperationOutput::LocalResources(created_resources))
             }
+            PersistentOperation::LocalResource(LocalResourcePersistentOperation::Update(resource)) => {
+                let resource = self.local_resource_repository().update_one(resource).await?;
+                Ok(CoreOperationOutput::LocalResource(resource))
+            }
             PersistentOperation::LocalResource(LocalResourcePersistentOperation::Remove { path, shelf_id }) => {
                 self.local_resource_repository().remove(path, shelf_id).await?;
 

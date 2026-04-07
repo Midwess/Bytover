@@ -54,6 +54,12 @@ impl Shelf {
         }
     }
 
+    pub fn update_resource(&mut self, update: &LocalResourceId, resource: LocalResource) {
+        if let Some(existing) = self.resources.iter_mut().find(|it| update.is_represent(it)) {
+            *existing = resource;
+        }
+    }
+
     pub fn remove_resource(&mut self, remove: &LocalResourceId) {
         self.resources.retain(|it| !remove.is_represent(it));
     }

@@ -50,12 +50,7 @@ impl AppCommand {
         Ok(())
     }
 
-    pub async fn upload(&self, session: TransferSession) -> Result<(), CoreError> {
-        if session.resources.is_empty() {
-            self.run(DialogOperation::toast("Please select at least one resource.".to_string())).await;
-            return Ok(());
-        }
-
+    pub async fn upload(&self, mut session: TransferSession) -> Result<(), CoreError> {
         let TransferTarget::Internet { to_emails, .. } = &session.target else {
             return Ok(());
         };
@@ -65,6 +60,19 @@ impl AppCommand {
                 self.run(DialogOperation::toast("Invalid email format".to_string())).await;
                 return Ok(());
             }
+        }
+
+        let selected_resources = std::mem::take(&mut session.resources);
+        session.resources = self.sync_local_resources(selected_resources).await;
+        session.progress = session
+            .resources
+            .iter()
+            .map(|it| TransferProgress::new(it.order_id, it.size, session.transfer_type.clone()))
+            .collect();
+
+        if session.resources.is_empty() {
+            self.run(DialogOperation::toast("Please select at least one resource.".to_string())).await;
+            return Ok(());
         }
 
         let mut transfer_session = match self.run(TransferOperation::create_cloud_session(session.clone())).await {
@@ -750,6 +758,12 @@ impl AppCommand {
         shelf_name: String,
         signalling_key: String
     ) -> Result<(), CoreError> {
+        let selected_resources = self.sync_local_resources(selected_resources).await;
+        if selected_resources.is_empty() {
+            self.run(DialogOperation::toast("No resources selected".to_string())).await;
+            return Ok(());
+        }
+
         let p2p_session = self.run(RpcOperation::create_p2p_session(shelf_name, signalling_key)).await?;
 
         let mut session = TransferSession::p2p(

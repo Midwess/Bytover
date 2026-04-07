@@ -57,7 +57,7 @@ pub enum TransferSessionUpdateEvent {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, From)]
 pub enum LocalResourceUpdateEvent {
-    Update
+    Update(LocalResource)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

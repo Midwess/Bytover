@@ -27,6 +27,7 @@ pub enum PersistentOperation {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum LocalResourcePersistentOperation {
     Add(Vec<LocalResource>),
+    Update(LocalResource),
     Remove { path: LocalResourcePath, shelf_id: u64 },
     FindAll,
     LoadOnDisk(LocalResourcePath),
@@ -109,6 +110,11 @@ impl LocalResourcePersistentOperation {
             resources
         )))
         .map(|it| it.result())
+    }
+
+    pub fn update(resource: LocalResource) -> AppRequestBuilder<impl Future<Output = Result<LocalResource, CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::LocalResource(LocalResourcePersistentOperation::Update(resource)))
+            .map(|it| it.result())
     }
 
     pub fn remove(path: LocalResourcePath, shelf_id: u64) -> AppRequestBuilder<impl Future<Output = Result<bool, CoreError>>> {

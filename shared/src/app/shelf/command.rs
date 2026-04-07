@@ -1,11 +1,12 @@
 use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
-use crate::app::core::model_events::LocalResourceEvent;
+use crate::app::core::model_events::{LocalResourceEvent, LocalResourceUpdateEvent};
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::persistent::{DeviceAliasPersistentOperation, LocalResourcePersistentOperation, ShelfPersistentOperation};
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::shelf::module::{ResourceSelection, ShelfEvent};
 use crate::app::transfer::module::TransferEvent;
+use crate::entities::local_resource::LocalResource;
 use crate::entities::shelf::Shelf;
 use crate::errors::CoreError;
 use crate::repository::local_resource::LocalResourceId;
@@ -26,6 +27,7 @@ impl AppCommand {
 
         let resources = LocalResourcePersistentOperation::find_all().into_future(self.ctx()).await?;
         log::info!("Loaded {} resources", resources.len());
+        let validation_resources = resources.clone();
 
         for shelf in shelves {
             self.update_model(ShelfEvent::ShelfLoaded(shelf));
@@ -37,8 +39,80 @@ impl AppCommand {
         }
 
         self.notify_shell(CoreOperation::Render);
+        if !validation_resources.is_empty() {
+            self.notify_event(ShelfEvent::ValidateLoadedResources(validation_resources));
+        }
 
         Ok(())
+    }
+
+    pub async fn validate_loaded_resources(
+        &self,
+        resources: Vec<LocalResource>
+    ) -> Result<(), CoreError> {
+        let _ = self.sync_local_resources(resources).await;
+        Ok(())
+    }
+
+    pub async fn sync_local_resources(&self, resources: Vec<LocalResource>) -> Vec<LocalResource> {
+        let mut synced_resources = Vec::with_capacity(resources.len());
+
+        for current_resource in resources {
+            let resource_id = LocalResourceId {
+                order_id: Some(current_resource.order_id),
+                path: Some(current_resource.path.clone()),
+                shelf_id: Some(current_resource.shelf_id)
+            };
+
+            let loaded_resource = match self
+                .run(LocalResourcePersistentOperation::load_from_disk(
+                    current_resource.path.clone()
+                ))
+                .await
+            {
+                Ok(resource) => resource,
+                Err(error) => {
+                    log::warn!("Failed to reload resource {:?}: {:?}", resource_id, error);
+                    synced_resources.push(current_resource);
+                    continue;
+                }
+            };
+
+            let Some(mut loaded_resource) = loaded_resource else {
+                log::info!("Removing missing resource {:?}", resource_id);
+                if let Err(error) = self.remove_resource(resource_id.clone()).await {
+                    log::error!("Failed to remove missing resource {:?}: {:?}", resource_id, error);
+                }
+                continue;
+            };
+
+            loaded_resource.order_id = current_resource.order_id;
+            loaded_resource.path = current_resource.path.clone();
+            loaded_resource.thumbnail_path = current_resource.thumbnail_path.clone();
+            loaded_resource.shelf_id = current_resource.shelf_id;
+
+            if loaded_resource == current_resource {
+                synced_resources.push(current_resource);
+                continue;
+            }
+
+            let updated_resource = match self.run(LocalResourcePersistentOperation::update(loaded_resource.clone())).await {
+                Ok(resource) => resource,
+                Err(error) => {
+                    log::error!("Failed to update resource {:?}: {:?}", resource_id, error);
+                    synced_resources.push(loaded_resource);
+                    continue;
+                }
+            };
+
+            self.update_model(LocalResourceEvent::Update(
+                resource_id.clone(),
+                LocalResourceUpdateEvent::Update(updated_resource.clone())
+            ));
+            synced_resources.push(updated_resource);
+        }
+
+        synced_resources
     }
 
     pub async fn create_shelf(&self, id: u64) -> Result<(), CoreError> {
