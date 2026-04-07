@@ -47,17 +47,13 @@ pub enum RtcOutcome {
 }
 
 /// Commands sent from outside into the RTC thread.
-pub enum RtcCommand {
-    Send { data: Vec<u8>, channel_id: ChannelId },
-    SetBufferedAmountLowThreshold { channel_id: ChannelId, threshold: usize },
-    Shutdown,
-}
+// RtcCommand enum removed, replaced with (Vec<u8>, ChannelId) tuple for simplicity
 
 /// Async-friendly handle returned from connect(). Communicates with the
 /// dedicated OS thread that drives the RTC networking loop.
 pub struct RtcHandle {
     event_rx: tokio::sync::mpsc::Receiver<RtcEvent>,
-    command_tx: tokio::sync::mpsc::Sender<RtcCommand>,
+    data_tx: Option<tokio::sync::mpsc::Sender<(Vec<u8>, ChannelId)>>,
     channel_ids: ChannelIds,
     thread_handle: Option<std::thread::JoinHandle<()>>,
 }
@@ -95,17 +91,11 @@ impl RtcHandle {
 
     /// Send data on a channel. Returns true if the command was queued.
     pub fn send(&self, data: &[u8], channel_id: ChannelId) -> bool {
-        self.command_tx.try_send(RtcCommand::Send {
-            data: data.to_vec(),
-            channel_id,
-        }).is_ok()
-    }
-
-    pub fn set_buffered_amount_low_threshold(&self, channel_id: ChannelId, threshold: usize) {
-        let _ = self.command_tx.try_send(RtcCommand::SetBufferedAmountLowThreshold {
-            channel_id,
-            threshold,
-        });
+        if let Some(ref tx) = self.data_tx {
+            tx.try_send((data.to_vec(), channel_id)).is_ok()
+        } else {
+            false
+        }
     }
 
     pub fn channel_ids(&self) -> &ChannelIds {
@@ -119,13 +109,14 @@ impl RtcHandle {
     }
 
     pub fn shutdown(&self) {
-        let _ = self.command_tx.try_send(RtcCommand::Shutdown);
+        // No-op, the handle will shutdown on Drop or when the client closes.
     }
 }
 
 impl Drop for RtcHandle {
     fn drop(&mut self) {
-        let _ = self.command_tx.try_send(RtcCommand::Shutdown);
+        // Signal shutdown by dropping the data sender
+        drop(self.data_tx.take());
         if let Some(handle) = self.thread_handle.take() {
             let _ = handle.join();
         }
@@ -391,7 +382,7 @@ impl RtcClient {
     fn spawn_thread(self) -> RtcHandle {
         let channel_ids = self.channel_ids;
         let (event_tx, event_rx) = tokio::sync::mpsc::channel::<RtcEvent>(5);
-        let (command_tx, command_rx) = tokio::sync::mpsc::channel::<RtcCommand>(16);
+        let (data_tx, data_rx) = tokio::sync::mpsc::channel::<(Vec<u8>, ChannelId)>(16);
 
         // Use an 8 MB stack to avoid overflow during high-throughput transmit bursts.
         let thread_handle = std::thread::Builder::new()
@@ -404,14 +395,14 @@ impl RtcClient {
                     .expect("Failed to build tokio runtime for RTC thread");
 
                 rt.block_on(async move {
-                    Self::run_loop(self, event_tx, command_rx).await;
+                    Self::run_loop(self, event_tx, data_rx).await;
                 });
             })
             .expect("Failed to spawn RTC I/O thread");
 
         RtcHandle {
             event_rx,
-            command_tx,
+            data_tx: Some(data_tx),
             channel_ids,
             thread_handle: Some(thread_handle),
         }
@@ -421,11 +412,10 @@ impl RtcClient {
     async fn run_loop(
         mut self,
         event_tx: tokio::sync::mpsc::Sender<RtcEvent>,
-        mut command_rx: tokio::sync::mpsc::Receiver<RtcCommand>,
+        mut data_rx: tokio::sync::mpsc::Receiver<(Vec<u8>, ChannelId)>,
     ) {
         log::info!("[rtc-client] RTC I/O thread started");
 
-        // Replay any events (e.g. ChannelData) that arrived during the connect handshake
         for event in std::mem::take(&mut self.early_events) {
             log::info!("[rtc-client] Replaying early event: {:?}", event);
             if event_tx.send(RtcEvent::Str0mEvent(event)).await.is_err() {
@@ -434,12 +424,9 @@ impl RtcClient {
             }
         }
 
-        // Track when ICE entered Disconnected state.
-        // str0m never emits Failed/Closed, so we use a timeout to detect a truly-gone peer.
         let mut ice_disconnected_since: Option<Instant> = None;
 
         while self.rtc.is_alive() {
-            // Check ICE disconnect timeout
             if let Some(since) = ice_disconnected_since {
                 if since.elapsed() >= ICE_DISCONNECT_TIMEOUT {
                     log::info!("[rtc-client] ICE disconnected for {:?}, tearing down", ICE_DISCONNECT_TIMEOUT);
@@ -448,31 +435,23 @@ impl RtcClient {
                 }
             }
 
-            // 0. Try to send pending transmit if any
             if let Some((data, channel_id)) = self.pending_transmit.take() {
                 if self.send(&data, channel_id) {
-                    // Sent successfully, pending is now None
-                } else {
-                    // Backpressure, put it back
+                }
+                else {
                     self.pending_transmit = Some((data, channel_id));
                 }
             }
 
-            // 1. If no pending, process commands (non-blocking)
             if self.pending_transmit.is_none() {
-                while let Ok(cmd) = command_rx.try_recv() {
-                    if self.handle_command(cmd) {
-                        log::info!("[rtc-client] RTC I/O thread shutdown by command");
-                        return;
-                    }
-                    // If we now have a pending (backpressure), stop processing more commands
+                while let Ok(cmd) = data_rx.try_recv() {
+                    self.handle_command(cmd);
                     if self.pending_transmit.is_some() {
                         break;
                     }
                 }
             }
 
-            // 2. Poll events from str0m, send to outside via event_tx
             let outcome = match self.poll_event().await {
                 Ok(o) => o,
                 Err(e) => {
@@ -484,7 +463,6 @@ impl RtcClient {
 
             match outcome {
                 RtcOutcome::Event(event) => {
-                    // Track ICE state for disconnect detection
                     if let Event::IceConnectionStateChange(state) = &event {
                         match state {
                             IceConnectionState::Disconnected => {
@@ -510,19 +488,17 @@ impl RtcClient {
                     continue;
                 }
                 RtcOutcome::MorePending => {
-                    // Cap reached, loop back immediately to keep processing output
                     continue;
                 }
                 RtcOutcome::Idle(_) => {}
             }
 
-            // 3. Wait for input (socket recv) OR new commands
-            // If ICE is disconnected, cap the wait to 1s so we can re-check the timeout
             let timeout = if ice_disconnected_since.is_some() {
                 self.timeout_duration().min(Duration::from_secs(1))
             } else {
                 self.timeout_duration()
             };
+
             tokio::select! {
                 result = self.wait_for_input(timeout) => {
                     if let Err(e) = result {
@@ -531,37 +507,29 @@ impl RtcClient {
                         return;
                     }
                 }
-                Some(cmd) = command_rx.recv(), if self.pending_transmit.is_none() => {
-                    if self.handle_command(cmd) {
-                        log::info!("[rtc-client] RTC I/O thread shutdown by command");
-                        return;
+                res = data_rx.recv(), if self.pending_transmit.is_none() => {
+                    match res {
+                        Some(cmd) => self.handle_command(cmd),
+                        None => {
+                            log::info!("[rtc-client] RTC I/O thread shutdown: data channel closed");
+                            return;
+                        }
                     }
                 }
             }
         }
-
+        
+        self.rtc.disconnect();
         log::info!("[rtc-client] RTC connection no longer alive, stopping I/O thread");
     }
 
-    /// Handle a command. Returns true if the thread should stop.
-    fn handle_command(&mut self, cmd: RtcCommand) -> bool {
-        match cmd {
-            RtcCommand::Send { data, channel_id } => {
-                if self.pending_transmit.is_none() && self.send(&data, channel_id) {
-                    // Sent successfully
-                } else {
-                    self.pending_transmit = Some((data, channel_id));
-                }
-                false
-            }
-            RtcCommand::SetBufferedAmountLowThreshold { channel_id, threshold } => {
-                self.set_buffered_amount_low_threshold(channel_id, threshold);
-                false
-            }
-            RtcCommand::Shutdown => {
-                self.rtc.disconnect();
-                true
-            }
+    /// Handle a command.
+    fn handle_command(&mut self, cmd: (Vec<u8>, ChannelId)) {
+        let (data, channel_id) = cmd;
+        if self.pending_transmit.is_none() && self.send(&data, channel_id) {
+            // Sent successfully
+        } else {
+            self.pending_transmit = Some((data, channel_id));
         }
     }
 
@@ -697,11 +665,6 @@ impl RtcClient {
         }
     }
 
-    fn set_buffered_amount_low_threshold(&mut self, channel_id: ChannelId, threshold: usize) {
-        if let Some(mut ch) = self.rtc.channel(channel_id) {
-            ch.set_buffered_amount_low_threshold(threshold);
-        }
-    }
 }
 
 fn to_v6_mapped(addr: SocketAddr) -> SocketAddr {

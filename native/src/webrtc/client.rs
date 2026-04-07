@@ -302,12 +302,6 @@ impl WebRtcClient {
         let mut reliable_data_rx = reliable_data_rx;
         let mut pending_data: Option<(Vec<u8>, ChannelId)> = None;
 
-        if let Some(ref mut rtc) = p2p_rtc {
-            rtc.set_buffered_amount_low_threshold(cids.reliable, MIN_BUFFER_SIZE);
-        }
-        if let Some(ref mut rtc) = relay_rtc {
-            rtc.set_buffered_amount_low_threshold(cids.reliable, MIN_BUFFER_SIZE);
-        }
 
         let mut retry_timer = Box::pin(tokio::time::sleep(Duration::from_millis(3)));
 
@@ -333,7 +327,6 @@ impl WebRtcClient {
 
                 // 1. New RTC connection arrivals from background racing
                 Some(c) = new_rtc_rx.recv(), if !new_rtc_rx.is_closed() => {
-                    c.1.set_buffered_amount_low_threshold(cids.reliable, MIN_BUFFER_SIZE);
                     if c.0 {
                         log::info!("[webrtc-client] truly P2P joined the run loop");
                         p2p_rtc = Some(c.1);
