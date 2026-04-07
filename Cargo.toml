@@ -11,6 +11,7 @@ members = [
     "signalling",
     "relay-server"
 ]
+exclude = ["third_party/str0m"]
 
 resolver = "2"
 

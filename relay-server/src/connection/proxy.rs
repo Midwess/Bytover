@@ -4,7 +4,7 @@ use tokio::sync::Notify;
 use str0m::channel::ChannelId;
 use str0m::Event;
 
-use crate::connection::rtc::{RelayRtcClient, RelayRtcError, PollOutcome};
+use crate::connection::rtc::{RelayRtcClient, RelayRtcError};
 use schema::devlog::bitbridge::DataChannel;
 use core_services::utils::yield_container::{YieldContainer, Yieldable};
 
@@ -112,79 +112,6 @@ impl ProxyInstance {
             if let Some(leg2) = leg2_opt.as_mut() {
                 if leg2.is_alive() {
                     let _ = leg2.handle_timeout(now);
-                }
-            }
-
-            // Drain pending output (Transmits) BEFORE entering select!.
-            if leg1.is_alive() {
-                loop {
-                    match leg1.poll_output().await {
-                        Ok(PollOutcome::Event(event)) => {
-                            if let Event::ChannelData(data) = event {
-                                depth_to_2 += 1;
-                                if tx_to_2.send((data.id, data.data)).is_err() {
-                                    log::warn!("[relay-server] tx_to_2 closed");
-                                    return session_id;
-                                }
-                            } else {
-                                log::debug!("[relay-server] Leg 1 Event: {:?}", event);
-                            }
-                            if !leg1_connected && leg1.is_fully_connected() {
-                                leg1_connected = true;
-                                log::info!("[relay-server] Leg 1 fully connected for session {}", session_id);
-                                if leg2_connected {
-                                    both_connected = true;
-                                    log::info!("[relay-server] Both legs connected for session {}", session_id);
-                                }
-                            }
-                        }
-                        Ok(PollOutcome::MorePending) => continue,
-                        Ok(PollOutcome::Idle(_)) => break,
-                        Err(e) => {
-                            log::warn!("[relay-server] Leg 1 drain error: {:?}", e);
-                            leg1.disconnect();
-                            if let Some(leg2) = leg2_opt.as_mut() {
-                                leg2.disconnect();
-                            }
-                            break;
-                        }
-                    }
-                }
-            }
-
-            if let Some(leg2) = leg2_opt.as_mut() {
-                if leg2.is_alive() {
-                    loop {
-                        match leg2.poll_output().await {
-                            Ok(PollOutcome::Event(event)) => {
-                                if let Event::ChannelData(data) = event {
-                                    depth_to_1 += 1;
-                                    if tx_to_1.send((data.id, data.data)).is_err() {
-                                        log::warn!("[relay-server] tx_to_1 closed");
-                                        return session_id;
-                                    }
-                                } else {
-                                    log::debug!("[relay-server] Leg 2 Event: {:?}", event);
-                                }
-                                if !leg2_connected && leg2.is_fully_connected() {
-                                    leg2_connected = true;
-                                    log::info!("[relay-server] Leg 2 fully connected for session {}", session_id);
-                                    if leg1_connected {
-                                        both_connected = true;
-                                        log::info!("[relay-server] Both legs connected for session {}", session_id);
-                                    }
-                                }
-                            }
-                            Ok(PollOutcome::MorePending) => continue,
-                            Ok(PollOutcome::Idle(_)) => break,
-                            Err(e) => {
-                                log::warn!("[relay-server] Leg 2 drain error: {:?}", e);
-                                leg2.disconnect();
-                                leg1.disconnect();
-                                break;
-                            }
-                        }
-                    }
                 }
             }
 
@@ -348,5 +275,4 @@ impl ProxyInstance {
         session_id
     }
 }
-
 

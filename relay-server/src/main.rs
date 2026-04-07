@@ -34,7 +34,7 @@ fn main() -> Result<(), MainErrors> {
 
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
-        .thread_stack_size(8 * 1024 * 1024) // 8 MB — str0m Rtc state machines are large
+        .thread_stack_size(32 * 1024 * 1024) // 32 MB guard for deep RTC/DTLS/SCTP poll paths
         .build()
         .expect("Failed to build tokio runtime")
         .block_on(async_main())

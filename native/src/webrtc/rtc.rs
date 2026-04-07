@@ -26,11 +26,9 @@ pub struct ChannelIds {
 /// str0m never emits Failed/Closed ICE states, so we need this timeout.
 const ICE_DISCONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Maximum number of UDP transmit packets flushed in a single `poll_event` call.
-/// Capping this prevents the polling loop from running unboundedly during large
-/// file-transfer bursts, which would otherwise cause a stack overflow on the
-/// rtc-io thread.
-const MAX_TRANSMITS_PER_POLL: usize = 8;
+/// Maximum number of consecutive `MorePending` cycles before we force a
+/// cooperative yield in the rtc-io loop.
+const MAX_PENDING_SPINS_PER_STEP: usize = 8;
 
 /// Events emitted from the RTC thread to the outside world.
 pub enum RtcEvent {
@@ -426,6 +424,7 @@ impl RtcClient {
 
         let mut ice_disconnected_since: Option<Instant> = None;
 
+        let mut pending_spins = 0usize;
         while self.rtc.is_alive() {
             if let Some(since) = ice_disconnected_since {
                 if since.elapsed() >= ICE_DISCONNECT_TIMEOUT {
@@ -463,6 +462,7 @@ impl RtcClient {
 
             match outcome {
                 RtcOutcome::Event(event) => {
+                    pending_spins = 0;
                     if let Event::IceConnectionStateChange(state) = &event {
                         match state {
                             IceConnectionState::Disconnected => {
@@ -488,9 +488,16 @@ impl RtcClient {
                     continue;
                 }
                 RtcOutcome::MorePending => {
+                    pending_spins += 1;
+                    if pending_spins >= MAX_PENDING_SPINS_PER_STEP {
+                        pending_spins = 0;
+                    }
+                    tokio::task::yield_now().await;
                     continue;
                 }
-                RtcOutcome::Idle(_) => {}
+                RtcOutcome::Idle(_) => {
+                    pending_spins = 0;
+                }
             }
 
             let timeout = if ice_disconnected_since.is_some() {
@@ -585,29 +592,22 @@ impl RtcClient {
     }
 
     async fn poll_event(&mut self) -> Result<RtcOutcome, WebRtcClientError> {
-        let mut transmit_count = 0;
-        loop {
-            match self.rtc.poll_output()? {
-                Output::Timeout(t) => {
-                    self.cached_timeout = t;
-                    return Ok(RtcOutcome::Idle(t));
+        match self.rtc.poll_output()? {
+            Output::Timeout(t) => {
+                self.cached_timeout = t;
+                Ok(RtcOutcome::Idle(t))
+            }
+            Output::Transmit(t) => {
+                let dest = to_v6_mapped(t.destination);
+                if let Err(e) = self.socket.send_to(&t.contents, dest).await {
+                    log::warn!("[rtc-client] Failed to send to {}: {}", dest, e);
+                    return Err(WebRtcClientError::Signalling(format!("Failed to send packet: {:?}", e)));
                 }
-                Output::Transmit(t) => {
-                    let dest = to_v6_mapped(t.destination);
-                    if let Err(e) = self.socket.send_to(&t.contents, dest).await {
-                        log::warn!("[rtc-client] Failed to send to {}: {}", dest, e);
-                        return Err(WebRtcClientError::Signalling(format!("Failed to send packet: {:?}", e)));
-                    }
-
-                    transmit_count += 1;
-                    if transmit_count >= MAX_TRANSMITS_PER_POLL {
-                        return Ok(RtcOutcome::MorePending);
-                    }
-                }
-                Output::Event(e) => {
-                    log::info!("[rtc-client] str0m Event: {:?}", e);
-                    return Ok(RtcOutcome::Event(e));
-                }
+                Ok(RtcOutcome::MorePending)
+            }
+            Output::Event(e) => {
+                log::info!("[rtc-client] str0m Event: {:?}", e);
+                Ok(RtcOutcome::Event(e))
             }
         }
     }

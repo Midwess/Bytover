@@ -32,3 +32,5 @@ desktop-update-plan.md
 bytover.log
 native-windows-gui
 str0m
+!third_party/str0m/
+!third_party/str0m/**

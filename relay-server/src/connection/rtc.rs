@@ -18,10 +18,9 @@ const SPEED_METER_WINDOW: Duration = Duration::from_secs(1);
 /// str0m never emits Failed/Closed ICE states, so we need this timeout.
 const ICE_DISCONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Maximum number of UDP transmit packets processed in a single `poll_output` call.
-/// Capping this prevents the async future state machine from growing too deep
-/// during file-transfer bursts, avoiding a stack overflow in the Tokio worker.
-const MAX_TRANSMITS_PER_POLL: usize = 8;
+/// Maximum number of consecutive `MorePending` cycles processed in a single
+/// `process_step` call before yielding back to the runtime.
+const MAX_PENDING_SPINS_PER_STEP: usize = 8;
 
 pub struct SpeedMeter {
     window: Duration,
@@ -185,9 +184,10 @@ impl RelayRtcClient {
         Ok((client, sdp_answer.to_sdp_string()))
     }
 
-    /// Poll the RTC engine for output. Each Transmit is sent immediately to avoid
-    /// stacking (which causes stack overflow under high load). Stops at the first Event
-    /// or Timeout, returning it for processing.
+    /// Poll one RTC output item and process it.
+    ///
+    /// Returning `MorePending` means the caller should call this method again soon,
+    /// but preferably after yielding so other tasks can run.
     pub async fn poll_output(&mut self) -> Result<PollOutcome, RelayRtcError> {
         // Check ICE disconnect timeout before polling
         if let Some(since) = self.ice_disconnected_since {
@@ -199,86 +199,68 @@ impl RelayRtcClient {
             }
         }
 
-        let mut event = None;
-        let mut transmit_count = 0;
-        let mut outcome = None;
+        match self.rtc.poll_output()? {
+            Output::Timeout(t) => {
+                self.cached_timeout = t;
+                Ok(PollOutcome::Idle(t))
+            }
+            Output::Transmit(t) => {
+                let dest = to_v6_mapped(t.destination);
+                let len = t.contents.len();
 
-        loop {
-            match self.rtc.poll_output()? {
-                Output::Timeout(t) => {
-                    self.cached_timeout = t;
-                    outcome = Some(PollOutcome::Idle(t));
-                    break;
+                if let Err(e) = self.socket.send_to(&t.contents, dest).await {
+                    log::warn!("[relay-rtc] Failed to send to {}: {}", dest, e);
+                } else {
+                    log::trace!("[relay-rtc] Transmitted {} bytes to {}", len, dest);
+                    self.up_meter.record(len as u64);
                 }
-                Output::Transmit(t) => {
-                    let dest = to_v6_mapped(t.destination);
-                    let len = t.contents.len();
 
-                    if let Err(e) = self.socket.send_to(&t.contents, dest).await {
-                        log::warn!("[relay-rtc] Failed to send to {}: {}", dest, e);
-                    } else {
-                        log::trace!("[relay-rtc] Transmitted {} bytes to {}", len, dest);
-                        self.up_meter.record(len as u64);
+                Ok(PollOutcome::MorePending)
+            }
+            Output::Event(e) => {
+                match &e {
+                    Event::ChannelData(data) => {
+                        log::trace!("[relay-rtc] ChannelData id={:?} len={}", data.id, data.data.len());
                     }
-
-                    transmit_count += 1;
-                    if transmit_count >= MAX_TRANSMITS_PER_POLL {
-                        outcome = Some(PollOutcome::MorePending);
-                        break;
+                    _ => {
+                        log::info!("[relay-rtc] Event: {e:?}");
                     }
                 }
-                Output::Event(e) => {
-                    event = Some(e);
-                    break;
+                match &e {
+                    Event::Connected => {
+                        self.pending_events.retain(|p| p != &PendingEvent::Connected);
+                    }
+                    Event::ChannelOpen(id, _) => {
+                        let target = PendingEvent::ChannelOpen(*id);
+                        self.pending_events.retain(|p| p != &target);
+                    }
+                    Event::IceConnectionStateChange(state) => {
+                        log::info!("[relay-rtc] ICE state changed to {:?}", state);
+                        match state {
+                            IceConnectionState::Disconnected => {
+                                if self.ice_disconnected_since.is_none() {
+                                    log::info!("[relay-rtc] ICE disconnected, starting {:?} timeout", ICE_DISCONNECT_TIMEOUT);
+                                    self.ice_disconnected_since = Some(Instant::now());
+                                }
+                            }
+                            IceConnectionState::Connected | IceConnectionState::Completed => {
+                                if self.ice_disconnected_since.is_some() {
+                                    log::info!("[relay-rtc] ICE recovered, clearing disconnect timer");
+                                }
+                                self.ice_disconnected_since = None;
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ => {}
                 }
+
+                if !self.connected && self.pending_events.is_empty() {
+                    self.connected = true;
+                }
+                Ok(PollOutcome::Event(e))
             }
         }
-
-        if let Some(e) = event {
-            match &e {
-                Event::ChannelData(data) => {
-                    log::trace!("[relay-rtc] ChannelData id={:?} len={}", data.id, data.data.len());
-                }
-                _ => {
-                    log::info!("[relay-rtc] Event: {e:?}");
-                }
-            }
-            match &e {
-                Event::Connected => {
-                    self.pending_events.retain(|p| p != &PendingEvent::Connected);
-                }
-                Event::ChannelOpen(id, _) => {
-                    let target = PendingEvent::ChannelOpen(*id);
-                    self.pending_events.retain(|p| p != &target);
-                }
-                Event::IceConnectionStateChange(state) => {
-                    log::info!("[relay-rtc] ICE state changed to {:?}", state);
-                    match state {
-                        IceConnectionState::Disconnected => {
-                            if self.ice_disconnected_since.is_none() {
-                                log::info!("[relay-rtc] ICE disconnected, starting {:?} timeout", ICE_DISCONNECT_TIMEOUT);
-                                self.ice_disconnected_since = Some(Instant::now());
-                            }
-                        }
-                        IceConnectionState::Connected | IceConnectionState::Completed => {
-                            if self.ice_disconnected_since.is_some() {
-                                log::info!("[relay-rtc] ICE recovered, clearing disconnect timer");
-                            }
-                            self.ice_disconnected_since = None;
-                        }
-                        _ => {}
-                    }
-                }
-                _ => {}
-            }
-
-            if !self.connected && self.pending_events.is_empty() {
-                self.connected = true;
-            }
-            return Ok(PollOutcome::Event(e));
-        }
-
-        Ok(outcome.unwrap_or(PollOutcome::Idle(self.cached_timeout)))
     }
 
     pub fn timeout_duration(&self) -> Duration {
@@ -333,10 +315,19 @@ impl RelayRtcClient {
     }
 
     pub async fn process_step(&mut self) -> Result<Option<Event>, RelayRtcError> {
+        let mut pending_spins = 0usize;
         loop {
             match self.poll_output().await? {
                 PollOutcome::Event(e) => return Ok(Some(e)),
-                PollOutcome::MorePending => continue,
+                PollOutcome::MorePending => {
+                    pending_spins += 1;
+                    if pending_spins >= MAX_PENDING_SPINS_PER_STEP {
+                        tokio::task::yield_now().await;
+                        return Ok(None);
+                    }
+                    tokio::task::yield_now().await;
+                    continue;
+                }
                 PollOutcome::Idle(_) => break,
             }
         }
