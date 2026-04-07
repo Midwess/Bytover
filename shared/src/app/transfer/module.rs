@@ -709,7 +709,11 @@ impl AppModule<BitBridge> for TransferModule {
                             completion: progress.percentage() as f32,
                             is_ready: is_p2p || progress.status.is_completed(),
                             is_completed: progress.status.is_completed(),
-                            is_success: progress.is_success()
+                            is_success: progress.is_success(),
+                            error_message: match &progress.status {
+                                TransferStatus::Fail(msg) => Some(msg.clone()),
+                                _ => None
+                            }
                         })
                     })
                     .collect();
@@ -747,7 +751,11 @@ impl AppModule<BitBridge> for TransferModule {
                             completion: progress.percentage() as f32,
                             is_ready: progress.status.is_completed(),
                             is_completed: progress.status.is_completed(),
-                            is_success: progress.is_success()
+                            is_success: progress.is_success(),
+                            error_message: match &progress.status {
+                                TransferStatus::Fail(msg) => Some(msg.clone()),
+                                _ => None
+                            }
                         }
                     } else {
                         ReceiveResourceViewModel {
@@ -755,7 +763,8 @@ impl AppModule<BitBridge> for TransferModule {
                             completion: 0.0,
                             is_ready: true,
                             is_completed: false,
-                            is_success: false
+                            is_success: false,
+                            error_message: None
                         }
                     })
                 } else {

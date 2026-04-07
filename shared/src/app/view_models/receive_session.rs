@@ -7,7 +7,8 @@ pub struct ReceiveResourceViewModel {
     pub completion: f32,
     pub is_completed: bool,
     pub is_ready: bool,
-    pub is_success: bool
+    pub is_success: bool,
+    pub error_message: Option<String>
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

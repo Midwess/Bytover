@@ -167,6 +167,10 @@ impl TransferProgress {
         matches!(self.status, TransferStatus::Saving)
     }
 
+    pub fn is_in_progress(&self) -> bool {
+        matches!(self.status, TransferStatus::InProgress)
+    }
+
     pub fn elapsed(&self) -> u64 {
         Utc::now().timestamp_millis() as u64 - self.start_time_utc_ms
     }
@@ -198,6 +202,10 @@ impl TransferProgress {
     }
 
     pub fn speed(&self) -> u64 {
+        if !self.is_in_progress() {
+            return 0;
+        }
+
         if self.elapsed() >= 3000 {
             return 0;
         }
@@ -390,6 +398,10 @@ impl TransferSession {
         )
     }
 
+    fn is_loaded_p2p_receive_session(&self) -> bool {
+        self.transfer_type == TransferType::Receive && self.is_p2p_connected() && !self.resources.is_empty()
+    }
+
     pub fn from_public_overview(
         order_id: u64,
         from_user: User,
@@ -509,7 +521,11 @@ impl TransferSession {
             return 1.0;
         }
 
-        if self.is_canceled() {
+        if self.cancellation_token.is_cancelled() {
+            return 0.0;
+        }
+
+        if !self.is_loaded_p2p_receive_session() && self.is_canceled() {
             return 0.0;
         }
 
@@ -530,7 +546,17 @@ impl TransferSession {
     }
 
     pub fn speed(&self, _interval: u64) -> u64 {
-        self.progress.iter().map(|it| it.speed()).sum::<u64>()
+        let mut has_in_progress = false;
+        let total_speed = self.progress.iter().fold(0, |acc, progress| {
+            if !progress.is_in_progress() {
+                return acc;
+            }
+
+            has_in_progress = true;
+            acc + progress.speed()
+        });
+
+        if has_in_progress { total_speed } else { 0 }
     }
 
     pub fn is_completed(&self) -> bool {
@@ -540,6 +566,10 @@ impl TransferSession {
     pub fn is_canceled(&self) -> bool {
         if self.cancellation_token.is_cancelled() {
             return true;
+        }
+
+        if self.is_loaded_p2p_receive_session() {
+            return false;
         }
 
         self.progress.iter().any(|it| it.is_canceled())
@@ -610,6 +640,20 @@ impl TransferSession {
                         return TransferSessionStatus::Initializing {
                             loading_state: Some("Waiting for resources...".to_owned()),
                             loading_error: None
+                        };
+                    }
+
+                    if self.is_loaded_p2p_receive_session() {
+                        if self.cancellation_token.is_cancelled() {
+                            return TransferSessionStatus::Canceled;
+                        }
+
+                        // For P2P receive sessions, once the session is connected and resources
+                        // are loaded, resource-level success/fail/cancel should not flip the
+                        // whole session state.
+                        return TransferSessionStatus::InProgress {
+                            bytes_per_second: self.speed(1000),
+                            percentage: self.total_progress()
                         };
                     }
                 }

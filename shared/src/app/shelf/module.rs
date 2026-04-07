@@ -346,8 +346,11 @@ impl AppModule<BitBridge> for ShelfModule {
                     for resource_vm in &mut view_model.resources {
                         if let Ok(order_id) = resource_vm.order_id.parse::<u64>() {
                             if let Some(progress) = session.resource_progress(order_id) {
-                                resource_vm.received_by_peers =
-                                    progress.received_by_peers().iter().map(PeerAvatarViewModel::from).collect();
+                                resource_vm.received_by_peers = if progress.is_failed() || progress.is_canceled() {
+                                    Vec::new()
+                                } else {
+                                    progress.received_by_peers().iter().map(PeerAvatarViewModel::from).collect()
+                                };
                             }
                         }
                     }
