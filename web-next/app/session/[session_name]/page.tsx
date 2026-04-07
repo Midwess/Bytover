@@ -213,8 +213,8 @@ export default function SessionPage() {
                                         {session.display_download_speed && (
                                             <>
                                                 <div className="w-px h-6 bg-white/10" />
-                                                <div className="flex flex-col items-start">
-                                                    <span className="text-xs font-bold text-white uppercase tracking-[0.2em] leading-none mb-1">
+                                                <div className="flex flex-col items-center">
+                                                    <span className="text-xs font-bold text-white uppercase tracking-[0.2em] leading-4 mb-1 max-w-[300px] max-h-[5lh] overflow-y-auto text-center block scrollbar-none">
                                                         {session.display_download_speed}
                                                     </span>
                                                     <span className="text-xs font-bold text-zinc-600 uppercase tracking-widest leading-none">
