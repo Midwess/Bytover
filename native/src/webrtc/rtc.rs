@@ -24,7 +24,7 @@ pub struct ChannelIds {
 
 /// How long ICE can stay in `Disconnected` before we treat it as a real disconnect.
 /// str0m never emits Failed/Closed ICE states, so we need this timeout.
-const ICE_DISCONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+const ICE_DISCONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Maximum number of UDP transmit packets flushed in a single `poll_event` call.
 /// Capping this prevents the polling loop from running unboundedly during large

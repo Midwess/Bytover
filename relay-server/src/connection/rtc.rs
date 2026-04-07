@@ -16,7 +16,7 @@ const SPEED_METER_WINDOW: Duration = Duration::from_secs(1);
 
 /// How long ICE can stay in `Disconnected` before we treat it as a real disconnect.
 /// str0m never emits Failed/Closed ICE states, so we need this timeout.
-const ICE_DISCONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+const ICE_DISCONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Maximum number of UDP transmit packets processed in a single `poll_output` call.
 /// Capping this prevents the async future state machine from growing too deep
