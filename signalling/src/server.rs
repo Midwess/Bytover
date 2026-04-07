@@ -220,7 +220,7 @@ async fn offer_handler(
     let mut message = schema::devlog::rpc_signalling::server::Message {
         offer: Some(schema::devlog::rpc_signalling::server::OfferMessage {
             sdp: offer_request.offer.sdp,
-            peer: Some(offer_request.peer),
+            peer: offer_request.peer,
         }),
         session_id: offer_request.session_id,
         ..Default::default()

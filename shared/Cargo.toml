@@ -12,14 +12,12 @@ typegen = ["crux_core/typegen"]
 [dependencies]
 crux_core.workspace = true
 core-services = { workspace = true, default-features = false, features = ["retry"] }
-reed-solomon-erasure.workspace = true
 schema = { workspace = true, features = ["client"], default-features = false }
 devlog-sdk = { workspace = true, default-features = false }
 tonic = { workspace = true, default-features = false }
 async-trait = { workspace = true }
 log = { workspace = true }
 thiserror = { workspace = true }
-bytemuck.workspace = true
 chrono = { workspace = true }
 anyhow = { workspace = true }
 uuid = { workspace = true, features = ["v4", "v7"] }

@@ -35,13 +35,11 @@ serde = { version = "1.0.219", default-features = false, features = ["derive"] }
 thiserror = { version = "2.0.16", default-features = false }
 serde_derive = { version = "1.0.219", default-features = false }
 serde_json = { version = "1.0.143", default-features = false }
-bytemuck = "1.24.0"
 chrono = { version = "0.4.42", default-features = false }
 lazy_static = { version = "1.5.0", default-features = false }
-reed-solomon-erasure = { version = "6.0.0", default-features = false }
 rand = { version = "0.8", default-features = false, features = ["std", "std_rng"] }
-ringbuf = "0.4.8"
 tonic-middleware = { version = "0.3.0", default-features = false }
+machine-uid = { version = "0.5.4" }
 tokio = { version = "1.47.1", default-features = false }
 reqwest = { version = "0.12.23", default-features = false }
 async-trait = { version = "0.1.89", default-features = false }
@@ -70,7 +68,6 @@ erased-serde = "0.4.8"
 indexmap = "2.11.0"
 tonic-web = "0.14.1"
 hostname = "0.4.1"
-machine-uid = "0.5.3"
 sea-orm = { version = "1.1.17", features = ["macros", "runtime-tokio-rustls", "sqlx-postgres", "with-json"] }
 image = "0.25.8"
 tempfile = "3.23.0"
@@ -78,16 +75,12 @@ tokio-cron-scheduler = { version = "0.15.1", default-features = false }
 str0m = { git = "https://github.com/Midwess/str0m" }
 tokio-tungstenite = "0.29.0"
 socket2 = "0.6.3"
-sha1 = "0.10.6"
 base64 = "0.22.1"
 stun-proto = { version = "2.0.0", features = ["std"] }
 if-addrs = "0.15.0"
 mdns-sd = "0.18.2"
 hmac = "0.12.1"
 actix-web = "4.11.0"
-h3ron = "0.18.0"
-geo-types = "0.7"
-maxminddb = "0.24"
 jsonwebtoken = "9.3"
 
 [workspace.metadata.bin]
