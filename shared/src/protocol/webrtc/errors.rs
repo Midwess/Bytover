@@ -7,19 +7,19 @@ use prost::{DecodeError, EncodeError};
 
 #[derive(thiserror::Error, Debug)]
 pub enum WebRtcErrors {
-    #[error("Something went wrong with the signalling client")]
+    #[error("Signalling client error: {0}")]
     SignallingClientError(anyhow::Error),
 
     #[error("Received an unsupported event from the signalling server")]
     UnSupportedEventFromSignallingServer,
 
-    #[error("Could not send your message (encoding failed)")]
+    #[error("Could not send your message: {0}")]
     MessageEncodeError(#[from] EncodeError),
 
-    #[error("Could not read an incoming message (decoding failed)")]
+    #[error("Could not read an incoming message: {0}")]
     MessageDecodeError(#[from] DecodeError),
 
-    #[error("The message channel encountered an error")]
+    #[error("The message channel encountered an error: {0}")]
     MessageChannelError(String),
 
     #[error("Could not connect you with the peer")]
@@ -28,28 +28,46 @@ pub enum WebRtcErrors {
     #[error("A session is already in progress. Please wait or end it before starting a new one.")]
     SessionAlreadyInProgress,
 
-    #[error("A persistent storage error occurred")]
+    #[error("Persistent storage error: {0}")]
     PersistentError(#[from] PersistenceError),
 
-    #[error("The selected file is not valid")]
+    #[error("Could not read the selected file: {0}")]
     ReadFileError(String),
 
-    #[error("The delimiter you provided is invalid")]
+    #[error("The delimiter is invalid: {0}")]
     InvalidDelimiter(String),
 
-    #[error("Could not find the peer connection")]
+    #[error("Could not find the peer connection: {0}")]
     ConnectionNotFound(String),
 
-    #[error("An unexpected system error occurred")]
+    #[error("Connection error: {0}")]
+    Connection(String),
+
+    #[error("RTC error: {0}")]
+    Rtc(String),
+
+    #[error("Signalling error: {0}")]
+    Signalling(String),
+
+    #[error("SDP error: {0}")]
+    Sdp(String),
+
+    #[error("Transfer error: {0}")]
+    Transfer(String),
+
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+
+    #[error("An unexpected system error occurred: {0}")]
     SystemError(#[from] anyhow::Error),
 
     #[error("Canceled")]
     Canceled(#[from] TaskErrors),
 
-    #[error("System error, yield error")]
+    #[error("System yield error: {0}")]
     YieldError(#[from] YieldError),
 
-    #[error("Panic")]
+    #[error("Task panic: {0}")]
     Panic(#[from] JoinError),
 
     #[error("Peer error: {0}")]
@@ -64,6 +82,6 @@ pub enum WebRtcErrors {
 
 impl From<WebRtcErrors> for CoreError {
     fn from(err: WebRtcErrors) -> Self {
-        CoreError::Network(format!("WebRtc {err:?}"))
+        CoreError::Network(err.to_string())
     }
 }

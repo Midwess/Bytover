@@ -166,7 +166,7 @@ impl RtcClient {
 
         let candidates = IceAgent::gather_candidates(&socket, &config)
             .await
-            .map_err(|e| WebRtcClientError::Signalling(format!("{e}")))?;
+            .map_err(|e| WebRtcClientError::Signalling(e.to_string()))?;
 
         let config = RtcConfig::default()
             .set_sctp_max_message_size(256 * 1024)
@@ -189,7 +189,8 @@ impl RtcClient {
         let offer_sdp = IceAgent::resolve_remote_candidates(&offer_message.sdp);
         log::info!("Received offer sdp: {offer_sdp}");
 
-        let offer = str0m::change::SdpOffer::from_sdp_string(&offer_sdp).map_err(|e| WebRtcClientError::SdpParse(format!("{e}")))?;
+        let offer = str0m::change::SdpOffer::from_sdp_string(&offer_sdp)
+            .map_err(|e| WebRtcClientError::Sdp(e.to_string()))?;
 
         let reliable_id = rtc.direct_api().create_data_channel(ChannelConfig {
             label: "reliable".to_string(),
@@ -215,12 +216,15 @@ impl RtcClient {
             ordered_msg: ordered_msg_id
         };
 
-        let answer = rtc.sdp_api().accept_offer(offer).map_err(WebRtcClientError::Rtc)?;
+        let answer = rtc
+            .sdp_api()
+            .accept_offer(offer)
+            .map_err(|e| WebRtcClientError::Rtc(e.to_string()))?;
 
         signalling
             .send_answer(answer.to_sdp_string(), me, request_id)
             .await
-            .map_err(|e| WebRtcClientError::Signalling(format!("{e}")))?;
+            .map_err(|e| WebRtcClientError::Signalling(e.to_string()))?;
 
         let client = Self {
             rtc,
@@ -267,7 +271,7 @@ impl RtcClient {
 
         let candidates = IceAgent::gather_candidates(&socket, &config)
             .await
-            .map_err(|e| WebRtcClientError::Signalling(format!("{e}")))?;
+            .map_err(|e| WebRtcClientError::Signalling(e.to_string()))?;
 
         let rtc_config = RtcConfig::default()
             .set_sctp_max_message_size(256 * 1024)
@@ -340,9 +344,10 @@ impl RtcClient {
         ];
 
         let sdp_string = local_offer.to_sdp_string();
-        let relay_ans = signalling.relay_connect(signalling_id, session_id, &sdp_string, relay_channels)
+        let relay_ans = signalling
+            .relay_connect(signalling_id, session_id, &sdp_string, relay_channels)
             .await
-            .map_err(|e| WebRtcClientError::Signalling(format!("Relay connect explicit failure: {e:?}")))?;
+            .map_err(|e| WebRtcClientError::Signalling(format!("Relay connect failed: {e}")))?;
 
         log::info!("Got relay answer sdp {:?}", relay_ans);
 
@@ -350,10 +355,15 @@ impl RtcClient {
             return Err(WebRtcClientError::Signalling(format!("Relay connect failure: {:?}", relay_ans.error_message)));
         }
 
-        let answer_sdp = relay_ans.sdp.ok_or_else(|| WebRtcClientError::Signalling("Missing SDP in successful relay reply".to_string()))?;
-        let remote_offer = str0m::change::SdpAnswer::from_sdp_string(&answer_sdp).map_err(|e| WebRtcClientError::SdpParse(format!("{e}")))?;
-        
-        rtc.sdp_api().accept_answer(pending, remote_offer).map_err(|e| WebRtcClientError::Rtc(e))?;
+        let answer_sdp = relay_ans
+            .sdp
+            .ok_or_else(|| WebRtcClientError::Signalling("Missing SDP in successful relay reply".to_string()))?;
+        let remote_offer = str0m::change::SdpAnswer::from_sdp_string(&answer_sdp)
+            .map_err(|e| WebRtcClientError::Sdp(e.to_string()))?;
+
+        rtc.sdp_api()
+            .accept_answer(pending, remote_offer)
+            .map_err(|e| WebRtcClientError::Rtc(e.to_string()))?;
 
         let client = Self {
             rtc,
@@ -551,7 +561,7 @@ impl RtcClient {
                     Event::IceConnectionStateChange(state) => {
                         log::info!("[rtc-client] ICE state: {:?}", state);
                         if matches!(state, IceConnectionState::Disconnected) {
-                            return Err(WebRtcClientError::Signalling("Peer disconnected during setup".into()));
+                            return Err(WebRtcClientError::Connection("Peer disconnected during setup".into()));
                         }
                     }
                     Event::ChannelOpen(cid, _) => {
@@ -583,7 +593,7 @@ impl RtcClient {
             }
 
             if !self.rtc.is_alive() {
-                return Err(WebRtcClientError::Signalling("RTC connection closed".into()));
+                return Err(WebRtcClientError::Connection("RTC connection closed".into()));
             }
 
             let timeout = self.timeout_duration();
@@ -592,7 +602,11 @@ impl RtcClient {
     }
 
     async fn poll_event(&mut self) -> Result<RtcOutcome, WebRtcClientError> {
-        match self.rtc.poll_output()? {
+        match self
+            .rtc
+            .poll_output()
+            .map_err(|e| WebRtcClientError::Rtc(e.to_string()))?
+        {
             Output::Timeout(t) => {
                 self.cached_timeout = t;
                 Ok(RtcOutcome::Idle(t))
@@ -601,7 +615,7 @@ impl RtcClient {
                 let dest = to_v6_mapped(t.destination);
                 if let Err(e) = self.socket.send_to(&t.contents, dest).await {
                     log::warn!("[rtc-client] Failed to send to {}: {}", dest, e);
-                    return Err(WebRtcClientError::Signalling(format!("Failed to send packet: {:?}", e)));
+                    return Err(WebRtcClientError::Connection(format!("Failed to send packet: {e}")));
                 }
                 Ok(RtcOutcome::MorePending)
             }
@@ -618,7 +632,9 @@ impl RtcClient {
 
     async fn wait_for_input(&mut self, timeout: Duration) -> Result<(), WebRtcClientError> {
         if timeout.is_zero() {
-            self.rtc.handle_input(Input::Timeout(Instant::now()))?;
+            self.rtc
+                .handle_input(Input::Timeout(Instant::now()))
+                .map_err(|e| WebRtcClientError::Rtc(e.to_string()))?;
             return Ok(());
         }
 
@@ -643,7 +659,9 @@ impl RtcClient {
             }
             Ok(Err(e)) => return Err(e.into()),
             Err(_) => {
-                self.rtc.handle_input(Input::Timeout(Instant::now()))?;
+                self.rtc
+                    .handle_input(Input::Timeout(Instant::now()))
+                    .map_err(|e| WebRtcClientError::Rtc(e.to_string()))?;
             }
         }
         Ok(())

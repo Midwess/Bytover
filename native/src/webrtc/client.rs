@@ -4,10 +4,8 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-
-
-use core_services::utils::cancellation::{FutureExtension, TaskErrors};
-use core_services::utils::yield_container::{YieldContainer, YieldError};
+use core_services::utils::cancellation::FutureExtension;
+use core_services::utils::yield_container::YieldContainer;
 use futures::channel::mpsc as futures_mpsc;
 use tokio::sync::mpsc;
 use futures::SinkExt;
@@ -17,7 +15,6 @@ use schema::devlog::bitbridge::peer_message_body::{Request, Response};
 use schema::devlog::bitbridge::view_session_detail_response::Result as SessionDetailResult;
 use schema::devlog::bitbridge::*;
 use schema::devlog::rpc_signalling::server::OfferMessage;
-use thiserror::Error;
 use tokio::sync::{Notify, OnceCell};
 
 
@@ -44,80 +41,7 @@ pub static CHUNK_SIZE: usize = 250 * 1024;
 pub static MAX_BUFFER_SIZE: usize = 1024 * 1024 * 5;
 pub static MIN_BUFFER_SIZE: usize = CHUNK_SIZE;
 
-#[derive(Debug, Error)]
-pub enum WebRtcClientError {
-    #[error("Rtc error: {0}")]
-    Rtc(#[from] str0m::error::RtcError),
-
-    #[error("SDP parse error: {0}")]
-    SdpParse(String),
-
-    #[error("Signalling error: {0}")]
-    Signalling(String),
-
-    #[error("IO error: {0}")]
-    Io(#[from] std::io::Error),
-
-    #[error("Message encode error: {0}")]
-    MessageEncode(#[from] prost::EncodeError),
-
-    #[error("Message decode error: {0}")]
-    MessageDecode(#[from] prost::DecodeError),
-
-    #[error("Message channel error: {0}")]
-    MessageChannel(String),
-
-    #[error("Transfer error: {0}")]
-    Transfer(String),
-
-    #[error("Timeout waiting for response")]
-    Timeout,
-
-    #[error("Invalid response: {0}")]
-    InvalidResponse(String),
-
-    #[error("Peer error: {0}")]
-    PeerError(String),
-
-    #[error("Cancelled")]
-    Cancelled,
-
-    #[error("Repository error: {0}")]
-    Repository(String),
-
-    #[error("WebRtc shared error: {0}")]
-    Shared(String),
-
-    #[error("Race condition {0:?}")]
-    Yield(#[from] YieldError),
-
-    #[error("Task cancelled")]
-    TaskCancelled(#[from] TaskErrors)
-}
-
-impl From<WebRtcErrors> for WebRtcClientError {
-    fn from(err: WebRtcErrors) -> Self {
-        WebRtcClientError::Shared(format!("{err}"))
-    }
-}
-
-impl From<shared::repository::errors::PersistenceError> for WebRtcClientError {
-    fn from(err: shared::repository::errors::PersistenceError) -> Self {
-        WebRtcClientError::Repository(format!("{err}"))
-    }
-}
-
-impl From<anyhow::Error> for WebRtcClientError {
-    fn from(err: anyhow::Error) -> Self {
-        WebRtcClientError::Shared(format!("{err}"))
-    }
-}
-
-impl From<WebRtcClientError> for CoreError {
-    fn from(err: WebRtcClientError) -> Self {
-        CoreError::Network(format!("WebRtcClient {err:?}"))
-    }
-}
+pub type WebRtcClientError = WebRtcErrors;
 
 pub struct WebRtcClient {
     msg_channel: OnceCell<DirectMessageChannel>,
@@ -190,7 +114,7 @@ impl WebRtcClient {
 
         let (first_res, mut remaining) = match futures::future::select_ok(vec![p2p_fut, relay_fut]).await {
             Ok((client, rem)) => (client, rem),
-            Err(e) => return Err(WebRtcClientError::Signalling(format!("Both connection legs failed: {:?}", e))),
+            Err(e) => return Err(WebRtcClientError::Signalling(format!("Both connection legs failed: {e:?}"))),
         };
 
         let first_conn = if first_res.0 { "truly P2P" } else { "Relay" };
@@ -298,7 +222,7 @@ impl WebRtcClient {
         } else if let Some(ref rtc) = relay_rtc {
             *rtc.channel_ids()
         } else {
-            return Err(WebRtcClientError::Shared("No connection available".to_string()));
+            return Err(WebRtcClientError::Connection("No connection available".to_string()));
         };
 
         let mut ordered_msg_rx = ordered_msg_rx_guard.value.take().unwrap();
@@ -538,7 +462,7 @@ impl WebRtcClient {
         let resource_id = resource.order_id;
         let result = self.stream_resource_inner(session_id, transfer_id, resource).await;
         if let Err(ref e) = result {
-            if matches!(e, WebRtcClientError::TaskCancelled(_)) {
+            if matches!(e, WebRtcClientError::Canceled(_)) {
                 log::info!("[webrtc-client] stream_resource canceled for resource {resource_id}");
             } else {
                 log::warn!("[webrtc-client] stream_resource failed for resource {resource_id}: {e:?}");
@@ -642,9 +566,7 @@ impl WebRtcClient {
 
         self.msg_channel()
             .notify(Request::ResourceNotification(notification))
-            .await
-            .map(|_| ())
-            .map_err(|e| WebRtcClientError::MessageChannel(format!("{e}")))?;
+            .await?;
 
         Ok(())
     }
@@ -667,8 +589,7 @@ impl WebRtcClient {
                     request_id,
                     Response::ViewSessionResponse(ViewSessionDetailResponse { result: Some(err_result) })
                 )
-                .await
-                .map_err(|e| WebRtcClientError::MessageChannel(format!("{e}")))?;
+                .await?;
             return Ok(());
         }
 
@@ -687,8 +608,7 @@ impl WebRtcClient {
         };
         self.msg_channel()
             .send_response(request_id, Response::ViewSessionResponse(response))
-            .await
-            .map_err(|e| WebRtcClientError::MessageChannel(format!("{e}")))?;
+            .await?;
 
         tokio::time::sleep(Duration::from_millis(100)).await;
 

@@ -4,8 +4,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use bytes::Bytes;
-use core_services::utils::cancellation::{FutureExtension, TaskErrors};
-use core_services::utils::yield_container::{YieldContainer, YieldError};
+use core_services::utils::cancellation::FutureExtension;
+use core_services::utils::yield_container::YieldContainer;
 use futures::channel::mpsc;
 use futures::channel::mpsc::unbounded;
 use futures::channel::oneshot;
@@ -22,6 +22,7 @@ use shared::app::operations::CoreOperationOutput;
 use shared::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use shared::entities::peer::Peer as PeerEntity;
 use shared::entities::transfer_session::TransferProgress;
+use shared::protocol::webrtc::errors::WebRtcErrors;
 use shared::protocol::webrtc::message_channel::DirectMessageChannel;
 use shared::protocol::webrtc::packet::WebRtcPacket;
 use shared::protocol::webrtc::transfer::{TransferDelimiterShema, TransfersContext};
@@ -29,10 +30,12 @@ use shared::repository::local_resource::LocalResourceRepository;
 use shared::repository::transfer_session::TransferSessionRepository;
 use shared::shell::api::CoreRequest;
 
-use crate::webrtc::ice::{IceAgent, IceError};
-use crate::webrtc::signaling::{SignalingClient, SignalingError};
+use crate::webrtc::ice::IceAgent;
+use crate::webrtc::signaling::SignalingClient;
 use crate::webrtc::web::channel_ids::*;
-use crate::webrtc::web::{RtcConnectionWrapper, RtcDataChannelWrapper, WebError, WebRtcApi};
+use crate::webrtc::web::{RtcConnectionWrapper, RtcDataChannelWrapper, WebRtcApi};
+
+pub type WebRtcClientError = WebRtcErrors;
 
 pub struct WebRtcClient {
     transfers_context: TransfersContext,
@@ -97,10 +100,14 @@ impl WebRtcClient {
         let session_id = uuid::Uuid::new_v4().to_string();
 
         let api = WebRtcApi::new(ice_config.clone());
-        let connection = api.create_peer_connection()?;
+        let connection = api
+            .create_peer_connection()
+            .map_err(|e| WebRtcClientError::Connection(e.to_string()))?;
 
         let relay_api = WebRtcApi::new(ice_config);
-        let relay_connection = relay_api.create_peer_connection()?;
+        let relay_connection = relay_api
+            .create_peer_connection()
+            .map_err(|e| WebRtcClientError::Connection(e.to_string()))?;
 
         let (msg_inbound_tx, msg_inbound_rx) = unbounded();
         let (data_inbound_tx, data_inbound_rx) = unbounded();
@@ -109,30 +116,62 @@ impl WebRtcClient {
         let (disconnect_tx, disconnect_rx) = oneshot::channel();
 
         // Setup P2P channels
-        let reliable_channel = api.create_unordered_channel(connection.clone(), RELIABLE_DATA_CHANNEL_ID)?;
-        let unordered_channel = api.create_unordered_channel(connection.clone(), UNORDERED_MSG_CHANNEL_ID)?;
-        let ordered_channel = api.create_ordered_channel(connection.clone(), ORDERED_MSG_CHANNEL_ID)?;
+        let reliable_channel = api
+            .create_unordered_channel(connection.clone(), RELIABLE_DATA_CHANNEL_ID)
+            .map_err(|e| WebRtcClientError::Connection(e.to_string()))?;
+        let unordered_channel = api
+            .create_unordered_channel(connection.clone(), UNORDERED_MSG_CHANNEL_ID)
+            .map_err(|e| WebRtcClientError::Connection(e.to_string()))?;
+        let ordered_channel = api
+            .create_ordered_channel(connection.clone(), ORDERED_MSG_CHANNEL_ID)
+            .map_err(|e| WebRtcClientError::Connection(e.to_string()))?;
 
-        api.setup_channel_handlers(reliable_channel.clone(), data_inbound_tx.clone())?;
-        api.setup_channel_handlers(unordered_channel.clone(), msg_inbound_tx.clone())?;
-        api.setup_channel_handlers(ordered_channel.clone(), msg_inbound_tx.clone())?;
+        api.setup_channel_handlers(reliable_channel.clone(), data_inbound_tx.clone())
+            .map_err(|e| WebRtcClientError::Connection(e.to_string()))?;
+        api.setup_channel_handlers(unordered_channel.clone(), msg_inbound_tx.clone())
+            .map_err(|e| WebRtcClientError::Connection(e.to_string()))?;
+        api.setup_channel_handlers(ordered_channel.clone(), msg_inbound_tx.clone())
+            .map_err(|e| WebRtcClientError::Connection(e.to_string()))?;
 
         // Setup Relay channels
-        let relay_reliable_channel = relay_api.create_unordered_channel(relay_connection.clone(), RELIABLE_DATA_CHANNEL_ID)?;
-        let relay_unordered_channel = relay_api.create_unordered_channel(relay_connection.clone(), UNORDERED_MSG_CHANNEL_ID)?;
-        let relay_ordered_channel = relay_api.create_ordered_channel(relay_connection.clone(), ORDERED_MSG_CHANNEL_ID)?;
+        let relay_reliable_channel = relay_api
+            .create_unordered_channel(relay_connection.clone(), RELIABLE_DATA_CHANNEL_ID)
+            .map_err(|e| WebRtcClientError::Connection(e.to_string()))?;
+        let relay_unordered_channel = relay_api
+            .create_unordered_channel(relay_connection.clone(), UNORDERED_MSG_CHANNEL_ID)
+            .map_err(|e| WebRtcClientError::Connection(e.to_string()))?;
+        let relay_ordered_channel = relay_api
+            .create_ordered_channel(relay_connection.clone(), ORDERED_MSG_CHANNEL_ID)
+            .map_err(|e| WebRtcClientError::Connection(e.to_string()))?;
 
-        relay_api.setup_channel_handlers(relay_reliable_channel.clone(), data_inbound_tx.clone())?;
-        relay_api.setup_channel_handlers(relay_unordered_channel.clone(), msg_inbound_tx.clone())?;
-        relay_api.setup_channel_handlers(relay_ordered_channel.clone(), msg_inbound_tx.clone())?;
+        relay_api
+            .setup_channel_handlers(relay_reliable_channel.clone(), data_inbound_tx.clone())
+            .map_err(|e| WebRtcClientError::Connection(e.to_string()))?;
+        relay_api
+            .setup_channel_handlers(relay_unordered_channel.clone(), msg_inbound_tx.clone())
+            .map_err(|e| WebRtcClientError::Connection(e.to_string()))?;
+        relay_api
+            .setup_channel_handlers(relay_ordered_channel.clone(), msg_inbound_tx.clone())
+            .map_err(|e| WebRtcClientError::Connection(e.to_string()))?;
 
-        api.create_offer_and_set_local(&connection).await?;
-        relay_api.create_offer_and_set_local(&relay_connection).await?;
+        api.create_offer_and_set_local(&connection)
+            .await
+            .map_err(|e| WebRtcClientError::Connection(e.to_string()))?;
+        relay_api
+            .create_offer_and_set_local(&relay_connection)
+            .await
+            .map_err(|e| WebRtcClientError::Connection(e.to_string()))?;
 
         // ICE gathering for P2P might take longer, we wait for both. 
-        ice_agent.wait_for_gathering_complete(&connection).await?;
+        ice_agent
+            .wait_for_gathering_complete(&connection)
+            .await
+            .map_err(|e| WebRtcClientError::Connection(e.to_string()))?;
         // For relay we could skip waiting for full gathering as relay doesn't need robust STUN usually, but we'll wait for safety
-        ice_agent.wait_for_gathering_complete(&relay_connection).await?;
+        ice_agent
+            .wait_for_gathering_complete(&relay_connection)
+            .await
+            .map_err(|e| WebRtcClientError::Connection(e.to_string()))?;
 
         let local_sdp = connection
             .local_description()
@@ -359,8 +398,7 @@ impl WebRtcClient {
 
         let response = msg_channel
             .send(Request::IntroduceRequest(introduce_request), None)
-            .await
-            .map_err(|e| WebRtcClientError::Message(e.to_string()))?;
+            .await?;
 
         match response {
             Response::IntroduceResponse(resp) => {
@@ -377,7 +415,7 @@ impl WebRtcClient {
                 log::info!("Introduce handshake completed");
                 Ok(())
             }
-            _ => Err(WebRtcClientError::Message("Unexpected response type".to_string()))
+            _ => Err(WebRtcClientError::InvalidResponse("Unexpected response type".to_string()))
         }
     }
 
@@ -404,8 +442,7 @@ impl WebRtcClient {
             .send(Request::ViewSessionRequest(request), None)
             .with_cancel(&timeout_token)
             .await
-            .map_err(|_| WebRtcClientError::Timeout)?
-            .map_err(|e| WebRtcClientError::Message(e.to_string()))?;
+            .map_err(|_| WebRtcClientError::Timeout)??;
 
         match response {
             Response::ViewSessionResponse(resp) => match resp.result {
@@ -419,11 +456,11 @@ impl WebRtcClient {
                     core_request
                         .response(CoreOperationOutput::Error(shared::errors::CoreError::PeerRequestError(error_msg)))
                         .await;
-                    return Err(WebRtcClientError::Peer(error_msg.to_string()));
+                    return Err(WebRtcClientError::PeerError(error_msg.to_string()));
                 }
-                _ => return Err(WebRtcClientError::Message("Unexpected response".to_string()))
+                _ => return Err(WebRtcClientError::InvalidResponse("Unexpected response".to_string()))
             },
-            _ => return Err(WebRtcClientError::Message("Unexpected response type".to_string()))
+            _ => return Err(WebRtcClientError::InvalidResponse("Unexpected response type".to_string()))
         }
 
         Ok(())
@@ -470,8 +507,7 @@ impl WebRtcClient {
 
         msg_channel
             .notify(Request::DownloadResourceRequest(request))
-            .await
-            .map_err(|e| WebRtcClientError::Message(e.to_string()))?;
+            .await?;
 
         let start_delimiter = loop {
             match rx.next().with_cancel(&resource_token).await? {
@@ -491,8 +527,7 @@ impl WebRtcClient {
         let mut writer = self
             .resource_repo
             .write(resource.path.clone(), compressed)
-            .await
-            .map_err(|e| WebRtcClientError::Transfer(format!("Failed to create writer: {:?}", e)))?;
+            .await?;
 
         let mut expected_size: Option<u64> = None;
         loop {
@@ -847,62 +882,5 @@ impl WebRtcClient {
 
         log::info!("Receiving loop stopped");
         Ok(())
-    }
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum WebRtcClientError {
-    #[error("Signaling error: {0}")]
-    Signaling(String),
-
-    #[error("Connection error: {0}")]
-    Connection(String),
-
-    #[error("Transfer error: {0}")]
-    Transfer(String),
-
-    #[error("Message error: {0}")]
-    Message(String),
-
-    #[error("Timeout")]
-    Timeout,
-
-    #[error("Peer error: {0}")]
-    Peer(String),
-
-    #[error("Yield error: {0}")]
-    Yield(#[from] YieldError),
-
-    #[error("Task cancelled")]
-    TaskCancelled(#[from] TaskErrors)
-}
-
-impl From<SignalingError> for WebRtcClientError {
-    fn from(err: SignalingError) -> Self {
-        WebRtcClientError::Signaling(err.to_string())
-    }
-}
-
-impl From<IceError> for WebRtcClientError {
-    fn from(err: IceError) -> Self {
-        WebRtcClientError::Connection(err.to_string())
-    }
-}
-
-impl From<WebError> for WebRtcClientError {
-    fn from(err: WebError) -> Self {
-        WebRtcClientError::Connection(err.to_string())
-    }
-}
-
-impl From<shared::errors::CoreError> for WebRtcClientError {
-    fn from(err: shared::errors::CoreError) -> Self {
-        WebRtcClientError::Transfer(err.to_string())
-    }
-}
-
-impl From<WebRtcClientError> for shared::errors::CoreError {
-    fn from(error: WebRtcClientError) -> Self {
-        shared::errors::CoreError::BrowserError(error.to_string())
     }
 }
