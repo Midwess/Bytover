@@ -1,7 +1,7 @@
-use std::sync::Arc;
-use tonic::{Request, Response, Status};
 use schema::devlog::bitbridge::relay_service_server::RelayService;
 use schema::devlog::bitbridge::{ConnectRequest, ConnectResponse};
+use std::sync::Arc;
+use tonic::{Request, Response, Status};
 
 use crate::connection::proxy_manager::ProxyManager;
 
@@ -17,17 +17,10 @@ impl RelayServiceImpl {
 
 #[tonic::async_trait]
 impl RelayService for RelayServiceImpl {
-    async fn connect(
-        &self,
-        request: Request<ConnectRequest>,
-    ) -> Result<Response<ConnectResponse>, Status> {
+    async fn connect(&self, request: Request<ConnectRequest>) -> Result<Response<ConnectResponse>, Status> {
         let req = request.get_ref();
 
-        log::info!(
-            "Connect request: session_id={}, channels={:?}",
-            req.session_id,
-            req.channels
-        );
+        log::info!("Connect request: session_id={}, channels={:?}", req.session_id, req.channels);
 
         match self.server.handle_connect(req.session_id.clone(), req.sdp.clone(), req.channels.clone()).await {
             Ok(answer_sdp) => {

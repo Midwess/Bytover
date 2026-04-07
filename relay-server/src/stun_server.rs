@@ -1,8 +1,8 @@
-use log::{info, error};
-use stun::message::{Message, BINDING_REQUEST, BINDING_SUCCESS};
-use stun::agent::TransactionId;
-use stun::xoraddr::XorMappedAddress;
 use devlog_sdk::tcp::listener::UdpConnection;
+use log::{error, info};
+use stun::agent::TransactionId;
+use stun::message::{Message, BINDING_REQUEST, BINDING_SUCCESS};
+use stun::xoraddr::XorMappedAddress;
 
 pub async fn run_stun_server(conn: UdpConnection) -> anyhow::Result<()> {
     let socket = conn.socket;

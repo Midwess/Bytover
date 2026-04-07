@@ -47,10 +47,7 @@ impl ProxyManager {
     /// Cleans up the entry if the Weak has expired.
     async fn get_proxy(&self, session_id: &str) -> Option<Arc<ProxyInstance>> {
         let mut proxies = self.proxies.lock().await;
-        let result = proxies
-            .get(session_id)
-            .cloned()
-            .and_then(|weak| weak.upgrade());
+        let result = proxies.get(session_id).cloned().and_then(|weak| weak.upgrade());
 
         if result.is_none() {
             proxies.remove(session_id);

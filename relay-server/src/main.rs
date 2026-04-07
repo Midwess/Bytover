@@ -1,20 +1,20 @@
 mod connection;
 mod di;
-mod grpc_service;
 mod grpc_middleware;
+mod grpc_service;
 mod locator_client;
 mod stun_server;
 
-use std::time::Duration;
-use serde::Serialize;
 use base64::Engine;
+use serde::Serialize;
+use std::time::Duration;
 
-use std::env;
 use devlog_sdk::tcp::listener::find_grpc_listener;
+use devlog_sdk::tcp::listener::find_udp_socket;
+use schema::devlog::bitbridge::relay_service_server::RelayServiceServer;
+use std::env;
 use tonic::transport::Server;
 use tonic_middleware::InterceptorFor;
-use schema::devlog::bitbridge::relay_service_server::RelayServiceServer;
-use devlog_sdk::tcp::listener::find_udp_socket;
 
 use crate::di::DiContainer;
 use crate::grpc_service::RelayServiceImpl;
@@ -41,7 +41,6 @@ fn main() -> Result<(), MainErrors> {
 }
 
 async fn async_main() -> Result<(), MainErrors> {
-
     log::info!("Starting relay server...");
 
     let di = DiContainer::init().await;
@@ -49,14 +48,10 @@ async fn async_main() -> Result<(), MainErrors> {
 
     // Prepare STUN server
     let stun_port = 3478;
-    let udp_conn = find_udp_socket(Some(stun_port))
-        .await
-        .map_err(|e| MainErrors::DiContainerError(e.to_string()))?;
+    let udp_conn = find_udp_socket(Some(stun_port)).await.map_err(|e| MainErrors::DiContainerError(e.to_string()))?;
 
     // Prepare gRPC server
-    let connection = find_grpc_listener(Some(9101))
-        .await
-        .map_err(|e| MainErrors::DiContainerError(e.to_string()))?;
+    let connection = find_grpc_listener(Some(9101)).await.map_err(|e| MainErrors::DiContainerError(e.to_string()))?;
     let relay_port = connection.port;
 
     log::info!("Relay Server listening on {}:{}", public_ip, relay_port);
@@ -69,7 +64,7 @@ async fn async_main() -> Result<(), MainErrors> {
     let grpc_server = Server::builder()
         .add_service(InterceptorFor::new(
             RelayServiceServer::new(RelayServiceImpl::new(di.proxy_manager.clone())),
-            di.get_auth_middleware()
+            di.get_auth_middleware(),
         ))
         .serve_with_incoming(connection.listener);
 
@@ -103,7 +98,7 @@ struct RegisterRelayRequest {
 
 async fn start_registration_loop(stun_port: u16, relay_port: u16) {
     let signalling_url = env::var("SIGNALLING_URL").unwrap_or_else(|_| "http://localhost:9221".to_string());
-    
+
     let secret = env::var("RELAY_SERVER_SECRET").unwrap_or_else(|_| "supersecret".to_string());
     let auth_str = format!("user:{}", secret);
     let b64_auth = base64::engine::general_purpose::STANDARD.encode(auth_str);
@@ -116,22 +111,14 @@ async fn start_registration_loop(stun_port: u16, relay_port: u16) {
     loop {
         interval.tick().await;
 
-        let req_body = RegisterRelayRequest {
-            stun_port,
-            relay_port,
-        };
+        let req_body = RegisterRelayRequest { stun_port, relay_port };
 
-        match client.post(&url)
-            .header("authorization", &auth_header)
-            .json(&req_body)
-            .send()
-            .await 
-        {
+        match client.post(&url).header("authorization", &auth_header).json(&req_body).send().await {
             Ok(resp) => {
                 if !resp.status().is_success() {
                     log::error!("Failed to register relay: status {}", resp.status());
                 }
-            },
+            }
             Err(e) => {
                 log::error!("Error sending registration request: {}", e);
             }

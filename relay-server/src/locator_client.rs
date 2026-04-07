@@ -40,22 +40,15 @@ impl LocatorClient {
             .build()
             .map_err(|e| LocatorError::HttpError(e.to_string()))?;
 
-        let response = client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| {
-                if e.is_timeout() {
-                    LocatorError::Timeout
-                } else {
-                    LocatorError::HttpError(e.to_string())
-                }
-            })?;
+        let response = client.get(&url).send().await.map_err(|e| {
+            if e.is_timeout() {
+                LocatorError::Timeout
+            } else {
+                LocatorError::HttpError(e.to_string())
+            }
+        })?;
 
-        let response: LocateResponse = response
-            .json()
-            .await
-            .map_err(|_| LocatorError::ParseError)?;
+        let response: LocateResponse = response.json().await.map_err(|_| LocatorError::ParseError)?;
 
         Ok(response.ip_address)
     }

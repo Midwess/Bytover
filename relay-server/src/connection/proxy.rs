@@ -1,16 +1,33 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::Notify;
 use str0m::channel::ChannelId;
 use str0m::Event;
+use tokio::sync::Notify;
 
 use crate::connection::rtc::{RelayRtcClient, RelayRtcError};
-use schema::devlog::bitbridge::DataChannel;
 use core_services::utils::yield_container::{YieldContainer, Yieldable};
+use schema::devlog::bitbridge::DataChannel;
 
-
-const STATS_TICK: Duration = Duration::from_secs(5);
+const STATS_TICK: Duration = Duration::from_secs(10);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(45);
+
+fn sync_upload_limits(
+    leg1: &mut Yieldable<Box<RelayRtcClient>>,
+    leg2: Option<&mut Yieldable<Box<RelayRtcClient>>>,
+    queued_bytes_to_2: usize,
+    queued_bytes_to_1: usize,
+) {
+    let leg2_other_side_download_bps = leg1.peer_download_rate_bps();
+
+    if let Some(leg2) = leg2 {
+        let leg1_other_side_download_bps = leg2.peer_download_rate_bps();
+        leg1.update_upload_limit(queued_bytes_to_2, leg1_other_side_download_bps);
+        leg2.update_upload_limit(queued_bytes_to_1, leg2_other_side_download_bps);
+    }
+    else {
+        leg1.update_upload_limit(queued_bytes_to_2, 0.0);
+    }
+}
 
 pub struct ProxyInstance {
     pub session_id: String,
@@ -29,29 +46,23 @@ impl ProxyInstance {
         })
     }
 
-    pub async fn init(
-        self: &Arc<Self>,
-        sdp_offer: String,
-        channels: Vec<DataChannel>,
-    ) -> Result<String, RelayRtcError> {
+    pub async fn init(self: &Arc<Self>, sdp_offer: String, channels: Vec<DataChannel>) -> Result<String, RelayRtcError> {
         log::info!("[relay-server] Initializing ProxyInstance for session {}", self.session_id);
         let (client, answer_sdp) = RelayRtcClient::accept_offer(&sdp_offer, channels).await?;
-        self.leg1.deposit(client).await.map_err(|_| {
-            RelayRtcError::Socket(std::io::Error::new(std::io::ErrorKind::Other, "Already yielded"))
-        })?;
+        self.leg1
+            .deposit(client)
+            .await
+            .map_err(|_| RelayRtcError::Socket(std::io::Error::new(std::io::ErrorKind::Other, "Already yielded")))?;
         Ok(answer_sdp)
     }
 
-    pub async fn proxy(
-        self: &Arc<Self>,
-        sdp_offer: String,
-        channels: Vec<DataChannel>,
-    ) -> Result<String, RelayRtcError> {
+    pub async fn proxy(self: &Arc<Self>, sdp_offer: String, channels: Vec<DataChannel>) -> Result<String, RelayRtcError> {
         log::info!("[relay-server] Proxying leg 2 for session {}", self.session_id);
         let (client, answer_sdp) = RelayRtcClient::accept_offer(&sdp_offer, channels).await?;
-        self.leg2.deposit(client).await.map_err(|_| {
-            RelayRtcError::Socket(std::io::Error::new(std::io::ErrorKind::Other, "Already yielded"))
-        })?;
+        self.leg2
+            .deposit(client)
+            .await
+            .map_err(|_| RelayRtcError::Socket(std::io::Error::new(std::io::ErrorKind::Other, "Already yielded")))?;
         self.notify_leg2.notify_one();
         Ok(answer_sdp)
     }
@@ -69,8 +80,8 @@ impl ProxyInstance {
 
         let (tx_to_2, mut rx_to_2) = tokio::sync::mpsc::unbounded_channel::<(ChannelId, Vec<u8>)>();
         let (tx_to_1, mut rx_to_1) = tokio::sync::mpsc::unbounded_channel::<(ChannelId, Vec<u8>)>();
-        let mut depth_to_2: usize = 0;
-        let mut depth_to_1: usize = 0;
+        let mut queued_bytes_to_2: usize = 0;
+        let mut queued_bytes_to_1: usize = 0;
         let mut pending_to_2: Option<(ChannelId, Vec<u8>)> = None;
         let mut pending_to_1: Option<(ChannelId, Vec<u8>)> = None;
 
@@ -119,11 +130,12 @@ impl ProxyInstance {
                 res1 = leg1.process_step(), if leg1.is_alive() => {
                     match res1 {
                         Ok(Some(Event::ChannelData(data))) => {
-                            depth_to_2 += 1;
+                            queued_bytes_to_2 = queued_bytes_to_2.saturating_add(data.data.len());
                             if tx_to_2.send((data.id, data.data)).is_err() {
                                 log::warn!("[relay-server] tx_to_2 closed");
                                 break;
                             }
+                            sync_upload_limits(&mut leg1, leg2_opt.as_mut(), queued_bytes_to_2, queued_bytes_to_1);
 
                         }
                         Ok(Some(event)) => log::debug!("[relay-server] Leg 1 Event: {:?}", event),
@@ -149,11 +161,12 @@ impl ProxyInstance {
                 res2 = async { leg2_opt.as_mut().unwrap().process_step().await }, if leg2_opt.as_ref().map(|l| l.is_alive()).unwrap_or(false) => {
                     match res2 {
                         Ok(Some(Event::ChannelData(data))) => {
-                            depth_to_1 += 1;
+                            queued_bytes_to_1 = queued_bytes_to_1.saturating_add(data.data.len());
                             if tx_to_1.send((data.id, data.data)).is_err() {
                                 log::warn!("[relay-server] tx_to_1 closed");
                                 break;
                             }
+                            sync_upload_limits(&mut leg1, leg2_opt.as_mut(), queued_bytes_to_2, queued_bytes_to_1);
 
                         }
                         Ok(Some(event)) => log::debug!("[relay-server] Leg 2 Event: {:?}", event),
@@ -194,35 +207,46 @@ impl ProxyInstance {
                 }
 
                 Some((id, buf)) = rx_to_2.recv(), if leg2_connected && pending_to_2.is_none() && leg2_opt.as_ref().map(|l| l.is_alive()).unwrap_or(false) => {
-                    if let Some(leg2) = leg2_opt.as_mut() {
-                        if leg2.send(&buf, id) {
-                            log::trace!("[relay-server] Forwarded data to leg 2 (ID: {:?}, len: {})", id, buf.len());
-                            depth_to_2 = depth_to_2.saturating_sub(1);
-
-                        } else {
-                            pending_to_2 = Some((id, buf));
-                            retry_to_2.as_mut().reset(tokio::time::Instant::now() + Duration::from_millis(3));
-                        }
+                    let sent = leg2_opt
+                        .as_mut()
+                        .map(|leg2| leg2.send(&buf, id))
+                        .unwrap_or(false);
+                    if sent {
+                        log::trace!("[relay-server] Forwarded data to leg 2 (ID: {:?}, len: {})", id, buf.len());
+                        queued_bytes_to_2 = queued_bytes_to_2.saturating_sub(buf.len());
+                        sync_upload_limits(&mut leg1, leg2_opt.as_mut(), queued_bytes_to_2, queued_bytes_to_1);
+                    } else {
+                        pending_to_2 = Some((id, buf));
+                        retry_to_2.as_mut().reset(tokio::time::Instant::now() + Duration::from_millis(3));
                     }
                 }
 
                 () = &mut retry_to_2, if pending_to_2.is_some() && leg2_connected && leg2_opt.as_ref().map(|l| l.is_alive()).unwrap_or(false) => {
-                    if let (Some(leg2), Some((id, buf))) = (leg2_opt.as_mut(), pending_to_2.as_ref()) {
-                        if leg2.send(buf, *id) {
+                    let sent = if let Some((id, buf)) = pending_to_2.as_ref() {
+                        leg2_opt
+                            .as_mut()
+                            .map(|leg2| leg2.send(buf, *id))
+                            .unwrap_or(false)
+                    } else {
+                        false
+                    };
+                    if sent {
+                        if let Some((id, buf)) = pending_to_2.take() {
                             log::trace!("[relay-server] Retried & forwarded data to leg 2 (ID: {:?})", id);
-                            pending_to_2 = None;
-                            depth_to_2 = depth_to_2.saturating_sub(1);
+                            queued_bytes_to_2 = queued_bytes_to_2.saturating_sub(buf.len());
                             retry_to_2.as_mut().reset(tokio::time::Instant::now() + far_future);
-                        } else {
-                            retry_to_2.as_mut().reset(tokio::time::Instant::now() + Duration::from_millis(3));
+                            sync_upload_limits(&mut leg1, leg2_opt.as_mut(), queued_bytes_to_2, queued_bytes_to_1);
                         }
+                    } else {
+                        retry_to_2.as_mut().reset(tokio::time::Instant::now() + Duration::from_millis(3));
                     }
                 }
 
                 Some((id, buf)) = rx_to_1.recv(), if leg1_connected && pending_to_1.is_none() && leg1.is_alive() => {
                     if leg1.send(&buf, id) {
                         log::trace!("[relay-server] Forwarded data to leg 1 (ID: {:?}, len: {})", id, buf.len());
-                        depth_to_1 = depth_to_1.saturating_sub(1);
+                        queued_bytes_to_1 = queued_bytes_to_1.saturating_sub(buf.len());
+                        sync_upload_limits(&mut leg1, leg2_opt.as_mut(), queued_bytes_to_2, queued_bytes_to_1);
 
                     } else {
                         pending_to_1 = Some((id, buf));
@@ -231,15 +255,20 @@ impl ProxyInstance {
                 }
 
                 () = &mut retry_to_1, if pending_to_1.is_some() && leg1_connected && leg1.is_alive() => {
-                    if let Some((id, buf)) = pending_to_1.as_ref() {
-                        if leg1.send(buf, *id) {
+                    let sent = if let Some((id, buf)) = pending_to_1.as_ref() {
+                        leg1.send(buf, *id)
+                    } else {
+                        false
+                    };
+                    if sent {
+                        if let Some((id, buf)) = pending_to_1.take() {
                             log::trace!("[relay-server] Retried & forwarded data to leg 1 (ID: {:?})", id);
-                            pending_to_1 = None;
-                            depth_to_1 = depth_to_1.saturating_sub(1);
+                            queued_bytes_to_1 = queued_bytes_to_1.saturating_sub(buf.len());
                             retry_to_1.as_mut().reset(tokio::time::Instant::now() + far_future);
-                        } else {
-                            retry_to_1.as_mut().reset(tokio::time::Instant::now() + Duration::from_millis(3));
+                            sync_upload_limits(&mut leg1, leg2_opt.as_mut(), queued_bytes_to_2, queued_bytes_to_1);
                         }
+                    } else {
+                        retry_to_1.as_mut().reset(tokio::time::Instant::now() + Duration::from_millis(3));
                     }
                 }
 
@@ -258,8 +287,8 @@ impl ProxyInstance {
                         let d2 = leg2.download_rate_bps();
                         let u2 = leg2.upload_rate_bps();
                         log::info!(
-                            "[relay-server] stats {session_id} leg1 down={:.0}B/s up={:.0}B/s leg2 down={:.0}B/s up={:.0}B/s q(A->B)={} q(B->A)={}",
-                            d1, u1, d2, u2, depth_to_2, depth_to_1,
+                            "[relay-server] stats {session_id} leg1 down={:.0}B/s up={:.0}B/s leg2 down={:.0}B/s up={:.0}B/s q(A->B)={}B q(B->A)={}B",
+                            d1, u1, d2, u2, queued_bytes_to_2, queued_bytes_to_1,
                         );
                     } else {
                         log::info!(
@@ -275,4 +304,3 @@ impl ProxyInstance {
         session_id
     }
 }
-
