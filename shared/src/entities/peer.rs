@@ -5,13 +5,27 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ResourceReceivedPeer {
     pub id: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
     pub avatar_url: String
+}
+
+impl ResourceReceivedPeer {
+    pub fn fallback(id: String) -> Self {
+        Self {
+            name: id.clone(),
+            id,
+            avatar_url: String::new()
+        }
+    }
 }
 
 impl From<&Peer> for ResourceReceivedPeer {
     fn from(peer: &Peer) -> Self {
         Self {
             id: peer.id.clone(),
+            name: peer.name.clone().unwrap_or_else(|| peer.device.name.clone()),
             avatar_url: peer.avatar_url.clone()
         }
     }

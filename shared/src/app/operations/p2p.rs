@@ -21,6 +21,9 @@ pub enum P2POperation {
         current_user: Peer
     },
     IsRunning,
+    GetPeer {
+        peer_id: String
+    },
     ViewSessionDetail {
         peer_id: String,
         order_id: u64,
@@ -117,6 +120,10 @@ impl P2POperation {
 
     pub fn is_running() -> AppRequestBuilder<impl Future<Output = Result<bool, CoreError>>> {
         Command::request_from_shell(CoreOperation::P2P(P2POperation::IsRunning)).map(|it| it.result())
+    }
+
+    pub fn get_peer(peer_id: String) -> AppRequestBuilder<impl Future<Output = Result<Option<Peer>, CoreError>>> {
+        Command::request_from_shell(CoreOperation::P2P(P2POperation::GetPeer { peer_id })).map(|it| it.result_option())
     }
 
     pub fn view_session_detail(

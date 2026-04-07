@@ -140,6 +140,14 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 Ok(CoreOperationOutput::None)
             }
 
+            P2POperation::GetPeer { peer_id } => {
+                let peer = self
+                    .get_client()
+                    .and_then(|client| client.peer_entity())
+                    .filter(|peer| peer.id == peer_id);
+                Ok(peer.into())
+            }
+
             P2POperation::StartNearbyServer(_) => {
                 log::warn!("StartNearbyServer called on WASM - not applicable (WASM is client-only)");
                 Err(P2PError::NotSupported("StartNearbyServer".into()).into())

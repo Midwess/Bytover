@@ -64,6 +64,9 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 Ok(CoreOperationOutput::None)
             }
             shared::app::operations::p2p::P2POperation::IsRunning => Ok(self.web_rtc.is_running().into()),
+            shared::app::operations::p2p::P2POperation::GetPeer { peer_id } => {
+                Ok(self.web_rtc.get_peer(&peer_id).await.into())
+            }
             shared::app::operations::p2p::P2POperation::CancelResource { peer_id, session_id, .. } => {
                 self.web_rtc.cancel_session(peer_id, session_id).await?;
                 Ok(CoreOperationOutput::None)

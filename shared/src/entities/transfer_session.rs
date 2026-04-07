@@ -209,13 +209,26 @@ impl TransferProgress {
         self.bytes_per_second
     }
 
-    pub fn mark_received_by_peer_id(&mut self, peer_id: String) {
-        if !self.received_by_peers.iter().any(|p| p.id == peer_id) {
-            self.received_by_peers.push(ResourceReceivedPeer {
-                id: peer_id,
-                avatar_url: String::new()
-            });
+    pub fn mark_received_by_peer(&mut self, peer: ResourceReceivedPeer) {
+        let ResourceReceivedPeer { id, name, avatar_url } = peer;
+
+        if let Some(existing) = self.received_by_peers.iter_mut().find(|peer| peer.id == id) {
+            if !name.is_empty() {
+                existing.name = name;
+            }
+
+            if !avatar_url.is_empty() {
+                existing.avatar_url = avatar_url;
+            }
+
+            return;
         }
+
+        self.received_by_peers.push(ResourceReceivedPeer { id, name, avatar_url });
+    }
+
+    pub fn mark_received_by_peer_id(&mut self, peer_id: String) {
+        self.mark_received_by_peer(ResourceReceivedPeer::fallback(peer_id));
     }
 
     pub fn received_by_peers(&self) -> &Vec<ResourceReceivedPeer> {

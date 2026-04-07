@@ -11,6 +11,7 @@ use crate::app::operations::{CoreOperation, CoreOperationOutput};
 use crate::app::transfer::module::TransferEvent;
 use crate::entities::device::DeviceInfo;
 use crate::entities::local_resource::LocalResource;
+use crate::entities::peer::ResourceReceivedPeer;
 use crate::entities::target::{P2PConnectionState, TransferTarget};
 use crate::entities::transfer_session::{
     SessionResourceUpdate,
@@ -34,6 +35,20 @@ pub const MAX_CONCURRENT_P2P_SESSIONS: usize = 5;
 impl AppCommand {
     pub async fn load_transfer_sessions(&self) -> Result<(), CoreError> {
         Ok(())
+    }
+
+    async fn resolve_received_peer(&self, peer_id: String) -> ResourceReceivedPeer {
+        match self.run(P2POperation::get_peer(peer_id.clone())).await {
+            Ok(Some(peer)) => ResourceReceivedPeer::from(&peer),
+            Ok(None) => {
+                log::warn!("Peer {peer_id} not found after successful transfer, using fallback recipient");
+                ResourceReceivedPeer::fallback(peer_id)
+            }
+            Err(error) => {
+                log::warn!("Failed to resolve peer {peer_id} after successful transfer: {error:?}");
+                ResourceReceivedPeer::fallback(peer_id)
+            }
+        }
     }
 
     pub async fn cancel_session(&self, transfer_session: &TransferSession) -> Result<(), CoreError> {
@@ -495,6 +510,7 @@ impl AppCommand {
 
         match result {
             Ok(()) => {
+                let peer = self.resolve_received_peer(peer_id).await;
                 let session_id_obj = TransferSessionId {
                     order_id: Some(session_id.to_string()),
                     transfer_type: Some(TransferType::send_any())
@@ -503,7 +519,7 @@ impl AppCommand {
                     session_id_obj,
                     PeerReceivedEvent {
                         resource_order_id,
-                        peer_id
+                        peer
                     }
                     .into()
                 ));

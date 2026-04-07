@@ -101,6 +101,17 @@ impl WebRtcServer {
         result
     }
 
+    pub async fn get_peer(&self, peer_id: &str) -> Option<PeerEntity> {
+        let mut clients = self.clients.lock().await;
+        let client = clients.get(peer_id).cloned().and_then(|client| client.upgrade());
+
+        if client.is_none() {
+            clients.remove(peer_id);
+        }
+
+        client.and_then(|client| client.peer_entity())
+    }
+
     pub async fn cancel_session(&self, peer_id: String, session_id: u64) -> Result<(), WebRtcServerError> {
         let client = self.get_client(&peer_id).await?;
         client.cancel_transfer(session_id).await;
