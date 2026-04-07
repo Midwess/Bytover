@@ -162,15 +162,13 @@ export default function SessionPage() {
                     <IncompatibleBrowser />
                 </main>
             ) : !session ? (
-                <main className="flex flex-col items-center justify-center gap-8 py-20 relative z-10">
+                <main className="flex flex-col items-center justify-center gap-8 py-20 relative z-10 min-h-screen">
                     {findSessionFailedMessage.message ? (
                         <p className="text-zinc-100 font-medium text-xl">{findSessionFailedMessage.message}</p>
                     ) : (
                         <>
-                            <div className="w-14 h-14 flex items-center justify-center rounded-2xl bg-zinc-900/50 border border-white/5 backdrop-blur-xl">
-                                <LoaderCircle className="animate-spin w-5 h-5 text-zinc-500" />
-                            </div>
-                            <p className="text-[11px] text-zinc-500 font-bold tracking-[0.2em]">INITIALIZING SESSION</p>
+                            <LoaderCircle className="animate-spin w-8 h-8 text-zinc-500" />
+                            <p className="text-[11px] text-zinc-500 font-bold tracking-[0.2em]">LOADING...</p>
                         </>
                     )}
                 </main>
