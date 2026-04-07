@@ -346,25 +346,17 @@ impl WebRtcClient {
                 // 2. Retry mechanism for pending outbound data blocked by backpressure
                 () = &mut retry_timer, if pending_data.is_some() => {
                     let (ref data, cid) = pending_data.as_ref().unwrap();
-                    let is_msg = *cid == cids.ordered_msg || *cid == cids.unordered_msg;
                     let mut sent = false;
 
-                    if is_msg {
-                        if let Some(ref rtc) = p2p_rtc {
-                            if rtc.is_alive() { let _ = rtc.send(data, *cid); }
+                    if let Some(ref rtc) = p2p_rtc {
+                        if rtc.is_alive() && rtc.send(data, *cid) {
+                            sent = true;
                         }
+                    }
+                    if !sent {
                         if let Some(ref rtc) = relay_rtc {
-                            if rtc.is_alive() { let _ = rtc.send(data, *cid); }
-                        }
-                        sent = p2p_rtc.as_ref().map_or(false, |r| r.is_alive())
-                            || relay_rtc.as_ref().map_or(false, |r| r.is_alive());
-                    } else {
-                        if let Some(ref rtc) = p2p_rtc {
-                            if rtc.is_alive() && rtc.send(data, *cid) { sent = true; }
-                        }
-                        if !sent {
-                            if let Some(ref rtc) = relay_rtc {
-                                if rtc.is_alive() && rtc.send(data, *cid) { sent = true; }
+                            if rtc.is_alive() && rtc.send(data, *cid) {
+                                sent = true;
                             }
                         }
                     }
@@ -418,28 +410,18 @@ impl WebRtcClient {
             }
 
             if let Some((cid, d)) = outbound_data {
-                let is_msg = cid == cids.ordered_msg || cid == cids.unordered_msg;
                 let mut sent = false;
 
-                if is_msg {
-                    // For messages: send on BOTH legs so the peer receives it
-                    // regardless of which connection is actually working end-to-end.
-                    if let Some(ref rtc) = p2p_rtc {
-                        if rtc.is_alive() { let _ = rtc.send(&d, cid); }
+                // Priority: P2P first, then Relay as fallback
+                if let Some(ref rtc) = p2p_rtc {
+                    if rtc.is_alive() && rtc.send(&d, cid) {
+                        sent = true;
                     }
+                }
+                if !sent {
                     if let Some(ref rtc) = relay_rtc {
-                        if rtc.is_alive() { let _ = rtc.send(&d, cid); }
-                    }
-                    sent = p2p_rtc.as_ref().map_or(false, |r| r.is_alive())
-                        || relay_rtc.as_ref().map_or(false, |r| r.is_alive());
-                } else {
-                    // For bulk data: prefer P2P, fall back to relay
-                    if let Some(ref rtc) = p2p_rtc {
-                        if rtc.is_alive() && rtc.send(&d, cid) { sent = true; }
-                    }
-                    if !sent {
-                        if let Some(ref rtc) = relay_rtc {
-                            if rtc.is_alive() && rtc.send(&d, cid) { sent = true; }
+                        if rtc.is_alive() && rtc.send(&d, cid) {
+                            sent = true;
                         }
                     }
                 }

@@ -124,9 +124,14 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 let peer = client.peer_entity().ok_or_else(|| P2PError::WebRtc("Peer not set after signaling exchange".into()))?;
                 self.set_current_user(current_user).ok();
 
-                client.run().await?;
+                let client_clone = client.clone();
+                wasm_bindgen_futures::spawn_local(async move {
+                    if let Err(e) = client_clone.run().await {
+                        log::error!("WebRtcClient run error: {:?}", e);
+                    }
+                });
 
-                Ok(CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected(peer)))
+                Ok(CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(peer)))
             }
 
             P2POperation::IsRunning => {
