@@ -10,12 +10,9 @@ use schema::devlog::bitbridge::{
     CreateDeviceSessionResponse,
     FindP2pSessionRequest,
     FindP2pSessionResponse,
-    GenPeerRequest,
-    GenPeerResponse,
     GetDeviceAliasesRequest,
     GetDeviceAliasesResponse,
-    P2pSession,
-    PeerMessage
+    P2pSession
 };
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
@@ -23,6 +20,16 @@ use tonic::{Request, Response, Status};
 pub struct P2PGrpcService {
     pub p2p_repository: Arc<dyn P2PSessionRepository>,
     pub app_service: Box<dyn AppInfoService>
+}
+
+fn normalize_signalling_route(signalling_route: &str) -> Result<String, Status> {
+    let signalling_route = signalling_route.trim();
+
+    if signalling_route.is_empty() {
+        return Err(Status::invalid_argument("Signalling route must not be blank"));
+    }
+
+    Ok(signalling_route.to_string())
 }
 
 #[async_trait::async_trait]
@@ -42,11 +49,19 @@ impl P2pOrchestrationService for P2PGrpcService {
         let request_body = request.get_ref();
         let alias = request_body.alias.clone();
         let signalling_key = request_body.signalling_key.clone();
+        let signalling_route = normalize_signalling_route(&request_body.signalling_route)?;
 
         let p2p_transfer_service = DiContainer::instance().await.get_p2p_transfer_service().await;
 
         let session = p2p_transfer_service
-            .create_user_device_session(user.order_id, device.order_id, device.name.clone(), alias, signalling_key)
+            .create_user_device_session(
+                user.order_id,
+                device.order_id,
+                device.name.clone(),
+                alias,
+                signalling_key,
+                signalling_route
+            )
             .await
             .map_err(|e| match e {
                 P2PTransferErrors::AliasNotFound => Status::invalid_argument("Alias not found for this device"),
@@ -62,7 +77,8 @@ impl P2pOrchestrationService for P2PGrpcService {
                 owner_user_id: session.user_id(),
                 description: session.description().map(|s| s.to_string()),
                 access_url: session.access_url(app.web_url().to_string()),
-                alias: session.alias().to_string()
+                alias: session.alias().to_string(),
+                signalling_route: session.signalling_route().to_string()
             }
         };
 
@@ -90,7 +106,8 @@ impl P2pOrchestrationService for P2PGrpcService {
                 owner_user_id: session.user_id(),
                 description: session.description().map(|s| s.to_string()),
                 access_url: session.access_url(app.web_url().to_string()),
-                alias: session.alias().to_string()
+                alias: session.alias().to_string(),
+                signalling_route: session.signalling_route().to_string()
             })
         };
 
@@ -118,42 +135,25 @@ impl P2pOrchestrationService for P2PGrpcService {
 
         Ok(Response::new(GetDeviceAliasesResponse { aliases }))
     }
+}
 
-    async fn gen_peer(&self, request: Request<GenPeerRequest>) -> Result<Response<GenPeerResponse>, Status> {
-        let user = request.extensions().get::<User>().cloned();
-        let device = request.into_inner().device;
+#[cfg(test)]
+mod tests {
+    use super::normalize_signalling_route;
+    use tonic::Code;
 
-        let peer_id = devlog_sdk::distributed_id::gen_id().await.to_string();
+    #[test]
+    fn trims_and_accepts_non_empty_signalling_route() {
+        let signalling_route = normalize_signalling_route("  rpc-signalling-local  ").unwrap();
 
-        let (name, avatar_url, email, signalling_id) = match user {
-            Some(u) => {
-                let sig = format!(
-                    "{}_{}_{}",
-                    devlog_sdk::distributed_id::gen_id().await,
-                    u.order_id,
-                    device.device_unique_key
-                );
-                (
-                    Some(u.display_name.clone()),
-                    u.avatar_url.clone().unwrap_or_default(),
-                    Some(u.email.clone()),
-                    Some(sig)
-                )
-            }
-            None => {
-                let avatar = self.app_service.random_avatar().await.unwrap_or_default();
-                (Some(device.device_name.clone()), avatar, None, None)
-            }
-        };
+        assert_eq!(signalling_route, "rpc-signalling-local");
+    }
 
-        let peer = PeerMessage {
-            peer_id,
-            name,
-            avatar_url,
-            email,
-            device
-        };
+    #[test]
+    fn rejects_blank_signalling_route() {
+        let error = normalize_signalling_route("   ").unwrap_err();
 
-        Ok(Response::new(GenPeerResponse { peer, signalling_id }))
+        assert_eq!(error.code(), Code::InvalidArgument);
+        assert_eq!(error.message(), "Signalling route must not be blank");
     }
 }

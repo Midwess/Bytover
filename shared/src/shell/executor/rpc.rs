@@ -1,5 +1,7 @@
 use crate::app::operations::rpc::{RpcOperation, RpcOperationOutput};
 use crate::app::operations::CoreOperationOutput;
+use crate::entities::device::DeviceInfo;
+use crate::entities::peer::Peer;
 use crate::errors::CoreError;
 use crate::protocol::rpc::app_server::AppServer;
 use core_services::utils::maybe::MaybeSend;
@@ -17,6 +19,8 @@ where
     <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send
 {
     fn app_server(&self) -> &AppServer<T>;
+
+    async fn gen_peer(&self, device: DeviceInfo) -> Result<Peer, CoreError>;
 
     async fn handle(&self, effect: RpcOperation) -> Result<CoreOperationOutput, CoreError> {
         match effect {
@@ -36,8 +40,13 @@ where
                 self.app_server().feedback(email, message).await?;
                 Ok(CoreOperationOutput::None)
             }
-            RpcOperation::CreateP2PSession { alias, signalling_key } => {
-                let p2p_session = self.app_server().create_device_session(alias, signalling_key).await?;
+            RpcOperation::CreateP2PSession {
+                alias,
+                signalling_key,
+                signalling_route
+            } => {
+                let p2p_session =
+                    self.app_server().create_device_session(alias, signalling_key, signalling_route).await?;
                 Ok(CoreOperationOutput::P2PSession(p2p_session))
             }
             RpcOperation::GetDeviceAliases => {
@@ -45,7 +54,7 @@ where
                 Ok(CoreOperationOutput::DeviceAliases(aliases))
             }
             RpcOperation::GenPeer { device } => {
-                let peer = self.app_server().gen_peer(device).await?;
+                let peer = self.gen_peer(device).await?;
                 Ok(CoreOperationOutput::Rpc(RpcOperationOutput::GenPeer(peer)))
             }
         }

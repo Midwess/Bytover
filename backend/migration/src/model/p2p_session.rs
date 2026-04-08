@@ -10,6 +10,7 @@ pub struct Model {
     pub alias: String,
     pub description: Option<String>,
     pub signalling_key: String,
+    pub signalling_route: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

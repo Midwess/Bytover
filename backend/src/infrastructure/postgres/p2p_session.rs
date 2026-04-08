@@ -26,7 +26,8 @@ impl TryFrom<P2PSessionModel> for P2PSession {
             model.user_id as u64,
             model.alias,
             model.description,
-            model.signalling_key
+            model.signalling_key,
+            model.signalling_route
         ))
     }
 }
@@ -41,7 +42,8 @@ impl TryFrom<&P2PSession> for P2PSessionActiveModel {
             user_id: Set(entity.user_id() as i64),
             alias: Set(entity.alias().to_string()),
             description: Set(entity.description().map(|s| s.to_string())),
-            signalling_key: Set(entity.signalling_key().to_string())
+            signalling_key: Set(entity.signalling_key().to_string()),
+            signalling_route: Set(entity.signalling_route().to_string())
         })
     }
 }

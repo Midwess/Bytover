@@ -19,7 +19,7 @@ export default function Introduction() {
 
     return (
         <div className="relative w-full pt-24 md:pt-32 pb-20 px-4 md:px-6 bg-black">
-            {/* Padded, Rounded Container for Hero - Railway Style */}
+            {/* Padded, rounded container for hero */}
             <div className="relative w-full min-h-[85vh] md:min-h-[90vh] rounded-2xl md:rounded-[2.5rem] overflow-hidden flex flex-col items-center justify-between border border-white/10 shadow-2xl">
                 
                 {/* Background - Contained within the rounded box */}

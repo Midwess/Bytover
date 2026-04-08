@@ -276,6 +276,7 @@ impl TransferSession {
         mut resources: Vec<LocalResource>,
         password: Option<String>,
         signalling_key: String,
+        signalling_route: String,
         alias: String,
         access_url: String,
         id: u64,
@@ -299,7 +300,8 @@ impl TransferSession {
             target: TransferTarget::P2P {
                 from_peer: None,
                 connection_state: P2PConnectionState::NotConnected,
-                signalling_key: Some(signalling_key)
+                signalling_key: Some(signalling_key),
+                signalling_route: Some(signalling_route)
             },
             from_user: User {
                 id: 0,

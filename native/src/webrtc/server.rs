@@ -16,6 +16,7 @@ use shared::errors::CoreError;
 use shared::repository::local_resource::LocalResourceRepository;
 use shared::shell::api::CoreRequest;
 
+use crate::config::{get_signalling_server_http_url_for_route, get_signalling_server_ws_url_for_route};
 use crate::webrtc::client::{WebRtcClient, WebRtcClientError};
 use crate::webrtc::signalling::SignalingClient;
 
@@ -57,8 +58,6 @@ impl From<WebRtcServerError> for CoreError {
 
 
 pub struct WebRtcServer {
-    ws_url: String,
-    http_url: String,
     clients: Mutex<HashMap<String, Weak<WebRtcClient>>>,
     resource_repo: Arc<dyn LocalResourceRepository>,
     current_user: OnceCell<PeerEntity>,
@@ -67,14 +66,8 @@ pub struct WebRtcServer {
 }
 
 impl WebRtcServer {
-    pub fn new(
-        ws_url: String,
-        http_url: String,
-        resource_repo: Arc<dyn LocalResourceRepository>
-    ) -> Arc<Self> {
+    pub fn new(resource_repo: Arc<dyn LocalResourceRepository>) -> Arc<Self> {
         Arc::new(Self {
-            ws_url,
-            http_url,
             clients: Mutex::new(HashMap::new()),
             resource_repo,
             current_user: Default::default(),
@@ -230,7 +223,17 @@ impl WebRtcServer {
             )))
         };
 
-        let mut signalling = SignalingClient::new(self.ws_url.clone(), self.http_url.clone());
+        let Some(signalling_route) = current_user.signalling_route.clone() else {
+            return Err(WebRtcServerError::Signalling(format!(
+                "No signalling route for peer {}",
+                current_user.id
+            )));
+        };
+
+        let mut signalling = SignalingClient::new(
+            get_signalling_server_ws_url_for_route(&signalling_route),
+            get_signalling_server_http_url_for_route(&signalling_route),
+        );
         signalling.start(key.clone()).await;
         log::info!("[webrtc-server] Signalling background task started");
 

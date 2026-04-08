@@ -107,6 +107,7 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
         match effect {
             P2POperation::ConnectPeer {
                 signalling_key,
+                signalling_route,
                 current_user
             } => {
                 log::info!("ConnectPeer called for WASM with key {}", signalling_key);
@@ -118,7 +119,7 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 let di = DiContainer::get_instance();
                 let resource_repo = di.get_local_resource_repository().await;
                 let transfer_repo = di.get_transfer_session_repository();
-                let signalling = di.get_signalling_client();
+                let signalling = di.get_signalling_client_for_route(&signalling_route);
 
                 let client = WebRtcClient::connect(current_user.clone(), signalling, IceAgent::new(), &signalling_key, resource_repo, transfer_repo)
                     .await

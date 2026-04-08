@@ -2,6 +2,10 @@ use crate::entities::device::DeviceInfo;
 use schema::devlog::bitbridge::PeerMessage;
 use serde::{Deserialize, Serialize};
 
+fn default_region_code() -> String {
+    "local".to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ResourceReceivedPeer {
     pub id: String,
@@ -38,8 +42,12 @@ pub struct Peer {
     pub avatar_url: String,
     pub email: Option<String>,
     pub device: DeviceInfo,
+    #[serde(default = "default_region_code")]
+    pub region_code: String,
     pub user_id: Option<u64>,
-    pub signalling_id: Option<String>
+    pub signalling_id: Option<String>,
+    #[serde(default)]
+    pub signalling_route: Option<String>
 }
 
 impl From<PeerMessage> for Peer {
@@ -50,8 +58,10 @@ impl From<PeerMessage> for Peer {
             avatar_url: value.avatar_url,
             email: value.email,
             device: value.device.into(),
+            region_code: value.region_code.unwrap_or_else(default_region_code),
             user_id: None,
-            signalling_id: None
+            signalling_id: None,
+            signalling_route: None
         }
     }
 }
@@ -63,7 +73,8 @@ impl From<Peer> for PeerMessage {
             name: value.name,
             avatar_url: value.avatar_url,
             email: value.email,
-            device: value.device.into()
+            device: value.device.into(),
+            region_code: Some(value.region_code)
         }
     }
 }

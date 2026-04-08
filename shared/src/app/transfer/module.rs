@@ -299,9 +299,22 @@ impl AppModule<BitBridge> for TransferModule {
                     return Command::done()
                 };
 
+                let Some(signalling_route) = me.signalling_route.clone() else {
+                    log::warn!("Missing signalling route");
+                    return Command::done()
+                };
+
                 Command::handle_result(move |it| async move {
                     it.app()
-                        .start_p2p_transfer(selected_resources, password, user, shelf_id, shelf_name, signalling_key)
+                        .start_p2p_transfer(
+                            selected_resources,
+                            password,
+                            user,
+                            shelf_id,
+                            shelf_name,
+                            signalling_key,
+                            signalling_route
+                        )
                         .await
                 })
             }

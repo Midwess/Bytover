@@ -8,18 +8,27 @@ pub struct P2PSession {
     pub user_id: u64,
     pub alias: String,
     pub description: Option<String>,
-    pub signalling_key: String
+    pub signalling_key: String,
+    pub signalling_route: String
 }
 
 impl P2PSession {
-    pub async fn new(device_id: u64, user_id: u64, alias: String, description: Option<String>, signalling_key: String) -> Self {
+    pub async fn new(
+        device_id: u64,
+        user_id: u64,
+        alias: String,
+        description: Option<String>,
+        signalling_key: String,
+        signalling_route: String
+    ) -> Self {
         Self {
             session_id: gen_id().await,
             device_id,
             user_id,
             alias,
             description,
-            signalling_key
+            signalling_key,
+            signalling_route
         }
     }
 
@@ -29,7 +38,8 @@ impl P2PSession {
         user_id: u64,
         alias: String,
         description: Option<String>,
-        signalling_key: String
+        signalling_key: String,
+        signalling_route: String
     ) -> Self {
         Self {
             session_id,
@@ -37,7 +47,8 @@ impl P2PSession {
             user_id,
             alias,
             description,
-            signalling_key
+            signalling_key,
+            signalling_route
         }
     }
 
@@ -67,5 +78,9 @@ impl P2PSession {
 
     pub fn signalling_key(&self) -> &str {
         &self.signalling_key
+    }
+
+    pub fn signalling_route(&self) -> &str {
+        &self.signalling_route
     }
 }

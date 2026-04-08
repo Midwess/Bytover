@@ -17,7 +17,7 @@ pub enum RpcOperation {
     GetMe(),
     GetUserById(u64),
     Feedback { email: String, message: String },
-    CreateP2PSession { alias: String, signalling_key: String },
+    CreateP2PSession { alias: String, signalling_key: String, signalling_route: String },
     GetDeviceAliases,
     GenPeer { device: DeviceInfo }
 }
@@ -68,9 +68,15 @@ impl RpcOperation {
 
     pub fn create_p2p_session(
         alias: String,
-        signalling_key: String
+        signalling_key: String,
+        signalling_route: String
     ) -> AppRequestBuilder<impl Future<Output = Result<schema::devlog::bitbridge::P2pSession, CoreError>>> {
-        Command::request_from_shell(CoreOperation::Rpc(RpcOperation::CreateP2PSession { alias, signalling_key })).map(
+        Command::request_from_shell(CoreOperation::Rpc(RpcOperation::CreateP2PSession {
+            alias,
+            signalling_key,
+            signalling_route
+        }))
+        .map(
             |res| match res {
                 CoreOperationOutput::P2PSession(session) => Ok(session),
                 CoreOperationOutput::Error(error) => Err(error),

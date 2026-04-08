@@ -18,6 +18,7 @@ pub enum P2POperation {
     StopNearbyServer,
     ConnectPeer {
         signalling_key: String,
+        signalling_route: String,
         current_user: Peer
     },
     IsRunning,

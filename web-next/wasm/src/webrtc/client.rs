@@ -218,13 +218,7 @@ impl WebRtcClient {
         let unordered_channel_p2p = unordered_channel.clone();
         let ordered_channel_p2p = ordered_channel.clone();
         
-        let me_proto = schema::devlog::bitbridge::PeerMessage {
-            peer_id: me.id.clone(),
-            name: me.name.clone(),
-            avatar_url: me.avatar_url.clone(),
-            device: me.device.clone().into(),
-            email: me.email.clone()
-        };
+        let me_proto = schema::devlog::bitbridge::PeerMessage::from(me.clone());
 
         let client = Arc::new(WebRtcClient {
             transfers_context: TransfersContext::new(),
@@ -254,15 +248,7 @@ impl WebRtcClient {
         if let Ok((answer_sdp, remote_peer_proto)) = p2p_res {
             log::info!("Got P2P answer from remote peer {answer_sdp:?}");
 
-            let remote_peer = PeerEntity {
-                id: remote_peer_proto.peer_id.clone(),
-                name: remote_peer_proto.name.clone(),
-                avatar_url: remote_peer_proto.avatar_url.clone(),
-                device: remote_peer_proto.device.clone().into(),
-                email: remote_peer_proto.email.clone(),
-                user_id: None,
-                signalling_id: None
-            };
+            let remote_peer = PeerEntity::from(remote_peer_proto);
 
             let _ = client.peer.set(remote_peer);
             p2p_answer_sdp = Some(answer_sdp);
@@ -382,13 +368,7 @@ impl WebRtcClient {
         let _ = self.me.set(current_user.clone());
 
         let introduce_request = schema::devlog::bitbridge::IntroduceRequestMessage {
-            mine: schema::devlog::bitbridge::PeerMessage {
-                peer_id: current_user.id.clone(),
-                name: current_user.name.clone(),
-                avatar_url: current_user.avatar_url.clone(),
-                device: current_user.device.clone().into(),
-                email: current_user.email.clone()
-            }
+            mine: schema::devlog::bitbridge::PeerMessage::from(current_user.clone())
         };
 
         let msg_channel = self
@@ -402,15 +382,7 @@ impl WebRtcClient {
 
         match response {
             Response::IntroduceResponse(resp) => {
-                let peer = PeerEntity {
-                    id: resp.peer.peer_id.clone(),
-                    name: resp.peer.name.clone(),
-                    avatar_url: resp.peer.avatar_url.clone(),
-                    device: resp.peer.device.clone().into(),
-                    email: resp.peer.email.clone(),
-                    user_id: None,
-                    signalling_id: None
-                };
+                let peer = PeerEntity::from(resp.peer);
                 let _ = self.set_peer(peer);
                 log::info!("Introduce handshake completed");
                 Ok(())
@@ -705,27 +677,13 @@ impl WebRtcClient {
         match msg {
             Request::IntroduceRequest(introduce_msg) => {
                 log::info!("Received introduce request from peer");
-                let peer = PeerEntity {
-                    id: introduce_msg.mine.peer_id.clone(),
-                    name: introduce_msg.mine.name.clone(),
-                    avatar_url: introduce_msg.mine.avatar_url.clone(),
-                    device: introduce_msg.mine.device.clone().into(),
-                    email: introduce_msg.mine.email.clone(),
-                    user_id: None,
-                    signalling_id: None
-                };
+                let peer = PeerEntity::from(introduce_msg.mine);
                 log::info!("Remote peer: {:?}", peer.id);
                 let _ = self.set_peer(peer);
 
                 if let Some(me) = self.me.get() {
                     let response = schema::devlog::bitbridge::IntroduceResponseMessage {
-                        peer: schema::devlog::bitbridge::PeerMessage {
-                            peer_id: me.id.clone(),
-                            name: me.name.clone(),
-                            avatar_url: me.avatar_url.clone(),
-                            device: me.device.clone().into(),
-                            email: me.email.clone()
-                        }
+                        peer: schema::devlog::bitbridge::PeerMessage::from(me.clone())
                     };
                     if let Some(msg_channel) = self.msg_channel.get() {
                         let _ = msg_channel

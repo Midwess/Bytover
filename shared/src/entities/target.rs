@@ -16,7 +16,9 @@ pub enum TransferTarget {
         from_peer: Option<Peer>,
         connection_state: P2PConnectionState,
         #[serde(default)]
-        signalling_key: Option<String>
+        signalling_key: Option<String>,
+        #[serde(default)]
+        signalling_route: Option<String>
     },
     Internet {
         to_emails: Vec<String>

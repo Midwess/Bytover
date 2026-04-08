@@ -192,7 +192,9 @@ impl AppCommand {
         self.update_model(TransferSessionModelEvent::Add(session));
 
         if let TransferTarget::P2P {
-            signalling_key: Some(key), ..
+            signalling_key: Some(key),
+            signalling_route: Some(route),
+            ..
         } = &target
         {
             self.update_model(TransferEvent::UpdateConnectionState {
@@ -208,6 +210,7 @@ impl AppCommand {
             let mut stream = self.stream_from_shell(
                 P2POperation::ConnectPeer {
                     signalling_key: key.to_string(),
+                    signalling_route: route.to_string(),
                     current_user
                 }
                 .into()
@@ -792,7 +795,8 @@ impl AppCommand {
         user: User,
         from_shelf_id: u64,
         shelf_name: String,
-        signalling_key: String
+        signalling_key: String,
+        signalling_route: String
     ) -> Result<(), CoreError> {
         let selected_resources = self.sync_local_resources(selected_resources).await;
         if selected_resources.is_empty() {
@@ -800,12 +804,19 @@ impl AppCommand {
             return Ok(());
         }
 
-        let p2p_session = self.run(RpcOperation::create_p2p_session(shelf_name, signalling_key)).await?;
+        let p2p_session = self
+            .run(RpcOperation::create_p2p_session(
+                shelf_name,
+                signalling_key,
+                signalling_route.clone()
+            ))
+            .await?;
 
         let mut session = TransferSession::p2p(
             selected_resources,
             password,
             p2p_session.signalling_key.clone(),
+            p2p_session.signalling_route.clone(),
             p2p_session.alias.clone(),
             p2p_session.access_url.clone(),
             p2p_session.session_id,

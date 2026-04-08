@@ -1,26 +1,45 @@
 use std::sync::Arc;
 
-use actix_web::{web, HttpRequest, HttpResponse};
 use actix_web::web::Bytes;
+use actix_web::{web, HttpRequest, HttpResponse};
+use base64::Engine;
+use devlog_sdk::distributed_id::gen_id;
+use devlog_sdk::grpc_gateway::channel::GrpcGatewayChannel;
 use devlog_sdk::tcp::listener::find_tcp_listener;
 use prost::Message as ProstMessage;
+use schema::devlog::bitbridge::PeerMessage;
+use schema::devlog::rpc_signalling::server::{
+    AnswerMessage, GeneratePeerRequest, GeneratePeerResponse, Message, OfferRequest, OfferResponse,
+};
 
+use crate::app_gateway::{AppGatewayClient, AppGatewayError};
 use crate::client::Client;
 use crate::client_manager::ClientManager;
+use crate::config::SignallingConfig;
 use crate::turn_manager::TurnManager;
 
-pub struct SignallingServer {
+#[derive(Clone)]
+struct ServerState {
     client_manager: Arc<ClientManager>,
     turn_manager: Arc<TurnManager>,
+    config: SignallingConfig,
+    app_gateway: AppGatewayClient,
+}
+
+pub struct SignallingServer {
+    config: SignallingConfig,
+    client_manager: Arc<ClientManager>,
+    turn_manager: Arc<TurnManager>,
+    app_gateway: AppGatewayClient,
 }
 
 impl SignallingServer {
-    pub fn new(
-        turn_manager: Arc<TurnManager>,
-    ) -> Self {
+    pub fn new(config: SignallingConfig, turn_manager: Arc<TurnManager>) -> Self {
         Self {
+            config,
             client_manager: ClientManager::new(),
             turn_manager,
+            app_gateway: AppGatewayClient::new(GrpcGatewayChannel::new()),
         }
     }
 
@@ -30,89 +49,35 @@ impl SignallingServer {
         let public_host = connection.public_host.clone();
         let std_listener = connection.listener.into_std()?;
 
-        let turn_manager_for_register = Arc::clone(&self.turn_manager);
-        let client_manager_for_closure1 = Arc::clone(&self.client_manager);
-        let client_manager_for_closure2 = Arc::clone(&self.client_manager);
-        let client_manager_for_closure3 = Arc::clone(&self.client_manager);
-        let client_manager_for_closure4 = Arc::clone(&self.client_manager);
-        let turn_manager_for_closure = Arc::clone(&self.turn_manager);
+        let state = web::Data::new(ServerState {
+            client_manager: Arc::clone(&self.client_manager),
+            turn_manager: Arc::clone(&self.turn_manager),
+            config: self.config.clone(),
+            app_gateway: self.app_gateway.clone(),
+        });
 
         let server = actix_web::HttpServer::new(move || {
-            let turn_manager_route1 = Arc::clone(&turn_manager_for_closure);
-            let turn_manager_route2 = Arc::clone(&turn_manager_for_closure);
-            let turn_manager_route3 = Arc::clone(&turn_manager_for_closure);
-            let turn_manager_route4 = Arc::clone(&turn_manager_for_closure);
-            let turn_manager_route5 = Arc::clone(&turn_manager_for_closure);
-
             actix_web::App::new()
-                .route(
-                    "/server/{key}",
-                    web::get().to({
-                        let client_manager = Arc::clone(&client_manager_for_closure1);
-                        let turn_manager = Arc::clone(&turn_manager_route1);
-                        move |req: HttpRequest,
-                              stream: web::Payload,
-                              key: web::Path<String>| {
-                            ws_handler(
-                                req,
-                                stream,
-                                key.into_inner(),
-                                client_manager.clone(),
-                                turn_manager.clone(),
-                            )
-                        }
-                    }),
-                )
-                .route(
-                    "/offer/{key}",
-                    web::post().to({
-                        let client_manager = Arc::clone(&client_manager_for_closure2);
-                        let turn_manager = Arc::clone(&turn_manager_route2);
-                        move |key: web::Path<String>, body: Bytes| {
-                            offer_handler(key.into_inner(), body, client_manager.clone(), turn_manager.clone())
-                        }
-                    }),
-                )
-                .route(
-                    "/relay/{key}",
-                    web::get().to({
-                        let client_manager = Arc::clone(&client_manager_for_closure3);
-                        let turn_manager = Arc::clone(&turn_manager_route3);
-                        move |key: web::Path<String>| {
-                            relay_handler(key.into_inner(), client_manager.clone(), turn_manager.clone())
-                        }
-                    }),
-                )
-                .route(
-                    "/relay/{key}",
-                    web::post().to({
-                        let client_manager = Arc::clone(&client_manager_for_closure4);
-                        let turn_manager = Arc::clone(&turn_manager_route4);
-                        move |key: web::Path<String>, body: Bytes| {
-                            relay_proxy_handler(key.into_inner(), body, client_manager.clone(), turn_manager.clone())
-                        }
-                    }),
-                )
-                .route(
-                    "/register-relay",
-                    web::post().to({
-                        let turn_manager = Arc::clone(&turn_manager_route5);
-                        move |req: HttpRequest, body: web::Json<RegisterRelayRequest>| {
-                            register_relay_handler(req, body, turn_manager.clone())
-                        }
-                    }),
-                )
+                .app_data(state.clone())
+                .route("/peer", web::post().to(peer_handler))
+                .route("/server/{key}", web::get().to(ws_handler))
+                .route("/offer/{key}", web::post().to(offer_handler))
+                .route("/relay/{key}", web::get().to(relay_handler))
+                .route("/relay/{key}", web::post().to(relay_proxy_handler))
+                .route("/register-relay", web::post().to(register_relay_handler))
         })
         .listen(std_listener)?
         .run();
 
         log::info!(
-            "RPC Signalling Server listening on {}:{}",
+            "RPC Signalling Server listening on {}:{} (region={}, route={})",
             public_host,
-            port
+            port,
+            self.config.region_code,
+            self.config.signalling_route
         );
 
-        self.register_gateway(&public_host, port, turn_manager_for_register).await?;
+        self.register_gateway(&public_host, port).await?;
 
         server.await?;
 
@@ -123,49 +88,151 @@ impl SignallingServer {
         &self,
         public_host: &str,
         port: u16,
-        _turn_manager: Arc<TurnManager>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         use devlog_sdk::api_gateway::client::ApiGatewayClient;
         use devlog_sdk::api_gateway::kong::client::KongGatewayAdminClient;
-        use devlog_sdk::api_gateway::service::{
-            GatewayRouteBuilder, GatewayRouteExpression, GatewayServiceBuilder,
-        };
+        use devlog_sdk::api_gateway::service::GatewayServiceBuilder;
 
         let api_gateway =
             KongGatewayAdminClient::new(devlog_sdk::config::CONFIGS.kong.admin_url.clone());
 
-        let service = GatewayServiceBuilder::new()
-            .http(public_host.to_string(), port)
+        // Remove the legacy single-route service so its broad `/rpc-signalling`
+        // prefix route cannot keep hijacking pinned regional paths after upgrades.
+        let _ = api_gateway.delete_service("rpc-signalling-server").await;
+
+        let shared_service = GatewayServiceBuilder::new()
+            .url(self.config.shared_upstream_url(public_host, port))
             .enable_cors(true)
-            .name("rpc-signalling-server")
-            .routes(vec![
-                GatewayRouteBuilder::new()
-                    .path(GatewayRouteExpression::start_with("/rpc-signalling"))
-                    .http()
-                    .methods(vec!["POST".to_owned(), "GET".to_owned(), "OPTIONS".to_owned()])
-                    .strip_path(true)
-                    .public(true)
-                    .preserve_host(true)
-                    .priority(10)
-                    .name("devlog-rpc-signalling-server-ws")
-                    .build(),
-            ])
+            .name("rpc-signalling-shared-server")
+            .routes(vec![build_gateway_route(
+                "devlog-rpc-signalling-shared",
+                self.config.bootstrap_route(),
+                10,
+            )])
             .build();
 
-        api_gateway.register(service).await?;
-        log::info!("Registered rpc-signalling service to gateway");
+        api_gateway.register(shared_service).await?;
+
+        let pinned_service = GatewayServiceBuilder::new()
+            .url(self.config.pinned_upstream_url(public_host, port))
+            .enable_cors(true)
+            .name(format!("rpc-signalling-{}-server", self.config.region_code))
+            .routes(vec![build_gateway_route(
+                format!("devlog-rpc-signalling-{}", self.config.region_code),
+                &self.config.signalling_route,
+                20,
+            )])
+            .build();
+
+        api_gateway.register(pinned_service).await?;
+
+        log::info!(
+            "Registered signalling routes {} and {} to gateway",
+            self.config.bootstrap_route(),
+            self.config.signalling_route
+        );
 
         Ok(())
     }
 }
 
+fn build_gateway_route(name: impl Into<String>, route: &str, priority: u32) -> devlog_sdk::api_gateway::service::GatewayRoute {
+    use devlog_sdk::api_gateway::service::{GatewayRouteBuilder, GatewayRouteExpression};
+
+    GatewayRouteBuilder::new()
+        .path(GatewayRouteExpression::exact_or_subpath(&format!("/{route}")))
+        .http()
+        .methods(vec!["POST".to_owned(), "GET".to_owned(), "OPTIONS".to_owned()])
+        .strip_path(true)
+        .public(true)
+        .preserve_host(false)
+        .priority(priority)
+        .name(name)
+        .build()
+}
+
+async fn peer_handler(req: HttpRequest, body: Bytes, state: web::Data<ServerState>) -> HttpResponse {
+    let peer_request = match GeneratePeerRequest::decode(&body[..]) {
+        Ok(message) => message,
+        Err(error) => {
+            return HttpResponse::BadRequest().body(format!("failed to decode generate peer request: {error}"));
+        }
+    };
+
+    let auth_context = match req.headers().get("authorization") {
+        Some(header) => {
+            let authorization = match header.to_str() {
+                Ok(value) => value,
+                Err(_) => return HttpResponse::Unauthorized().body("invalid authorization header"),
+            };
+
+            match state.app_gateway.resolve_auth(authorization).await {
+                Ok(context) => Some(context),
+                Err(AppGatewayError::InvalidAuthorization) => {
+                    return HttpResponse::Unauthorized().body("invalid authorization header");
+                }
+                Err(AppGatewayError::Unauthorized(message)) => {
+                    return HttpResponse::Unauthorized().body(message);
+                }
+                Err(AppGatewayError::Upstream(message)) => {
+                    return HttpResponse::BadGateway().body(message);
+                }
+            }
+        }
+        None => None,
+    };
+
+    let device = peer_request.device;
+    let peer_id = gen_id().await.to_string();
+
+    let (name, avatar_url, email, signalling_id) = match auth_context {
+        Some(context) => {
+            let signalling_id = format!(
+                "{}_{}_{}",
+                gen_id().await,
+                context.user.order_id,
+                device.device_unique_key
+            );
+
+            (
+                Some(context.user.display_name),
+                context.user.avatar_url.unwrap_or_default(),
+                Some(context.user.email),
+                Some(signalling_id),
+            )
+        }
+        None => {
+            let avatar_url = state.app_gateway.random_avatar().await.unwrap_or_default();
+            (Some(device.device_name.clone()), avatar_url, None, None)
+        }
+    };
+
+    let peer = PeerMessage {
+        peer_id,
+        name,
+        avatar_url,
+        email,
+        device,
+        region_code: Some(state.config.region_code.clone()),
+    };
+
+    let response = GeneratePeerResponse {
+        peer,
+        signalling_id,
+        region_code: state.config.region_code.clone(),
+        signalling_route: state.config.signalling_route.clone(),
+    };
+
+    encode_binary_response(&response)
+}
+
 async fn ws_handler(
     req: HttpRequest,
     stream: web::Payload,
-    key: String,
-    client_manager: Arc<ClientManager>,
-    turn_manager: Arc<TurnManager>,
+    key: web::Path<String>,
+    state: web::Data<ServerState>,
 ) -> Result<HttpResponse, actix_web::Error> {
+    let key = key.into_inner();
     let peer_addr = req
         .connection_info()
         .realip_remote_addr()
@@ -176,48 +243,39 @@ async fn ws_handler(
 
     let (response, session, msg_stream) = actix_ws::handle(&req, stream)?;
 
-    let client = Client::new(key.clone(), session);
-    let client = Arc::new(client);
+    let client = Arc::new(Client::new(key.clone(), session));
 
-    client_manager.register(key.clone(), &client).await;
+    state.client_manager.register(key.clone(), &client).await;
 
-    let client_manager_clone = Arc::clone(&client_manager);
-    let turn_manager_clone = Arc::clone(&turn_manager);
-    let key_clone = key.clone();
+    let client_manager = Arc::clone(&state.client_manager);
+    let turn_manager = Arc::clone(&state.turn_manager);
     let client_for_spawn = Arc::clone(&client);
+    let key_clone = key.clone();
 
     tokio::task::spawn_local(async move {
         <Arc<Client> as Clone>::clone(&client_for_spawn).run(msg_stream).await;
-        client_manager_clone.unregister(&key_clone).await;
-        turn_manager_clone.unregister_client(&key_clone).await;
+        client_manager.unregister(&key_clone).await;
+        turn_manager.unregister_client(&key_clone).await;
     });
 
     Ok(response)
 }
 
-async fn offer_handler(
-    key: String,
-    body: Bytes,
-    client_manager: Arc<ClientManager>,
-    turn_manager: Arc<TurnManager>,
-) -> HttpResponse {
-    let client = match client_manager.get(&key).await {
-        Some(c) => c,
-        None => {
-            return HttpResponse::ServiceUnavailable()
-                .body("client not connected");
+async fn offer_handler(key: web::Path<String>, body: Bytes, state: web::Data<ServerState>) -> HttpResponse {
+    let key = key.into_inner();
+    let client = match state.client_manager.get(&key).await {
+        Some(client) => client,
+        None => return HttpResponse::ServiceUnavailable().body("client not connected"),
+    };
+
+    let offer_request = match OfferRequest::decode(&body[..]) {
+        Ok(message) => message,
+        Err(error) => {
+            return HttpResponse::BadRequest().body(format!("failed to decode offer request: {error}"));
         }
     };
 
-    let offer_request = match schema::devlog::rpc_signalling::server::OfferRequest::decode(&body[..]) {
-        Ok(m) => m,
-        Err(e) => {
-            return HttpResponse::BadRequest()
-                .body(format!("failed to decode offer request: {}", e));
-        }
-    };
-
-    let mut message = schema::devlog::rpc_signalling::server::Message {
+    let mut message = Message {
         offer: Some(schema::devlog::rpc_signalling::server::OfferMessage {
             sdp: offer_request.offer.sdp,
             peer: offer_request.peer,
@@ -226,134 +284,106 @@ async fn offer_handler(
         ..Default::default()
     };
 
-    message.ice_config = turn_manager.get_relay_config(&key).await;
+    message.ice_config = state.turn_manager.get_relay_config(&key).await;
 
     match client.request(message).await {
         Ok(response) => {
             let answer = match response.answer {
-                Some(a) => a,
+                Some(answer) => answer,
                 None => return HttpResponse::InternalServerError().body("no answer in response"),
             };
+
             let peer = match answer.peer.clone() {
-                Some(p) => p,
+                Some(peer) => peer,
                 None => return HttpResponse::InternalServerError().body("no peer info in response"),
             };
 
-            let offer_response = schema::devlog::rpc_signalling::server::OfferResponse {
-                answer: schema::devlog::rpc_signalling::server::AnswerMessage {
+            let offer_response = OfferResponse {
+                answer: AnswerMessage {
                     sdp: answer.sdp,
                     peer: Some(peer.clone()),
                 },
                 peer,
             };
 
-            let mut buf = Vec::new();
-            match offer_response.encode(&mut buf) {
-                Ok(()) => HttpResponse::Ok()
-                    .content_type("application/octet-stream")
-                    .body(buf),
-                Err(e) => {
-                    HttpResponse::InternalServerError()
-                        .body(format!("failed to encode response: {}", e))
-                }
-            }
+            encode_binary_response(&offer_response)
         }
-        Err(crate::client::ClientError::Timeout(_)) => {
-            HttpResponse::GatewayTimeout().body("request timed out")
-        }
+        Err(crate::client::ClientError::Timeout(_)) => HttpResponse::GatewayTimeout().body("request timed out"),
         Err(crate::client::ClientError::Disconnected) => {
             HttpResponse::ServiceUnavailable().body("client disconnected")
         }
-        Err(e) => {
-            HttpResponse::InternalServerError()
-                .body(format!("internal error: {}", e))
-        }
+        Err(error) => HttpResponse::InternalServerError().body(format!("internal error: {error}")),
     }
 }
 
-async fn relay_handler(
-    key: String,
-    client_manager: Arc<ClientManager>,
-    turn_manager: Arc<TurnManager>,
-) -> HttpResponse {
-    let _ = client_manager.get(&key).await;
+async fn relay_handler(key: web::Path<String>, state: web::Data<ServerState>) -> HttpResponse {
+    let key = key.into_inner();
+    let _ = state.client_manager.get(&key).await;
 
-    let relay_config = match turn_manager.get_relay_config(&key).await {
+    let relay_config = match state.turn_manager.get_relay_config(&key).await {
         Some(config) => config,
-        None => {
-            return HttpResponse::ServiceUnavailable()
-                .body("client not connected");
-        }
+        None => return HttpResponse::ServiceUnavailable().body("client not connected"),
     };
 
-    let mut buf = Vec::new();
-    match relay_config.encode(&mut buf) {
-        Ok(()) => HttpResponse::Ok()
-            .content_type("application/octet-stream")
-            .body(buf),
-        Err(e) => {
-            HttpResponse::InternalServerError()
-                .body(format!("failed to encode response: {}", e))
-        }
-    }
+    encode_binary_response(&relay_config)
 }
 
-async fn relay_proxy_handler(
-    key: String,
-    body: Bytes,
-    client_manager: Arc<ClientManager>,
-    turn_manager: Arc<TurnManager>,
-) -> HttpResponse {
+async fn relay_proxy_handler(key: web::Path<String>, body: Bytes, state: web::Data<ServerState>) -> HttpResponse {
     use schema::devlog::bitbridge::relay_service_client::RelayServiceClient;
-    use base64::Engine;
     use tonic::metadata::MetadataValue;
 
-    if client_manager.get(&key).await.is_none() {
+    let key = key.into_inner();
+
+    if state.client_manager.get(&key).await.is_none() {
         return HttpResponse::ServiceUnavailable().body("client not connected");
     }
 
     let connect_req = match schema::devlog::bitbridge::ConnectRequest::decode(&body[..]) {
-        Ok(m) => m,
-        Err(e) => {
-            return HttpResponse::BadRequest().body(format!("failed to decode ConnectRequest: {}", e));
+        Ok(message) => message,
+        Err(error) => {
+            return HttpResponse::BadRequest().body(format!("failed to decode ConnectRequest: {error}"));
         }
     };
 
-    let ice_config = match turn_manager.get_relay_config(&key).await {
-        Some(c) => c,
+    let ice_config = match state.turn_manager.get_relay_config(&key).await {
+        Some(config) => config,
         None => return HttpResponse::ServiceUnavailable().body("no relay config assigned to client"),
     };
 
-    let stun_url = match ice_config.urls.iter().find(|u| u.starts_with("stun:")) {
-        Some(u) => u,
+    let stun_url = match ice_config.urls.iter().find(|url| url.starts_with("stun:")) {
+        Some(url) => url,
         None => return HttpResponse::InternalServerError().body("no stun URL found in client config"),
     };
 
-    // Parse domain from stun:domain:3478
     let domain = stun_url
         .strip_prefix("stun:")
-        .and_then(|s: &str| s.split(':').next())
+        .and_then(|value: &str| value.split(':').next())
         .unwrap_or("");
 
     if domain.is_empty() {
         return HttpResponse::InternalServerError().body("invalid STUN URL format");
     }
 
-    let url = format!("http://{}:9101", domain);
-    
+    let url = format!("http://{domain}:9101");
+
     let channel = match tonic::transport::Channel::from_shared(url) {
         Ok(endpoint) => match endpoint.connect().await {
-            Ok(ch) => ch,
-            Err(e) => return HttpResponse::InternalServerError().body(format!("failed to connect to relay server channel: {}", e))
+            Ok(channel) => channel,
+            Err(error) => {
+                return HttpResponse::InternalServerError()
+                    .body(format!("failed to connect to relay server channel: {error}"));
+            }
         },
-        Err(e) => return HttpResponse::InternalServerError().body(format!("invalid relay server url: {}", e))
+        Err(error) => return HttpResponse::InternalServerError().body(format!("invalid relay server url: {error}")),
     };
+
     let mut client = RelayServiceClient::new(channel);
 
     let secret = std::env::var("RELAY_SERVER_SECRET").unwrap_or_else(|_| "supersecret".to_string());
-    let auth_str = format!("user:{}", secret);
-    let b64_auth = base64::engine::general_purpose::STANDARD.encode(auth_str);
-    let header_value = format!("Basic {}", b64_auth);
+    let header_value = format!(
+        "Basic {}",
+        base64::engine::general_purpose::STANDARD.encode(format!("user:{secret}"))
+    );
 
     let mut request = tonic::Request::new(connect_req);
     if let Ok(meta_value) = MetadataValue::try_from(header_value) {
@@ -361,19 +391,8 @@ async fn relay_proxy_handler(
     }
 
     match client.connect(request).await {
-        Ok(response) => {
-            let mut buf = Vec::new();
-            let msg = response.into_inner();
-            if let Err(e) = ProstMessage::encode(&msg, &mut buf) {
-                return HttpResponse::InternalServerError().body(format!("failed to encode response: {}", e));
-            }
-            HttpResponse::Ok()
-                .content_type("application/octet-stream")
-                .body(buf)
-        }
-        Err(status) => {
-            HttpResponse::InternalServerError().body(format!("relay server gRPC error: {}", status))
-        }
+        Ok(response) => encode_binary_response(&response.into_inner()),
+        Err(status) => HttpResponse::InternalServerError().body(format!("relay server gRPC error: {status}")),
     }
 }
 
@@ -412,13 +431,10 @@ struct RegisterRelayRequest {
 async fn register_relay_handler(
     req: HttpRequest,
     body: web::Json<RegisterRelayRequest>,
-    turn_manager: Arc<TurnManager>,
+    state: web::Data<ServerState>,
 ) -> HttpResponse {
-    use base64::Engine;
-
-    // Basic Auth Check
-    let auth_header = match req.headers().get("authorization").and_then(|h| h.to_str().ok()) {
-        Some(h) => h,
+    let auth_header = match req.headers().get("authorization").and_then(|header| header.to_str().ok()) {
+        Some(header) => header,
         None => return HttpResponse::Unauthorized().body("missing authorization header"),
     };
 
@@ -426,9 +442,8 @@ async fn register_relay_handler(
         return HttpResponse::Unauthorized().body("invalid authorization format");
     }
 
-    let b64_part = &auth_header[6..];
-    let decoded = match base64::engine::general_purpose::STANDARD.decode(b64_part) {
-        Ok(d) => d,
+    let decoded = match base64::engine::general_purpose::STANDARD.decode(&auth_header[6..]) {
+        Ok(decoded) => decoded,
         Err(_) => return HttpResponse::Unauthorized().body("failed to decode base64 auth"),
     };
 
@@ -447,10 +462,23 @@ async fn register_relay_handler(
         .realip_remote_addr()
         .unwrap_or("0.0.0.0")
         .to_string();
-    
+
     let ip_address = extract_ip_from_request(&req, &peer_addr);
 
-    turn_manager.register_relay(ip_address, body.stun_port, body.relay_port).await;
+    state
+        .turn_manager
+        .register_relay(ip_address, body.stun_port, body.relay_port)
+        .await;
 
     HttpResponse::Ok().finish()
+}
+
+fn encode_binary_response<T: ProstMessage>(message: &T) -> HttpResponse {
+    let mut buffer = Vec::new();
+    match message.encode(&mut buffer) {
+        Ok(()) => HttpResponse::Ok()
+            .content_type("application/octet-stream")
+            .body(buffer),
+        Err(error) => HttpResponse::InternalServerError().body(format!("failed to encode response: {error}")),
+    }
 }

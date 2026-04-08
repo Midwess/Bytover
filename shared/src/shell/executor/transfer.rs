@@ -93,7 +93,8 @@ where
                         target: TransferTarget::P2P {
                             from_peer: None,
                             connection_state: crate::entities::target::P2PConnectionState::NotConnected,
-                            signalling_key: Some(p2p_session.signalling_key.clone())
+                            signalling_key: Some(p2p_session.signalling_key.clone()),
+                            signalling_route: Some(p2p_session.signalling_route.clone())
                         },
                         access_url: p2p_session.access_url.clone(),
                         alias: alias.clone(),

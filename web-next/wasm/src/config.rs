@@ -83,19 +83,29 @@ pub fn get_gateway_grpc_url() -> String {
 }
 
 pub fn get_signalling_server_ws_url() -> String {
+    get_signalling_server_ws_url_for_route("rpc-signalling")
+}
+
+pub fn get_signalling_server_ws_url_for_route(route: &str) -> String {
     let host_info = get_host_info(true).unwrap();
+    let route = route.trim_start_matches('/');
     if host_info.is_with_ssl {
-        format!("wss://{}:{}/rpc-signalling", host_info.host, host_info.port)
+        format!("wss://{}:{}/{}", host_info.host, host_info.port, route)
     } else {
-        format!("ws://{}:{}/rpc-signalling", host_info.host, host_info.port)
+        format!("ws://{}:{}/{}", host_info.host, host_info.port, route)
     }
 }
 
 pub fn get_signalling_server_http_url() -> String {
+    get_signalling_server_http_url_for_route("rpc-signalling")
+}
+
+pub fn get_signalling_server_http_url_for_route(route: &str) -> String {
     let host_info = get_host_info(true).unwrap();
+    let route = route.trim_start_matches('/');
     if host_info.is_with_ssl {
-        format!("https://{}:{}/rpc-signalling", host_info.host, host_info.port)
+        format!("https://{}:{}/{}", host_info.host, host_info.port, route)
     } else {
-        format!("http://{}:{}/rpc-signalling", host_info.host, host_info.port)
+        format!("http://{}:{}/{}", host_info.host, host_info.port, route)
     }
 }

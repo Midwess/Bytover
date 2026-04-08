@@ -5,7 +5,7 @@
  */
 export const getAssetUrl = (path: string): string => {
     const prefix = process.env.NEXT_PUBLIC_S3_CDN_PREFIX;
-    const version = process.env.NEXT_PUBLIC_VERSION || process.env.NEXT_PUBLIC_RAILWAY_GIT_COMMIT_SHA;
+    const version = process.env.NEXT_PUBLIC_VERSION || process.env.NEXT_PUBLIC_GIT_COMMIT_SHA;
 
     if (prefix && version) {
         // Ensure path starts with /
