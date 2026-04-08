@@ -516,8 +516,18 @@ impl TransferSession {
 
     pub fn total_progress(&self) -> f64 {
         let is_p2p_receive = !self.target.is_public() && self.transfer_type == TransferType::Receive;
-        let total_size = self.progress.iter().map(|it| it.file_size).sum::<u64>();
+        let relevant_progress = if is_p2p_receive {
+            self.progress.iter().filter(|it| it.is_in_progress()).collect::<Vec<_>>()
+        } else {
+            self.progress.iter().collect::<Vec<_>>()
+        };
+
+        let total_size = relevant_progress.iter().map(|it| it.file_size).sum::<u64>();
         if total_size == 0 {
+            if is_p2p_receive {
+                return 0.0;
+            }
+
             return 1.0;
         }
 
@@ -529,16 +539,8 @@ impl TransferSession {
             return 0.0;
         }
 
-        let total_bytes_sent = self
-            .progress
+        let total_bytes_sent = relevant_progress
             .iter()
-            .filter(|it| {
-                if is_p2p_receive {
-                    return it.status == TransferStatus::InProgress && it.percentage() > 0f64;
-                }
-
-                true
-            })
             .map(|it| it.total_bytes_counter)
             .sum::<u64>();
 

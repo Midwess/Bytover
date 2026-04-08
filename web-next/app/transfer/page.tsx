@@ -7,7 +7,6 @@ import Header from "@/components/web/header";
 import Footer from "@/components/web/footer";
 import { DownloadSection } from "@/components/download-section";
 import { HighlightFeatures } from "@/components/highlight-features";
-import { useFaviconProgress } from "@/hooks/use-favicon-progress";
 import { motion } from "motion/react";
 
 function TransferBoardContent() {
@@ -50,9 +49,6 @@ function TransferBoardContent() {
 }
 
 export default function TransferBoard() {
-    const totalP2PProgress = core.useTotalP2PProgress();
-    useFaviconProgress(totalP2PProgress);
-
     return (
         <div className="min-h-screen w-screen bg-black relative overflow-x-hidden selection:bg-blue-500 selection:text-white font-inter">
             <Suspense fallback={null}>

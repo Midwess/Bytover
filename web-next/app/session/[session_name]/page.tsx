@@ -18,6 +18,7 @@ import StaticHeader from "@/components/web/static-header";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ResourceGrid } from "@/components/main/resource-grid";
 import { DownloadAllButton } from "@/components/main/download-all-button";
+import { useFaviconProgress } from "@/hooks/use-favicon-progress";
 import { motion } from "framer-motion";
 import Aurora from "@/components/ui/aurora";
 import {
@@ -84,6 +85,8 @@ export default function SessionPage() {
     }, [accentColor]);
 
     const session = core.useSession(sessionName);
+    const faviconProgress = session?.is_in_progress ? session.progress : null;
+    useFaviconProgress(faviconProgress);
 
     useEffect(() => {
         if (coreReady && sessionName) {

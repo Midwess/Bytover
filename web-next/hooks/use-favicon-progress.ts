@@ -9,6 +9,25 @@ function getAllFavicons(): HTMLLinkElement[] {
     return Array.from(document.querySelectorAll<HTMLLinkElement>('link[rel="icon"], link[rel="shortcut icon"]'))
 }
 
+function resolveBaseFaviconHref(originalHrefs: Map<HTMLLinkElement, string>): string | null {
+    const favicons = getAllFavicons()
+    if (favicons.length === 0) return null
+
+    const getHref = (fav: HTMLLinkElement) => originalHrefs.get(fav) ?? fav.href
+
+    const mediaMatched = favicons.find(fav => fav.media && window.matchMedia(fav.media).matches)
+    if (mediaMatched) {
+        return getHref(mediaMatched)
+    }
+
+    const plainIcon = favicons.find(fav => !fav.media)
+    if (plainIcon) {
+        return getHref(plainIcon)
+    }
+
+    return getHref(favicons[0])
+}
+
 export function useFaviconProgress(progress: number | null) {
     const canvasRef = useRef<HTMLCanvasElement | null>(null)
     const originalHrefsRef = useRef<Map<HTMLLinkElement, string>>(new Map())
@@ -27,10 +46,8 @@ export function useFaviconProgress(progress: number | null) {
             originalHrefsRef.current.set(fav, fav.href)
         })
 
-        // Load the PNG favicon image
         faviconImageRef.current = new Image()
         faviconImageRef.current.crossOrigin = 'anonymous'
-        faviconImageRef.current.src = '/favicon-light.png'
 
         return () => {
             // Restore all original favicons on unmount
@@ -60,6 +77,9 @@ export function useFaviconProgress(progress: number | null) {
             })
             return
         }
+
+        const baseFaviconHref = resolveBaseFaviconHref(originalHrefsRef.current)
+        if (!baseFaviconHref) return
 
         const drawProgress = () => {
             ctx.clearRect(0, 0, FAVICON_SIZE, FAVICON_SIZE)
@@ -104,17 +124,24 @@ export function useFaviconProgress(progress: number | null) {
 
         // If image is loaded, draw immediately, otherwise wait for it
         const img = faviconImageRef.current
-        if (img?.complete) {
+        if (!img) return
+
+        const onLoad = () => {
             drawProgress()
-        } else if (img) {
-            const onLoad = () => {
-                drawProgress()
-                img.removeEventListener('load', onLoad)
-            }
-            img.addEventListener('load', onLoad)
-            return () => {
-                img.removeEventListener('load', onLoad)
-            }
+        }
+
+        if (img.src !== baseFaviconHref) {
+            img.src = baseFaviconHref
+        }
+
+        if (img.complete && img.naturalWidth > 0) {
+            drawProgress()
+            return
+        }
+
+        img.addEventListener('load', onLoad)
+        return () => {
+            img.removeEventListener('load', onLoad)
         }
     }, [progress])
 }
