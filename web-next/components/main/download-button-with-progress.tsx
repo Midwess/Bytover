@@ -105,7 +105,12 @@ export default function DownloadButtonWithProgress({
                                 <circle cx="20" cy="20" r="18" stroke="currentColor" strokeWidth="2.5" fill="transparent" strokeDasharray={113.1} strokeDashoffset={113.1 - (113.1 * progress)} strokeLinecap="round" className="text-white transition-all duration-300" />
                             </svg>
                             <div className="relative z-10 flex items-center justify-center">
-                                <span className="text-xs font-bold text-white tabular-nums transition-all duration-300 group-hover:opacity-0 group-hover:scale-50">{Math.round(progress * 100)}%</span>
+                                <span className={cn(
+                                    "font-bold text-white tabular-nums transition-all duration-300 group-hover:opacity-0 group-hover:scale-50",
+                                    Math.round(progress * 100) >= 100 ? "text-[9px]" : "text-[10px]"
+                                )}>
+                                    {Math.round(progress * 100)}%
+                                </span>
                                 <X className="w-4 h-4 text-white absolute opacity-0 scale-50 group-hover:opacity-100 group-hover:scale-100 transition-all duration-300" strokeWidth={3} />
                             </div>
                         </>
@@ -114,8 +119,8 @@ export default function DownloadButtonWithProgress({
                             {/* Normal Progress View */}
                             <div className="w-full space-y-1.5 transition-all duration-300 group-hover:opacity-0 group-hover:scale-[0.98] group-hover:blur-sm">
                                 <div className="flex items-center justify-between px-1">
-                                    <span className="text-[9px] font-bold text-white uppercase tracking-widest">{speed || 'Downloading'}</span>
-                                    <span className="text-[9px] font-bold text-white tabular-nums">{Math.round(progress * 100)}%</span>
+                                    <span className="text-[9px] font-bold text-white uppercase tracking-widest leading-none">{speed || 'Downloading'}</span>
+                                    <span className="text-[8px] font-bold text-white tabular-nums leading-none">{Math.round(progress * 100)}%</span>
                                 </div>
                                 <div className="h-1 w-full bg-white/10 rounded-full overflow-hidden">
                                     <motion.div 
