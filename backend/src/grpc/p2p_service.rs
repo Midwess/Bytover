@@ -27,6 +27,8 @@ pub struct P2PGrpcService {
     pub app_service: Box<dyn AppInfoService>
 }
 
+const DEFAULT_REGION_CODE: &str = "local";
+
 fn normalize_signalling_route(signalling_route: &str) -> Result<String, Status> {
     let signalling_route = signalling_route.trim();
 
@@ -38,11 +40,31 @@ fn normalize_signalling_route(signalling_route: &str) -> Result<String, Status> 
 }
 
 fn derive_signalling_region(region_code: Option<&str>) -> (String, String) {
-    let region_code = region_code.map(str::trim).filter(|value| !value.is_empty()).unwrap_or("local").to_string();
+    let region_code = region_code
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(DEFAULT_REGION_CODE)
+        .to_string();
 
     let signalling_route = format!("rpc-signalling-{region_code}");
 
     (region_code, signalling_route)
+}
+
+fn current_region_code() -> Option<String> {
+    resolve_region_code(
+        std::env::var("BYTOVER_REGION_CODE").ok().as_deref(),
+        std::env::var("RAILWAY_REPLICA_REGION").ok().as_deref()
+    )
+}
+
+fn resolve_region_code(bytover_region_code: Option<&str>, railway_replica_region: Option<&str>) -> Option<String> {
+    [bytover_region_code, railway_replica_region]
+        .into_iter()
+        .flatten()
+        .map(str::trim)
+        .find(|value| !value.is_empty())
+        .map(str::to_string)
 }
 
 #[async_trait::async_trait]
@@ -154,7 +176,8 @@ impl P2pOrchestrationService for P2PGrpcService {
         let device = request.into_inner().device;
 
         let peer_id = devlog_sdk::distributed_id::gen_id().await.to_string();
-        let (region_code, signalling_route) = derive_signalling_region(std::env::var("BYTOVER_REGION_CODE").ok().as_deref());
+        let region_code = current_region_code();
+        let (region_code, signalling_route) = derive_signalling_region(region_code.as_deref());
 
         let (name, avatar_url, email, signalling_id) = match user {
             Some(user) => {
@@ -196,7 +219,8 @@ impl P2pOrchestrationService for P2PGrpcService {
     }
 
     async fn get_region(&self, _request: Request<GetRegionRequest>) -> Result<Response<GetRegionResponse>, Status> {
-        let (region_code, signalling_route) = derive_signalling_region(std::env::var("BYTOVER_REGION_CODE").ok().as_deref());
+        let region_code = current_region_code();
+        let (region_code, signalling_route) = derive_signalling_region(region_code.as_deref());
 
         Ok(Response::new(GetRegionResponse {
             region_code,
@@ -207,7 +231,7 @@ impl P2pOrchestrationService for P2PGrpcService {
 
 #[cfg(test)]
 mod tests {
-    use super::{derive_signalling_region, normalize_signalling_route};
+    use super::{derive_signalling_region, normalize_signalling_route, resolve_region_code};
     use tonic::Code;
 
     #[test]
@@ -239,5 +263,19 @@ mod tests {
 
         assert_eq!(region_code, "us-west");
         assert_eq!(signalling_route, "rpc-signalling-us-west");
+    }
+
+    #[test]
+    fn uses_railway_replica_region_as_fallback() {
+        let region_code = resolve_region_code(None, Some("eu-west"));
+
+        assert_eq!(region_code.as_deref(), Some("eu-west"));
+    }
+
+    #[test]
+    fn prefers_explicit_bytover_region_code() {
+        let region_code = resolve_region_code(Some("ap-southeast"), Some("eu-west"));
+
+        assert_eq!(region_code.as_deref(), Some("ap-southeast"));
     }
 }
