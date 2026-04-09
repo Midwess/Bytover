@@ -54,7 +54,7 @@ fn derive_signalling_region(region_code: Option<&str>) -> (String, String) {
 fn current_region_code() -> Option<String> {
     resolve_region_code(
         std::env::var("BYTOVER_REGION_CODE").ok().as_deref(),
-        std::env::var("RAILWAY_REPLICA_REGION").ok().as_deref()
+        normalize_railway_region(std::env::var("RAILWAY_REPLICA_REGION").ok().as_deref()).as_deref()
     )
 }
 
@@ -65,6 +65,13 @@ fn resolve_region_code(bytover_region_code: Option<&str>, railway_replica_region
         .map(str::trim)
         .find(|value| !value.is_empty())
         .map(str::to_string)
+}
+
+fn normalize_railway_region(region: Option<&str>) -> Option<String> {
+    region
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| value.split('-').find(|segment| !segment.is_empty()).unwrap_or(value).to_string())
 }
 
 #[async_trait::async_trait]
@@ -231,7 +238,7 @@ impl P2pOrchestrationService for P2PGrpcService {
 
 #[cfg(test)]
 mod tests {
-    use super::{derive_signalling_region, normalize_signalling_route, resolve_region_code};
+    use super::{derive_signalling_region, normalize_railway_region, normalize_signalling_route, resolve_region_code};
     use tonic::Code;
 
     #[test]
@@ -277,5 +284,19 @@ mod tests {
         let region_code = resolve_region_code(Some("ap-southeast"), Some("eu-west"));
 
         assert_eq!(region_code.as_deref(), Some("ap-southeast"));
+    }
+
+    #[test]
+    fn canonicalizes_provider_formatted_railway_region() {
+        let region_code = normalize_railway_region(Some("europe-west4-drams3a"));
+
+        assert_eq!(region_code.as_deref(), Some("europe"));
+    }
+
+    #[test]
+    fn preserves_already_short_railway_region() {
+        let region_code = normalize_railway_region(Some("europe"));
+
+        assert_eq!(region_code.as_deref(), Some("europe"));
     }
 }

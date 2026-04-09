@@ -10,7 +10,7 @@ impl SignallingConfig {
     pub fn from_env() -> Self {
         let region_code = resolve_region_code(
             env_trimmed("BYTOVER_REGION_CODE").as_deref(),
-            env_trimmed("RAILWAY_REPLICA_REGION").as_deref()
+            normalize_railway_region(env_trimmed("RAILWAY_REPLICA_REGION").as_deref()).as_deref()
         );
 
         Self {
@@ -48,9 +48,16 @@ fn resolve_region_code(bytover_region_code: Option<&str>, railway_replica_region
         .to_string()
 }
 
+fn normalize_railway_region(region: Option<&str>) -> Option<String> {
+    region
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| value.split('-').find(|segment| !segment.is_empty()).unwrap_or(value).to_string())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::resolve_region_code;
+    use super::{normalize_railway_region, resolve_region_code};
 
     #[test]
     fn falls_back_to_railway_replica_region() {
@@ -64,6 +71,20 @@ mod tests {
         let region_code = resolve_region_code(Some("ap-southeast"), Some("eu-west"));
 
         assert_eq!(region_code, "ap-southeast");
+    }
+
+    #[test]
+    fn canonicalizes_provider_formatted_railway_region() {
+        let region_code = normalize_railway_region(Some("europe-west4-drams3a"));
+
+        assert_eq!(region_code.as_deref(), Some("europe"));
+    }
+
+    #[test]
+    fn preserves_already_short_railway_region() {
+        let region_code = normalize_railway_region(Some("europe"));
+
+        assert_eq!(region_code.as_deref(), Some("europe"));
     }
 
     #[test]

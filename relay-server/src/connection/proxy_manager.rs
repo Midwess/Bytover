@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 
 use futures_util::stream::FuturesUnordered;
@@ -27,7 +27,7 @@ pub struct ProxyManager {
     proxies: Mutex<HashMap<String, Weak<ProxyInstance>>>,
     run_tx: Mutex<Option<tokio::sync::mpsc::UnboundedSender<Arc<ProxyInstance>>>>,
     running: AtomicBool,
-    public_ipv4: Ipv4Addr
+    public_ipv4: AtomicU32
 }
 
 impl ProxyManager {
@@ -36,12 +36,20 @@ impl ProxyManager {
             proxies: Mutex::new(HashMap::new()),
             run_tx: Mutex::new(None),
             running: AtomicBool::new(false),
-            public_ipv4
+            public_ipv4: AtomicU32::new(u32::from(public_ipv4))
         })
     }
 
     pub fn is_running(&self) -> bool {
         self.running.load(Ordering::SeqCst)
+    }
+
+    pub fn public_ipv4(&self) -> Ipv4Addr {
+        Ipv4Addr::from(self.public_ipv4.load(Ordering::SeqCst))
+    }
+
+    pub fn set_public_ipv4(&self, public_ipv4: Ipv4Addr) {
+        self.public_ipv4.store(u32::from(public_ipv4), Ordering::SeqCst);
     }
 
     /// Starts the ProxyManager run loop. This is an async loop (like WebRtcServer::start)
@@ -108,7 +116,7 @@ impl ProxyManager {
                 Some(existing) => (existing, false),
                 None => {
                     proxies.remove(&session_id);
-                    let proxy = ProxyInstance::new(session_id.clone(), self.public_ipv4);
+                    let proxy = ProxyInstance::new(session_id.clone(), self.public_ipv4());
                     proxies.insert(session_id.clone(), Arc::downgrade(&proxy));
                     (proxy, true)
                 }
