@@ -15,10 +15,6 @@ pub fn get_gateway_grpc_url() -> String {
     }
 }
 
-pub fn get_signalling_server_ws_url() -> String {
-    get_signalling_server_ws_url_for_route("rpc-signalling")
-}
-
 pub fn get_signalling_server_ws_url_for_route(route: &str) -> String {
     let gateway_host = GATEWAY_HTTP1_HOST.unwrap_or(GATEWAY_HOST.unwrap_or("localhost"));
     let gateway_port = GATEWAY_HTTP1_PORT
@@ -31,10 +27,6 @@ pub fn get_signalling_server_ws_url_for_route(route: &str) -> String {
     } else {
         format!("ws://{gateway_host}{gateway_port}/{route}")
     }
-}
-
-pub fn get_signalling_server_http_url() -> String {
-    get_signalling_server_http_url_for_route("rpc-signalling")
 }
 
 pub fn get_signalling_server_http_url_for_route(route: &str) -> String {

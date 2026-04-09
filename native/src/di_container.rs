@@ -1,6 +1,5 @@
 use crate::config::{
     get_gateway_grpc_url,
-    get_signalling_server_http_url,
     GATEWAY_HOST
 };
 use crate::core_api_impl::net_stream::NetStreamImpl;
@@ -178,8 +177,6 @@ impl DiContainer {
 
         let web_rtc_server = WebRtcServer::new(local_resource_repo.clone());
 
-        let auth_provider = self.get_auth_provider();
-
         let cloud_service = CloudService {
             server: self.get_cloud_server(),
             active_session: Default::default(),
@@ -190,8 +187,6 @@ impl DiContainer {
         let executor = NativeExecutor {
             rpc: Box::new(NativeRpcImpl {
                 auth_server: self.get_authentication_server(),
-                auth_provider,
-                signalling_http_url: get_signalling_server_http_url(),
             }),
             persistent: Box::new(NativePersistentImpl {
                 auth_session_repository: Box::new(self.get_auth_session_repository()),

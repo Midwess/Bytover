@@ -1,0 +1,89 @@
+name: relay-server-deploy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: relay-server-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE_NAME: midwess/bytover-relay
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      BYTOVER_WITH_SSL: ${{ vars.BYTOVER_WITH_SSL }}
+      BYTOVER_PUBLIC_GATEWAY_HOST: ${{ vars.BYTOVER_PUBLIC_GATEWAY_HOST }}
+      BYTOVER_PUBLIC_GATEWAY_PORT: ${{ vars.BYTOVER_PUBLIC_GATEWAY_PORT }}
+      BYTOVER_PUBLIC_HTTP1_GATEWAY_HOST: ${{ vars.BYTOVER_PUBLIC_HTTP1_GATEWAY_HOST }}
+      BYTOVER_PUBLIC_HTTP1_GATEWAY_PORT: ${{ vars.BYTOVER_PUBLIC_HTTP1_GATEWAY_PORT }}
+      RELAY_SERVER_SECRET: ${{ secrets.RELAY_SERVER_SECRET }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.GIT_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Compute image tag
+        id: image_tag
+        run: |
+          tag="$(git rev-parse --short=7 "$GITHUB_SHA")"
+          echo "value=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.MIDWESS_DOCKER_USER }}
+          password: ${{ secrets.MIDWESS_DOCKER_PASSWORD }}
+
+      - name: Build and push relay-server image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: relay-server/Dockerfile
+          push: true
+          tags: ${{ env.IMAGE_NAME }}:${{ steps.image_tag.outputs.value }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trigger Portainer stack redeploy
+        env:
+          PORTAINER_STACK_WEBHOOK_URL: ${{ secrets.PORTAINER_RELAY_SERVER_STACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$PORTAINER_STACK_WEBHOOK_URL" ]; then
+            echo "::error::Missing secret PORTAINER_RELAY_SERVER_STACK_WEBHOOK_URL"
+            exit 1
+          fi
+
+          if [ -z "$RELAY_SERVER_SECRET" ]; then
+            echo "::error::Missing secret RELAY_SERVER_SECRET"
+            exit 1
+          fi
+
+          curl --fail --show-error --silent \
+            --retry 3 \
+            --retry-all-errors \
+            --connect-timeout 10 \
+            --max-time 60 \
+            -X POST \
+            -G \
+            --data-urlencode "RELAY_SERVER_IMAGE_TAG=${{ steps.image_tag.outputs.value }}" \
+            --data-urlencode "RELAY_SERVER_SECRET=$RELAY_SERVER_SECRET" \
+            --data-urlencode "BYTOVER_WITH_SSL=$BYTOVER_WITH_SSL" \
+            --data-urlencode "BYTOVER_PUBLIC_GATEWAY_HOST=$BYTOVER_PUBLIC_GATEWAY_HOST" \
+            --data-urlencode "BYTOVER_PUBLIC_GATEWAY_PORT=$BYTOVER_PUBLIC_GATEWAY_PORT" \
+            --data-urlencode "BYTOVER_PUBLIC_HTTP1_GATEWAY_HOST=$BYTOVER_PUBLIC_HTTP1_GATEWAY_HOST" \
+            --data-urlencode "BYTOVER_PUBLIC_HTTP1_GATEWAY_PORT=$BYTOVER_PUBLIC_HTTP1_GATEWAY_PORT" \
+            "$PORTAINER_STACK_WEBHOOK_URL"

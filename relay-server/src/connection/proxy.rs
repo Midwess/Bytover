@@ -1,3 +1,4 @@
+use std::net::Ipv4Addr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use str0m::channel::ChannelId;
@@ -23,8 +24,7 @@ fn sync_upload_limits(
         let leg1_other_side_download_bps = leg2.peer_download_rate_bps();
         leg1.update_upload_limit(queued_bytes_to_2, leg1_other_side_download_bps);
         leg2.update_upload_limit(queued_bytes_to_1, leg2_other_side_download_bps);
-    }
-    else {
+    } else {
         leg1.update_upload_limit(queued_bytes_to_2, 0.0);
     }
 }
@@ -34,21 +34,23 @@ pub struct ProxyInstance {
     leg1: YieldContainer<Box<RelayRtcClient>>,
     leg2: YieldContainer<Box<RelayRtcClient>>,
     notify_leg2: Notify,
+    public_ipv4: Ipv4Addr,
 }
 
 impl ProxyInstance {
-    pub fn new(session_id: String) -> Arc<Self> {
+    pub fn new(session_id: String, public_ipv4: Ipv4Addr) -> Arc<Self> {
         Arc::new(Self {
             session_id,
             leg1: YieldContainer::empty(),
             leg2: YieldContainer::empty(),
             notify_leg2: Notify::new(),
+            public_ipv4,
         })
     }
 
     pub async fn init(self: &Arc<Self>, sdp_offer: String, channels: Vec<DataChannel>) -> Result<String, RelayRtcError> {
         log::info!("[relay-server] Initializing ProxyInstance for session {}", self.session_id);
-        let (client, answer_sdp) = RelayRtcClient::accept_offer(&sdp_offer, channels).await?;
+        let (client, answer_sdp) = RelayRtcClient::accept_offer(&sdp_offer, channels, self.public_ipv4).await?;
         self.leg1
             .deposit(client)
             .await
@@ -58,7 +60,7 @@ impl ProxyInstance {
 
     pub async fn proxy(self: &Arc<Self>, sdp_offer: String, channels: Vec<DataChannel>) -> Result<String, RelayRtcError> {
         log::info!("[relay-server] Proxying leg 2 for session {}", self.session_id);
-        let (client, answer_sdp) = RelayRtcClient::accept_offer(&sdp_offer, channels).await?;
+        let (client, answer_sdp) = RelayRtcClient::accept_offer(&sdp_offer, channels, self.public_ipv4).await?;
         self.leg2
             .deposit(client)
             .await

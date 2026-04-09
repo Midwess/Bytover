@@ -1,5 +1,4 @@
 const DEFAULT_REGION_CODE: &str = "local";
-const SHARED_SIGNALLING_ROUTE: &str = "rpc-signalling";
 
 #[derive(Debug, Clone)]
 pub struct SignallingConfig {
@@ -21,16 +20,6 @@ impl SignallingConfig {
         }
     }
 
-    pub fn bootstrap_route(&self) -> &'static str {
-        SHARED_SIGNALLING_ROUTE
-    }
-
-    pub fn shared_upstream_url(&self, public_host: &str, port: u16) -> String {
-        env_url("BYTOVER_SIGNALLING_SHARED_UPSTREAM_URL")
-            .or_else(|| env_host("BYTOVER_SIGNALLING_PUBLIC_HOST").map(|host| format!("https://{host}")))
-            .unwrap_or_else(|| format!("http://{public_host}:{port}"))
-    }
-
     pub fn pinned_upstream_url(&self, public_host: &str, port: u16) -> String {
         env_url("BYTOVER_SIGNALLING_PINNED_UPSTREAM_URL")
             .or_else(|| env_host("BYTOVER_SIGNALLING_PRIVATE_HOST").map(|host| format!("http://{host}:{port}")))
@@ -39,15 +28,9 @@ impl SignallingConfig {
 }
 
 fn env_url(key: &str) -> Option<String> {
-    std::env::var(key)
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
+    std::env::var(key).ok().map(|value| value.trim().to_string()).filter(|value| !value.is_empty())
 }
 
 fn env_host(key: &str) -> Option<String> {
-    std::env::var(key)
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
+    std::env::var(key).ok().map(|value| value.trim().to_string()).filter(|value| !value.is_empty())
 }

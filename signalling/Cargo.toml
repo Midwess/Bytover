@@ -18,4 +18,4 @@ base64 = "0.22.1"
 log = "0.4.27"
 schema = { workspace = true, features = ["server", "client"] }
 core-services = { workspace = true, features = ["grpc-server", "host_machine", "services"] }
-devlog-sdk = { workspace = true, features = ["gateway", "grpc-client", "grpc-server"] }
+devlog-sdk = { workspace = true, features = ["gateway", "grpc-server"] }

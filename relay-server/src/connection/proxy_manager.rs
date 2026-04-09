@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::net::Ipv4Addr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 
@@ -13,9 +14,7 @@ use schema::devlog::bitbridge::DataChannel;
 #[derive(Debug, Error)]
 pub enum ProxyManagerError {
     #[error("Relay RTC error: {0}")]
-    RelayRtc(#[from] RelayRtcError),
-    #[error("Proxy session not found: {0}")]
-    SessionNotFound(String),
+    RelayRtc(#[from] RelayRtcError)
 }
 
 use crate::connection::proxy::ProxyInstance;
@@ -28,37 +27,21 @@ pub struct ProxyManager {
     proxies: Mutex<HashMap<String, Weak<ProxyInstance>>>,
     run_tx: Mutex<Option<tokio::sync::mpsc::UnboundedSender<Arc<ProxyInstance>>>>,
     running: AtomicBool,
+    public_ipv4: Ipv4Addr,
 }
 
 impl ProxyManager {
-    pub fn new() -> Arc<Self> {
+    pub fn new(public_ipv4: Ipv4Addr) -> Arc<Self> {
         Arc::new(Self {
             proxies: Mutex::new(HashMap::new()),
             run_tx: Mutex::new(None),
             running: AtomicBool::new(false),
+            public_ipv4,
         })
     }
 
     pub fn is_running(&self) -> bool {
         self.running.load(Ordering::SeqCst)
-    }
-
-    /// Gets a proxy instance by session_id, upgrading the Weak reference.
-    /// Cleans up the entry if the Weak has expired.
-    async fn get_proxy(&self, session_id: &str) -> Option<Arc<ProxyInstance>> {
-        let mut proxies = self.proxies.lock().await;
-        let result = proxies.get(session_id).cloned().and_then(|weak| weak.upgrade());
-
-        if result.is_none() {
-            proxies.remove(session_id);
-        }
-
-        result
-    }
-
-    pub fn stop(&self) {
-        self.running.store(false, Ordering::SeqCst);
-        log::info!("[relay-server] ProxyManager stopped");
     }
 
     /// Starts the ProxyManager run loop. This is an async loop (like WebRtcServer::start)
@@ -125,7 +108,7 @@ impl ProxyManager {
                 Some(existing) => (existing, false),
                 None => {
                     proxies.remove(&session_id);
-                    let proxy = ProxyInstance::new(session_id.clone());
+                    let proxy = ProxyInstance::new(session_id.clone(), self.public_ipv4);
                     proxies.insert(session_id.clone(), Arc::downgrade(&proxy));
                     (proxy, true)
                 }

@@ -92,21 +92,25 @@ impl IceAgent {
 
         let timeout = std::time::Duration::from_millis(self.timeout_ms.min(self.cap_ms));
         let early_check = std::time::Duration::from_millis(self.early_check_ms);
-
-        select_biased! {
-            _ = Delay::new(timeout).fuse() => {
-                log::warn!("ICE gathering timed out after {}ms", self.timeout_ms);
-            }
+        let timed_out = select_biased! {
+            _ = complete_rx.next().fuse() => false,
+            _ = Delay::new(timeout).fuse() => true,
             _ = Delay::new(early_check).fuse() => {
                 let ready = tracker.borrow().has_sufficient_candidates();
                 if ready {
-                    conn.set_onicegatheringstatechange(None);
-                    conn.set_onicecandidate(None);
-                    return Ok(());
+                    false
+                } else {
+                    let remaining = timeout.saturating_sub(early_check);
+                    select_biased! {
+                        _ = complete_rx.next().fuse() => false,
+                        _ = Delay::new(remaining).fuse() => true,
+                    }
                 }
-                let _ = complete_rx.next().await;
             }
-            _ = complete_rx.next() => {}
+        };
+
+        if timed_out {
+            log::warn!("ICE gathering timed out after {}ms", self.timeout_ms);
         }
 
         conn.set_onicegatheringstatechange(None);

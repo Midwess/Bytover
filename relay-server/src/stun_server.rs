@@ -1,6 +1,5 @@
 use devlog_sdk::tcp::listener::UdpConnection;
 use log::{error, info};
-use stun::agent::TransactionId;
 use stun::message::{Message, BINDING_REQUEST, BINDING_SUCCESS};
 use stun::xoraddr::XorMappedAddress;
 

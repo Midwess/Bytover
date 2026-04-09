@@ -1,8 +1,5 @@
 use crate::bridge::bridge::CoreBridgeImpl;
-use crate::config::{
-    get_gateway_grpc_url, get_signalling_server_http_url, get_signalling_server_http_url_for_route,
-    get_signalling_server_ws_url, get_signalling_server_ws_url_for_route,
-};
+use crate::config::{get_gateway_grpc_url, get_signalling_server_http_url_for_route, get_signalling_server_ws_url_for_route};
 use crate::executor::executor::NativeExecutor;
 use crate::executor::p2p::P2PNativeExecutorImpl;
 use crate::executor::persistent::NativePersistentImpl;
@@ -172,10 +169,6 @@ impl DiContainer {
         &*self.core_bridge
     }
 
-    pub fn get_signalling_client(&self) -> SignalingClient {
-        SignalingClient::new(get_signalling_server_ws_url(), get_signalling_server_http_url())
-    }
-
     pub fn get_signalling_client_for_route(&self, route: &str) -> SignalingClient {
         SignalingClient::new(
             get_signalling_server_ws_url_for_route(route),
@@ -199,8 +192,6 @@ impl DiContainer {
         let executor = NativeExecutor {
             rpc: Box::new(NativeRpcImpl {
                 auth_server: self.get_authentication_server(),
-                auth_provider: self.get_auth_provider(),
-                signalling_http_url: get_signalling_server_http_url(),
             }),
             persistent: Box::new(NativePersistentImpl {
                 auth_session_repository: Box::new(self.get_auth_session_repository()),

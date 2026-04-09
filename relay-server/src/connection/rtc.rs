@@ -1,5 +1,5 @@
 use std::collections::VecDeque;
-use std::net::SocketAddr;
+use std::net::{Ipv4Addr, SocketAddr};
 use std::time::{Duration, Instant};
 
 use async_speed_limit::Limiter;
@@ -150,7 +150,7 @@ pub enum RelayRtcError {
 #[derive(Debug)]
 pub enum PollOutcome {
     Event(Event),
-    Idle(Instant),
+    Idle,
     MorePending,
 }
 
@@ -174,7 +174,11 @@ pub struct RelayRtcClient {
 }
 
 impl RelayRtcClient {
-    pub async fn accept_offer(sdp_offer: &str, channels: Vec<DataChannel>) -> Result<(Box<Self>, String), RelayRtcError> {
+    pub async fn accept_offer(
+        sdp_offer: &str,
+        channels: Vec<DataChannel>,
+        public_ipv4: Ipv4Addr,
+    ) -> Result<(Box<Self>, String), RelayRtcError> {
         let socket = Socket::new(Domain::IPV6, Type::DGRAM, Some(socket2::Protocol::UDP))?;
         socket.set_only_v6(false)?;
         socket.set_nonblocking(true)?;
@@ -184,8 +188,9 @@ impl RelayRtcClient {
         let socket = tokio::net::UdpSocket::from_std(socket)?;
 
         let local_addr = socket.local_addr()?;
-        let mut local_v4_addr = local_addr;
-        let mut local_v6_addr = local_addr;
+        let public_addr = SocketAddr::new(public_ipv4.into(), local_addr.port());
+        let local_v4_addr = public_addr;
+        let local_v6_addr = local_addr;
 
         let rtc_config = RtcConfig::default()
             .set_sctp_max_message_size(5 * 1024 * 1024)
@@ -193,32 +198,8 @@ impl RelayRtcClient {
 
         let mut rtc = rtc_config.build(Instant::now());
 
-        let public_ip_v4 = std::env::var("BYTOVER_RELAY_PUBLIC_IP").ok().and_then(|s| s.parse::<std::net::Ipv4Addr>().ok());
-        let public_ip_v6 = std::env::var("BYTOVER_RELAY_PUBLIC_IP_V6").ok().and_then(|s| s.parse::<std::net::Ipv6Addr>().ok());
-
-        if let Some(ip4) = public_ip_v4 {
-            let addr = SocketAddr::new(ip4.into(), local_addr.port());
-            if let Ok(c) = Candidate::host(addr, Protocol::Udp) {
-                rtc.add_local_candidate(c);
-            }
-            local_v4_addr = addr;
-        }
-
-        if let Some(ip6) = public_ip_v6 {
-            let addr = SocketAddr::new(ip6.into(), local_addr.port());
-            if let Ok(c) = Candidate::host(addr, Protocol::Udp) {
-                rtc.add_local_candidate(c);
-            }
-            local_v6_addr = addr;
-        }
-
-        if public_ip_v4.is_none() && public_ip_v6.is_none() {
-            log::warn!("[relay-rtc] No public IPs configured (BYTOVER_RELAY_PUBLIC_IP or BYTOVER_RELAY_PUBLIC_IP_V6). ICE gathering may fail.");
-            let addr = SocketAddr::new(std::net::Ipv4Addr::LOCALHOST.into(), local_addr.port());
-            if let Ok(c) = Candidate::host(addr, Protocol::Udp) {
-                rtc.add_local_candidate(c);
-            }
-            local_v4_addr = addr;
+        if let Ok(candidate) = Candidate::host(public_addr, Protocol::Udp) {
+            rtc.add_local_candidate(candidate);
         }
 
         let offer =
@@ -271,14 +252,14 @@ impl RelayRtcClient {
                 log::info!("[relay-rtc] ICE disconnected for {:?}, tearing down", ICE_DISCONNECT_TIMEOUT);
                 self.rtc.disconnect();
                 self.ice_disconnected_since = None;
-                return Ok(PollOutcome::Idle(Instant::now() + Duration::from_secs(3600)));
+                return Ok(PollOutcome::Idle);
             }
         }
 
         match self.rtc.poll_output()? {
             Output::Timeout(t) => {
                 self.cached_timeout = t;
-                Ok(PollOutcome::Idle(t))
+                Ok(PollOutcome::Idle)
             }
             Output::Transmit(t) => {
                 let dest = to_v6_mapped(t.destination);
@@ -398,7 +379,7 @@ impl RelayRtcClient {
                     tokio::task::yield_now().await;
                     continue;
                 }
-                PollOutcome::Idle(_) => break,
+                PollOutcome::Idle => break,
             }
         }
 

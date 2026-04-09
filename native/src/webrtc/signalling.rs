@@ -1,8 +1,7 @@
 use core_services::utils::yield_container::YieldError;
 use futures_util::{SinkExt, StreamExt};
 use prost::Message as ProstMessage;
-use schema::devlog::rpc_signalling::server::{AnswerMessage, GeneratePeerRequest, GeneratePeerResponse, IceConfig, Message};
-use shared::entities::peer::Peer;
+use schema::devlog::rpc_signalling::server::{AnswerMessage, IceConfig, Message};
 use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::mpsc;
@@ -28,12 +27,6 @@ pub enum SignallingError {
 
     #[error("HTTP request failed: {0}")]
     HttpFailed(String),
-
-    #[error("Unauthorized: {0}")]
-    Unauthorized(String),
-
-    #[error("Bad request: {0}")]
-    BadRequest(String),
 
     #[error("Yield error: {0}")]
     YieldError(#[from] YieldError)
@@ -153,60 +146,6 @@ impl SignalingClient {
             http_url: self.http_url.clone(),
             msg_transfer_tx: tx,
         })
-    }
-
-    pub async fn generate_peer(
-        http_url: &str,
-        device: schema::value::device::RegisteringDevice,
-        authorization: Option<&str>,
-    ) -> Result<Peer, SignallingError> {
-        let url = format!("{}/peer", http_url.trim_end_matches('/'));
-        let request = GeneratePeerRequest { device };
-        let mut body = Vec::new();
-        request
-            .encode(&mut body)
-            .map_err(|error| SignallingError::ProtocolError(error.to_string()))?;
-
-        let client = reqwest::Client::new();
-        let mut request_builder = client
-            .post(url)
-            .body(body)
-            .header(reqwest::header::CONTENT_TYPE, "application/octet-stream");
-
-        if let Some(header_value) = authorization {
-            request_builder = request_builder.header("authorization", header_value);
-        }
-
-        let response = request_builder
-            .send()
-            .await
-            .map_err(|error| SignallingError::HttpFailed(format!("{error:?}")))?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let message = response.text().await.unwrap_or_default();
-
-            return Err(match status {
-                reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::FORBIDDEN => {
-                    SignallingError::Unauthorized(message)
-                }
-                reqwest::StatusCode::BAD_REQUEST => SignallingError::BadRequest(message),
-                _ => SignallingError::HttpFailed(format!("peer endpoint returned {status}: {message}")),
-            });
-        }
-
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(|error| SignallingError::HttpFailed(format!("{error}")))?;
-        let response = GeneratePeerResponse::decode(&bytes[..])?;
-
-        let mut peer = Peer::from(response.peer);
-        peer.signalling_id = response.signalling_id;
-        peer.region_code = response.region_code;
-        peer.signalling_route = Some(response.signalling_route);
-
-        Ok(peer)
     }
 
     pub async fn start(&mut self, key: String) {

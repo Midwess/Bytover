@@ -10,9 +10,14 @@ use schema::devlog::bitbridge::{
     CreateDeviceSessionResponse,
     FindP2pSessionRequest,
     FindP2pSessionResponse,
+    GenPeerRequest,
+    GenPeerResponse,
+    GetRegionRequest,
+    GetRegionResponse,
     GetDeviceAliasesRequest,
     GetDeviceAliasesResponse,
-    P2pSession
+    P2pSession,
+    PeerMessage
 };
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
@@ -30,6 +35,18 @@ fn normalize_signalling_route(signalling_route: &str) -> Result<String, Status> 
     }
 
     Ok(signalling_route.to_string())
+}
+
+fn derive_signalling_region(region_code: Option<&str>) -> (String, String) {
+    let region_code = region_code
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("local")
+        .to_string();
+
+    let signalling_route = format!("rpc-signalling-{region_code}");
+
+    (region_code, signalling_route)
 }
 
 #[async_trait::async_trait]
@@ -135,11 +152,68 @@ impl P2pOrchestrationService for P2PGrpcService {
 
         Ok(Response::new(GetDeviceAliasesResponse { aliases }))
     }
+
+    async fn gen_peer(&self, request: Request<GenPeerRequest>) -> Result<Response<GenPeerResponse>, Status> {
+        let user = request.extensions().get::<User>().cloned();
+        let device = request.into_inner().device;
+
+        let peer_id = devlog_sdk::distributed_id::gen_id().await.to_string();
+        let (region_code, signalling_route) =
+            derive_signalling_region(std::env::var("BYTOVER_REGION_CODE").ok().as_deref());
+
+        let (name, avatar_url, email, signalling_id) = match user {
+            Some(user) => {
+                let signalling_id = format!(
+                    "{}_{}_{}",
+                    devlog_sdk::distributed_id::gen_id().await,
+                    user.order_id,
+                    device.device_unique_key
+                );
+
+                (
+                    Some(user.display_name.clone()),
+                    user.avatar_url.unwrap_or_default(),
+                    Some(user.email.clone()),
+                    Some(signalling_id),
+                )
+            }
+            None => {
+                let avatar = self.app_service.random_avatar().await.unwrap_or_default();
+                (Some(device.device_name.clone()), avatar, None, None)
+            }
+        };
+
+        let peer = PeerMessage {
+            peer_id,
+            name,
+            avatar_url,
+            email,
+            device,
+            region_code: Some(region_code.clone()),
+        };
+
+        Ok(Response::new(GenPeerResponse {
+            peer,
+            signalling_id,
+            region_code,
+            signalling_route,
+        }))
+    }
+
+    async fn get_region(&self, _request: Request<GetRegionRequest>) -> Result<Response<GetRegionResponse>, Status> {
+        let (region_code, signalling_route) =
+            derive_signalling_region(std::env::var("BYTOVER_REGION_CODE").ok().as_deref());
+
+        Ok(Response::new(GetRegionResponse {
+            region_code,
+            signalling_route,
+        }))
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::normalize_signalling_route;
+    use super::{derive_signalling_region, normalize_signalling_route};
     use tonic::Code;
 
     #[test]
@@ -155,5 +229,21 @@ mod tests {
 
         assert_eq!(error.code(), Code::InvalidArgument);
         assert_eq!(error.message(), "Signalling route must not be blank");
+    }
+
+    #[test]
+    fn derives_local_region_when_env_missing() {
+        let (region_code, signalling_route) = derive_signalling_region(None);
+
+        assert_eq!(region_code, "local");
+        assert_eq!(signalling_route, "rpc-signalling-local");
+    }
+
+    #[test]
+    fn derives_route_from_region_code() {
+        let (region_code, signalling_route) = derive_signalling_region(Some("us-west"));
+
+        assert_eq!(region_code, "us-west");
+        assert_eq!(signalling_route, "rpc-signalling-us-west");
     }
 }

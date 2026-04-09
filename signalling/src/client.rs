@@ -7,7 +7,7 @@ use actix_ws::Session;
 use futures_util::StreamExt;
 use prost::Message as ProstMessage;
 use thiserror::Error;
-use tokio::sync::{Mutex, oneshot};
+use tokio::sync::{oneshot, Mutex};
 use tokio::time::timeout;
 use uuid::Uuid;
 
@@ -28,8 +28,7 @@ pub enum ClientError {
 pub struct Client {
     pub key: String,
     ws_session: Mutex<Session>,
-    pending_requests:
-        Mutex<HashMap<String, oneshot::Sender<schema::devlog::rpc_signalling::server::Message>>>,
+    pending_requests: Mutex<HashMap<String, oneshot::Sender<schema::devlog::rpc_signalling::server::Message>>>,
 }
 
 impl Client {
@@ -43,15 +42,10 @@ impl Client {
 
     pub async fn send_msg(&self, message: schema::devlog::rpc_signalling::server::Message) -> Result<(), ClientError> {
         let mut buf = Vec::new();
-        message
-            .encode(&mut buf)
-            .map_err(|e| ClientError::Internal(e.to_string()))?;
+        message.encode(&mut buf).map_err(|e| ClientError::Internal(e.to_string()))?;
 
         let mut session = self.ws_session.lock().await;
-        session
-            .binary(Bytes::from(buf))
-            .await
-            .map_err(|_| ClientError::Disconnected)?;
+        session.binary(Bytes::from(buf)).await.map_err(|_| ClientError::Disconnected)?;
 
         Ok(())
     }
@@ -78,10 +72,7 @@ impl Client {
             .map_err(|_| ClientError::Disconnected)
     }
 
-    pub async fn resolve_response(
-        self: &Arc<Self>,
-        message: schema::devlog::rpc_signalling::server::Message,
-    ) {
+    pub async fn resolve_response(self: &Arc<Self>, message: schema::devlog::rpc_signalling::server::Message) {
         if let Some(request_id) = &message.request_id {
             let mut pending = self.pending_requests.lock().await;
             if let Some(tx) = pending.remove(request_id) {
