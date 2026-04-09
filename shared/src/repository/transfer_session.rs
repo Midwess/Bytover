@@ -1,6 +1,6 @@
-use crate::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
+use crate::entities::local_resource::{LocalResourcePath, ResourceType};
 use crate::entities::target::TransferTarget;
-use crate::entities::transfer_session::{TransferProgress, TransferSession, TransferType};
+use crate::entities::transfer_session::{TransferSession, TransferType};
 use crate::repository::errors::PersistenceError;
 use core_services::db::repository::abstraction::id::DbId;
 use core_services::db::repository::abstraction::repository::Repository;
@@ -38,18 +38,6 @@ pub struct ZipDownloadPaths {
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 pub trait TransferSessionRepository: Repository<TransferSession, TransferSessionId> {
-    async fn update_progresses(
-        &self,
-        order_id: u64,
-        progresses: Vec<TransferProgress>
-    ) -> Result<Option<TransferSession>, PersistenceError>;
-    async fn update_resource(
-        &self,
-        session_id: TransferSessionId,
-        resource: LocalResource
-    ) -> Result<Option<TransferSession>, PersistenceError>;
-
-    async fn delete_session(&self, session_id: TransferSessionId) -> Result<(), PersistenceError>;
     async fn generate_resource_saved_paths(
         &self,
         session_order_id: u64,

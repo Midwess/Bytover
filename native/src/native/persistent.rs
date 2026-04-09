@@ -15,8 +15,8 @@ pub struct NativePersistentImpl {
 
 #[async_trait::async_trait]
 impl NativePersistent for NativePersistentImpl {
-    fn auth_session_repository(&self) -> &Box<dyn AuthSessionRepository> {
-        &self.auth_session_repository
+    fn auth_session_repository(&self) -> &dyn AuthSessionRepository {
+        &*self.auth_session_repository
     }
 
     fn local_resource_repository(&self) -> &dyn LocalResourceRepository {

@@ -115,18 +115,21 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         } else if path_buf.is_symlink() {
             log::warn!("Symlink is not supported: {absolute_path:?}");
             return Ok(None)
+        } else if !path_buf.exists() {
+            return Ok(None)
         }
 
-        let file = FileEntry::new(None, absolute_path)
+        let file = FileEntry::existing(absolute_path)
             .await
             .map_err(|it| PersistenceError::IOError(format!("{it:?}")))?;
+        let resource_type = self.get_resource_type(path.clone()).await?;
         let resource = LocalResource {
             order_id: gen_id().await,
             name: file.name(),
             size: file.size,
             path,
             thumbnail_path: None,
-            r#type: ResourceType::File,
+            r#type: resource_type,
             shelf_id: 0
         };
 
@@ -214,7 +217,7 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
     ) -> Result<Box<dyn CIOCursor>, PersistenceError> {
         let absolute_path = self.path_resolver.get_absolute_path(path).await;
         let path = PathBuf::from(absolute_path);
-        let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown").to_string();
+        let _file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown").to_string();
 
         if path.is_dir() {
             let folder = Folder::new(path).await.map_err(|e| PersistenceError::IOError(format!("{e:?}")))?;

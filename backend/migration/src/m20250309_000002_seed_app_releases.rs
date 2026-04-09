@@ -133,7 +133,6 @@ impl MigrationTrait for Migration {
 
 #[derive(DeriveIden)]
 enum AppRelease {
-    Table,
     Version,
     Platform,
     Architecture,

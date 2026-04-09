@@ -1,24 +1,17 @@
 'use client';
 
-import React, { Suspense } from "react";
+import { Suspense } from "react";
 import SendBoard from "./send_board";
 import core from '@/wasm/wasm_core';
 import Header from "@/components/web/header";
 import Footer from "@/components/web/footer";
 import { DownloadSection } from "@/components/download-section";
 import { HighlightFeatures } from "@/components/highlight-features";
-import { useFaviconProgress } from "@/hooks/use-favicon-progress";
 import { motion } from "motion/react";
 
 function TransferBoardContent() {
     const coreReady = core.useCoreReady();
     const coreCompatible = core.useIsCoreCompatible();
-
-    React.useEffect(() => {
-        if (coreReady && coreCompatible) {
-            core.launchNearby()
-        }
-    }, [coreReady, coreCompatible]);
 
     if (!coreCompatible) {
         return (
@@ -56,9 +49,6 @@ function TransferBoardContent() {
 }
 
 export default function TransferBoard() {
-    const totalP2PProgress = core.useTotalP2PProgress();
-    useFaviconProgress(totalP2PProgress);
-
     return (
         <div className="min-h-screen w-screen bg-black relative overflow-x-hidden selection:bg-blue-500 selection:text-white font-inter">
             <Suspense fallback={null}>
@@ -98,7 +88,7 @@ export default function TransferBoard() {
                                 initial={{ opacity: 0, y: 10 }}
                                 whileInView={{ opacity: 1, y: 0 }}
                                 viewport={{ once: true }}
-                                className="px-3 py-1 rounded-full text-[10px] font-bold tracking-[0.2em] uppercase bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                                className="px-3 py-1 rounded-full text-xs font-bold tracking-[0.2em] uppercase bg-blue-500/10 text-blue-400 border border-blue-500/20"
                             >
                                 Performance Edge
                             </motion.span>

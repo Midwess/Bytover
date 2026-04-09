@@ -9,6 +9,8 @@ pub struct Model {
     pub user_id: i64,
     pub alias: String,
     pub description: Option<String>,
+    pub signalling_key: String,
+    pub signalling_route: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

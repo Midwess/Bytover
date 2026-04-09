@@ -44,7 +44,7 @@ export function Pricing2() {
             initial={{ opacity: 0, y: 10 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="px-3 py-1 rounded-full text-[10px] font-bold tracking-[0.2em] uppercase bg-zinc-900 text-zinc-500 border border-zinc-800"
+            className="px-3 py-1 rounded-full text-xs font-bold tracking-[0.2em] uppercase bg-zinc-900 text-zinc-500 border border-zinc-800"
           >
             Pricing
           </motion.div>
@@ -120,7 +120,7 @@ export function Pricing2() {
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                     <h3 className="text-xl font-bold text-white tracking-tight">Full</h3>
-                    <span className="px-1.5 py-0.5 rounded-full text-[8px] font-bold bg-blue-600 text-white uppercase tracking-widest">Recommended</span>
+                    <span className="px-1.5 py-0.5 rounded-full text-xs font-bold bg-blue-600 text-white uppercase tracking-widest">Recommended</span>
                 </div>
                 <div className="flex items-baseline gap-1">
                   <span className="text-5xl font-bold text-white">$12.99</span>

@@ -117,10 +117,8 @@ impl NetStreamInnerImpl {
             upload.x_content_length
         );
 
-        // This is the main chunk size, every chunk must be equal in size except the last one
         let main_chunk_size = upload.x_content_length;
 
-        // Upload all main chunks
         while uploaded < total_size && !upload.is_last {
             let etag = match Self::upload_chunk(&upload.upload_url, cursor, tx, &mut uploaded, upload.x_content_length as u64).await {
                 Ok(etag) => etag,
@@ -143,8 +141,6 @@ impl NetStreamInnerImpl {
             };
         }
 
-        // When we reach this point, it means that the file size has been incorrectly calculated
-        // we need to dump all remaining data to a temporary file and upload it in chunks
         let temp_file = NamedTempFile::new()?;
         let temp_path = temp_file.path().to_path_buf();
         let mut temp_writer = tokio::fs::File::create(&temp_path).await?;

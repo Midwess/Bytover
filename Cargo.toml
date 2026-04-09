@@ -8,13 +8,18 @@ members = [
     "native",
     "web-next/wasm",
     "web-next/worker",
+    "signalling",
+    "relay-server"
 ]
+exclude = ["third_party/str0m"]
 
 resolver = "2"
 
 [workspace.package]
 authors = ["Jimmy"]
 edition = "2021"
+rust-version = "1.74.0"
+version = "0.1.0"
 
 [profile.dev]
 debug-assertions = false
@@ -23,23 +28,18 @@ debug-assertions = false
 core-services = { path = "libs/core-services", default-features = false }
 devlog-sdk = { path = "libs/devlog-sdk", default-features = false }
 schema = { path = "libs/schema/rust", default-features = false }
-matchbox_protocol = { git = "https://github.com/Midwess/matchbox.git", branch = "main" }
-matchbox_socket = { git = "https://github.com/Midwess/matchbox.git", branch = "main" }
-ewebsock = { git = "https://github.com/c-git/ewebsock.git", branch = "wss_support", features = ["tokio", "tls"] }
+crossbeam = "0.8.4"
 anyhow = { version = "1.0.99", default-features = false }
 crux_core = { version = "0.16.1" }
 serde = { version = "1.0.219", default-features = false, features = ["derive"] }
 thiserror = { version = "2.0.16", default-features = false }
 serde_derive = { version = "1.0.219", default-features = false }
 serde_json = { version = "1.0.143", default-features = false }
-bytemuck = "1.24.0"
 chrono = { version = "0.4.42", default-features = false }
 lazy_static = { version = "1.5.0", default-features = false }
-reed-solomon-erasure = { version = "6.0.0", default-features = false }
-raptorq = "2.0.0"
 rand = { version = "0.8", default-features = false, features = ["std", "std_rng"] }
-ringbuf = "0.4.8"
 tonic-middleware = { version = "0.3.0", default-features = false }
+machine-uid = { version = "0.5.4" }
 tokio = { version = "1.47.1", default-features = false }
 reqwest = { version = "0.12.23", default-features = false }
 async-trait = { version = "0.1.89", default-features = false }
@@ -60,6 +60,7 @@ futures-timer = { version = "3.0.3", default-features = false, features = ["wasm
 n0-future = { version = "0.3.1", default-features = false }
 http = { version = "1.3.1", default-features = false }
 async-stream = { version = "0.3.6", default-features = false }
+async-speed-limit = { version = "0.4.2" }
 once_cell = { version = "1.21.3", default-features = false }
 futures = {version = "0.3.31", default-features = false }
 http-body = { version = "1.0.1", default-features = false }
@@ -67,11 +68,20 @@ erased-serde = "0.4.8"
 indexmap = "2.11.0"
 tonic-web = "0.14.1"
 hostname = "0.4.1"
-machine-uid = "0.5.3"
 sea-orm = { version = "1.1.17", features = ["macros", "runtime-tokio-rustls", "sqlx-postgres", "with-json"] }
 image = "0.25.8"
 tempfile = "3.23.0"
 tokio-cron-scheduler = { version = "0.15.1", default-features = false }
+str0m = { git = "https://github.com/Midwess/str0m" }
+tokio-tungstenite = "0.29.0"
+socket2 = "0.6.3"
+base64 = "0.22.1"
+stun-proto = { version = "2.0.0", features = ["std"] }
+if-addrs = "0.15.0"
+mdns-sd = "0.18.2"
+hmac = "0.12.1"
+actix-web = "4.11.0"
+jsonwebtoken = "9.3"
 
 [workspace.metadata.bin]
 cargo-xcode = { version = "=1.7.0" }

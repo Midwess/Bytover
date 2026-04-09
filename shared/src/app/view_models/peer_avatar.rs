@@ -20,7 +20,7 @@ impl From<&Peer> for PeerAvatarViewModel {
 impl From<&ResourceReceivedPeer> for PeerAvatarViewModel {
     fn from(peer: &ResourceReceivedPeer) -> Self {
         Self {
-            name: String::new(),
+            name: if peer.name.is_empty() { peer.id.clone() } else { peer.name.clone() },
             avatar_url: peer.avatar_url.clone()
         }
     }

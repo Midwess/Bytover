@@ -10,6 +10,7 @@ use tonic_middleware::InterceptorFor;
 
 pub mod app_gateway;
 pub mod cloud_storage;
+pub mod config;
 pub mod di_container;
 pub mod entities;
 pub mod errors;
@@ -46,18 +47,14 @@ async fn main() -> Result<(), MainErrors> {
     let http_port = http_connection.port;
     let http_listener = http_connection.listener;
 
-    // Spawn HTTP server - run() blocks but we handle ctrl+c in main
     let http_handle = tokio::spawn(async move {
         log::info!("Starting HTTP server on port {}", http_port);
         let std_listener = http_listener.into_std().expect("Failed to convert listener");
-        actix_web::HttpServer::new(|| {
-            actix_web::App::new()
-                .configure(http::config)
-        })
-        .listen(std_listener)
-        .expect("Failed to bind HTTP server")
-        .run()
-        .await
+        actix_web::HttpServer::new(|| actix_web::App::new().configure(http::config))
+            .listen(std_listener)
+            .expect("Failed to bind HTTP server")
+            .run()
+            .await
     });
 
     // Wait for either gRPC server or Ctrl+C
@@ -79,10 +76,9 @@ async fn main() -> Result<(), MainErrors> {
         }
     }
 
-    // Wait for HTTP server to stop (it will stop when runtime shuts down)
     log::info!("Waiting for HTTP server to stop...");
-    if let Err(e) = http_handle.await {
-        log::error!("HTTP server error: {}", e);
+    if let Err(error) = http_handle.await {
+        log::error!("HTTP server error: {}", error);
     }
 
     log::info!("Backend shutdown complete");
@@ -111,9 +107,10 @@ async fn start_grpc_server(connection: GrpcConnection) -> Result<(), MainErrors>
 async fn setup_grpc_gateway(tcp: &GrpcConnection) -> Result<(), MainErrors> {
     log::info!("Registering with gateway");
     let api_gateway = KongGatewayAdminClient::new(devlog_sdk::config::CONFIGS.kong.admin_url.clone());
+    let endpoint = config::resolve_public_grpc_endpoint(&tcp.public_host, tcp.port);
 
     let service = GatewayServiceBuilder::new()
-        .grpc(tcp.public_host.clone(), tcp.port)
+        .grpc(endpoint.host.clone(), endpoint.port)
         .name("bitbridge-grpc-server")
         .enable_cors(true)
         .routes(vec![
@@ -130,7 +127,11 @@ async fn setup_grpc_gateway(tcp: &GrpcConnection) -> Result<(), MainErrors> {
         ])
         .build();
 
-    log::info!("Register service {service:?}");
+    log::info!(
+        "Register gRPC service {service:?} using upstream {}:{}",
+        endpoint.host,
+        endpoint.port
+    );
     api_gateway.register(service).await?;
 
     Ok(())
@@ -157,7 +158,11 @@ async fn setup_http_gateway(tcp: &TcpConnection) -> Result<(), MainErrors> {
         ])
         .build();
 
-    log::info!("Register HTTP service {service:?}");
+    log::info!(
+        "Register HTTP service {service:?} using upstream {}:{}",
+        tcp.public_host,
+        tcp.port
+    );
     api_gateway.register(service).await?;
 
     Ok(())

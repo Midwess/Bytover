@@ -1,6 +1,6 @@
 use core_services::utils::pool::reponse::PoolResponse;
 use core_services::utils::pool::request::PoolRequest;
-use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
+use redb::{Database, ReadableDatabase, TableDefinition};
 use shared::repository::device_alias::DeviceAliasRepository;
 use shared::repository::errors::PersistenceError;
 

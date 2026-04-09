@@ -115,7 +115,6 @@ impl MigrationTrait for Migration {
 
 #[derive(DeriveIden)]
 enum AppRelease {
-    Table,
     Id,
     Version,
     Platform,

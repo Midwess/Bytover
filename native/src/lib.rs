@@ -1,5 +1,3 @@
-// Only compile these modules when "lib" feature is enabled
-
 static _CURRENT_VERSION: &str = "1.0.0";
 
 use core_services::logger::setup;
@@ -11,6 +9,7 @@ pub mod di_container;
 pub mod native;
 pub mod network;
 pub mod repository;
+pub mod webrtc;
 
 use crate::core_api_impl::bridge::CoreBridgeImpl;
 use crate::native::message_to_shell::{MessageToShell, MessageToShellResponse};
@@ -99,7 +98,6 @@ impl<E: Serialize + Send + 'static> Drop for ThrottleShellRuntime<E> {
     }
 }
 
-// NativeProcessor implementation
 pub struct NativeProcessor {
     native_executor: &'static NativeExecutor
 }

@@ -1,0 +1,21 @@
+[package]
+name = "signalling"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+uuid = { workspace = true, features = ["v4"] }
+actix-web = "4.11.0"
+actix-ws = "0.3"
+tokio = { workspace = true, features = ["rt-multi-thread", "time", "sync"] }
+tokio-tungstenite = { workspace = true }
+futures-util = { workspace = true }
+prost = { workspace = true }
+tonic = { workspace = true }
+thiserror = { workspace = true }
+base64 = "0.22.1"
+log = "0.4.27"
+schema = { workspace = true, features = ["server", "client"] }
+core-services = { workspace = true, features = ["grpc-server", "host_machine", "services"] }
+devlog-sdk = { workspace = true, features = ["gateway", "grpc-server"] }

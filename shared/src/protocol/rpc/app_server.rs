@@ -4,21 +4,14 @@ use crate::protocol::rpc::auth_provider::AuthProvider;
 use crate::protocol::rpc::connection::RpcNetworkModule;
 use crate::protocol::rpc::errors::RpcErrors;
 use core_services::utils::maybe::MaybeSend;
-use schema::devlog::app_gateway::rpc::application_service_client::ApplicationServiceClient;
 use schema::devlog::app_gateway::rpc::auth_service_client::AuthServiceClient;
 use schema::devlog::app_gateway::rpc::authenticate_response::Action;
 use schema::devlog::app_gateway::rpc::feedback_service_client::FeedbackServiceClient;
 use schema::devlog::app_gateway::rpc::people_service_client::PeopleServiceClient;
 use schema::devlog::app_gateway::rpc::user_service_client::UserServiceClient;
-use schema::devlog::app_gateway::rpc::{
-    AppFeedbackRequest,
-    AuthenticateRequest,
-    FindUserRequest,
-    GenerateRandomAvatarRequest,
-    MeRequest
-};
+use schema::devlog::app_gateway::rpc::{AppFeedbackRequest, AuthenticateRequest, FindUserRequest, MeRequest};
 use schema::devlog::bitbridge::p2p_orchestration_service_client::P2pOrchestrationServiceClient;
-use schema::devlog::bitbridge::{CreateDeviceSessionRequest, FindP2pSessionRequest, GetDeviceAliasesRequest};
+use schema::devlog::bitbridge::{CreateDeviceSessionRequest, FindP2pSessionRequest, GenPeerRequest, GetDeviceAliasesRequest};
 use schema::value::auth_method::AuthMethod;
 use schema::value::device::RegisteringDevice;
 use tonic::Request;
@@ -128,17 +121,6 @@ where
             .ok_or_else(|| RpcErrors::BadRequest(format!("User {} not found", user_id)))
     }
 
-    pub async fn random_avatar(&self) -> Result<String, RpcErrors> {
-        let req = GenerateRandomAvatarRequest {
-            app_name: Some("BitBridge".to_owned())
-        };
-
-        let channel = self.rpc_module.connect().await?;
-        let mut client = ApplicationServiceClient::new(channel);
-        let avatar = client.get_avatar(req).await?;
-        Ok(avatar.into_inner().avatar.unwrap_or_default())
-    }
-
     pub async fn feedback(&self, email: String, message: String) -> Result<(), RpcErrors> {
         let request = AppFeedbackRequest {
             app_name: "BitBridge".to_string(),
@@ -153,9 +135,18 @@ where
         Ok(())
     }
 
-    pub async fn create_device_session(&self, alias: String) -> Result<schema::devlog::bitbridge::P2pSession, RpcErrors> {
+    pub async fn create_device_session(
+        &self,
+        alias: String,
+        signalling_key: String,
+        signalling_route: String
+    ) -> Result<schema::devlog::bitbridge::P2pSession, RpcErrors> {
         let channel = self.rpc_module.connect().await?;
-        let req = CreateDeviceSessionRequest { alias };
+        let req = CreateDeviceSessionRequest {
+            alias,
+            signalling_key,
+            signalling_route
+        };
         let mut request = Request::new(req);
 
         self.auth_provider.with_auth(&mut request).await?;
@@ -187,5 +178,31 @@ where
         let mut client = P2pOrchestrationServiceClient::new(channel);
         let response = client.find_session(request).await?;
         Ok(response.into_inner().session)
+    }
+
+    pub async fn gen_peer(&self, device: crate::entities::device::DeviceInfo) -> Result<crate::entities::peer::Peer, RpcErrors> {
+        let channel = self.rpc_module.connect().await?;
+        let req = GenPeerRequest {
+            device: RegisteringDevice {
+                platform: device.platform as i32,
+                device_name: device.name.clone(),
+                device_unique_key: device.unique_id.clone(),
+                device_type: device.device_type as i32,
+                url: device.url.clone()
+            }
+        };
+        let mut request = Request::new(req);
+
+        let _ = self.auth_provider.with_auth(&mut request).await;
+
+        let mut client = P2pOrchestrationServiceClient::new(channel);
+        let response = client.gen_peer(request).await?.into_inner();
+
+        let mut peer = crate::entities::peer::Peer::from(response.peer);
+        peer.signalling_id = response.signalling_id;
+        peer.region_code = response.region_code;
+        peer.signalling_route = Some(response.signalling_route);
+
+        Ok(peer)
     }
 }

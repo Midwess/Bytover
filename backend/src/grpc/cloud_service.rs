@@ -39,7 +39,7 @@ use tonic::{Request, Response, Status};
 pub struct CloudGrpcService {
     pub cloud_storage: Arc<dyn CloudStorage>,
     pub session_repository: Arc<dyn TransferSessionRepository>,
-    pub app_service: Box<dyn AppInfoService>,
+    pub app_service: Box<dyn AppInfoService>
 }
 
 type SubscribeSessionResponseStream = Pin<Box<dyn tokio_stream::Stream<Item = Result<SubscribeSessionInfoResponse, Status>> + Send>>;

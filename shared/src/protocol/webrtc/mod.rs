@@ -1,15 +1,4 @@
 pub mod errors;
-mod fec;
 pub mod message_channel;
-pub mod peer;
-pub mod quad_channel;
-pub mod signalling;
-pub mod signalling_client;
+pub mod packet;
 pub mod transfer;
-pub mod webrtc;
-
-#[cfg(test)]
-mod protocol_sync_test;
-
-#[cfg(test)]
-mod fec_transfer_test;

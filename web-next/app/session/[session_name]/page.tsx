@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams } from "next/navigation";
 import {
     AppEventVariantTransfer,
@@ -18,6 +18,7 @@ import StaticHeader from "@/components/web/static-header";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ResourceGrid } from "@/components/main/resource-grid";
 import { DownloadAllButton } from "@/components/main/download-all-button";
+import { useFaviconProgress } from "@/hooks/use-favicon-progress";
 import { motion } from "framer-motion";
 import Aurora from "@/components/ui/aurora";
 import {
@@ -83,31 +84,15 @@ export default function SessionPage() {
         ];
     }, [accentColor]);
 
-    useEffect(() => {
-        if (coreReady && coreCompatible) {
-            core.launchNearby();
-        }
-    }, [coreReady, coreCompatible]);
-
-    const searchSessions = core.useSearchSessionsList();
-    const allSessions = core.useAllSessionsList();
-    const selectedSession = core.useSelectedSession();
+    const session = core.useSession(sessionName);
+    const faviconProgress = session?.is_in_progress ? session.progress : null;
+    useFaviconProgress(faviconProgress);
 
     useEffect(() => {
         if (coreReady && sessionName) {
             core.update(new AppEventVariantTransfer(new TransferEventVariantFindSession(sessionName)));
         }
     }, [coreReady, sessionName]);
-
-    const targetSessionFromList = useMemo(() => {
-        return searchSessions.find(s => s.alias === sessionName) ||
-            allSessions.find(s => s.alias === sessionName);
-    }, [searchSessions, allSessions, sessionName]);
-
-    const session = useMemo(() => {
-        if (selectedSession?.alias === sessionName) return selectedSession;
-        return targetSessionFromList;
-    }, [selectedSession, targetSessionFromList, sessionName]);
 
     const isLoading = session?.is_loading;
 
@@ -180,15 +165,13 @@ export default function SessionPage() {
                     <IncompatibleBrowser />
                 </main>
             ) : !session ? (
-                <main className="flex flex-col items-center justify-center gap-8 py-20 relative z-10">
+                <main className="flex flex-col items-center justify-center gap-8 py-20 relative z-10 min-h-screen">
                     {findSessionFailedMessage.message ? (
                         <p className="text-zinc-100 font-medium text-xl">{findSessionFailedMessage.message}</p>
                     ) : (
                         <>
-                            <div className="w-14 h-14 flex items-center justify-center rounded-2xl bg-zinc-900/50 border border-white/5 backdrop-blur-xl">
-                                <LoaderCircle className="animate-spin w-5 h-5 text-zinc-500" />
-                            </div>
-                            <p className="text-[11px] text-zinc-500 font-bold tracking-[0.2em]">INITIALIZING SESSION</p>
+                            <LoaderCircle className="animate-spin w-8 h-8 text-zinc-500" />
+                            <p className="text-[11px] text-zinc-500 font-bold tracking-[0.2em]">LOADING...</p>
                         </>
                     )}
                 </main>
@@ -222,23 +205,23 @@ export default function SessionPage() {
                                 <div className="flex flex-wrap items-center justify-center gap-6 md:gap-10">
                                     <div className="flex items-center gap-3.5">
                                         <div className="flex flex-col items-end">
-                                            <span className="text-[10px] font-bold text-white uppercase tracking-[0.2em] leading-none mb-1">
-                                                {session.resources.length.toString().padStart(2, '0')} Items
+                                            <span className="text-xs text font-bold text-white uppercase tracking-[0.2em] leading-none mb-1">
+                                                {session.resources.length}
                                             </span>
-                                            <span className="text-[8px] font-bold text-zinc-600 uppercase tracking-widest leading-none">
-                                                Available
+                                            <span className="text-xs font-bold text-zinc-600 uppercase tracking-widest leading-none">
+                                                {session.resources.length > 1 ? 'Items' : 'Item'}
                                             </span>
                                         </div>
 
                                         {session.display_download_speed && (
                                             <>
                                                 <div className="w-px h-6 bg-white/10" />
-                                                <div className="flex flex-col items-start">
-                                                    <span className="text-[10px] font-bold text-white uppercase tracking-[0.2em] leading-none mb-1">
+                                                <div className="flex flex-col items-center">
+                                                    <span className="text-xs font-bold text-white uppercase tracking-[0.2em] leading-4 mb-1 max-w-[300px] max-h-[5lh] overflow-y-auto text-center block scrollbar-none">
                                                         {session.display_download_speed}
                                                     </span>
-                                                    <span className="text-[8px] font-bold text-zinc-600 uppercase tracking-widest leading-none">
-                                                        Network Speed
+                                                    <span className="text-xs font-bold text-zinc-600 uppercase tracking-widest leading-none">
+                                                        Status
                                                     </span>
                                                 </div>
                                             </>
@@ -249,7 +232,7 @@ export default function SessionPage() {
                                         <div className="flex items-center">
                                             <DownloadAllButton
                                                 session={session as ReceiveSessionViewModel}
-                                                containerClass="rounded-full bg-gradient-to-r from-bluePrimary to-bluePrimary/80 text-white hover:opacity-90 transition-all duration-500 px-6 py-2.5 h-auto text-[10px] font-bold tracking-[0.2em] uppercase border-0"
+                                                containerClass="rounded-full bg-gradient-to-r from-bluePrimary to-bluePrimary/80 text-white hover:opacity-90 transition-all duration-500 px-6 py-2.5 h-auto text-xs font-bold tracking-[0.2em] uppercase border-0"
                                             />
                                         </div>
                                     )}
@@ -258,7 +241,7 @@ export default function SessionPage() {
                         </div>
                     </div>
 
-                    <main className="flex flex-col items-center px-6 relative z-10 pb-12 md:pb-0">
+                    <main className="flex flex-col items-center px-6 relative z-10 pb-12 md:pb-0 min-h-screen">
                         <div className="w-full max-w-6xl flex flex-col animate-in fade-in duration-1000 slide-in-from-bottom-8">
                             <div className="w-full">
                                 {isLoading && (!session.resources || session.resources.length === 0) ? (

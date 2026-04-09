@@ -19,7 +19,7 @@ export default function Introduction() {
 
     return (
         <div className="relative w-full pt-24 md:pt-32 pb-20 px-4 md:px-6 bg-black">
-            {/* Padded, Rounded Container for Hero - Railway Style */}
+            {/* Padded, rounded container for hero */}
             <div className="relative w-full min-h-[85vh] md:min-h-[90vh] rounded-2xl md:rounded-[2.5rem] overflow-hidden flex flex-col items-center justify-between border border-white/10 shadow-2xl">
                 
                 {/* Background - Contained within the rounded box */}
@@ -35,7 +35,7 @@ export default function Introduction() {
                     <motion.div 
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold tracking-[0.2em] uppercase bg-white/10 text-white/70 border border-white/10 backdrop-blur-xl mb-10"
+                        className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold tracking-[0.2em] uppercase bg-white/10 text-white/70 border border-white/10 backdrop-blur-xl mb-10"
                     >
                         <span className="text-blue-300">Version 1.0</span>
                         <div className="w-px h-2 bg-white/20 mx-1" />

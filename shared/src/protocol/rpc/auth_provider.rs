@@ -12,7 +12,7 @@ pub struct AuthProvider {
 }
 
 impl AuthProvider {
-    pub async fn with_auth<T>(&self, request: &mut Request<T>) -> Result<(), RpcErrors> {
+    pub async fn authorization_header(&self) -> Result<Option<String>, RpcErrors> {
         let session = self
             .session_repository
             .find_one(&AuthSessionId {
@@ -21,11 +21,15 @@ impl AuthProvider {
             .await
             .map_err(|e| RpcErrors::AuthError(anyhow!("Failed to load authentication session {e:?}")))?;
 
-        let Some(session) = session else {
+        Ok(session.map(|session| session.token.value))
+    }
+
+    pub async fn with_auth<T>(&self, request: &mut Request<T>) -> Result<(), RpcErrors> {
+        let Some(header_value) = self.authorization_header().await? else {
             return Err(RpcErrors::AuthError(anyhow!("You need to login first")));
         };
 
-        if let Ok(token) = MetadataValue::from_str(&session.token.value) {
+        if let Ok(token) = MetadataValue::from_str(&header_value) {
             request.metadata_mut().insert("authorization", token);
         }
 

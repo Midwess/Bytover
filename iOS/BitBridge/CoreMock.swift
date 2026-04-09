@@ -83,8 +83,8 @@ class CoreMock: Core {
         x.transfer = .init(TransferViewModel(
             transfer_method: .device,
             nearby_peers: [],
-            received_sessions: [receive_session1, receive_session2, receive_session3],
-            received_cloud_sessions: [],
+            received_session: receive_session1,
+            received_cloud_session: nil,
             cloud_session: CloudSession(access_url: "https://bitbridge.bytover.com/12384", password: "secure123!", session_id: 12384, is_completed: false, is_in_progress: true, display_download_speed: "1.2 MB/s", progress: 0.88)
         ))
 

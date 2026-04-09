@@ -38,7 +38,7 @@ export function DownloadSection() {
                         <DownloadPlatforms />
                         <div className="flex flex-wrap justify-center gap-3">
                             {["Instant link", "Direct P2P", "Shelf management", "Always Encrypted"].map(tag => (
-                                <span key={tag} className="px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-white/40 bg-white/5 border border-white/5 rounded-full backdrop-blur-md">
+                                <span key={tag} className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-white/40 bg-white/5 border border-white/5 rounded-full backdrop-blur-md">
                                     {tag}
                                 </span>
                             ))}

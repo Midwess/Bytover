@@ -374,7 +374,7 @@ export default function SendBoard() {
                                         className="aspect-square rounded-2xl border-2 border-dashed border-white/20 flex flex-col items-center justify-center gap-2 hover:bg-white/5 transition-colors"
                                     >
                                         <Plus className="w-6 h-6 text-white/40" />
-                                        <span className="text-white/40 text-[10px] font-bold uppercase">Add more</span>
+                                        <span className="text-white/40 text-xs font-bold uppercase">Add more</span>
                                     </motion.button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="center" className="bg-zinc-900 border-white/10 text-white min-w-[160px] p-2 rounded-xl">
@@ -415,7 +415,7 @@ export default function SendBoard() {
                             {/* Progress bar - show only when uploading and progress > 0% */}
                             {isInProgressDefer && progress > 0 && (
                                 <div className="space-y-3">
-                                    <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-white/60">
+                                    <div className="flex items-center justify-between text-xs font-bold uppercase tracking-widest text-white/60">
                                         <span>{(cloudSession || persistentCloudSession)?.display_download_speed || 'Uploading to cloud'}</span>
                                         <span>{Math.round(progress)}%</span>
                                     </div>
@@ -454,7 +454,7 @@ export default function SendBoard() {
                                     <Settings2 className="w-5 h-5" />
                                 </Button>
                             </TooltipTrigger>
-                            <TooltipContent side="top" className="bg-zinc-900 border-white/10 text-white font-bold text-[10px] uppercase">
+                            <TooltipContent side="top" className="bg-zinc-900 border-white/10 text-white font-bold text-xs uppercase">
                                 More options
                             </TooltipContent>
                         </Tooltip>
@@ -532,7 +532,7 @@ export default function SendBoard() {
 
                                 <div className="space-y-4">
                                     <div className="space-y-2">
-                                        <Label className="text-[10px] font-bold uppercase tracking-widest text-white/40 ml-1">Send to emails</Label>
+                                        <Label className="text-xs font-bold uppercase tracking-widest text-white/40 ml-1">Send to emails</Label>
                                         <MultiEmailInput
                                             emails={emails}
                                             onEmailsChange={setEmails}
@@ -543,7 +543,7 @@ export default function SendBoard() {
                                     </div>
 
                                     <div className="space-y-2">
-                                        <Label className="text-[10px] font-bold uppercase tracking-widest text-white/40 ml-1">Secure Password</Label>
+                                        <Label className="text-xs font-bold uppercase tracking-widest text-white/40 ml-1">Secure Password</Label>
                                         <Input 
                                             type="password"
                                             value={password}

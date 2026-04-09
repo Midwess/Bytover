@@ -1,0 +1,324 @@
+use std::net::Ipv4Addr;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use str0m::channel::ChannelId;
+use str0m::Event;
+use tokio::sync::Notify;
+
+use crate::connection::rtc::{RelayRtcClient, RelayRtcError};
+use core_services::utils::yield_container::{YieldContainer, Yieldable};
+use schema::devlog::bitbridge::DataChannel;
+
+const STATS_TICK: Duration = Duration::from_secs(10);
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(45);
+
+fn sync_upload_limits(
+    leg1: &mut Yieldable<Box<RelayRtcClient>>,
+    leg2: Option<&mut Yieldable<Box<RelayRtcClient>>>,
+    queued_bytes_to_2: usize,
+    queued_bytes_to_1: usize
+) {
+    let leg2_other_side_download_bps = leg1.peer_download_rate_bps();
+
+    if let Some(leg2) = leg2 {
+        let leg1_other_side_download_bps = leg2.peer_download_rate_bps();
+        leg1.update_upload_limit(queued_bytes_to_2, leg1_other_side_download_bps);
+        leg2.update_upload_limit(queued_bytes_to_1, leg2_other_side_download_bps);
+    } else {
+        leg1.update_upload_limit(queued_bytes_to_2, 0.0);
+    }
+}
+
+pub struct ProxyInstance {
+    pub session_id: String,
+    leg1: YieldContainer<Box<RelayRtcClient>>,
+    leg2: YieldContainer<Box<RelayRtcClient>>,
+    notify_leg2: Notify,
+    public_ipv4: Ipv4Addr
+}
+
+impl ProxyInstance {
+    pub fn new(session_id: String, public_ipv4: Ipv4Addr) -> Arc<Self> {
+        Arc::new(Self {
+            session_id,
+            leg1: YieldContainer::empty(),
+            leg2: YieldContainer::empty(),
+            notify_leg2: Notify::new(),
+            public_ipv4
+        })
+    }
+
+    pub async fn init(self: &Arc<Self>, sdp_offer: String, channels: Vec<DataChannel>) -> Result<String, RelayRtcError> {
+        log::info!("[relay-server] Initializing ProxyInstance for session {}", self.session_id);
+        let (client, answer_sdp) = RelayRtcClient::accept_offer(&sdp_offer, channels, self.public_ipv4).await?;
+        self.leg1
+            .deposit(client)
+            .await
+            .map_err(|_| RelayRtcError::Socket(std::io::Error::other("Already yielded")))?;
+        Ok(answer_sdp)
+    }
+
+    pub async fn proxy(self: &Arc<Self>, sdp_offer: String, channels: Vec<DataChannel>) -> Result<String, RelayRtcError> {
+        log::info!("[relay-server] Proxying leg 2 for session {}", self.session_id);
+        let (client, answer_sdp) = RelayRtcClient::accept_offer(&sdp_offer, channels, self.public_ipv4).await?;
+        self.leg2
+            .deposit(client)
+            .await
+            .map_err(|_| RelayRtcError::Socket(std::io::Error::other("Already yielded")))?;
+        self.notify_leg2.notify_one();
+        Ok(answer_sdp)
+    }
+
+    pub async fn run(self: Arc<Self>) -> String {
+        let session_id = self.session_id.clone();
+        log::info!("[relay-server] Starting unified run loop for session {}", session_id);
+
+        let mut leg1 = self.leg1.retrieve().await.expect("Leg 1 must exist on run()");
+        let mut leg2_opt: Option<Yieldable<Box<RelayRtcClient>>> = None;
+
+        let mut leg1_connected = false;
+        let mut leg2_connected = false;
+        let mut both_connected = false;
+
+        let (tx_to_2, mut rx_to_2) = tokio::sync::mpsc::unbounded_channel::<(ChannelId, Vec<u8>)>();
+        let (tx_to_1, mut rx_to_1) = tokio::sync::mpsc::unbounded_channel::<(ChannelId, Vec<u8>)>();
+        let mut queued_bytes_to_2: usize = 0;
+        let mut queued_bytes_to_1: usize = 0;
+        let mut pending_to_2: Option<(ChannelId, Vec<u8>)> = None;
+        let mut pending_to_1: Option<(ChannelId, Vec<u8>)> = None;
+
+        let mut stats_tick = tokio::time::interval(STATS_TICK);
+        stats_tick.tick().await;
+
+        let far_future = Duration::from_secs(3600);
+        let mut retry_to_2 = Box::pin(tokio::time::sleep(far_future));
+        let mut retry_to_1 = Box::pin(tokio::time::sleep(far_future));
+
+        let connect_deadline = tokio::time::sleep(CONNECT_TIMEOUT);
+        tokio::pin!(connect_deadline);
+
+        loop {
+            let leg1_alive = leg1.is_alive();
+            let leg2_alive = leg2_opt.as_ref().map(|l| l.is_alive()).unwrap_or(true);
+
+            if !leg1_alive || !leg2_alive {
+                if !leg1_alive && (leg2_opt.is_none() || !leg2_alive) {
+                    log::info!("[relay-server] Both legs finished for session {}", session_id);
+                    break;
+                }
+
+                if !leg1_alive {
+                    if let Some(leg2) = leg2_opt.as_mut() {
+                        if leg2.is_alive() {
+                            leg2.disconnect();
+                        }
+                    }
+                } else if !leg2_alive {
+                    leg1.disconnect();
+                }
+            }
+
+            let now = Instant::now();
+            if leg1.is_alive() {
+                let _ = leg1.handle_timeout(now);
+            }
+            if let Some(leg2) = leg2_opt.as_mut() {
+                if leg2.is_alive() {
+                    let _ = leg2.handle_timeout(now);
+                }
+            }
+
+            tokio::select! {
+                res1 = leg1.process_step(), if leg1.is_alive() => {
+                    match res1 {
+                        Ok(Some(Event::ChannelData(data))) => {
+                            queued_bytes_to_2 = queued_bytes_to_2.saturating_add(data.data.len());
+                            if tx_to_2.send((data.id, data.data)).is_err() {
+                                log::warn!("[relay-server] tx_to_2 closed");
+                                break;
+                            }
+                            sync_upload_limits(&mut leg1, leg2_opt.as_mut(), queued_bytes_to_2, queued_bytes_to_1);
+
+                        }
+                        Ok(Some(event)) => log::debug!("[relay-server] Leg 1 Event: {:?}", event),
+                        Ok(None) => {}
+                        Err(e) => {
+                            log::warn!("[relay-server] Leg 1 disconnect/error: {:?}", e);
+                            leg1.disconnect();
+                            if let Some(leg2) = leg2_opt.as_mut() {
+                                leg2.disconnect();
+                            }
+                        }
+                    }
+                    if !leg1_connected && leg1.is_fully_connected() {
+                        leg1_connected = true;
+                        log::info!("[relay-server] Leg 1 fully connected for session {}", session_id);
+                        if leg2_connected {
+                            both_connected = true;
+                            log::info!("[relay-server] Both legs connected for session {}", session_id);
+                        }
+                    }
+                }
+
+                res2 = async { leg2_opt.as_mut().unwrap().process_step().await },
+                if leg2_opt.as_ref().map(|l| l.is_alive()).unwrap_or(false) => {
+                    match res2 {
+                        Ok(Some(Event::ChannelData(data))) => {
+                            queued_bytes_to_1 = queued_bytes_to_1.saturating_add(data.data.len());
+                            if tx_to_1.send((data.id, data.data)).is_err() {
+                                log::warn!("[relay-server] tx_to_1 closed");
+                                break;
+                            }
+                            sync_upload_limits(&mut leg1, leg2_opt.as_mut(), queued_bytes_to_2, queued_bytes_to_1);
+
+                        }
+                        Ok(Some(event)) => log::debug!("[relay-server] Leg 2 Event: {:?}", event),
+                        Ok(None) => {}
+                        Err(e) => {
+                            log::warn!("[relay-server] Leg 2 disconnect/error: {:?}", e);
+                            if let Some(leg2) = leg2_opt.as_mut() {
+                                leg2.disconnect();
+                            }
+                            leg1.disconnect();
+                        }
+                    }
+                    if !leg2_connected {
+                        if let Some(leg2) = leg2_opt.as_mut() {
+                            if leg2.is_fully_connected() {
+                                leg2_connected = true;
+                                log::info!("[relay-server] Leg 2 fully connected for session {}", session_id);
+                                if leg1_connected {
+                                    both_connected = true;
+                                    log::info!("[relay-server] Both legs connected for session {}", session_id);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                _ = self.notify_leg2.notified(), if leg2_opt.is_none() => {
+                    match self.leg2.retrieve().await {
+                        Ok(c) => {
+                            log::info!("[relay-server] Leg 2 attached to run loop for session {}", session_id);
+                            leg2_opt = Some(c);
+                        }
+                        Err(_) => {
+                            log::warn!("[relay-server] Failed to retrieve leg 2");
+                            break;
+                        }
+                    }
+                }
+
+                Some((id, buf)) = rx_to_2.recv(),
+                if leg2_connected
+                    && pending_to_2.is_none()
+                    && leg2_opt.as_ref().map(|l| l.is_alive()).unwrap_or(false) => {
+                    let sent = leg2_opt
+                        .as_mut()
+                        .map(|leg2| leg2.send(&buf, id))
+                        .unwrap_or(false);
+                    if sent {
+                        log::trace!("[relay-server] Forwarded data to leg 2 (ID: {:?}, len: {})", id, buf.len());
+                        queued_bytes_to_2 = queued_bytes_to_2.saturating_sub(buf.len());
+                        sync_upload_limits(&mut leg1, leg2_opt.as_mut(), queued_bytes_to_2, queued_bytes_to_1);
+                    } else {
+                        pending_to_2 = Some((id, buf));
+                        retry_to_2.as_mut().reset(tokio::time::Instant::now() + Duration::from_millis(3));
+                    }
+                }
+
+                () = &mut retry_to_2,
+                if pending_to_2.is_some()
+                    && leg2_connected
+                    && leg2_opt.as_ref().map(|l| l.is_alive()).unwrap_or(false) => {
+                    let sent = if let Some((id, buf)) = pending_to_2.as_ref() {
+                        leg2_opt
+                            .as_mut()
+                            .map(|leg2| leg2.send(buf, *id))
+                            .unwrap_or(false)
+                    } else {
+                        false
+                    };
+                    if sent {
+                        if let Some((id, buf)) = pending_to_2.take() {
+                            log::trace!("[relay-server] Retried & forwarded data to leg 2 (ID: {:?})", id);
+                            queued_bytes_to_2 = queued_bytes_to_2.saturating_sub(buf.len());
+                            retry_to_2.as_mut().reset(tokio::time::Instant::now() + far_future);
+                            sync_upload_limits(&mut leg1, leg2_opt.as_mut(), queued_bytes_to_2, queued_bytes_to_1);
+                        }
+                    } else {
+                        retry_to_2.as_mut().reset(tokio::time::Instant::now() + Duration::from_millis(3));
+                    }
+                }
+
+                Some((id, buf)) = rx_to_1.recv(), if leg1_connected && pending_to_1.is_none() && leg1.is_alive() => {
+                    if leg1.send(&buf, id) {
+                        log::trace!("[relay-server] Forwarded data to leg 1 (ID: {:?}, len: {})", id, buf.len());
+                        queued_bytes_to_1 = queued_bytes_to_1.saturating_sub(buf.len());
+                        sync_upload_limits(&mut leg1, leg2_opt.as_mut(), queued_bytes_to_2, queued_bytes_to_1);
+
+                    } else {
+                        pending_to_1 = Some((id, buf));
+                        retry_to_1.as_mut().reset(tokio::time::Instant::now() + Duration::from_millis(3));
+                    }
+                }
+
+                () = &mut retry_to_1, if pending_to_1.is_some() && leg1_connected && leg1.is_alive() => {
+                    let sent = if let Some((id, buf)) = pending_to_1.as_ref() {
+                        leg1.send(buf, *id)
+                    } else {
+                        false
+                    };
+                    if sent {
+                        if let Some((id, buf)) = pending_to_1.take() {
+                            log::trace!("[relay-server] Retried & forwarded data to leg 1 (ID: {:?})", id);
+                            queued_bytes_to_1 = queued_bytes_to_1.saturating_sub(buf.len());
+                            retry_to_1.as_mut().reset(tokio::time::Instant::now() + far_future);
+                            sync_upload_limits(&mut leg1, leg2_opt.as_mut(), queued_bytes_to_2, queued_bytes_to_1);
+                        }
+                    } else {
+                        retry_to_1.as_mut().reset(tokio::time::Instant::now() + Duration::from_millis(3));
+                    }
+                }
+
+                _ = &mut connect_deadline, if !both_connected => {
+                    log::error!(
+                        "[relay-server] Connect deadline ({}s) exceeded for session {}. leg1_connected={} leg2_connected={}",
+                        CONNECT_TIMEOUT.as_secs(), session_id, leg1_connected, leg2_connected,
+                    );
+                    break;
+                }
+
+                _ = stats_tick.tick() => {
+                    let d1 = leg1.download_rate_bps();
+                    let u1 = leg1.upload_rate_bps();
+                    if let Some(leg2) = leg2_opt.as_mut() {
+                        let d2 = leg2.download_rate_bps();
+                        let u2 = leg2.upload_rate_bps();
+                        log::info!(
+                            concat!(
+                                "[relay-server] stats {} leg1 down={:.0}B/s up={:.0}B/s ",
+                                "leg2 down={:.0}B/s up={:.0}B/s q(A->B)={}B q(B->A)={}B"
+                            ),
+                            session_id,
+                            d1,
+                            u1,
+                            d2,
+                            u2,
+                            queued_bytes_to_2,
+                            queued_bytes_to_1,
+                        );
+                    } else {
+                        log::info!(
+                            "[relay-server] stats {session_id} leg1 down={:.0}B/s up={:.0}B/s (leg2 pending)",
+                            d1, u1,
+                        );
+                    }
+                }
+            }
+        }
+
+        log::info!("[relay-server] Tearing down proxy instance {}", session_id);
+        session_id
+    }
+}

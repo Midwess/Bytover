@@ -1,7 +1,6 @@
 use std::fmt::Display;
 
 use crate::app::core::model_events::{ConnectionRecovered, SessionLoadError, UpdateAction};
-use crate::entities::finding_scope::FindingScope;
 use crate::entities::local_resource::{LocalResource, LocalResourcePath};
 use crate::entities::peer::{Peer, ResourceReceivedPeer};
 use crate::entities::target::{P2PConnectionState, TransferTarget};
@@ -11,7 +10,6 @@ use chrono::Utc;
 use core_services::db::repository::abstraction::id::DbId;
 use core_services::utils::cancellation::CancellationToken;
 use schema::devlog::bitbridge::P2pTransferSessionMessage;
-use schema::devlog::rpc_signalling::server::ScopeState;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
@@ -169,6 +167,10 @@ impl TransferProgress {
         matches!(self.status, TransferStatus::Saving)
     }
 
+    pub fn is_in_progress(&self) -> bool {
+        matches!(self.status, TransferStatus::InProgress)
+    }
+
     pub fn elapsed(&self) -> u64 {
         Utc::now().timestamp_millis() as u64 - self.start_time_utc_ms
     }
@@ -200,6 +202,10 @@ impl TransferProgress {
     }
 
     pub fn speed(&self) -> u64 {
+        if !self.is_in_progress() {
+            return 0;
+        }
+
         if self.elapsed() >= 3000 {
             return 0;
         }
@@ -211,10 +217,26 @@ impl TransferProgress {
         self.bytes_per_second
     }
 
-    pub fn mark_received_by_peer(&mut self, peer: Peer) {
-        if !self.received_by_peers.iter().any(|p| p.id == peer.id) {
-            self.received_by_peers.push(ResourceReceivedPeer::from(&peer));
+    pub fn mark_received_by_peer(&mut self, peer: ResourceReceivedPeer) {
+        let ResourceReceivedPeer { id, name, avatar_url } = peer;
+
+        if let Some(existing) = self.received_by_peers.iter_mut().find(|peer| peer.id == id) {
+            if !name.is_empty() {
+                existing.name = name;
+            }
+
+            if !avatar_url.is_empty() {
+                existing.avatar_url = avatar_url;
+            }
+
+            return;
         }
+
+        self.received_by_peers.push(ResourceReceivedPeer { id, name, avatar_url });
+    }
+
+    pub fn mark_received_by_peer_id(&mut self, peer_id: String) {
+        self.mark_received_by_peer(ResourceReceivedPeer::fallback(peer_id));
     }
 
     pub fn received_by_peers(&self) -> &Vec<ResourceReceivedPeer> {
@@ -254,7 +276,7 @@ impl TransferSession {
         mut resources: Vec<LocalResource>,
         password: Option<String>,
         signalling_key: String,
-        _scope: String,
+        signalling_route: String,
         alias: String,
         access_url: String,
         id: u64,
@@ -277,8 +299,9 @@ impl TransferSession {
             transfer_type,
             target: TransferTarget::P2P {
                 from_peer: None,
-                scope: FindingScope::new(&signalling_key),
-                connection_state: P2PConnectionState::NotConnected
+                connection_state: P2PConnectionState::NotConnected,
+                signalling_key: Some(signalling_key),
+                signalling_route: Some(signalling_route)
             },
             from_user: User {
                 id: 0,
@@ -326,14 +349,12 @@ impl TransferSession {
     pub fn owner_connected(&mut self, peer: Peer) {
         if let TransferTarget::P2P {
             from_peer,
-            scope,
             connection_state,
             ..
         } = &mut self.target
         {
             from_peer.replace(peer);
             *connection_state = P2PConnectionState::Connected;
-            scope.update_state(ScopeState::Online);
         }
 
         self.connection_error = None;
@@ -343,12 +364,11 @@ impl TransferSession {
         if let TransferTarget::P2P {
             from_peer,
             connection_state,
-            scope
+            ..
         } = &mut self.target
         {
             from_peer.take();
             *connection_state = P2PConnectionState::NotConnected;
-            scope.update_state(ScopeState::Offline);
             self.is_required_password = false;
         }
 
@@ -380,18 +400,8 @@ impl TransferSession {
         )
     }
 
-    pub fn add_resource_from_peer(&mut self, resource: LocalResource, peer: &Peer) -> bool {
-        if !peer.is_owned(self) {
-            log::warn!(
-                "Peer {} is not owner of session {}, ignoring resource",
-                peer.id(),
-                self.order_id
-            );
-            return false;
-        }
-
-        self.add_resource(resource);
-        true
+    fn is_loaded_p2p_receive_session(&self) -> bool {
+        self.transfer_type == TransferType::Receive && self.is_p2p_connected() && !self.resources.is_empty()
     }
 
     pub fn from_public_overview(
@@ -453,7 +463,7 @@ impl TransferSession {
 
     pub fn peer_id(&self) -> Option<String> {
         match &self.target {
-            TransferTarget::P2P { from_peer, .. } => from_peer.as_ref().map(|p| p.id().to_string()),
+            TransferTarget::P2P { from_peer, .. } => from_peer.as_ref().map(|p| p.id.clone()),
             _ => None
         }
     }
@@ -485,7 +495,9 @@ impl TransferSession {
     }
 
     fn is_initializing(&self) -> bool {
-        self.progress.iter().all(|it| it.status == TransferStatus::InProgress && it.bytes_per_second == 0 && it.percentage() == 0f64)
+        self.progress
+            .iter()
+            .all(|it| it.status == TransferStatus::InProgress && it.bytes_per_second == 0 && it.percentage() == 0f64)
     }
 
     pub fn update_progress(&mut self, progress: TransferProgress) {
@@ -506,33 +518,50 @@ impl TransferSession {
 
     pub fn total_progress(&self) -> f64 {
         let is_p2p_receive = !self.target.is_public() && self.transfer_type == TransferType::Receive;
-        let total_size = self.progress.iter().map(|it| it.file_size).sum::<u64>();
+        let relevant_progress = if is_p2p_receive {
+            self.progress.iter().filter(|it| it.is_in_progress()).collect::<Vec<_>>()
+        } else {
+            self.progress.iter().collect::<Vec<_>>()
+        };
+
+        let total_size = relevant_progress.iter().map(|it| it.file_size).sum::<u64>();
         if total_size == 0 {
+            if is_p2p_receive {
+                return 0.0;
+            }
+
             return 1.0;
         }
 
-        if self.is_canceled() {
+        if self.cancellation_token.is_cancelled() {
             return 0.0;
         }
 
-        let total_bytes_sent = self
-            .progress
-            .iter()
-            .filter(|it| {
-                if is_p2p_receive {
-                    return it.status == TransferStatus::InProgress && it.percentage() > 0f64;
-                }
+        if !self.is_loaded_p2p_receive_session() && self.is_canceled() {
+            return 0.0;
+        }
 
-                true
-            })
-            .map(|it| it.total_bytes_counter)
-            .sum::<u64>();
+        let total_bytes_sent = relevant_progress.iter().map(|it| it.total_bytes_counter).sum::<u64>();
 
         total_bytes_sent as f64 / total_size as f64
     }
 
     pub fn speed(&self, _interval: u64) -> u64 {
-        self.progress.iter().map(|it| it.speed()).sum::<u64>()
+        let mut has_in_progress = false;
+        let total_speed = self.progress.iter().fold(0, |acc, progress| {
+            if !progress.is_in_progress() {
+                return acc;
+            }
+
+            has_in_progress = true;
+            acc + progress.speed()
+        });
+
+        if has_in_progress {
+            total_speed
+        } else {
+            0
+        }
     }
 
     pub fn is_completed(&self) -> bool {
@@ -542,6 +571,10 @@ impl TransferSession {
     pub fn is_canceled(&self) -> bool {
         if self.cancellation_token.is_cancelled() {
             return true;
+        }
+
+        if self.is_loaded_p2p_receive_session() {
+            return false;
         }
 
         self.progress.iter().any(|it| it.is_canceled())
@@ -583,17 +616,7 @@ impl TransferSession {
             };
         }
 
-        if let TransferTarget::P2P {
-            connection_state, scope, ..
-        } = &self.target
-        {
-            if !scope.is_online() {
-                return TransferSessionStatus::Initializing {
-                    loading_state: Some("Waiting for the session owner to come online...".to_owned()),
-                    loading_error: None
-                };
-            }
-
+        if let TransferTarget::P2P { connection_state, .. } = &self.target {
             match connection_state {
                 P2PConnectionState::NotConnected => {
                     return TransferSessionStatus::Initializing {
@@ -622,6 +645,20 @@ impl TransferSession {
                         return TransferSessionStatus::Initializing {
                             loading_state: Some("Waiting for resources...".to_owned()),
                             loading_error: None
+                        };
+                    }
+
+                    if self.is_loaded_p2p_receive_session() {
+                        if self.cancellation_token.is_cancelled() {
+                            return TransferSessionStatus::Canceled;
+                        }
+
+                        // For P2P receive sessions, once the session is connected and resources
+                        // are loaded, resource-level success/fail/cancel should not flip the
+                        // whole session state.
+                        return TransferSessionStatus::InProgress {
+                            bytes_per_second: self.speed(1000),
+                            percentage: self.total_progress()
                         };
                     }
                 }
@@ -668,8 +705,7 @@ impl TransferSession {
 
         if self.is_success() {
             TransferSessionStatus::Success
-        }
-        else {
+        } else {
             TransferSessionStatus::InProgress {
                 bytes_per_second: self.speed(1000),
                 percentage: self.total_progress()

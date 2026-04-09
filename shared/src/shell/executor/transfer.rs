@@ -1,3 +1,4 @@
+// Stub WebRtc - actual implementation in disabled webrtc module
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use crate::app::operations::CoreOperationOutput;
 use crate::entities::target::TransferTarget;
@@ -6,11 +7,29 @@ use crate::errors::CoreError;
 use crate::protocol::public_cloud::cloud_service::CloudService;
 use crate::protocol::rpc::app_server::AppServer;
 use crate::protocol::rpc::cloud_server::CloudServer;
-use crate::protocol::webrtc::webrtc::WebRtc;
 use crate::shell::api::CoreRequest;
 use core_services::utils::cancellation::CancellationToken;
 use core_services::utils::maybe::MaybeSend;
 use std::sync::Arc;
+
+#[derive(Clone)]
+pub struct WebRtc;
+
+impl Default for WebRtc {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl WebRtc {
+    pub fn new() -> Self {
+        WebRtc
+    }
+
+    pub async fn cancel_session(&self, _peer_id: String, _session_id: u64) -> Result<(), CoreError> {
+        Ok(())
+    }
+}
 
 #[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]
 #[cfg_attr(target_family = "wasm", async_trait::async_trait(?Send))]
@@ -57,7 +76,7 @@ where
                 self.web_rtc().cancel_session(peer_id, session_id).await?;
                 Ok(CoreOperationOutput::None)
             }
-            TransferOperation::FindPublicSession { alias } => {
+            TransferOperation::FindSession { alias } => {
                 // Try P2P session first
                 if let Ok(Some(p2p_session)) = self.app_server().find_p2p_session_by_alias(alias.clone()).await {
                     let Some(user) = self.app_server().find_user(p2p_session.owner_user_id).await? else {
@@ -73,8 +92,9 @@ where
                         transfer_type: TransferType::Receive,
                         target: TransferTarget::P2P {
                             from_peer: None,
-                            scope: crate::entities::finding_scope::FindingScope::new(&p2p_session.signalling_room_id),
-                            connection_state: crate::entities::target::P2PConnectionState::NotConnected
+                            connection_state: crate::entities::target::P2PConnectionState::NotConnected,
+                            signalling_key: Some(p2p_session.signalling_key.clone()),
+                            signalling_route: Some(p2p_session.signalling_route.clone())
                         },
                         access_url: p2p_session.access_url.clone(),
                         alias: alias.clone(),
@@ -99,7 +119,10 @@ where
                 };
 
                 let Some(user) = self.app_server().find_user(session_key.user_id).await? else {
-                    return Err(CoreError::BadRequest(format!("Not found owner {} for this session", session_key.user_id)));
+                    return Err(CoreError::BadRequest(format!(
+                        "Not found owner {} for this session",
+                        session_key.user_id
+                    )));
                 };
 
                 let transfer_session = TransferSession::from_public_overview(

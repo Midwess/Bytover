@@ -59,7 +59,7 @@ export function JoinWaitList() {
                 >
                   {/* Header - Transparent, No background */}
                   <div className="space-y-4">
-                    <span className="text-[10px] font-bold tracking-[0.3em] uppercase text-blue-600">
+                    <span className="text-xs font-bold tracking-[0.3em] uppercase text-blue-600">
                       Give Feedback
                     </span>
                     <h2 className="text-4xl md:text-5xl font-bold text-white tracking-tight leading-[1.1]">
@@ -73,7 +73,7 @@ export function JoinWaitList() {
                   {/* Form - Dark & Minimalist */}
                   <div className="w-full space-y-10">
                     <div className="space-y-1 text-left">
-                      <label className="text-[10px] font-bold tracking-[0.1em] uppercase text-zinc-500 ml-0.5">Email address</label>
+                      <label className="text-xs font-bold tracking-[0.1em] uppercase text-zinc-500 ml-0.5">Email address</label>
                       <input
                         type="email"
                         className="w-full h-10 bg-transparent border-b border-zinc-800 focus:border-white transition-all text-white placeholder:text-zinc-700 focus:outline-none font-medium text-base px-0.5"
@@ -86,7 +86,7 @@ export function JoinWaitList() {
                     </div>
 
                     <div className="space-y-1 text-left">
-                      <label className="text-[10px] font-bold tracking-[0.1em] uppercase text-zinc-500 ml-0.5">Message</label>
+                      <label className="text-xs font-bold tracking-[0.1em] uppercase text-zinc-500 ml-0.5">Message</label>
                       <textarea
                         className="w-full min-h-[100px] bg-transparent border-b border-zinc-800 focus:border-white transition-all text-white placeholder:text-zinc-700 focus:outline-none resize-none font-medium text-base py-1 px-0.5"
                         placeholder="Tell us what you&apos;d like to see next..."
@@ -115,7 +115,7 @@ export function JoinWaitList() {
                           "Submit Feedback"
                           )}
                       </Button>
-                      <p className="text-[10px] text-center text-zinc-600 mt-8 font-bold tracking-widest uppercase">We read every single message.</p>
+                      <p className="text-xs text-center text-zinc-600 mt-8 font-bold tracking-widest uppercase">We read every single message.</p>
                     </div>
                   </div>
                 </motion.div>

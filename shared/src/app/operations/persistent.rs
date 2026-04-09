@@ -10,10 +10,9 @@ use crate::entities::local_resource::{LocalResource, LocalResourcePath, Resource
 use crate::entities::session::Session;
 use crate::entities::shelf::Shelf;
 use crate::entities::token::Token;
-use crate::entities::transfer_session::{TransferProgress, TransferSession};
 use crate::entities::user::User;
 use crate::errors::CoreError;
-use crate::repository::transfer_session::{TransferSessionId, ZipDownloadPaths};
+use crate::repository::transfer_session::ZipDownloadPaths;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum PersistentOperation {
@@ -28,6 +27,7 @@ pub enum PersistentOperation {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum LocalResourcePersistentOperation {
     Add(Vec<LocalResource>),
+    Update(LocalResource),
     Remove { path: LocalResourcePath, shelf_id: u64 },
     FindAll,
     LoadOnDisk(LocalResourcePath),
@@ -50,15 +50,7 @@ pub enum SessionPersistentOperation {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum TransferSessionPersistentOperation {
-    Save(TransferSession),
     Clear,
-    UpdateProgresses(u64, Vec<TransferProgress>),
-    Remove(TransferSessionId),
-    GetAllReceivedSessions(),
-    UpdateResource {
-        session_id: TransferSessionId,
-        resource: LocalResource
-    },
     GenerateResourcePath {
         session_id: u64,
         resource_names: HashMap<u64, (String, ResourceType)>
@@ -120,6 +112,13 @@ impl LocalResourcePersistentOperation {
         .map(|it| it.result())
     }
 
+    pub fn update(resource: LocalResource) -> AppRequestBuilder<impl Future<Output = Result<LocalResource, CoreError>>> {
+        AppCommand::request_from_shell(PersistentOperation::LocalResource(LocalResourcePersistentOperation::Update(
+            resource
+        )))
+        .map(|it| it.result())
+    }
+
     pub fn remove(path: LocalResourcePath, shelf_id: u64) -> AppRequestBuilder<impl Future<Output = Result<bool, CoreError>>> {
         AppCommand::request_from_shell(PersistentOperation::LocalResource(LocalResourcePersistentOperation::Remove {
             path,
@@ -161,47 +160,6 @@ impl LocalResourcePersistentOperation {
 }
 
 impl TransferSessionPersistentOperation {
-    pub fn save(session: TransferSession) -> AppRequestBuilder<impl Future<Output = Result<TransferSession, CoreError>>> {
-        AppCommand::request_from_shell(PersistentOperation::TransferSession(TransferSessionPersistentOperation::Save(
-            session
-        )))
-        .map(|it| it.result())
-    }
-
-    pub fn update_progresses(
-        order_id: u64,
-        progresses: Vec<TransferProgress>
-    ) -> AppRequestBuilder<impl Future<Output = Result<Option<TransferSession>, CoreError>>> {
-        AppCommand::request_from_shell(PersistentOperation::TransferSession(
-            TransferSessionPersistentOperation::UpdateProgresses(order_id, progresses)
-        ))
-        .map(|it| it.result_option())
-    }
-
-    pub fn update_resource(
-        session_id: TransferSessionId,
-        resource: LocalResource
-    ) -> AppRequestBuilder<impl Future<Output = Result<Option<TransferSession>, CoreError>>> {
-        AppCommand::request_from_shell(PersistentOperation::TransferSession(
-            TransferSessionPersistentOperation::UpdateResource { session_id, resource }
-        ))
-        .map(|it| it.result_option())
-    }
-
-    pub fn get_all_received_sessions() -> AppRequestBuilder<impl Future<Output = Result<Vec<TransferSession>, CoreError>>> {
-        AppCommand::request_from_shell(PersistentOperation::TransferSession(
-            TransferSessionPersistentOperation::GetAllReceivedSessions()
-        ))
-        .map(|it| it.result())
-    }
-
-    pub fn remove(id: TransferSessionId) -> AppRequestBuilder<impl Future<Output = Result<bool, CoreError>>> {
-        AppCommand::request_from_shell(PersistentOperation::TransferSession(
-            TransferSessionPersistentOperation::Remove(id)
-        ))
-        .map(|it| it.result())
-    }
-
     pub fn clear_all() -> AppRequestBuilder<impl Future<Output = Result<bool, CoreError>>> {
         AppCommand::request_from_shell(PersistentOperation::TransferSession(TransferSessionPersistentOperation::Clear))
             .map(|it| it.result())

@@ -10,9 +10,14 @@ use schema::devlog::bitbridge::{
     CreateDeviceSessionResponse,
     FindP2pSessionRequest,
     FindP2pSessionResponse,
+    GenPeerRequest,
+    GenPeerResponse,
     GetDeviceAliasesRequest,
     GetDeviceAliasesResponse,
-    P2pSession
+    GetRegionRequest,
+    GetRegionResponse,
+    P2pSession,
+    PeerMessage
 };
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
@@ -20,6 +25,24 @@ use tonic::{Request, Response, Status};
 pub struct P2PGrpcService {
     pub p2p_repository: Arc<dyn P2PSessionRepository>,
     pub app_service: Box<dyn AppInfoService>
+}
+
+fn normalize_signalling_route(signalling_route: &str) -> Result<String, Status> {
+    let signalling_route = signalling_route.trim();
+
+    if signalling_route.is_empty() {
+        return Err(Status::invalid_argument("Signalling route must not be blank"));
+    }
+
+    Ok(signalling_route.to_string())
+}
+
+fn derive_signalling_region(region_code: Option<&str>) -> (String, String) {
+    let region_code = region_code.map(str::trim).filter(|value| !value.is_empty()).unwrap_or("local").to_string();
+
+    let signalling_route = format!("rpc-signalling-{region_code}");
+
+    (region_code, signalling_route)
 }
 
 #[async_trait::async_trait]
@@ -38,11 +61,20 @@ impl P2pOrchestrationService for P2PGrpcService {
 
         let request_body = request.get_ref();
         let alias = request_body.alias.clone();
+        let signalling_key = request_body.signalling_key.clone();
+        let signalling_route = normalize_signalling_route(&request_body.signalling_route)?;
 
         let p2p_transfer_service = DiContainer::instance().await.get_p2p_transfer_service().await;
 
         let session = p2p_transfer_service
-            .create_user_device_session(user.order_id, device.order_id, device.name.clone(), alias)
+            .create_user_device_session(
+                user.order_id,
+                device.order_id,
+                device.name.clone(),
+                alias,
+                signalling_key,
+                signalling_route
+            )
             .await
             .map_err(|e| match e {
                 P2PTransferErrors::AliasNotFound => Status::invalid_argument("Alias not found for this device"),
@@ -54,12 +86,12 @@ impl P2pOrchestrationService for P2PGrpcService {
         let response = CreateDeviceSessionResponse {
             session: P2pSession {
                 session_id: session.session_id(),
-                signalling_room_id: session.owner_signalling_key(),
+                signalling_key: session.signalling_key().to_string(),
                 owner_user_id: session.user_id(),
                 description: session.description().map(|s| s.to_string()),
                 access_url: session.access_url(app.web_url().to_string()),
                 alias: session.alias().to_string(),
-                signalling_scope: session.get_scope().to_string()
+                signalling_route: session.signalling_route().to_string()
             }
         };
 
@@ -83,12 +115,12 @@ impl P2pOrchestrationService for P2PGrpcService {
         let response = FindP2pSessionResponse {
             session: Some(P2pSession {
                 session_id: session.session_id(),
-                signalling_room_id: session.member_signalling_key(),
+                signalling_key: session.signalling_key().to_string(),
                 owner_user_id: session.user_id(),
                 description: session.description().map(|s| s.to_string()),
                 access_url: session.access_url(app.web_url().to_string()),
                 alias: session.alias().to_string(),
-                signalling_scope: session.get_scope().to_string()
+                signalling_route: session.signalling_route().to_string()
             })
         };
 
@@ -115,5 +147,97 @@ impl P2pOrchestrationService for P2PGrpcService {
             .map_err(|e| Status::internal(e.to_string()))?;
 
         Ok(Response::new(GetDeviceAliasesResponse { aliases }))
+    }
+
+    async fn gen_peer(&self, request: Request<GenPeerRequest>) -> Result<Response<GenPeerResponse>, Status> {
+        let user = request.extensions().get::<User>().cloned();
+        let device = request.into_inner().device;
+
+        let peer_id = devlog_sdk::distributed_id::gen_id().await.to_string();
+        let (region_code, signalling_route) = derive_signalling_region(std::env::var("BYTOVER_REGION_CODE").ok().as_deref());
+
+        let (name, avatar_url, email, signalling_id) = match user {
+            Some(user) => {
+                let signalling_id = format!(
+                    "{}_{}_{}",
+                    devlog_sdk::distributed_id::gen_id().await,
+                    user.order_id,
+                    device.device_unique_key
+                );
+
+                (
+                    Some(user.display_name.clone()),
+                    user.avatar_url.unwrap_or_default(),
+                    Some(user.email.clone()),
+                    Some(signalling_id)
+                )
+            }
+            None => {
+                let avatar = self.app_service.random_avatar().await.unwrap_or_default();
+                (Some(device.device_name.clone()), avatar, None, None)
+            }
+        };
+
+        let peer = PeerMessage {
+            peer_id,
+            name,
+            avatar_url,
+            email,
+            device,
+            region_code: Some(region_code.clone())
+        };
+
+        Ok(Response::new(GenPeerResponse {
+            peer,
+            signalling_id,
+            region_code,
+            signalling_route
+        }))
+    }
+
+    async fn get_region(&self, _request: Request<GetRegionRequest>) -> Result<Response<GetRegionResponse>, Status> {
+        let (region_code, signalling_route) = derive_signalling_region(std::env::var("BYTOVER_REGION_CODE").ok().as_deref());
+
+        Ok(Response::new(GetRegionResponse {
+            region_code,
+            signalling_route
+        }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{derive_signalling_region, normalize_signalling_route};
+    use tonic::Code;
+
+    #[test]
+    fn trims_and_accepts_non_empty_signalling_route() {
+        let signalling_route = normalize_signalling_route("  rpc-signalling-local  ").unwrap();
+
+        assert_eq!(signalling_route, "rpc-signalling-local");
+    }
+
+    #[test]
+    fn rejects_blank_signalling_route() {
+        let error = normalize_signalling_route("   ").unwrap_err();
+
+        assert_eq!(error.code(), Code::InvalidArgument);
+        assert_eq!(error.message(), "Signalling route must not be blank");
+    }
+
+    #[test]
+    fn derives_local_region_when_env_missing() {
+        let (region_code, signalling_route) = derive_signalling_region(None);
+
+        assert_eq!(region_code, "local");
+        assert_eq!(signalling_route, "rpc-signalling-local");
+    }
+
+    #[test]
+    fn derives_route_from_region_code() {
+        let (region_code, signalling_route) = derive_signalling_region(Some("us-west"));
+
+        assert_eq!(region_code, "us-west");
+        assert_eq!(signalling_route, "rpc-signalling-us-west");
     }
 }

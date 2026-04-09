@@ -12,6 +12,7 @@ use schema::value::device::DeviceType;
 use schema::value::platform::Platform;
 use shared::app::authentication::module::AuthenticationEvent;
 use shared::app::environment::module::EnvironmentEvent;
+use shared::app::p2p::module::P2PEvent;
 use shared::app::operations::device::DeviceOperation;
 use shared::app::operations::dialog::DialogOperation;
 use shared::app::operations::webview::WebViewOperation;
@@ -145,16 +146,19 @@ async fn remove_resource(shelf_id: String, resource_id: String, app_handle: AppH
 #[tauri::command]
 async fn delete_receive_session(session_id: String, app_handle: AppHandle) {
     let session_id = session_id.parse::<u64>().unwrap_or_default();
-    process_event(TransferEvent::DeleteSession {
+    process_event(TransferEvent::CancelTransfer {
         session_id,
+        transfer_type: TransferType::Receive
     }, app_handle).await;
 }
 
 #[tauri::command]
 async fn open_session(session_id: String, app_handle: AppHandle) {
     let session_id = session_id.parse::<u64>().unwrap_or_default();
-    process_event(TransferEvent::OpenSession {
-        session_id
+    process_event(TransferEvent::ViewSession {
+        session_id,
+        password: None,
+        transfer_type: TransferType::Receive
     }, app_handle).await;
 }
 
@@ -574,6 +578,13 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
                     CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
                 }
             },
+            CoreOperation::LaunchNearbyServer => {
+                spawn(async move {
+                    let bridge = DiContainer::get_instance().core_bridge();
+                    bridge.notify(AppEvent::P2P(P2PEvent::Launch)).await;
+                });
+                CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
+            }
             operation => {
                 spawn(async move {
                     let bridge = DiContainer::get_instance().core_bridge();
@@ -794,7 +805,6 @@ pub async fn run() {
                     .init(Arc::new(PathResolverImpl::new(workdir_path).await), &*bridge)
                     .await;
                 process_event(EnvironmentEvent::AppLaunched {
-                    auto_launch_nearby: true,
                     allowed_nearby_anonymous: false
                 }, handle.clone()).await;
 

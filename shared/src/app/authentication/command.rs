@@ -58,6 +58,7 @@ impl AppCommand {
         SessionPersistentOperation::save_user(user.clone()).into_future(self.ctx()).await?;
         self.notify_event(AppEvent::Authentication(AuthenticationEvent::Authorized { user }));
         self.notify_shell(CoreOperation::Render);
+        self.notify_shell(CoreOperation::LaunchNearbyServer);
 
         self.fetch_and_assign_aliases().await;
 
@@ -103,6 +104,7 @@ impl AppCommand {
 
         let user = RpcOperation::get_me().into_future(self.ctx()).await?;
         self.notify_event(AppEvent::Authentication(AuthenticationEvent::Authorized { user }));
+        self.notify_shell(CoreOperation::LaunchNearbyServer);
 
         self.fetch_and_assign_aliases().await;
 

@@ -1,0 +1,29 @@
+[package]
+name = "relay-server"
+description = "A relay server using tonic gRPC with tokio"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+socket2 = { workspace = true }
+str0m = { workspace = true }
+log = { workspace = true }
+serde = { workspace = true }
+http = { workspace = true, features = ["std"] }
+anyhow = { workspace = true }
+devlog-sdk = { workspace = true, features = ["gateway", "grpc-server", "grpc-client", "tcp"] }
+schema = { workspace = true, features = ["client", "server"] }
+tonic = { workspace = true, features = ["tls-webpki-roots", "tls-native-roots"] }
+tonic-middleware = { workspace = true }
+async-speed-limit = { workspace = true }
+futures-util = { workspace = true }
+reqwest = { workspace = true, features = ["json", "rustls-tls-webpki-roots"] }
+env_logger = "0.11.6"
+async-trait = { workspace = true }
+base64 = { workspace = true }
+core-services = { workspace = true }
+thiserror = { workspace = true }
+stun = "0.17.1"
+tokio-util = { workspace = true, features = ["net"] }

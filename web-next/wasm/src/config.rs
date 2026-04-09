@@ -6,18 +6,36 @@ use web_sys::window;
 pub const GATEWAY_HOST: Option<&str> = option_env!("BYTOVER_PUBLIC_GATEWAY_HOST");
 pub const GATEWAY_PORT: Option<&str> = option_env!("BYTOVER_PUBLIC_GATEWAY_PORT");
 pub const WITH_SSL: Option<&str> = option_env!("BYTOVER_WITH_SSL");
-pub const LOCATOR_URL: Option<&str> = option_env!("BYTOVER_LOCATOR_URL");
 pub const GATEWAY_HTTP1_HOST: Option<&str> = option_env!("BYTOVER_PUBLIC_HTTP1_GATEWAY_HOST");
 pub const GATEWAY_HTTP1_PORT: Option<&str> = option_env!("BYTOVER_PUBLIC_HTTP1_GATEWAY_PORT");
+pub const RELAY_ONLY: Option<&str> = option_env!("BYTOVER_RELAY_ONLY");
+pub const RELAY_SERVER: Option<&str> = option_env!("BYTOVER_RELAY_SERVER");
+
+pub fn is_relay_only() -> bool {
+    RELAY_ONLY == Some("1")
+}
+
+pub fn get_relay_server_override() -> Option<String> {
+    if let Some(server) = RELAY_SERVER {
+        if !server.is_empty() {
+            return Some(server.to_string());
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Ok(server) = std::env::var("BYTOVER_RELAY_SERVER") {
+        if !server.is_empty() {
+            return Some(server);
+        }
+    }
+
+    None
+}
 
 pub struct HostInfo {
     pub host: String,
     pub port: u16,
     pub is_with_ssl: bool
-}
-
-pub fn get_locator_url() -> String {
-    LOCATOR_URL.unwrap_or("https://bytover.com/locator").to_string()
 }
 
 pub fn get_host_info(http1: bool) -> Result<HostInfo, JsValue> {
@@ -64,11 +82,22 @@ pub fn get_gateway_grpc_url() -> String {
     }
 }
 
-pub fn get_signalling_server_ws_url() -> String {
+pub fn get_signalling_server_ws_url_for_route(route: &str) -> String {
     let host_info = get_host_info(true).unwrap();
+    let route = route.trim_start_matches('/');
     if host_info.is_with_ssl {
-        format!("wss://{}:{}/rpc-signalling", host_info.host, host_info.port)
+        format!("wss://{}:{}/{}", host_info.host, host_info.port, route)
     } else {
-        format!("ws://{}:{}/rpc-signalling", host_info.host, host_info.port)
+        format!("ws://{}:{}/{}", host_info.host, host_info.port, route)
+    }
+}
+
+pub fn get_signalling_server_http_url_for_route(route: &str) -> String {
+    let host_info = get_host_info(true).unwrap();
+    let route = route.trim_start_matches('/');
+    if host_info.is_with_ssl {
+        format!("https://{}:{}/{}", host_info.host, host_info.port, route)
+    } else {
+        format!("http://{}:{}/{}", host_info.host, host_info.port, route)
     }
 }

@@ -9,6 +9,7 @@ pub mod file_system;
 pub mod network;
 pub mod repository;
 pub mod web_worker;
+pub mod webrtc;
 
 // /shared/src/lib.rs
 use crate::di_container::DiContainer;

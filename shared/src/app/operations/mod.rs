@@ -1,6 +1,5 @@
 pub mod device;
 pub mod dialog;
-pub mod internet;
 pub mod p2p;
 pub mod persistent;
 pub mod rpc;
@@ -13,7 +12,6 @@ use std::time::Duration;
 use crate::app::operations::device::GeoLocation;
 use crate::app::shelf::module::ResourceSelection;
 use crate::entities::device::DeviceInfo;
-use crate::entities::finding_scope::FindingScope;
 use crate::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use crate::entities::peer::Peer;
 use crate::entities::session::Session;
@@ -27,7 +25,6 @@ use crux_core::capability::Operation;
 use derive_more::{From, TryFrom, TryInto};
 use device::DeviceOperation;
 use dialog::DialogOperation;
-use internet::InternetOperation;
 use p2p::{P2POperation, P2POperationOutput};
 use persistent::PersistentOperation;
 use rpc::{RpcOperation, RpcOperationOutput};
@@ -37,7 +34,7 @@ use webview::WebViewOperation;
 
 use super::AppEvent;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, From)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, From, TryFrom, TryInto)]
 pub enum CoreOperation {
     WebView(WebViewOperation),
     Device(DeviceOperation),
@@ -45,12 +42,12 @@ pub enum CoreOperation {
     Persistent(PersistentOperation),
     Transfer(TransferOperation),
     P2P(P2POperation),
-    Internet(InternetOperation),
     Render,
     InitNativeExecutor,
     Notified(AppEvent),
     Dialog(DialogOperation),
-    Delay(Duration)
+    Delay(Duration),
+    LaunchNearbyServer
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, From, TryFrom, TryInto)]
@@ -72,14 +69,13 @@ pub enum CoreOperationOutput {
     GeoLocation(GeoLocation),
     DeviceInfo(DeviceInfo),
     ThumbnailPng(Vec<u8>),
-    FindingScopes(Vec<FindingScope>),
     Bool(bool),
     TransferSessions(Vec<TransferSession>),
     LocalResources(Vec<LocalResource>),
     LocalResource(LocalResource),
     Shelf(Shelf),
     Shelves(Vec<Shelf>),
-    Aliases(Vec<String>),
+    DeviceAliases(Vec<String>),
     ResourcePathMap(std::collections::HashMap<u64, LocalResourcePath>),
     ZipDownloadPaths(ZipDownloadPaths),
     ResourceSelections(Vec<ResourceSelection>),

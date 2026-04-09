@@ -23,7 +23,8 @@ shared = { path = "../shared" }
 core-services = { workspace = true, features = ["db-red", "local-storage", "retry", "zip"] }
 devlog-sdk = { workspace = true }
 schema = { path = "../libs/schema/rust" }
-tokio = { workspace = true, features = ["rt-multi-thread", "sync"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "sync", "net", "time"] }
+prost = { workspace = true }
 async-trait = { workspace = true }
 log = { workspace = true }
 bincode = { workspace = true }
@@ -42,7 +43,16 @@ serde_json = { workspace = true }
 tempfile.workspace = true
 lz4_flex = { version = "0.12", default-features = false, features = ["frame"] }
 n0-future = { workspace = true }
-
+str0m = { workspace = true }
+thiserror.workspace = true
+crossbeam = { workspace = true }
+rand.workspace = true
+tokio-tungstenite.workspace = true
+socket2.workspace = true
+stun-proto = { workspace = true }
+if-addrs = { workspace = true }
+mdns-sd = { workspace = true }
+uuid = { workspace = true, features = ["v4"] }
 [target.uniffi-bindgen.dependencies]
 uniffi = { workspace = true }
 

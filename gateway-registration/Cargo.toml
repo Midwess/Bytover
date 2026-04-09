@@ -1,0 +1,12 @@
+[package]
+name = "gateway-registration"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+devlog-sdk = { path = "../libs/devlog-sdk", features = ["gateway"] }
+core-services = { path = "../libs/core-services" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+log = "0.4"
+url = "2"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }

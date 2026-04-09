@@ -127,19 +127,19 @@ export function SharingControlPanel({ className }: SharingControlPanelProps) {
         <TabsList className="bg-transparent backdrop-blur-md border border-white/10 p-0.5 rounded-xl w-full mb-1">
           <TabsTrigger 
             value="quick" 
-            className="rounded-lg flex-1 px-0.5 py-1 data-[state=active]:bg-white/10 data-[state=active]:text-white text-[#A1A1AA] flex items-center justify-center gap-1 text-[10px] transition-all"
+            className="rounded-lg flex-1 px-0.5 py-1 data-[state=active]:bg-white/10 data-[state=active]:text-white text-[#A1A1AA] flex items-center justify-center gap-1 text-xs transition-all"
           >
             <Zap className="h-3 w-3" /> Quick
           </TabsTrigger>
           <TabsTrigger 
             value="cloud" 
-            className="rounded-lg flex-1 px-0.5 py-1 data-[state=active]:bg-white/10 data-[state=active]:text-white text-[#A1A1AA] flex items-center justify-center gap-1 text-[10px] transition-all"
+            className="rounded-lg flex-1 px-0.5 py-1 data-[state=active]:bg-white/10 data-[state=active]:text-white text-[#A1A1AA] flex items-center justify-center gap-1 text-xs transition-all"
           >
             <Globe className="h-3 w-3" /> Cloud
           </TabsTrigger>
           <TabsTrigger 
             value="email" 
-            className="rounded-lg flex-1 px-0.5 py-1 data-[state=active]:bg-white/10 data-[state=active]:text-white text-[#A1A1AA] flex items-center justify-center gap-1 text-[10px] transition-all"
+            className="rounded-lg flex-1 px-0.5 py-1 data-[state=active]:bg-white/10 data-[state=active]:text-white text-[#A1A1AA] flex items-center justify-center gap-1 text-xs transition-all"
           >
             <Mail className="h-3 w-3" /> Email
           </TabsTrigger>

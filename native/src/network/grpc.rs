@@ -1,7 +1,5 @@
-use crate::config::get_locator_url;
 use shared::protocol::rpc::connection::RpcNetworkModule;
 use shared::protocol::rpc::errors::RpcErrors;
-use shared::shell::api::network::InternetConnection;
 use std::future::poll_fn;
 use std::sync::Arc;
 use std::time::Duration;
@@ -12,7 +10,6 @@ use tonic::transport::{Channel, ClientTlsConfig};
 #[derive(Clone)]
 pub struct RpcNetworkModuleImpl {
     channel: Arc<Mutex<Option<Channel>>>,
-    internet_connection: InternetConnection,
     endpoint: String,
     domain: String
 }
@@ -22,7 +19,6 @@ impl RpcNetworkModuleImpl {
         Self {
             channel: Default::default(),
             endpoint,
-            internet_connection: InternetConnection::new(get_locator_url()),
             domain
         }
     }
@@ -36,9 +32,8 @@ impl RpcNetworkModuleImpl {
     }
 
     pub async fn new_connection(&self) -> Result<(), RpcErrors> {
-        let mut builder = Channel::builder(self.endpoint.parse().unwrap())
-            .connect_timeout(Duration::from_secs(5))
-            .timeout(Duration::from_millis(12000));
+        let uri = self.endpoint.parse().map_err(|e| RpcErrors::InternalServerError(format!("{e:?}")))?;
+        let mut builder = Channel::builder(uri).connect_timeout(Duration::from_secs(5)).timeout(Duration::from_millis(12000));
 
         if self.endpoint.starts_with("https") {
             log::info!("Connecting to gRPC server over TLS");

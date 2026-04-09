@@ -1,5 +1,3 @@
-pub mod network;
-
 use crate::app::operations::CoreOperationOutput;
 use crate::app::AppEvent;
 use crate::entities::local_resource::LocalResourcePath;
@@ -7,18 +5,15 @@ use crate::utils::compression::CompressStats;
 use bytes::Bytes;
 pub use core_services::local_storage::stream::IOCursor as IOReader;
 use core_services::local_storage::stream::IOCursor;
-use core_services::utils::cancellation::{CancellationToken, FutureExtension};
 use crux_core::RequestHandle;
 use futures::channel::mpsc::{Receiver, UnboundedReceiver};
 use futures::task::{noop_waker, Context, Poll};
 use futures_util::lock::Mutex;
-use matchbox_socket::PeerBuffered;
 use n0_future::Stream;
 use schema::devlog::bitbridge::client_upload_request::Upload;
 use schema::devlog::bitbridge::MultiPartUploadComplete;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::time::Duration;
 
 #[derive(Debug, thiserror::Error)]
 pub enum IOWriterError {
@@ -30,6 +25,9 @@ pub enum IOWriterError {
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 pub trait IOWriter: Send + Sync {
     async fn write(&mut self, data: bytes::Bytes) -> anyhow::Result<usize>;
+    async fn write_at(&mut self, _data: bytes::Bytes, _offset: u64) -> anyhow::Result<usize> {
+        Err(anyhow::anyhow!("write_at not implemented for this IOWriter"))
+    }
     async fn flush(&mut self) -> anyhow::Result<()> {
         Ok(())
     }
@@ -54,6 +52,10 @@ pub trait DIOWriter: IOWriter {
     /// Receive a compressed chunk
     /// return an amount data that written (uncompressed size)
     async fn d_write(&mut self, data: Bytes) -> anyhow::Result<Option<usize>>;
+
+    /// Receive a compressed chunk and write it at a specific offset
+    /// return an amount data that written (uncompressed size)
+    async fn d_write_at(&mut self, data: Bytes, offset: u64) -> anyhow::Result<Option<usize>>;
 }
 
 pub enum CruxRequest {
@@ -153,43 +155,4 @@ impl<T: Send + Sync> TimeoutReceiver<T> for UnboundedReceiver<T> {
 pub trait BufferExt: Send + Sync {
     async fn flush_timeout(&self, index: usize) -> anyhow::Result<usize>;
     async fn flush_all_timeout(&self) -> anyhow::Result<()>;
-}
-
-#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
-impl BufferExt for PeerBuffered {
-    async fn flush_timeout(&self, index: usize) -> anyhow::Result<usize> {
-        let buffered = self.buffered_amount(index).await;
-        if buffered == 0 {
-            return Ok(0);
-        }
-
-        // Assume min speed = 10 KB/s = 10,000 bytes/s
-        let est_secs = buffered as f64 / 10_000.0;
-
-        // Clamp between 5s and 10s
-        let secs = est_secs.clamp(5.0, 10.0);
-        let timeout = Duration::from_secs_f64(secs);
-
-        let cancel = CancellationToken::timeout(timeout);
-        let flushed = self.flush(index).with_cancel(&cancel).await.is_ok();
-        if flushed {
-            let new_buffered = self.buffered_amount(index).await;
-            return if new_buffered < buffered {
-                Ok(buffered - new_buffered)
-            } else {
-                Err(anyhow::anyhow!("Peer hang up at {}", new_buffered))
-            }
-        }
-
-        Ok(0)
-    }
-
-    async fn flush_all_timeout(&self) -> anyhow::Result<()> {
-        for i in 0..self.len() {
-            self.flush_timeout(i).await?;
-        }
-
-        Ok(())
-    }
 }

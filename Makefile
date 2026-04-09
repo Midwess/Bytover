@@ -21,6 +21,14 @@ ffmt:
 	cargo fix -p wasm --target wasm32-unknown-unknown --allow-dirty --allow-staged
 	cargo clippy -p wasm --target wasm32-unknown-unknown --allow-dirty --allow-staged --fix
 	cargo +nightly fmt -p wasm
+	@echo "==> Fixing and formatting signalling"
+	cargo fix -p signalling --allow-dirty --allow-staged
+	cargo clippy -p signalling --allow-dirty --allow-staged --fix
+	cargo +nightly fmt -p signalling
+	@echo "==> Fixing and formatting relay-server"
+	cargo fix -p relay-server --allow-dirty --allow-staged
+	cargo clippy -p relay-server --allow-dirty --allow-staged --fix
+	cargo +nightly fmt -p relay-server
 	swiftlint lint --fix || true
 
 web:

@@ -14,12 +14,11 @@ use crate::repository::device_alias::DeviceAliasRepository;
 use crate::repository::local_resource::LocalResourceRepository;
 use crate::repository::shelf::ShelfRepository;
 use crate::repository::transfer_session::TransferSessionRepository;
-use core_services::db::repository::abstraction::table::Table;
 
 #[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]
 #[cfg_attr(target_family = "wasm", async_trait::async_trait(?Send))]
 pub trait NativePersistent: Send + Sync {
-    fn auth_session_repository(&self) -> &Box<dyn AuthSessionRepository>;
+    fn auth_session_repository(&self) -> &dyn AuthSessionRepository;
     fn local_resource_repository(&self) -> &dyn LocalResourceRepository;
     fn transfer_session_repository(&self) -> &dyn TransferSessionRepository;
     fn shelf_repository(&self) -> &dyn ShelfRepository;
@@ -93,6 +92,10 @@ pub trait NativePersistent: Send + Sync {
 
                 Ok(CoreOperationOutput::LocalResources(created_resources))
             }
+            PersistentOperation::LocalResource(LocalResourcePersistentOperation::Update(resource)) => {
+                let resource = self.local_resource_repository().update_one(resource).await?;
+                Ok(CoreOperationOutput::LocalResource(resource))
+            }
             PersistentOperation::LocalResource(LocalResourcePersistentOperation::Remove { path, shelf_id }) => {
                 self.local_resource_repository().remove(path, shelf_id).await?;
 
@@ -116,35 +119,6 @@ pub trait NativePersistent: Send + Sync {
             PersistentOperation::LocalResource(LocalResourcePersistentOperation::GetResourceType { path }) => {
                 let result = self.local_resource_repository().get_resource_type(path).await?;
                 Ok(CoreOperationOutput::ResourceType(result))
-            }
-            PersistentOperation::TransferSession(TransferSessionPersistentOperation::Save(mut session)) => {
-                // Reset back to disconnected state
-                session.owner_disconnected();
-                let session = self.transfer_session_repository().create(session).await?;
-                Ok(session.into())
-            }
-            PersistentOperation::TransferSession(TransferSessionPersistentOperation::GetAllReceivedSessions()) => {
-                let sessions = self.transfer_session_repository().find_all(None, None, None).await?;
-                log::info!("Found sessions: {:?}", sessions.len());
-                Ok(CoreOperationOutput::TransferSessions(sessions))
-            }
-            PersistentOperation::TransferSession(TransferSessionPersistentOperation::UpdateProgresses(order_id, progresses)) => {
-                let session = self.transfer_session_repository().update_progresses(order_id, progresses).await?;
-                Ok(match session {
-                    Some(session) => CoreOperationOutput::TransferSession(session),
-                    None => CoreOperationOutput::None
-                })
-            }
-            PersistentOperation::TransferSession(TransferSessionPersistentOperation::Remove(id)) => {
-                self.transfer_session_repository().delete_session(id).await?;
-                Ok(CoreOperationOutput::Bool(true))
-            }
-            PersistentOperation::TransferSession(TransferSessionPersistentOperation::UpdateResource { session_id, resource }) => {
-                let session = self.transfer_session_repository().update_resource(session_id, resource).await?;
-                Ok(match session {
-                    Some(session) => CoreOperationOutput::TransferSession(session),
-                    None => CoreOperationOutput::None
-                })
             }
             PersistentOperation::TransferSession(TransferSessionPersistentOperation::GenerateResourcePath {
                 session_id,
@@ -171,12 +145,7 @@ pub trait NativePersistent: Send + Sync {
                 Ok(CoreOperationOutput::ZipDownloadPaths(result))
             }
             PersistentOperation::TransferSession(TransferSessionPersistentOperation::Clear) => {
-                let sessions = self.transfer_session_repository().find_all(None, None, None).await?;
-                for session in sessions {
-                    let result = self.transfer_session_repository().delete_session(session.id()).await;
-                    log::info!("Deleted session: {:?}", result);
-                }
-
+                // Transfer sessions are no longer persisted - nothing to clear
                 Ok(CoreOperationOutput::Bool(true))
             }
             PersistentOperation::User(_) => Err(CoreError::NotImplemented("User operations not implemented yet".to_string())),
@@ -206,7 +175,7 @@ pub trait NativePersistent: Send + Sync {
             }
             PersistentOperation::DeviceAlias(DeviceAliasPersistentOperation::GetAll) => {
                 let aliases = self.device_alias_repository().get_all_aliases().await?;
-                Ok(CoreOperationOutput::Aliases(aliases))
+                Ok(CoreOperationOutput::DeviceAliases(aliases))
             }
             PersistentOperation::DeviceAlias(DeviceAliasPersistentOperation::ClearAll) => {
                 self.device_alias_repository().clear_all().await?;

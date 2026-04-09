@@ -74,6 +74,20 @@ services:
       - database
       - kong-migration
 
+  gateway-registration:
+    build:
+      context: .
+      dockerfile: gateway-registration/Dockerfile
+    container_name: gateway-registration
+    depends_on:
+      - kong-gateway
+    environment:
+      KONG_ADMIN_URL: "http://kong-gateway:8001"
+      REMOTE_GATEWAY_URL: "grpcs://centerbeam.proxy.rlwy.net:53581"
+    networks:
+      - kong-net
+    restart: on-failure
+
   etcd:
     image: quay.io/coreos/etcd:v3.5.25
     container_name: etcd

@@ -13,7 +13,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tonic = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["signal"] }
 tonic-middleware = { workspace = true }
 log = { workspace = true }
 async-trait = { workspace = true }
@@ -25,5 +25,4 @@ tokio-cron-scheduler = { workspace = true }
 chrono = { workspace = true }
 rand = "0.8"
 actix-web = "4"
-actix-rt = "2"
 semver = "1"

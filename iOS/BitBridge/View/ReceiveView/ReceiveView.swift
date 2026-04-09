@@ -14,7 +14,7 @@ struct ReceiveView: View {
     @Environment(\.screenSize) private var screenSize
     @EnvironmentObject private var core: Core
 
-    @State var receiveSessions: [ReceiveSessionViewModel] = []
+    @State var receiveSession: ReceiveSessionViewModel?
     @State var selectedItem: ReceiveSessionViewModel?
     @State var isShowItemOption = false
 
@@ -41,10 +41,10 @@ struct ReceiveView: View {
                         UpgradePremiumButton()
                     }
 
-                    VStack(spacing: SpaceTheme.item.value) {
-                        ForEach(self.receiveSessions, id: \.self.id) { item in
-                            ReceiveSessionHeaderView(session: item, selectedItem: $selectedItem)
-                            ReceiveSessionBodyView(session: item)
+                    if let session = self.receiveSession {
+                        VStack(spacing: SpaceTheme.item.value) {
+                            ReceiveSessionHeaderView(session: session, selectedItem: $selectedItem)
+                            ReceiveSessionBodyView(session: session)
                         }
                         .padding(.horizontal, SpaceTheme.screen.value)
                         .padding(.top, SpaceTheme.item.value)
@@ -59,11 +59,7 @@ struct ReceiveView: View {
         }
         .ignoresSafeArea()
         .onReceive(self.core.transfer, perform: { value in
-            let receivedSessions = value?.received_sessions ?? []
-
-            if receivedSessions.count != self.receiveSessions.count {
-                self.receiveSessions = receivedSessions
-            }
+            self.receiveSession = value?.received_session
         })
     }
 }

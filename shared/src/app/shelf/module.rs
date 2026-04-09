@@ -1,12 +1,12 @@
 use crate::app::core::extensions::{CoreCommandContextUtils, CoreCommandUtils};
-use crate::app::core::model_events::LocalResourceEvent;
+use crate::app::core::model_events::{LocalResourceEvent, LocalResourceUpdateEvent};
 use crate::app::modules::AppModule;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::dialog::DialogOperation;
 use crate::app::view_models::peer_avatar::PeerAvatarViewModel;
 use crate::app::view_models::selected_resource::SelectedResourceViewModel;
 use crate::app::{AppModel, BitBridge};
-use crate::entities::local_resource::{LocalResourcePath, ResourceType};
+use crate::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use crate::entities::shelf::Shelf;
 use crate::entities::transfer_session::TransferType;
 use crate::repository::local_resource::LocalResourceId;
@@ -37,7 +37,7 @@ pub struct ShelfItemViewModel {
     pub description: String,
     pub is_online: bool,
     pub is_resource_remove_allowed: bool,
-    pub resources: Vec<SelectedResourceViewModel>,
+    pub resources: Vec<SelectedResourceViewModel>
 }
 
 impl ShelfItemViewModel {
@@ -66,7 +66,7 @@ impl From<&Shelf> for ShelfItemViewModel {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ShelfViewModel {
     pub shelves: Vec<ShelfItemViewModel>,
-    pub is_loading: bool,
+    pub is_loading: bool
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -74,6 +74,7 @@ pub enum ShelfEvent {
     Launch,
     BeginLoadingResources,
     EndLoadingResources,
+    ValidateLoadedResources(Vec<LocalResource>),
     OpenResource {
         shelf_id: u64,
         resource_id: u64
@@ -130,6 +131,9 @@ impl AppModule<BitBridge> for ShelfModule {
             Self::Event::EndLoadingResources => {
                 model.shelf.is_loading = false;
                 Command::render()
+            }
+            Self::Event::ValidateLoadedResources(resource_ids) => {
+                Command::handle_result(move |it| async move { it.app().validate_loaded_resources(resource_ids).await })
             }
             Self::Event::AddResources { shelf_id, selections } => {
                 let Some(shelf) = model.shelf.get_shelf(shelf_id) else {
@@ -196,7 +200,13 @@ impl AppModule<BitBridge> for ShelfModule {
                             }
                         }
                     }
-                    _ => {}
+                    LocalResourceEvent::Update(id, LocalResourceUpdateEvent::Update(resource)) => {
+                        if let Some(shelf_id) = id.shelf_id {
+                            if let Some(shelf) = model.shelf.get_shelf_mut(shelf_id) {
+                                shelf.update_resource(&id, resource);
+                            }
+                        }
+                    }
                 }
 
                 Command::done()
@@ -336,11 +346,11 @@ impl AppModule<BitBridge> for ShelfModule {
                     for resource_vm in &mut view_model.resources {
                         if let Ok(order_id) = resource_vm.order_id.parse::<u64>() {
                             if let Some(progress) = session.resource_progress(order_id) {
-                                resource_vm.received_by_peers = progress
-                                    .received_by_peers()
-                                    .iter()
-                                    .map(PeerAvatarViewModel::from)
-                                    .collect();
+                                resource_vm.received_by_peers = if progress.is_failed() || progress.is_canceled() {
+                                    Vec::new()
+                                } else {
+                                    progress.received_by_peers().iter().map(PeerAvatarViewModel::from).collect()
+                                };
                             }
                         }
                     }
@@ -354,7 +364,7 @@ impl AppModule<BitBridge> for ShelfModule {
 
         ShelfViewModel {
             shelves,
-            is_loading: model.shelf.is_loading,
+            is_loading: model.shelf.is_loading
         }
     }
 }

@@ -2,7 +2,7 @@ use crate::app::shelf::module::ShelfEvent;
 use crate::app::transfer::module::TransferEvent;
 use crate::app::AppEvent;
 use crate::entities::local_resource::LocalResource;
-use crate::entities::peer::Peer;
+use crate::entities::peer::ResourceReceivedPeer;
 use crate::entities::transfer_session::{SessionResourceUpdate, ThumbnailUpdatedEvent, TransferProgress, TransferSession};
 use crate::repository::local_resource::LocalResourceId;
 use crate::repository::transfer_session::TransferSessionId;
@@ -32,7 +32,7 @@ pub trait UpdateAction<Data> {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PeerReceivedEvent {
     pub resource_order_id: u64,
-    pub peer: Peer
+    pub peer: ResourceReceivedPeer
 }
 
 impl UpdateAction<TransferSession> for PeerReceivedEvent {
@@ -58,7 +58,7 @@ pub enum TransferSessionUpdateEvent {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, From)]
 pub enum LocalResourceUpdateEvent {
-    Update
+    Update(LocalResource)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

@@ -1,18 +1,17 @@
 use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
-use crate::app::core::model_events::{PeerReceivedEvent, SessionLoadError, TransferSessionModelEvent, UpdateAction};
+use crate::app::core::model_events::{PeerReceivedEvent, SessionLoadError, TransferSessionModelEvent};
+use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::dialog::{DialogOperation, MessageReason};
-use crate::app::operations::p2p::P2POperation;
+use crate::app::operations::p2p::{P2POperation, P2POperationOutput};
 use crate::app::operations::persistent::TransferSessionPersistentOperation;
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use crate::app::operations::{CoreOperation, CoreOperationOutput};
-use crate::app::p2p::module::P2PEvent;
 use crate::app::transfer::module::TransferEvent;
 use crate::entities::device::DeviceInfo;
-use crate::entities::finding_scope::FindingScope;
 use crate::entities::local_resource::LocalResource;
-use crate::entities::peer::Peer;
+use crate::entities::peer::ResourceReceivedPeer;
 use crate::entities::target::{P2PConnectionState, TransferTarget};
 use crate::entities::transfer_session::{
     SessionResourceUpdate,
@@ -34,47 +33,25 @@ use std::collections::HashMap;
 pub const MAX_CONCURRENT_P2P_SESSIONS: usize = 5;
 
 impl AppCommand {
-    pub fn maybe_auto_view_p2p_session(&self, sessions: &[TransferSession]) -> Option<TransferEvent> {
-        let p2p_receive_sessions: Vec<_> = sessions
-            .iter()
-            .filter(|s| matches!(s.transfer_type, TransferType::Receive) && s.target.is_peer())
-            .collect();
-
-        if p2p_receive_sessions.len() == 1 {
-            let session = p2p_receive_sessions[0];
-            Some(TransferEvent::ViewSession {
-                password: session.password.clone(),
-                session_id: session.order_id,
-                transfer_type: TransferType::Receive
-            })
-        } else {
-            None
-        }
-    }
-
     pub async fn load_transfer_sessions(&self) -> Result<(), CoreError> {
-        let receive_sessions = self.run(TransferSessionPersistentOperation::get_all_received_sessions()).await?;
-
-        for session in &receive_sessions {
-            if let TransferTarget::P2P { ref scope, .. } = session.target {
-                self.update_model(P2PEvent::AddFindingScope(scope.clone()));
-            }
-        }
-
-        if let Some(auto_view_event) = self.maybe_auto_view_p2p_session(&receive_sessions) {
-            self.update_model(auto_view_event);
-        }
-
-        let events = receive_sessions
-            .into_iter()
-            .map(|it| TransferEvent::ModelEvent(TransferSessionModelEvent::Add(it)))
-            .collect::<Vec<_>>();
-        self.update_model_series(events);
-
         Ok(())
     }
 
-    pub async fn delete_session(&self, transfer_session: &TransferSession) -> Result<(), CoreError> {
+    async fn resolve_received_peer(&self, peer_id: String) -> ResourceReceivedPeer {
+        match self.run(P2POperation::get_peer(peer_id.clone())).await {
+            Ok(Some(peer)) => ResourceReceivedPeer::from(&peer),
+            Ok(None) => {
+                log::warn!("Peer {peer_id} not found after successful transfer, using fallback recipient");
+                ResourceReceivedPeer::fallback(peer_id)
+            }
+            Err(error) => {
+                log::warn!("Failed to resolve peer {peer_id} after successful transfer: {error:?}");
+                ResourceReceivedPeer::fallback(peer_id)
+            }
+        }
+    }
+
+    pub async fn cancel_session(&self, transfer_session: &TransferSession) -> Result<(), CoreError> {
         log::info!("Cancelling transfer: {:?}", transfer_session.order_id);
 
         let _ = self
@@ -84,22 +61,11 @@ impl AppCommand {
             ))
             .await;
 
-        if let TransferTarget::P2P { ref scope, .. } = transfer_session.target {
-            self.update_model(P2PEvent::RemoveFindingScope(scope.clone()));
-        }
-
-        let _ = self.run(TransferSessionPersistentOperation::remove(transfer_session.id())).await;
         self.update_model(TransferSessionModelEvent::Remove(transfer_session.id()));
-
         Ok(())
     }
 
-    pub async fn upload(&self, session: TransferSession) -> Result<(), CoreError> {
-        if session.resources.is_empty() {
-            self.run(DialogOperation::toast("Please select at least one resource.".to_string())).await;
-            return Ok(());
-        }
-
+    pub async fn upload(&self, mut session: TransferSession) -> Result<(), CoreError> {
         let TransferTarget::Internet { to_emails, .. } = &session.target else {
             return Ok(());
         };
@@ -109,6 +75,19 @@ impl AppCommand {
                 self.run(DialogOperation::toast("Invalid email format".to_string())).await;
                 return Ok(());
             }
+        }
+
+        let selected_resources = std::mem::take(&mut session.resources);
+        session.resources = self.sync_local_resources(selected_resources).await;
+        session.progress = session
+            .resources
+            .iter()
+            .map(|it| TransferProgress::new(it.order_id, it.size, session.transfer_type.clone()))
+            .collect();
+
+        if session.resources.is_empty() {
+            self.run(DialogOperation::toast("Please select at least one resource.".to_string())).await;
+            return Ok(());
         }
 
         let mut transfer_session = match self.run(TransferOperation::create_cloud_session(session.clone())).await {
@@ -152,10 +131,6 @@ impl AppCommand {
                         break;
                     }
                     TransferOperationOutput::ThumbnailUpdated(thumbnail) => {
-                        if let Some(resource) = transfer_session.resource_mut(thumbnail.resource_id).cloned() {
-                            TransferSessionPersistentOperation::update_resource(transfer_session.id(), resource);
-                        }
-
                         self.update_model(TransferSessionModelEvent::Update(transfer_session.id(), thumbnail.into()));
                     }
                     other => {
@@ -192,7 +167,8 @@ impl AppCommand {
     }
 
     pub async fn find_transfer_session(&self, keywords: String) -> Result<(), CoreError> {
-        let session_overview = self.run(TransferOperation::find_transfer_session(keywords.clone())).await?;
+        log::info!("Searching for transfer session: {keywords:?}");
+        let session_overview = self.run(TransferOperation::find_transfer_session(keywords.clone())).await.ok().flatten();
 
         let Some(session) = session_overview else {
             log::info!("No session found");
@@ -204,29 +180,95 @@ impl AppCommand {
             return Ok(());
         };
 
-        if let Err(e) = self.run(TransferSessionPersistentOperation::save(session.clone())).await {
-            log::error!("Failed to save session: {e:?}");
-        };
-
-        if let TransferTarget::P2P { ref scope, .. } = session.target {
-            self.update_model(P2PEvent::AddFindingScope(scope.clone()));
+        log::info!("Found session: {session:?}");
+        if !matches!(session.transfer_type, TransferType::Receive) {
+            return Ok(());
         }
 
-        let should_auto_view = matches!(session.transfer_type, TransferType::Receive);
-        let auto_view_event = if should_auto_view {
-            Some(TransferEvent::ViewSession {
-                password: session.password.clone(),
-                session_id: session.order_id,
-                transfer_type: TransferType::Receive
-            })
-        } else {
-            None
-        };
+        let session_order_id = session.order_id;
+        let password = session.password.clone();
+        let target = session.target.clone();
 
         self.update_model(TransferSessionModelEvent::Add(session));
 
-        if let Some(event) = auto_view_event {
-            self.update_model(event);
+        if let TransferTarget::P2P {
+            signalling_key: Some(key),
+            signalling_route: Some(route),
+            ..
+        } = &target
+        {
+            self.update_model(TransferEvent::UpdateConnectionState {
+                session_id: session_order_id,
+                state: P2PConnectionState::Connecting
+            });
+
+            let device = self.run(DeviceOperation::get_device_info()).await;
+            let user = RpcOperation::get_me().into_future(self.ctx()).await.ok();
+            let current_user = self.gen_peer(user, device.unwrap()).await;
+
+            log::info!("Connecting to peer with key: {key:?}");
+            let mut stream = self.stream_from_shell(
+                P2POperation::ConnectPeer {
+                    signalling_key: key.to_string(),
+                    signalling_route: route.to_string(),
+                    current_user
+                }
+                .into()
+            );
+
+            let mut viewed = false;
+            while let Some(output) = stream.next().await {
+                match output {
+                    CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(peer)) => {
+                        self.update_model(TransferEvent::PeerConnected {
+                            session_id: session_order_id,
+                            peer
+                        });
+
+                        if !viewed {
+                            viewed = true;
+                            self.update_model(TransferEvent::ViewSession {
+                                password: password.clone(),
+                                session_id: session_order_id,
+                                transfer_type: TransferType::Receive
+                            });
+                        }
+                    }
+                    CoreOperationOutput::P2P(P2POperationOutput::ReceivedResourceNotification {
+                        session_order_id,
+                        resource,
+                        peer_id
+                    }) => {
+                        self.update_model(TransferEvent::ResourceNotification {
+                            session_order_id,
+                            resource,
+                            peer_id
+                        });
+                    }
+                    CoreOperationOutput::P2P(P2POperationOutput::CancelSessionRequest { session_id }) => {
+                        log::info!("Peer canceled session {session_id}");
+                        self.update_model(TransferSessionModelEvent::Remove(TransferSessionId {
+                            order_id: Some(session_id.to_string()),
+                            transfer_type: Some(TransferType::Receive)
+                        }));
+                        return Ok(());
+                    }
+                    CoreOperationOutput::Error(e) => {
+                        log::error!("Failed to connect to peer: {e:?}");
+                        self.update_model(TransferEvent::UpdateConnectionState {
+                            session_id: session_order_id,
+                            state: P2PConnectionState::Failed(e.to_string())
+                        });
+                        return Ok(());
+                    }
+                    CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected(peer)) => {
+                        log::info!("Peer disconnected during transfer session: {:?}", peer.id);
+                        self.update_model(TransferEvent::PeerDisconnected { peer_id: peer.id });
+                        return Ok(());
+                    }
+                    _ => {}
+                }
+            }
         }
 
         Ok(())
@@ -438,8 +480,6 @@ impl AppCommand {
                     log::error!("Error receiving session detail: {:?}", e);
 
                     if matches!(e, CoreError::PeerRequestError(PeerErrorsMessage::SessionNotFound)) {
-                        log::info!("Deleting session {:?} from database as it was not found", session_id);
-                        let _ = self.run(TransferSessionPersistentOperation::remove(session_id.clone())).await;
                         self.update_model(TransferSessionModelEvent::Remove(session_id.clone()));
                     } else {
                         self.update_model(TransferSessionModelEvent::Update(
@@ -459,7 +499,7 @@ impl AppCommand {
 
     pub async fn handle_download_request(
         &self,
-        peer: Option<Peer>,
+        peer_id: String,
         session_id: u64,
         transfer_id: u16,
         resource: Option<LocalResource>
@@ -469,13 +509,7 @@ impl AppCommand {
             return Ok(());
         };
 
-        let Some(peer) = peer else {
-            log::error!("Peer not found for download request");
-            return Ok(());
-        };
-
         let resource_order_id = resource.order_id;
-        let peer_id = peer.id.clone();
         let result = self
             .run(P2POperation::stream_resource_to_peer(
                 peer_id.clone(),
@@ -487,21 +521,30 @@ impl AppCommand {
 
         match result {
             Ok(()) => {
+                let peer = self.resolve_received_peer(peer_id).await;
                 let session_id_obj = TransferSessionId {
                     order_id: Some(session_id.to_string()),
                     transfer_type: Some(TransferType::send_any())
                 };
                 self.update_model(TransferSessionModelEvent::Update(
                     session_id_obj,
-                    PeerReceivedEvent {
-                        resource_order_id,
-                        peer
-                    }
-                    .into()
+                    PeerReceivedEvent { resource_order_id, peer }.into()
                 ));
             }
             Err(e) => {
-                log::error!("Failed to stream resource to peer: {e:?}");
+                let is_canceled = match &e {
+                    CoreError::Network(message) => {
+                        let lower = message.to_ascii_lowercase();
+                        lower.contains("task cancelled") || lower.contains("canceled")
+                    }
+                    _ => false
+                };
+
+                if is_canceled {
+                    log::info!("Peer canceled resource {resource_order_id} in session {session_id}");
+                } else {
+                    log::error!("Failed to stream resource to peer: {e:?}");
+                }
             }
         }
 
@@ -673,8 +716,7 @@ impl AppCommand {
                         if progress.is_completed() {
                             aggregate_progress = progress;
                         }
-                    }
-                    else {
+                    } else {
                         let current = resource_progress_map.entry(progress.resource_order_id).or_insert(progress.total_bytes());
                         *current = (*current).max(progress.total_bytes());
 
@@ -715,12 +757,9 @@ impl AppCommand {
         session_id: TransferSessionId,
         password: Option<String>
     ) -> Result<(), CoreError> {
-        use crate::app::AppEvent;
-
         match &session.target {
             TransferTarget::P2P {
                 connection_state,
-                scope,
                 from_peer,
                 ..
             } => {
@@ -735,11 +774,10 @@ impl AppCommand {
                 }
 
                 if from_peer.is_none() {
-                    self.update_model(AppEvent::P2P(P2PEvent::AddFindingScope(scope.clone())));
                     return Ok(());
                 }
 
-                let peer_id = from_peer.as_ref().unwrap().id().to_string();
+                let peer_id = from_peer.as_ref().unwrap().id.clone();
                 self.request_session_detail(peer_id, session_id, session.order_id, password).await
             }
             TransferTarget::Internet { .. } => self.view_public_session(session, password).await
@@ -752,23 +790,34 @@ impl AppCommand {
         password: Option<String>,
         user: User,
         from_shelf_id: u64,
-        shelf_name: String
+        shelf_name: String,
+        signalling_key: String,
+        signalling_route: String
     ) -> Result<(), CoreError> {
-        let p2p_session = self.run(RpcOperation::create_p2p_session(shelf_name)).await?;
+        let selected_resources = self.sync_local_resources(selected_resources).await;
+        if selected_resources.is_empty() {
+            self.run(DialogOperation::toast("No resources selected".to_string())).await;
+            return Ok(());
+        }
+
+        let p2p_session = self
+            .run(RpcOperation::create_p2p_session(
+                shelf_name,
+                signalling_key,
+                signalling_route.clone()
+            ))
+            .await?;
 
         let mut session = TransferSession::p2p(
             selected_resources,
             password,
-            p2p_session.signalling_room_id.clone(),
-            p2p_session.signalling_scope.clone(),
+            p2p_session.signalling_key.clone(),
+            p2p_session.signalling_route.clone(),
             p2p_session.alias.clone(),
             p2p_session.access_url.clone(),
             p2p_session.session_id,
             from_shelf_id
         );
-
-        let scope = FindingScope::new(&p2p_session.signalling_room_id);
-        self.update_model(P2PEvent::AddFindingScope(scope));
 
         session.from_user = user;
         self.update_model(TransferSessionModelEvent::Add(session.clone()));

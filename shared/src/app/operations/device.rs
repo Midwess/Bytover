@@ -56,10 +56,6 @@ impl DeviceOperation {
         })
     }
 
-    pub fn open_session(session_id: u64) -> AppRequestBuilder<impl Future<Output = ()>> {
-        AppCommand::request_from_shell(DeviceOperation::OpenSession(session_id)).map(|_it| ())
-    }
-
     pub fn open(path: LocalResourcePath) -> AppRequestBuilder<impl Future<Output = ()>> {
         AppCommand::request_from_shell(DeviceOperation::Open(path)).map(|_it| ())
     }
@@ -68,12 +64,12 @@ impl DeviceOperation {
         AppCommand::request_from_shell(DeviceOperation::CloseShelf(shelf_id)).map(|_it| ())
     }
 
-    pub fn paste_clipboard(shelf_id: u64) -> AppRequestBuilder<impl Future<Output = Vec<crate::app::shelf::module::ResourceSelection>>> {
-        AppCommand::request_from_shell(DeviceOperation::PasteClipboard(shelf_id)).map(|output| {
-            match output {
-                super::CoreOperationOutput::ResourceSelections(selections) => selections,
-                _ => vec![]
-            }
+    pub fn paste_clipboard(
+        shelf_id: u64
+    ) -> AppRequestBuilder<impl Future<Output = Vec<crate::app::shelf::module::ResourceSelection>>> {
+        AppCommand::request_from_shell(DeviceOperation::PasteClipboard(shelf_id)).map(|output| match output {
+            super::CoreOperationOutput::ResourceSelections(selections) => selections,
+            _ => vec![]
         })
     }
 }

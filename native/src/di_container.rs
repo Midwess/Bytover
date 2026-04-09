@@ -1,4 +1,4 @@
-use crate::config::{get_gateway_grpc_url, get_locator_url, get_signalling_server_ws_url, GATEWAY_HOST};
+use crate::config::{get_gateway_grpc_url, GATEWAY_HOST};
 use crate::core_api_impl::net_stream::NetStreamImpl;
 use crate::native::executor::NativeExecutor;
 use crate::native::p2p::P2PNativeExecutorImpl;
@@ -12,6 +12,7 @@ use crate::repository::local_resource::LocalResourceRepositoryImpl;
 use crate::repository::shelf::ShelfRepositoryImpl;
 use crate::repository::transfer_session::TransferSessionRepositoryImpl;
 use crate::repository::RedbPoolProvider;
+use crate::webrtc::server::WebRtcServer;
 use core_services::utils::pool::allocator::{PoolAllocator, PoolBuilder, PoolResourceProvider};
 use core_services::utils::pool::request::PoolRequestBuilder;
 use devlog_sdk::distributed_id::init_scoped_id_generator;
@@ -20,14 +21,13 @@ use shared::protocol::public_cloud::cloud_service::CloudService;
 use shared::protocol::rpc::app_server::AppServer;
 use shared::protocol::rpc::auth_provider::AuthProvider;
 use shared::protocol::rpc::cloud_server::CloudServer;
-use shared::protocol::webrtc::webrtc::WebRtc;
 use shared::repository::auth_session::AuthSessionRepository;
 use shared::repository::local_resource::LocalResourceRepository;
 use shared::repository::path_resolver::PathResolver;
 use shared::repository::shelf::ShelfRepository;
 use shared::repository::transfer_session::TransferSessionRepository;
-use shared::shell::api::network::InternetConnection;
 use shared::shell::api::{CoreBridge, NetStream};
+use shared::shell::executor::transfer::WebRtc;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::OnceCell;
@@ -53,7 +53,7 @@ impl DiContainer {
                 core_bridge: OnceCell::new(),
                 native_executor: OnceCell::new(),
                 db: OnceCell::new(),
-                rpc_connection: RpcNetworkModuleImpl::new(get_gateway_grpc_url(), GATEWAY_HOST.unwrap().to_string()),
+                rpc_connection: RpcNetworkModuleImpl::new(get_gateway_grpc_url(), GATEWAY_HOST.unwrap_or("localhost").to_string()),
                 cloud_server: OnceCell::new()
             };
 
@@ -169,12 +169,11 @@ impl DiContainer {
         }
 
         let local_resource_repo = Arc::new(self.get_local_resource_repository());
-        let transfer_session_repo = Arc::new(self.get_transfer_session_repository());
-        let web_rtc = Arc::new(WebRtc::new(
-            get_signalling_server_ws_url(),
-            local_resource_repo.clone(),
-            transfer_session_repo
-        ));
+
+        let web_rtc_stub = Arc::new(WebRtc::new());
+
+        let web_rtc_server = WebRtcServer::new(local_resource_repo.clone());
+
         let cloud_service = CloudService {
             server: self.get_cloud_server(),
             active_session: Default::default(),
@@ -183,7 +182,6 @@ impl DiContainer {
         };
 
         let executor = NativeExecutor {
-            internet_connection: InternetConnection::new(get_locator_url()),
             rpc: Box::new(NativeRpcImpl {
                 auth_server: self.get_authentication_server()
             }),
@@ -195,10 +193,10 @@ impl DiContainer {
                 device_alias_repository: Box::new(self.get_device_alias_repository())
             }),
             transfer: Box::new(TransferNativeImpl {
-                web_rtc: web_rtc.clone(),
+                web_rtc: web_rtc_stub.clone(),
                 cloud_service
             }),
-            p2p: Box::new(P2PNativeExecutorImpl { web_rtc })
+            p2p: Box::new(P2PNativeExecutorImpl { web_rtc: web_rtc_server })
         };
 
         let _ = self.native_executor.set(executor);

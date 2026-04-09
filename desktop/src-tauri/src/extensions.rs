@@ -98,14 +98,6 @@ fn release_registry_slot(label: &str) {
 
 // ── Monitor helper ────────────────────────────────────────────────────────────
 
-fn get_monitor_at_point<R: Runtime>(app: &tauri::AppHandle<R>, x: i32, y: i32) -> Option<tauri::Monitor> {
-    app.available_monitors().ok()?.into_iter().find(|m| {
-        let pos = m.position();
-        let size = m.size();
-        x >= pos.x && x < pos.x + size.width as i32 &&
-        y >= pos.y && y < pos.y + size.height as i32
-    })
-}
 
 // ── Trait definition ──────────────────────────────────────────────────────────
 

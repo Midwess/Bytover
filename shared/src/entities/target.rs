@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-use crate::entities::finding_scope::FindingScope;
 use crate::entities::peer::Peer;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -15,8 +14,11 @@ pub enum P2PConnectionState {
 pub enum TransferTarget {
     P2P {
         from_peer: Option<Peer>,
-        scope: FindingScope,
-        connection_state: P2PConnectionState
+        connection_state: P2PConnectionState,
+        #[serde(default)]
+        signalling_key: Option<String>,
+        #[serde(default)]
+        signalling_route: Option<String>
     },
     Internet {
         to_emails: Vec<String>
@@ -88,9 +90,7 @@ impl TransferTarget {
 impl TransferTarget {
     pub fn id(&self) -> String {
         match self {
-            TransferTarget::P2P { from_peer, .. } => {
-                from_peer.as_ref().map(|p| p.id().to_string()).unwrap_or_else(|| "unknown".to_string())
-            }
+            TransferTarget::P2P { from_peer, .. } => from_peer.as_ref().map(|p| p.id.clone()).unwrap_or_else(|| "unknown".to_string()),
             TransferTarget::Internet { .. } => "public".to_string()
         }
     }

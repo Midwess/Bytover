@@ -16,16 +16,26 @@ pub enum RpcOperation {
     GetAuthenticateUrl(DeviceInfo),
     GetMe(),
     GetUserById(u64),
-    Feedback { email: String, message: String },
-    RandomAvatar,
-    CreateP2PSession { alias: String },
-    GetDeviceAliases
+    Feedback {
+        email: String,
+        message: String
+    },
+    CreateP2PSession {
+        alias: String,
+        signalling_key: String,
+        signalling_route: String
+    },
+    GetDeviceAliases,
+    GenPeer {
+        device: DeviceInfo
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum RpcOperationOutput {
     GetMe(User),
-    GetUserById(User)
+    GetUserById(User),
+    GenPeer(crate::entities::peer::Peer)
 }
 
 impl Operation for RpcOperation {
@@ -65,18 +75,17 @@ impl RpcOperation {
         })
     }
 
-    pub fn random_avatar() -> AppRequestBuilder<impl Future<Output = Result<String, CoreError>>> {
-        Command::request_from_shell(CoreOperation::Rpc(RpcOperation::RandomAvatar)).map(|res| match res {
-            CoreOperationOutput::String(value) => Ok(value),
-            CoreOperationOutput::Error(error) => Err(error),
-            _ => panic!("Invalid output for RpcOperation::RandomAvatar")
-        })
-    }
-
     pub fn create_p2p_session(
-        alias: String
+        alias: String,
+        signalling_key: String,
+        signalling_route: String
     ) -> AppRequestBuilder<impl Future<Output = Result<schema::devlog::bitbridge::P2pSession, CoreError>>> {
-        Command::request_from_shell(CoreOperation::Rpc(RpcOperation::CreateP2PSession { alias })).map(|res| match res {
+        Command::request_from_shell(CoreOperation::Rpc(RpcOperation::CreateP2PSession {
+            alias,
+            signalling_key,
+            signalling_route
+        }))
+        .map(|res| match res {
             CoreOperationOutput::P2PSession(session) => Ok(session),
             CoreOperationOutput::Error(error) => Err(error),
             _ => panic!("Invalid output for RpcOperation::CreateP2PSession")
@@ -85,9 +94,17 @@ impl RpcOperation {
 
     pub fn get_device_aliases() -> AppRequestBuilder<impl Future<Output = Result<Vec<String>, CoreError>>> {
         Command::request_from_shell(CoreOperation::Rpc(RpcOperation::GetDeviceAliases)).map(|res| match res {
-            CoreOperationOutput::Aliases(aliases) => Ok(aliases),
+            CoreOperationOutput::DeviceAliases(aliases) => Ok(aliases),
             CoreOperationOutput::Error(error) => Err(error),
             _ => panic!("Invalid output for RpcOperation::GetDeviceAliases")
+        })
+    }
+
+    pub fn gen_peer(device: DeviceInfo) -> AppRequestBuilder<impl Future<Output = Result<crate::entities::peer::Peer, CoreError>>> {
+        Command::request_from_shell(CoreOperation::Rpc(RpcOperation::GenPeer { device })).map(|res| match res {
+            CoreOperationOutput::Rpc(RpcOperationOutput::GenPeer(peer)) => Ok(peer),
+            CoreOperationOutput::Error(error) => Err(error),
+            _ => panic!("Invalid output for RpcOperation::GenPeer")
         })
     }
 }

@@ -44,15 +44,16 @@ enum TransferSessionStatus {
     Canceled
 }
 
-impl ToString for TransferSessionStatus {
-    fn to_string(&self) -> String {
-        match self {
-            TransferSessionStatus::Created => "Created".to_string(),
-            TransferSessionStatus::InProgress => "InProgress".to_string(),
-            TransferSessionStatus::Success => "Success".to_string(),
-            TransferSessionStatus::Failed => "Failed".to_string(),
-            TransferSessionStatus::Canceled => "Canceled".to_string()
-        }
+impl std::fmt::Display for TransferSessionStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            TransferSessionStatus::Created => "Created",
+            TransferSessionStatus::InProgress => "InProgress",
+            TransferSessionStatus::Success => "Success",
+            TransferSessionStatus::Failed => "Failed",
+            TransferSessionStatus::Canceled => "Canceled"
+        };
+        write!(f, "{}", s)
     }
 }
 

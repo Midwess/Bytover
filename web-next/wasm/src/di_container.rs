@@ -1,5 +1,5 @@
 use crate::bridge::bridge::CoreBridgeImpl;
-use crate::config::{get_gateway_grpc_url, get_locator_url, get_signalling_server_ws_url};
+use crate::config::{get_gateway_grpc_url, get_signalling_server_http_url_for_route, get_signalling_server_ws_url_for_route};
 use crate::executor::executor::NativeExecutor;
 use crate::executor::p2p::P2PNativeExecutorImpl;
 use crate::executor::persistent::NativePersistentImpl;
@@ -13,6 +13,7 @@ use crate::repository::local_resource::LocalResourceRepositoryImpl;
 use crate::repository::shelf::ShelfRepositoryImpl;
 use crate::repository::transfer_session::TransferSessionRepositoryImpl;
 use crate::repository::IdbPoolProvider;
+use crate::webrtc::signaling::SignalingClient;
 use core_services::utils::never_send::NeverSend;
 use core_services::utils::pool::allocator::{PoolAllocator, PoolBuilder, PoolResourceProvider};
 use core_services::utils::pool::request::PoolRequestBuilder;
@@ -23,13 +24,12 @@ use shared::protocol::public_cloud::cloud_service::CloudService;
 use shared::protocol::rpc::app_server::AppServer;
 use shared::protocol::rpc::auth_provider::AuthProvider;
 use shared::protocol::rpc::cloud_server::CloudServer;
-use shared::protocol::webrtc::webrtc::WebRtc;
 use shared::repository::auth_session::AuthSessionRepository;
 use shared::repository::local_resource::LocalResourceRepository;
 use shared::repository::shelf::ShelfRepository;
 use shared::repository::transfer_session::TransferSessionRepository;
-use shared::shell::api::network::InternetConnection;
 use shared::shell::api::{CoreBridge, NetStream};
+use shared::shell::executor::transfer::WebRtc;
 use std::sync::Arc;
 use std::time::Duration;
 use tonic_web_wasm_client::Client;
@@ -169,16 +169,19 @@ impl DiContainer {
         &*self.core_bridge
     }
 
+    pub fn get_signalling_client_for_route(&self, route: &str) -> SignalingClient {
+        SignalingClient::new(
+            get_signalling_server_ws_url_for_route(route),
+            get_signalling_server_http_url_for_route(route)
+        )
+    }
+
     pub async fn get_native_executor(&'static self) -> &'static NativeExecutor {
         if let Some(executor) = self.native_executor.get() {
             return executor
         }
 
-        let web_rtc = Arc::new(WebRtc::new(
-            get_signalling_server_ws_url(),
-            self.get_local_resource_repository().await,
-            self.get_transfer_session_repository()
-        ));
+        let web_rtc = Arc::new(WebRtc::new());
         let cloud_service = CloudService {
             server: self.get_cloud_server(),
             active_session: Default::default(),
@@ -187,7 +190,6 @@ impl DiContainer {
         };
 
         let executor = NativeExecutor {
-            internet_connection: InternetConnection::new(get_locator_url()),
             rpc: Box::new(NativeRpcImpl {
                 auth_server: self.get_authentication_server()
             }),
@@ -204,7 +206,12 @@ impl DiContainer {
                 cloud_server: self.get_cloud_server(),
                 auth_server: self.get_authentication_server()
             }),
-            p2p: Box::new(P2PNativeExecutorImpl { web_rtc })
+            p2p: Box::new(P2PNativeExecutorImpl {
+                web_rtc: OnceCell::from(web_rtc),
+                client: std::sync::Arc::new(std::sync::Mutex::new(None)),
+                signalling: OnceCell::new(),
+                current_user: OnceCell::new()
+            })
         };
 
         let _ = self.native_executor.set(executor);

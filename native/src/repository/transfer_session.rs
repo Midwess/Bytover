@@ -8,15 +8,14 @@ use core_services::db::repository::abstraction::table::Table;
 use core_services::utils::pool::reponse::PoolResponse;
 use core_services::utils::pool::request::PoolRequest;
 use redb::Database;
-use shared::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
-use shared::entities::transfer_session::{TransferProgress, TransferSession};
+use shared::entities::local_resource::{LocalResourcePath, ResourceType};
+use shared::entities::transfer_session::TransferSession;
 use shared::repository::errors::PersistenceError;
 use shared::repository::path_resolver::PathResolver;
 use shared::repository::transfer_session::{TransferSessionId, TransferSessionRepository, ZipDownloadPaths};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tokio::fs;
 
 pub struct TransferSessionRepositoryImpl {
     pub db: PoolRequest<Database>,
@@ -90,65 +89,6 @@ impl Repository<TransferSession, TransferSessionId> for TransferSessionRepositor
 
 #[async_trait::async_trait]
 impl TransferSessionRepository for TransferSessionRepositoryImpl {
-    async fn update_progresses(
-        &self,
-        order_id: u64,
-        progresses: Vec<TransferProgress>
-    ) -> Result<Option<TransferSession>, PersistenceError> {
-        let id = TransferSessionId {
-            order_id: Some(order_id.to_string()),
-            ..Default::default()
-        };
-        let session = RedbRepository::<TransferSession, RedbIdWrapper<TransferSessionId>>::find_one(self, &RedbIdWrapper(id)).await?;
-
-        if let Some(session) = session {
-            let mut session = session;
-            session.progress = progresses;
-            let result = RedbRepository::<TransferSession, RedbIdWrapper<TransferSessionId>>::update_one(self, session).await?;
-            Ok(Some(result))
-        } else {
-            Ok(None)
-        }
-    }
-
-    async fn update_resource(
-        &self,
-        session_id: TransferSessionId,
-        resource: LocalResource
-    ) -> Result<Option<TransferSession>, PersistenceError> {
-        let session =
-            RedbRepository::<TransferSession, RedbIdWrapper<TransferSessionId>>::find_one(self, &RedbIdWrapper(session_id.clone()))
-                .await?;
-
-        if let Some(mut session) = session {
-            session.replace_resource(resource);
-            let result = RedbRepository::<TransferSession, RedbIdWrapper<TransferSessionId>>::update_one(self, session).await?;
-            Ok(Some(result))
-        } else {
-            Ok(None)
-        }
-    }
-
-    async fn delete_session(&self, session_id: TransferSessionId) -> Result<(), PersistenceError> {
-        let session =
-            RedbRepository::<TransferSession, RedbIdWrapper<TransferSessionId>>::delete_one(self, &RedbIdWrapper(session_id.clone()))
-                .await?;
-        let session_order_id = session.order_id;
-        let session_dir_path = self.path_resolver.get_session_dir_path(session_order_id).await;
-        let path_buf = PathBuf::from(session_dir_path);
-        if !path_buf.is_dir() {
-            return Err(PersistenceError::NotFound(format!(
-                "Not found folder for session {session_order_id}"
-            )))
-        }
-
-        if let Err(e) = fs::remove_dir_all(path_buf).await {
-            log::error!("Error when delete session folder but we already delete the session record, so skipping...: {e}");
-        }
-
-        Ok(())
-    }
-
     async fn generate_resource_saved_paths(
         &self,
         session_order_id: u64,

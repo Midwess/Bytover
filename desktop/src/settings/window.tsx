@@ -186,7 +186,7 @@ function SettingsWindow() {
                     <img src="/icon.png" alt="Bytover" className="w-8 h-8 rounded-lg" />
                     <div className="text-center">
                         <div className="text-[11px] font-medium text-white/90">Bytover</div>
-                        <div className="text-[10px] text-white/40">Version {version}</div>
+                        <div className="text-xs text-white/40">Version {version}</div>
                     </div>
                 </div>
             </div>
@@ -516,8 +516,8 @@ function AboutContent({version}: {version: string}) {
             </SettingsSection>
 
             <div className="flex flex-col items-center gap-1 mt-8 opacity-20">
-                <span className="text-[10px] uppercase tracking-[0.2em] font-bold">Built with Tauri</span>
-                <span className="text-[10px]">© 2026 Westrise</span>
+                <span className="text-xs uppercase tracking-[0.2em] font-bold">Built with Tauri</span>
+                <span className="text-xs">© 2026 Westrise</span>
             </div>
         </div>
     )

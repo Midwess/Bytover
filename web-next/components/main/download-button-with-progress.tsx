@@ -1,6 +1,6 @@
 'use client'
 
-import {Check, ArrowDown} from 'lucide-react'
+import {Check, ArrowDown, X} from 'lucide-react'
 import {useState, useEffect, useRef} from 'react'
 import {cn} from '@/lib/utils.ts'
 import { motion } from 'framer-motion'
@@ -66,13 +66,13 @@ export default function DownloadButtonWithProgress({
 
     const isPill = !!buttonText;
     const commonClasses = cn(
-        isPill ? "h-12 px-8 w-auto min-w-[180px]" : "w-12 h-12",
-        "rounded-full flex items-center justify-center transition-all duration-500",
+        isPill ? "h-12 px-8 w-auto min-w-[200px]" : "w-12 h-12",
+        "rounded-full flex items-center justify-center transition-all duration-500 shrink-0",
         containerClass
     )
 
     return (
-        <div className={cn("relative flex flex-col items-center justify-center", className)}>
+        <div className="relative flex flex-col items-center justify-center">
             {state === 'idle' && (
                 <button
                     onClick={onDownloadClick}
@@ -92,8 +92,9 @@ export default function DownloadButtonWithProgress({
                 <button
                     onClick={onCancelClick}
                     className={cn(
-                        isPill ? "h-12 px-6 min-w-[200px]" : "w-12 h-12",
-                        "rounded-full bg-white/5 border border-white/10 relative overflow-hidden flex flex-col items-center justify-center transition-all duration-500"
+                        isPill ? "h-12 px-8 min-w-[200px]" : "w-12 h-12",
+                        "rounded-full bg-white/5 border border-white/10 relative overflow-hidden flex flex-col items-center justify-center transition-all duration-500 shrink-0 group hover:bg-white/10",
+                        containerClass
                     )}
                     title="Cancel download"
                 >
@@ -103,20 +104,36 @@ export default function DownloadButtonWithProgress({
                                 <circle cx="20" cy="20" r="18" stroke="currentColor" strokeWidth="2.5" fill="transparent" className="text-white/5" />
                                 <circle cx="20" cy="20" r="18" stroke="currentColor" strokeWidth="2.5" fill="transparent" strokeDasharray={113.1} strokeDashoffset={113.1 - (113.1 * progress)} strokeLinecap="round" className="text-white transition-all duration-300" />
                             </svg>
-                            <span className="relative z-10 text-[10px] font-bold text-white tabular-nums">{Math.round(progress * 100)}%</span>
+                            <div className="relative z-10 flex items-center justify-center">
+                                <span className={cn(
+                                    "font-bold text-white tabular-nums transition-all duration-300 group-hover:opacity-0 group-hover:scale-50",
+                                    Math.round(progress * 100) >= 100 ? "text-[9px]" : "text-[10px]"
+                                )}>
+                                    {Math.round(progress * 100)}%
+                                </span>
+                                <X className="w-4 h-4 text-white absolute opacity-0 scale-50 group-hover:opacity-100 group-hover:scale-100 transition-all duration-300" strokeWidth={3} />
+                            </div>
                         </>
                     ) : (
-                        <div className="w-full space-y-1.5">
-                            <div className="flex items-center justify-between px-1">
-                                <span className="text-[9px] font-bold text-white uppercase tracking-widest">{speed || 'Downloading'}</span>
-                                <span className="text-[9px] font-bold text-white tabular-nums">{Math.round(progress * 100)}%</span>
+                        <div className="w-full relative">
+                            {/* Normal Progress View */}
+                            <div className="w-full space-y-1.5 transition-all duration-300 group-hover:opacity-0 group-hover:scale-[0.98] group-hover:blur-sm">
+                                <div className="flex items-center justify-between px-1">
+                                    <span className="text-[9px] font-bold text-white uppercase tracking-widest leading-none">{speed || 'Downloading'}</span>
+                                    <span className="text-[8px] font-bold text-white tabular-nums leading-none">{Math.round(progress * 100)}%</span>
+                                </div>
+                                <div className="h-1 w-full bg-white/10 rounded-full overflow-hidden">
+                                    <motion.div 
+                                        initial={false}
+                                        animate={{ width: `${progress * 100}%` }}
+                                        className="h-full bg-white"
+                                    />
+                                </div>
                             </div>
-                            <div className="h-1 w-full bg-white/10 rounded-full overflow-hidden">
-                                <motion.div 
-                                    initial={false}
-                                    animate={{ width: `${progress * 100}%` }}
-                                    className="h-full bg-white"
-                                />
+
+                            <div className="absolute inset-0 flex items-center justify-center gap-2 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transition-all duration-300">
+                                <X className="w-3.5 h-3.5 text-white" strokeWidth={3} />
+                                <span className="text-[10px] font-bold text-white uppercase tracking-[0.2em] whitespace-nowrap">Cancel</span>
                             </div>
                         </div>
                     )}
@@ -125,7 +142,7 @@ export default function DownloadButtonWithProgress({
 
             {state === 'waiting' && (
                 <div className={cn(commonClasses, "bg-white/5 border border-white/10 animate-pulse")}>
-                    <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">...</span>
+                    <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">...</span>
                 </div>
             )}
 
@@ -133,10 +150,6 @@ export default function DownloadButtonWithProgress({
                 <div className={cn(commonClasses, "bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.4)]")}>
                     <Check className="w-5 h-5" strokeWidth={3} />
                 </div>
-            )}
-
-            {state === 'downloading' && (
-                <span className="text-[9px] text-white/40 font-medium mt-1.5">Press to cancel</span>
             )}
         </div>
     )

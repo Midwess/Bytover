@@ -13,7 +13,7 @@ pub enum PathResolverMessage {
     GetThumbnailDirPath,
     GetSessionDirPath { session_id: u64 },
     GetSystemDirPath,
-    GetDroppedContentDirPath,
+    GetDroppedContentDirPath
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -23,7 +23,7 @@ pub enum PathResolverResponseMessage {
     GetThumbnailDirPath { path: String },
     GetSessionDirPath { path: String },
     GetSystemDirPath { path: String },
-    GetDroppedContentDirPath { path: String },
+    GetDroppedContentDirPath { path: String }
 }
 
 pub struct PathResolverImpl {
@@ -99,8 +99,10 @@ impl PathResolver for PathResolverImpl {
     }
 
     async fn get_dropped_content_dir_path(&self) -> String {
-        let MessageToShellResponse::PathResolverResponse(PathResolverResponseMessage::GetDroppedContentDirPath { path }) =
-            self.shell.request(MessageToShell::PathResolver(PathResolverMessage::GetDroppedContentDirPath)).await
+        let MessageToShellResponse::PathResolverResponse(PathResolverResponseMessage::GetDroppedContentDirPath { path }) = self
+            .shell
+            .request(MessageToShell::PathResolver(PathResolverMessage::GetDroppedContentDirPath))
+            .await
         else {
             panic!("Failed to get dropped content dir path");
         };

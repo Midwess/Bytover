@@ -25,7 +25,7 @@ export function CloudEmailTransfer() {
                             initial={{ opacity: 0, y: 10 }}
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true }}
-                            className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold tracking-[0.2em] uppercase bg-purple-500/10 text-purple-400 border border-purple-500/20"
+                            className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold tracking-[0.2em] uppercase bg-purple-500/10 text-purple-400 border border-purple-500/20"
                         >
                             Cloud & Email Transfer
                         </motion.div>
