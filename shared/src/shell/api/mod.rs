@@ -1,5 +1,3 @@
-
-
 use crate::app::operations::CoreOperationOutput;
 use crate::app::AppEvent;
 use crate::entities::local_resource::LocalResourcePath;
@@ -158,4 +156,3 @@ pub trait BufferExt: Send + Sync {
     async fn flush_timeout(&self, index: usize) -> anyhow::Result<usize>;
     async fn flush_all_timeout(&self) -> anyhow::Result<()>;
 }
-

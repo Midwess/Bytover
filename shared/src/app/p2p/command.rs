@@ -66,16 +66,44 @@ impl AppCommand {
                     break;
                 }
                 CoreOperationOutput::None => {}
-                CoreOperationOutput::P2P(P2POperationOutput::ReceivedViewSessionRequest { peer_id, request_id, order_id, password }) => {
+                CoreOperationOutput::P2P(P2POperationOutput::ReceivedViewSessionRequest {
+                    peer_id,
+                    request_id,
+                    order_id,
+                    password
+                }) => {
                     log::info!("Received view session request {request_id:?}");
-                    self.notify_event(TransferEvent::ReceivedViewSessionRequest { peer_id, request_id, order_id, password });
+                    self.notify_event(TransferEvent::ReceivedViewSessionRequest {
+                        peer_id,
+                        request_id,
+                        order_id,
+                        password
+                    });
                 }
-                CoreOperationOutput::P2P(P2POperationOutput::ReceivedDownloadRequest { peer_id, session_order_id, resource_order_id, transfer_id }) => {
+                CoreOperationOutput::P2P(P2POperationOutput::ReceivedDownloadRequest {
+                    peer_id,
+                    session_order_id,
+                    resource_order_id,
+                    transfer_id
+                }) => {
                     log::info!("Received download request {transfer_id:?}");
-                    self.notify_event(TransferEvent::ReceivedDownloadRequest { peer_id, session_order_id, resource_order_id, transfer_id });
+                    self.notify_event(TransferEvent::ReceivedDownloadRequest {
+                        peer_id,
+                        session_order_id,
+                        resource_order_id,
+                        transfer_id
+                    });
                 }
-                CoreOperationOutput::P2P(P2POperationOutput::ReceivedResourceNotification { session_order_id, resource, peer_id }) => {
-                    self.notify_event(TransferEvent::ResourceNotification { session_order_id, resource, peer_id });
+                CoreOperationOutput::P2P(P2POperationOutput::ReceivedResourceNotification {
+                    session_order_id,
+                    resource,
+                    peer_id
+                }) => {
+                    self.notify_event(TransferEvent::ResourceNotification {
+                        session_order_id,
+                        resource,
+                        peer_id
+                    });
                 }
                 CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(connected)) => {
                     log::info!("Peer connected {connected:?}");

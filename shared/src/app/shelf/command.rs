@@ -46,10 +46,7 @@ impl AppCommand {
         Ok(())
     }
 
-    pub async fn validate_loaded_resources(
-        &self,
-        resources: Vec<LocalResource>
-    ) -> Result<(), CoreError> {
+    pub async fn validate_loaded_resources(&self, resources: Vec<LocalResource>) -> Result<(), CoreError> {
         let _ = self.sync_local_resources(resources).await;
         Ok(())
     }
@@ -64,11 +61,7 @@ impl AppCommand {
                 shelf_id: Some(current_resource.shelf_id)
             };
 
-            let loaded_resource = match self
-                .run(LocalResourcePersistentOperation::load_from_disk(
-                    current_resource.path.clone()
-                ))
-                .await
+            let loaded_resource = match self.run(LocalResourcePersistentOperation::load_from_disk(current_resource.path.clone())).await
             {
                 Ok(resource) => resource,
                 Err(error) => {

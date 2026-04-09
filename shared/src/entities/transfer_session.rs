@@ -541,10 +541,7 @@ impl TransferSession {
             return 0.0;
         }
 
-        let total_bytes_sent = relevant_progress
-            .iter()
-            .map(|it| it.total_bytes_counter)
-            .sum::<u64>();
+        let total_bytes_sent = relevant_progress.iter().map(|it| it.total_bytes_counter).sum::<u64>();
 
         total_bytes_sent as f64 / total_size as f64
     }
@@ -560,7 +557,11 @@ impl TransferSession {
             acc + progress.speed()
         });
 
-        if has_in_progress { total_speed } else { 0 }
+        if has_in_progress {
+            total_speed
+        } else {
+            0
+        }
     }
 
     pub fn is_completed(&self) -> bool {

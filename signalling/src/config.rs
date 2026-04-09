@@ -3,7 +3,7 @@ const DEFAULT_REGION_CODE: &str = "local";
 #[derive(Debug, Clone)]
 pub struct SignallingConfig {
     pub region_code: String,
-    pub signalling_route: String,
+    pub signalling_route: String
 }
 
 impl SignallingConfig {
@@ -16,7 +16,7 @@ impl SignallingConfig {
 
         Self {
             signalling_route: format!("rpc-signalling-{region_code}"),
-            region_code,
+            region_code
         }
     }
 

@@ -127,7 +127,11 @@ async fn setup_grpc_gateway(tcp: &GrpcConnection) -> Result<(), MainErrors> {
         ])
         .build();
 
-    log::info!("Register gRPC service {service:?} using upstream {}:{}", endpoint.host, endpoint.port);
+    log::info!(
+        "Register gRPC service {service:?} using upstream {}:{}",
+        endpoint.host,
+        endpoint.port
+    );
     api_gateway.register(service).await?;
 
     Ok(())
@@ -154,7 +158,11 @@ async fn setup_http_gateway(tcp: &TcpConnection) -> Result<(), MainErrors> {
         ])
         .build();
 
-    log::info!("Register HTTP service {service:?} using upstream {}:{}", tcp.public_host, tcp.port);
+    log::info!(
+        "Register HTTP service {service:?} using upstream {}:{}",
+        tcp.public_host,
+        tcp.port
+    );
     api_gateway.register(service).await?;
 
     Ok(())

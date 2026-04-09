@@ -1,5 +1,3 @@
-
-
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -7,7 +5,6 @@ use std::time::Duration;
 use core_services::utils::cancellation::FutureExtension;
 use core_services::utils::yield_container::YieldContainer;
 use futures::channel::mpsc as futures_mpsc;
-use tokio::sync::mpsc;
 use futures::SinkExt;
 use futures_util::stream::StreamExt;
 use prost::Message;
@@ -15,8 +12,7 @@ use schema::devlog::bitbridge::peer_message_body::{Request, Response};
 use schema::devlog::bitbridge::view_session_detail_response::Result as SessionDetailResult;
 use schema::devlog::bitbridge::*;
 use schema::devlog::rpc_signalling::server::OfferMessage;
-use tokio::sync::{Notify, OnceCell};
-
+use tokio::sync::{mpsc, Notify, OnceCell};
 
 use shared::app::operations::p2p::P2POperationOutput;
 use shared::app::operations::CoreOperationOutput;
@@ -31,11 +27,9 @@ use shared::repository::local_resource::LocalResourceRepository;
 use shared::shell::api::CoreRequest;
 use shared::utils::compression::is_compressible;
 
-
-use crate::webrtc::rtc::{RtcHandle, RtcEvent};
+use crate::webrtc::rtc::{RtcEvent, RtcHandle};
 use crate::webrtc::signalling::SignallingSender;
 use str0m::channel::ChannelId;
-
 
 pub static CHUNK_SIZE: usize = 250 * 1024;
 pub static MAX_BUFFER_SIZE: usize = 1024 * 1024 * 5;
@@ -65,9 +59,8 @@ pub struct WebRtcClient {
     reliable_data_tx: YieldContainer<mpsc::Sender<Vec<u8>>>,
     bytes_sent_counter: Arc<AtomicUsize>,
     disconnect_requested: AtomicBool,
-    disconnect_notify: Notify,
+    disconnect_notify: Notify
 }
-
 
 impl std::fmt::Debug for WebRtcClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -100,25 +93,37 @@ impl WebRtcClient {
         let me_proto = schema::devlog::bitbridge::PeerMessage::from(me.clone());
         let me_proto_p2p = me_proto.clone();
 
-        let p2p_fut: std::pin::Pin<Box<dyn std::future::Future<Output = Result<(bool, RtcHandle), WebRtcClientError>> + Send>> = Box::pin(async move {
-            RtcHandle::connect(&signalling_id_p2p, offer_message_p2p, me_proto_p2p, signalling_p2p, &request_id_p2p)
+        let p2p_fut: std::pin::Pin<Box<dyn std::future::Future<Output = Result<(bool, RtcHandle), WebRtcClientError>> + Send>> =
+            Box::pin(async move {
+                RtcHandle::connect(
+                    &signalling_id_p2p,
+                    offer_message_p2p,
+                    me_proto_p2p,
+                    signalling_p2p,
+                    &request_id_p2p
+                )
                 .await
                 .map(|c| (true, c))
-        });
+            });
 
-        let relay_fut: std::pin::Pin<Box<dyn std::future::Future<Output = Result<(bool, RtcHandle), WebRtcClientError>> + Send>> = Box::pin(async move {
-            RtcHandle::connect_relay(&signalling_id_relay, &session_id_relay, signalling_relay)
-                .await
-                .map(|c| (false, c))
-        });
+        let relay_fut: std::pin::Pin<Box<dyn std::future::Future<Output = Result<(bool, RtcHandle), WebRtcClientError>> + Send>> =
+            Box::pin(async move {
+                RtcHandle::connect_relay(&signalling_id_relay, &session_id_relay, signalling_relay)
+                    .await
+                    .map(|c| (false, c))
+            });
 
         let (first_res, mut remaining) = match futures::future::select_ok(vec![p2p_fut, relay_fut]).await {
             Ok((client, rem)) => (client, rem),
-            Err(e) => return Err(WebRtcClientError::Signalling(format!("Both connection legs failed: {e:?}"))),
+            Err(e) => return Err(WebRtcClientError::Signalling(format!("Both connection legs failed: {e:?}")))
         };
 
         let first_conn = if first_res.0 { "truly P2P" } else { "Relay" };
-        log::info!("[webrtc-client] First RTC connected (is_p2p: {}, type: {}), creating client", first_res.0, first_conn);
+        log::info!(
+            "[webrtc-client] First RTC connected (is_p2p: {}, type: {}), creating client",
+            first_res.0,
+            first_conn
+        );
 
         let (new_rtc_tx, new_rtc_rx) = tokio::sync::mpsc::channel::<(bool, RtcHandle)>(1);
         if let Some(rem_fut) = remaining.pop() {
@@ -129,7 +134,7 @@ impl WebRtcClient {
                         log::info!("[webrtc-client] Second RTC connected (is_p2p: {}, type: {})", c.0, second_conn);
                         let _ = new_rtc_tx.send(c).await;
                     }
-                    Err(e) => log::error!("[webrtc-client] Remaining connection failed: {:?}", e),
+                    Err(e) => log::error!("[webrtc-client] Remaining connection failed: {:?}", e)
                 }
             });
         }
@@ -179,7 +184,7 @@ impl WebRtcClient {
             reliable_data_tx: YieldContainer::new(reliable_data_tx),
             bytes_sent_counter: Arc::new(AtomicUsize::new(0)),
             disconnect_requested: AtomicBool::new(false),
-            disconnect_notify: Notify::new(),
+            disconnect_notify: Notify::new()
         };
 
         log::info!("[webrtc-client] connection established, peer info exchanged via signaling.");
@@ -230,10 +235,12 @@ impl WebRtcClient {
         let mut reliable_data_rx = reliable_data_rx;
         let mut pending_data: Option<(Vec<u8>, ChannelId)> = None;
 
-
         let mut retry_timer = Box::pin(tokio::time::sleep(Duration::from_millis(3)));
 
-        while p2p_rtc.as_ref().map_or(false, |r| r.is_alive()) || relay_rtc.as_ref().map_or(false, |r| r.is_alive()) || !new_rtc_rx.is_closed() {
+        while p2p_rtc.as_ref().is_some_and(|r| r.is_alive()) ||
+            relay_rtc.as_ref().is_some_and(|r| r.is_alive()) ||
+            !new_rtc_rx.is_closed()
+        {
             if sending_handle.is_finished() || msg_handle.is_finished() {
                 break;
             }
@@ -250,11 +257,11 @@ impl WebRtcClient {
             }
 
             // Proactively clear dead connections so sends fall through to the live one
-            if p2p_rtc.as_ref().map_or(false, |r| !r.is_alive()) {
+            if p2p_rtc.as_ref().is_some_and(|r| !r.is_alive()) {
                 log::info!("[webrtc-client] P2P RTC no longer alive, clearing");
                 p2p_rtc = None;
             }
-            if relay_rtc.as_ref().map_or(false, |r| !r.is_alive()) {
+            if relay_rtc.as_ref().is_some_and(|r| !r.is_alive()) {
                 log::info!("[webrtc-client] Relay RTC no longer alive, clearing");
                 relay_rtc = None;
             }
@@ -390,7 +397,7 @@ impl WebRtcClient {
         event: RtcEvent,
         cids: &crate::webrtc::rtc::ChannelIds,
         msg_tx: &tokio::sync::mpsc::UnboundedSender<(String, Request)>,
-        is_p2p: bool,
+        is_p2p: bool
     ) -> bool {
         match event {
             RtcEvent::Str0mEvent(event) => match event {
@@ -412,7 +419,7 @@ impl WebRtcClient {
                 _ => {}
             },
             RtcEvent::Error(e) => {
-                log::warn!("[webrtc-client] {} RTC error: {e:?}", if is_p2p {"P2P"} else {"Relay"});
+                log::warn!("[webrtc-client] {} RTC error: {e:?}", if is_p2p { "P2P" } else { "Relay" });
                 return false;
             }
         }
@@ -456,7 +463,6 @@ impl WebRtcClient {
         log::info!("[webrtc-client] Disconnect requested for peer {:?}", self.peer_id());
         self.disconnect_notify.notify_one();
     }
-
 
     pub async fn stream_resource(&self, session_id: u64, transfer_id: u16, resource: LocalResource) -> Result<(), WebRtcClientError> {
         let resource_id = resource.order_id;
@@ -564,9 +570,7 @@ impl WebRtcClient {
             resource: Some(resource_proto)
         };
 
-        self.msg_channel()
-            .notify(Request::ResourceNotification(notification))
-            .await?;
+        self.msg_channel().notify(Request::ResourceNotification(notification)).await?;
 
         Ok(())
     }
@@ -606,9 +610,7 @@ impl WebRtcClient {
         let response = ViewSessionDetailResponse {
             result: Some(SessionDetailResult::Session(proto_session.clone()))
         };
-        self.msg_channel()
-            .send_response(request_id, Response::ViewSessionResponse(response))
-            .await?;
+        self.msg_channel().send_response(request_id, Response::ViewSessionResponse(response)).await?;
 
         tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -725,7 +727,7 @@ impl WebRtcClient {
         loop {
             let (prefix, offset, packet, _reliable) = match outbound_rx.next().await {
                 Some(it) => it,
-                None => break,
+                None => break
             };
 
             let data = WebRtcPacket::serialize(prefix, offset, &packet);

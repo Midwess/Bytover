@@ -1,18 +1,17 @@
 use std::collections::HashMap;
-use std::sync::Arc;
-use std::sync::Weak;
+use std::sync::{Arc, Weak};
 use tokio::sync::Mutex;
 
 use crate::client::Client;
 
 pub struct ClientManager {
-    clients: Mutex<HashMap<String, Weak<Client>>>,
+    clients: Mutex<HashMap<String, Weak<Client>>>
 }
 
 impl ClientManager {
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
-            clients: Mutex::new(HashMap::new()),
+            clients: Mutex::new(HashMap::new())
         })
     }
 

@@ -36,7 +36,11 @@ impl TransferDelimiterShema {
     }
 
     pub fn end(session_id: u64, resource_id: u64, total_size: u64) -> Self {
-        Self::End { session_id, resource_id, total_size }
+        Self::End {
+            session_id,
+            resource_id,
+            total_size
+        }
     }
 
     pub fn hold(counter: u8) -> Self {

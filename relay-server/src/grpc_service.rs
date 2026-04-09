@@ -6,7 +6,7 @@ use tonic::{Request, Response, Status};
 use crate::connection::proxy_manager::ProxyManager;
 
 pub struct RelayServiceImpl {
-    server: Arc<ProxyManager>,
+    server: Arc<ProxyManager>
 }
 
 impl RelayServiceImpl {
@@ -28,7 +28,7 @@ impl RelayService for RelayServiceImpl {
                 let response = ConnectResponse {
                     success: true,
                     sdp: Some(answer_sdp),
-                    error_message: None,
+                    error_message: None
                 };
                 Ok(Response::new(response))
             }
@@ -37,7 +37,7 @@ impl RelayService for RelayServiceImpl {
                 let response = ConnectResponse {
                     success: false,
                     sdp: None,
-                    error_message: Some(e.to_string()),
+                    error_message: Some(e.to_string())
                 };
                 Ok(Response::new(response))
             }

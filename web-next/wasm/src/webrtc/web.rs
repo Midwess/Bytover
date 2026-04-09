@@ -108,7 +108,7 @@ impl WebRtcApi {
     pub fn create_peer_connection(&self) -> Result<Arc<RtcConnectionWrapper>, WebError> {
         let config = RtcConfiguration::new();
         let ice_servers_array = Array::new();
-        
+
         for url in &self.config.urls {
             let server = RtcIceServer::new();
             server.set_urls(&JsValue::from_str(url));
@@ -120,7 +120,7 @@ impl WebRtcApi {
             }
             ice_servers_array.push(&server);
         }
-        
+
         config.set_ice_servers(&ice_servers_array);
 
         if crate::config::is_relay_only() {
@@ -193,7 +193,6 @@ impl WebRtcApi {
         channel: Arc<RtcDataChannelWrapper>,
         inbound_tx: mpsc::UnboundedSender<Vec<u8>>
     ) -> Result<(), WebError> {
-
         let onmessage = {
             let inbound_tx = inbound_tx.clone();
             let channel = channel.clone();
@@ -204,7 +203,10 @@ impl WebRtcApi {
                         log::warn!("Failed to send inbound packet: {:?}", e);
                     }
                 } else {
-                    log::warn!("WASM onmessage: data is not ArrayBuffer on channel {}", channel.id().unwrap_or(0));
+                    log::warn!(
+                        "WASM onmessage: data is not ArrayBuffer on channel {}",
+                        channel.id().unwrap_or(0)
+                    );
                 }
             }) as Box<dyn FnMut(MessageEvent)>)
         };

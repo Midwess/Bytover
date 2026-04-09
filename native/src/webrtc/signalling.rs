@@ -43,7 +43,7 @@ pub struct SignalingClient {
 #[derive(Clone)]
 pub struct SignallingSender {
     http_url: String,
-    msg_transfer_tx: mpsc::Sender<Vec<u8>>,
+    msg_transfer_tx: mpsc::Sender<Vec<u8>>
 }
 
 impl SignallingSender {
@@ -57,7 +57,7 @@ impl SignallingSender {
                     format!("turn:{}?transport=tcp", server),
                 ],
                 username: Some("guest".to_string()),
-                credential: Some("guest".to_string()),
+                credential: Some("guest".to_string())
             });
         }
 
@@ -76,21 +76,28 @@ impl SignallingSender {
         IceConfig::decode(&bytes[..]).map_err(SignallingError::from)
     }
 
-    pub async fn relay_connect(&self, key: &str, session_id: &str, sdp: &str, channels: Vec<schema::devlog::bitbridge::DataChannel>) -> Result<schema::devlog::bitbridge::ConnectResponse, SignallingError> {
+    pub async fn relay_connect(
+        &self,
+        key: &str,
+        session_id: &str,
+        sdp: &str,
+        channels: Vec<schema::devlog::bitbridge::DataChannel>
+    ) -> Result<schema::devlog::bitbridge::ConnectResponse, SignallingError> {
         use prost::Message;
-        
+
         let url = format!("{}/relay/{}", self.http_url, key);
         let request = schema::devlog::bitbridge::ConnectRequest {
             sdp: sdp.to_string(),
             session_id: session_id.to_string(),
-            channels,
+            channels
         };
-        
+
         let mut buf = Vec::new();
         request.encode(&mut buf).map_err(|e| SignallingError::ProtocolError(e.to_string()))?;
 
         let client = reqwest::Client::new();
-        let response = client.post(&url)
+        let response = client
+            .post(&url)
             .body(buf)
             .header(reqwest::header::CONTENT_TYPE, "application/octet-stream")
             .send()
@@ -108,8 +115,12 @@ impl SignallingSender {
         schema::devlog::bitbridge::ConnectResponse::decode(&bytes[..]).map_err(SignallingError::from)
     }
 
-
-    pub async fn send_answer(&self, sdp: String, peer: schema::devlog::bitbridge::PeerMessage, request_id: &str) -> Result<(), SignallingError> {
+    pub async fn send_answer(
+        &self,
+        sdp: String,
+        peer: schema::devlog::bitbridge::PeerMessage,
+        request_id: &str
+    ) -> Result<(), SignallingError> {
         let msg = Message {
             request_id: Some(request_id.to_string()),
             answer: Some(AnswerMessage { sdp, peer: Some(peer) }),
@@ -118,7 +129,6 @@ impl SignallingSender {
         self.send_message(&msg).await
     }
 
-
     async fn send_message(&self, msg: &Message) -> Result<(), SignallingError> {
         let mut buf = Vec::new();
         msg.encode(&mut buf)
@@ -126,9 +136,7 @@ impl SignallingSender {
         self.msg_transfer_tx.send(buf).await.map_err(|_| SignallingError::NotConnected)?;
         Ok(())
     }
-
 }
-
 
 impl SignalingClient {
     pub fn new(ws_url: String, http_url: String) -> Self {
@@ -144,7 +152,7 @@ impl SignalingClient {
     pub fn get_sender(&self) -> Option<SignallingSender> {
         self.msg_transfer_tx.clone().map(|tx| SignallingSender {
             http_url: self.http_url.clone(),
-            msg_transfer_tx: tx,
+            msg_transfer_tx: tx
         })
     }
 
@@ -250,7 +258,6 @@ impl SignalingClient {
         let msg_rx = self.msg_rx.as_mut().ok_or(SignallingError::NotConnected)?;
         msg_rx.recv().await.ok_or(SignallingError::Stopped)?
     }
-
 
     pub fn decode_message(data: &[u8]) -> Result<Message, SignallingError> {
         Message::decode(data).map_err(SignallingError::from)

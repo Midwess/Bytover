@@ -22,7 +22,7 @@ pub struct P2PNativeExecutorImpl {
     pub web_rtc: OnceCell<Arc<WebRtc>>,
     pub client: Arc<Mutex<Option<Arc<WebRtcClient>>>>,
     pub signalling: OnceCell<SignalingClient>,
-    pub current_user: OnceCell<PeerEntity>,
+    pub current_user: OnceCell<PeerEntity>
 }
 
 /// Errors that can occur in P2P operations
@@ -121,14 +121,23 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 let transfer_repo = di.get_transfer_session_repository();
                 let signalling = di.get_signalling_client_for_route(&signalling_route);
 
-                let client = WebRtcClient::connect(current_user.clone(), signalling, IceAgent::new(), &signalling_key, resource_repo, transfer_repo)
-                    .await
-                    .map_err(|e| P2PError::WebRtc(e.to_string()))?;
+                let client = WebRtcClient::connect(
+                    current_user.clone(),
+                    signalling,
+                    IceAgent::new(),
+                    &signalling_key,
+                    resource_repo,
+                    transfer_repo
+                )
+                .await
+                .map_err(|e| P2PError::WebRtc(e.to_string()))?;
 
                 client.start_core_stream(request.clone());
                 self.set_client(client.clone()).map_err(|_| P2PError::AlreadyConnected)?;
 
-                let peer = client.peer_entity().ok_or_else(|| P2PError::WebRtc("Peer not set after signaling exchange".into()))?;
+                let peer = client
+                    .peer_entity()
+                    .ok_or_else(|| P2PError::WebRtc("Peer not set after signaling exchange".into()))?;
                 self.set_current_user(current_user).ok();
 
                 let client_clone = client.clone();
@@ -138,9 +147,7 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                     let disconnected_peer = client_clone.peer_entity();
                     let result = client_clone.run().await;
                     if let Some(peer) = disconnected_peer {
-                        request_clone
-                            .response(CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected(peer)))
-                            .await;
+                        request_clone.response(CoreOperationOutput::P2P(P2POperationOutput::PeerDisconnected(peer))).await;
                     }
                     client_slot.lock().unwrap().take();
                     if let Err(e) = result {
@@ -158,10 +165,7 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
             }
 
             P2POperation::GetPeer { peer_id } => {
-                let peer = self
-                    .get_client()
-                    .and_then(|client| client.peer_entity())
-                    .filter(|peer| peer.id == peer_id);
+                let peer = self.get_client().and_then(|client| client.peer_entity()).filter(|peer| peer.id == peer_id);
                 Ok(peer.into())
             }
 

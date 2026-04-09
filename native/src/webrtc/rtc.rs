@@ -1,13 +1,13 @@
+use socket2::{Domain, Socket, Type};
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
-use socket2::{Domain, Socket, Type};
 use str0m::channel::{ChannelConfig, ChannelId};
 use str0m::net::{Protocol, Receive};
 use str0m::{Event, IceConnectionState, Input, Output, Rtc, RtcConfig};
 
 use schema::devlog::rpc_signalling::server::OfferMessage;
 
-use crate::webrtc::client::{MAX_BUFFER_SIZE, WebRtcClientError};
+use crate::webrtc::client::{WebRtcClientError, MAX_BUFFER_SIZE};
 use crate::webrtc::ice::IceAgent;
 use crate::webrtc::signalling::SignallingSender;
 
@@ -33,7 +33,7 @@ const MAX_PENDING_SPINS_PER_STEP: usize = 8;
 /// Events emitted from the RTC thread to the outside world.
 pub enum RtcEvent {
     Str0mEvent(Event),
-    Error(WebRtcClientError),
+    Error(WebRtcClientError)
 }
 
 /// Outcome of a single poll operation
@@ -41,7 +41,7 @@ pub enum RtcEvent {
 pub enum RtcOutcome {
     Event(Event),
     Idle(Instant),
-    MorePending,
+    MorePending
 }
 
 /// Commands sent from outside into the RTC thread.
@@ -53,7 +53,7 @@ pub struct RtcHandle {
     event_rx: tokio::sync::mpsc::Receiver<RtcEvent>,
     data_tx: Option<tokio::sync::mpsc::Sender<(Vec<u8>, ChannelId)>>,
     channel_ids: ChannelIds,
-    thread_handle: Option<std::thread::JoinHandle<()>>,
+    thread_handle: Option<std::thread::JoinHandle<()>>
 }
 
 impl RtcHandle {
@@ -72,7 +72,7 @@ impl RtcHandle {
     pub async fn connect_relay(
         signalling_id: &str,
         session_id: &str,
-        signalling: SignallingSender,
+        signalling: SignallingSender
     ) -> Result<Self, WebRtcClientError> {
         RtcClient::connect_relay(signalling_id, session_id, signalling).await
     }
@@ -102,8 +102,7 @@ impl RtcHandle {
 
     /// The handle is alive if the thread hasn't finished and the event channel is open.
     pub fn is_alive(&self) -> bool {
-        !self.event_rx.is_closed()
-            && self.thread_handle.as_ref().map_or(false, |h| !h.is_finished())
+        !self.event_rx.is_closed() && self.thread_handle.as_ref().is_some_and(|h| !h.is_finished())
     }
 
     pub fn shutdown(&mut self) {
@@ -132,7 +131,7 @@ struct RtcClient {
     pending_transmit: Option<(Vec<u8>, str0m::channel::ChannelId)>,
     /// Events received during the connect/handshake phase that need to be
     /// replayed once the run loop starts (e.g. early ChannelData).
-    early_events: Vec<Event>,
+    early_events: Vec<Event>
 }
 
 impl RtcClient {
@@ -168,9 +167,7 @@ impl RtcClient {
             .await
             .map_err(|e| WebRtcClientError::Signalling(e.to_string()))?;
 
-        let config = RtcConfig::default()
-            .set_sctp_max_message_size(256 * 1024)
-            .set_sctp_buffer_size(5 * 1024 * 1024);
+        let config = RtcConfig::default().set_sctp_max_message_size(256 * 1024).set_sctp_buffer_size(5 * 1024 * 1024);
 
         let mut rtc = config.build(Instant::now());
         let mut local_v4_addr = None;
@@ -189,8 +186,7 @@ impl RtcClient {
         let offer_sdp = IceAgent::resolve_remote_candidates(&offer_message.sdp);
         log::info!("Received offer sdp: {offer_sdp}");
 
-        let offer = str0m::change::SdpOffer::from_sdp_string(&offer_sdp)
-            .map_err(|e| WebRtcClientError::Sdp(e.to_string()))?;
+        let offer = str0m::change::SdpOffer::from_sdp_string(&offer_sdp).map_err(|e| WebRtcClientError::Sdp(e.to_string()))?;
 
         let reliable_id = rtc.direct_api().create_data_channel(ChannelConfig {
             label: "reliable".to_string(),
@@ -216,10 +212,7 @@ impl RtcClient {
             ordered_msg: ordered_msg_id
         };
 
-        let answer = rtc
-            .sdp_api()
-            .accept_offer(offer)
-            .map_err(|e| WebRtcClientError::Rtc(e.to_string()))?;
+        let answer = rtc.sdp_api().accept_offer(offer).map_err(|e| WebRtcClientError::Rtc(e.to_string()))?;
 
         signalling
             .send_answer(answer.to_sdp_string(), me, request_id)
@@ -236,7 +229,7 @@ impl RtcClient {
             cached_timeout: Instant::now(),
             channel_ids,
             pending_transmit: None,
-            early_events: Vec::new(),
+            early_events: Vec::new()
         };
 
         let connected = false;
@@ -248,7 +241,7 @@ impl RtcClient {
     pub async fn connect_relay(
         signalling_id: &str,
         session_id: &str,
-        signalling: SignallingSender,
+        signalling: SignallingSender
     ) -> Result<RtcHandle, WebRtcClientError> {
         log::info!("Connecting to relay");
         // Fetch relay config which will act as the ICE server config.
@@ -273,9 +266,7 @@ impl RtcClient {
             .await
             .map_err(|e| WebRtcClientError::Signalling(e.to_string()))?;
 
-        let rtc_config = RtcConfig::default()
-            .set_sctp_max_message_size(256 * 1024)
-            .set_sctp_buffer_size(5 * 1024 * 1024);
+        let rtc_config = RtcConfig::default().set_sctp_max_message_size(256 * 1024).set_sctp_buffer_size(5 * 1024 * 1024);
 
         let mut rtc = rtc_config.build(Instant::now());
         let mut local_v4_addr = None;
@@ -319,7 +310,9 @@ impl RtcClient {
             ordered_msg: ordered_msg_id
         };
 
-        let (local_offer, pending) = sdp_api.apply().ok_or_else(|| WebRtcClientError::Signalling("Could not create local offer via apply()".into()))?;
+        let (local_offer, pending) = sdp_api
+            .apply()
+            .ok_or_else(|| WebRtcClientError::Signalling("Could not create local offer via apply()".into()))?;
         log::info!("Offer to relay {:?}", local_offer.to_sdp_string());
 
         let relay_channels = vec![
@@ -327,19 +320,19 @@ impl RtcClient {
                 max_retransmit: 0,
                 ordered: false,
                 negotiate: RELIABLE_STREAM_ID as i32,
-                label: "reliable".to_string(),
+                label: "reliable".to_string()
             },
             schema::devlog::bitbridge::DataChannel {
                 max_retransmit: 0,
                 ordered: false,
                 negotiate: UNORDERED_MSG_STREAM_ID as i32,
-                label: "unordered_msg".to_string(),
+                label: "unordered_msg".to_string()
             },
             schema::devlog::bitbridge::DataChannel {
                 max_retransmit: 0,
                 ordered: true,
                 negotiate: ORDERED_MSG_STREAM_ID as i32,
-                label: "ordered_msg".to_string(),
+                label: "ordered_msg".to_string()
             },
         ];
 
@@ -352,14 +345,17 @@ impl RtcClient {
         log::info!("Got relay answer sdp {:?}", relay_ans);
 
         if !relay_ans.success {
-            return Err(WebRtcClientError::Signalling(format!("Relay connect failure: {:?}", relay_ans.error_message)));
+            return Err(WebRtcClientError::Signalling(format!(
+                "Relay connect failure: {:?}",
+                relay_ans.error_message
+            )));
         }
 
         let answer_sdp = relay_ans
             .sdp
             .ok_or_else(|| WebRtcClientError::Signalling("Missing SDP in successful relay reply".to_string()))?;
-        let remote_offer = str0m::change::SdpAnswer::from_sdp_string(&answer_sdp)
-            .map_err(|e| WebRtcClientError::Sdp(e.to_string()))?;
+        let remote_offer =
+            str0m::change::SdpAnswer::from_sdp_string(&answer_sdp).map_err(|e| WebRtcClientError::Sdp(e.to_string()))?;
 
         rtc.sdp_api()
             .accept_answer(pending, remote_offer)
@@ -375,7 +371,7 @@ impl RtcClient {
             cached_timeout: Instant::now(),
             channel_ids,
             pending_transmit: None,
-            early_events: Vec::new(),
+            early_events: Vec::new()
         };
 
         let connected = false;
@@ -411,7 +407,7 @@ impl RtcClient {
             event_rx,
             data_tx: Some(data_tx),
             channel_ids,
-            thread_handle: Some(thread_handle),
+            thread_handle: Some(thread_handle)
         }
     }
 
@@ -419,7 +415,7 @@ impl RtcClient {
     async fn run_loop(
         mut self,
         event_tx: tokio::sync::mpsc::Sender<RtcEvent>,
-        mut data_rx: tokio::sync::mpsc::Receiver<(Vec<u8>, ChannelId)>,
+        mut data_rx: tokio::sync::mpsc::Receiver<(Vec<u8>, ChannelId)>
     ) {
         log::info!("[rtc-client] RTC I/O thread started");
 
@@ -445,8 +441,7 @@ impl RtcClient {
 
             if let Some((data, channel_id)) = self.pending_transmit.take() {
                 if self.send(&data, channel_id) {
-                }
-                else {
+                } else {
                     self.pending_transmit = Some((data, channel_id));
                 }
             }
@@ -535,7 +530,7 @@ impl RtcClient {
                 }
             }
         }
-        
+
         self.rtc.disconnect();
         log::info!("[rtc-client] RTC connection no longer alive, stopping I/O thread");
     }
@@ -602,11 +597,7 @@ impl RtcClient {
     }
 
     async fn poll_event(&mut self) -> Result<RtcOutcome, WebRtcClientError> {
-        match self
-            .rtc
-            .poll_output()
-            .map_err(|e| WebRtcClientError::Rtc(e.to_string()))?
-        {
+        match self.rtc.poll_output().map_err(|e| WebRtcClientError::Rtc(e.to_string()))? {
             Output::Timeout(t) => {
                 self.cached_timeout = t;
                 Ok(RtcOutcome::Idle(t))
@@ -671,18 +662,16 @@ impl RtcClient {
         if let Some(mut ch) = self.rtc.channel(channel_id) {
             match ch.write(true, data) {
                 Ok(true) => true,
-                Ok(false) => false, 
+                Ok(false) => false,
                 Err(e) => {
                     log::error!("[rtc-client] Failed to write to channel {:?}: {:?}", channel_id, e);
                     false
                 }
             }
-        }
-        else {
+        } else {
             false
         }
     }
-
 }
 
 fn to_v6_mapped(addr: SocketAddr) -> SocketAddr {
@@ -696,7 +685,11 @@ fn from_v6_mapped(addr: SocketAddr) -> SocketAddr {
     match addr {
         SocketAddr::V6(v6) => {
             let octets = v6.ip().octets();
-            if octets[0..12] == [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff] {
+            if octets[0..12] ==
+                [
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff
+                ]
+            {
                 let v4 = std::net::Ipv4Addr::new(octets[12], octets[13], octets[14], octets[15]);
                 SocketAddr::new(v4.into(), v6.port())
             } else {

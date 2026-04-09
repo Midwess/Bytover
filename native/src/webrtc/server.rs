@@ -56,13 +56,12 @@ impl From<WebRtcServerError> for CoreError {
     }
 }
 
-
 pub struct WebRtcServer {
     clients: Mutex<HashMap<String, Weak<WebRtcClient>>>,
     resource_repo: Arc<dyn LocalResourceRepository>,
     current_user: OnceCell<PeerEntity>,
     core_request: OnceCell<CoreRequest>,
-    running: AtomicBool,
+    running: AtomicBool
 }
 
 impl WebRtcServer {
@@ -72,7 +71,7 @@ impl WebRtcServer {
             resource_repo,
             current_user: Default::default(),
             core_request: Default::default(),
-            running: AtomicBool::new(false),
+            running: AtomicBool::new(false)
         })
     }
 
@@ -232,7 +231,7 @@ impl WebRtcServer {
 
         let mut signalling = SignalingClient::new(
             get_signalling_server_ws_url_for_route(&signalling_route),
-            get_signalling_server_http_url_for_route(&signalling_route),
+            get_signalling_server_http_url_for_route(&signalling_route)
         );
         signalling.start(key.clone()).await;
         log::info!("[webrtc-server] Signalling background task started");
@@ -305,7 +304,7 @@ impl WebRtcServer {
                             client.start_core_stream(self.core_request.get().unwrap().clone());
                             let client_for_run = client.clone();
                             let peer_id_for_run = peer_id.clone();
-                            
+
                             run_handles.push(tokio::spawn(async move {
                                 log::info!("[webrtc-server] Spawning run loop");
                                 if let Err(e) = client_for_run.run().await {
@@ -319,14 +318,14 @@ impl WebRtcServer {
                         }
                     }
                 }
-                
+
                 Some(res) = run_handles.next(), if !run_handles.is_empty() => {
                     match res {
                         Ok(peer_id) => {
                             log::info!("[webrtc-server] Client {peer_id} run loop finished");
                             let peer = {
                                 let clients = self.clients.lock().await;
-                                clients.get(&peer_id).and_then(|c| c.upgrade()).map(|c| c.peer_entity()).flatten()
+                                clients.get(&peer_id).and_then(|c| c.upgrade()).and_then(|c| c.peer_entity())
                             };
                             self.clients.lock().await.remove(&peer_id);
                             if let Some(p) = peer {

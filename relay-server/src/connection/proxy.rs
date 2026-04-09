@@ -16,7 +16,7 @@ fn sync_upload_limits(
     leg1: &mut Yieldable<Box<RelayRtcClient>>,
     leg2: Option<&mut Yieldable<Box<RelayRtcClient>>>,
     queued_bytes_to_2: usize,
-    queued_bytes_to_1: usize,
+    queued_bytes_to_1: usize
 ) {
     let leg2_other_side_download_bps = leg1.peer_download_rate_bps();
 
@@ -34,7 +34,7 @@ pub struct ProxyInstance {
     leg1: YieldContainer<Box<RelayRtcClient>>,
     leg2: YieldContainer<Box<RelayRtcClient>>,
     notify_leg2: Notify,
-    public_ipv4: Ipv4Addr,
+    public_ipv4: Ipv4Addr
 }
 
 impl ProxyInstance {
@@ -44,7 +44,7 @@ impl ProxyInstance {
             leg1: YieldContainer::empty(),
             leg2: YieldContainer::empty(),
             notify_leg2: Notify::new(),
-            public_ipv4,
+            public_ipv4
         })
     }
 
@@ -54,7 +54,7 @@ impl ProxyInstance {
         self.leg1
             .deposit(client)
             .await
-            .map_err(|_| RelayRtcError::Socket(std::io::Error::new(std::io::ErrorKind::Other, "Already yielded")))?;
+            .map_err(|_| RelayRtcError::Socket(std::io::Error::other("Already yielded")))?;
         Ok(answer_sdp)
     }
 
@@ -64,7 +64,7 @@ impl ProxyInstance {
         self.leg2
             .deposit(client)
             .await
-            .map_err(|_| RelayRtcError::Socket(std::io::Error::new(std::io::ErrorKind::Other, "Already yielded")))?;
+            .map_err(|_| RelayRtcError::Socket(std::io::Error::other("Already yielded")))?;
         self.notify_leg2.notify_one();
         Ok(answer_sdp)
     }
@@ -160,7 +160,8 @@ impl ProxyInstance {
                     }
                 }
 
-                res2 = async { leg2_opt.as_mut().unwrap().process_step().await }, if leg2_opt.as_ref().map(|l| l.is_alive()).unwrap_or(false) => {
+                res2 = async { leg2_opt.as_mut().unwrap().process_step().await },
+                if leg2_opt.as_ref().map(|l| l.is_alive()).unwrap_or(false) => {
                     match res2 {
                         Ok(Some(Event::ChannelData(data))) => {
                             queued_bytes_to_1 = queued_bytes_to_1.saturating_add(data.data.len());
@@ -208,7 +209,10 @@ impl ProxyInstance {
                     }
                 }
 
-                Some((id, buf)) = rx_to_2.recv(), if leg2_connected && pending_to_2.is_none() && leg2_opt.as_ref().map(|l| l.is_alive()).unwrap_or(false) => {
+                Some((id, buf)) = rx_to_2.recv(),
+                if leg2_connected
+                    && pending_to_2.is_none()
+                    && leg2_opt.as_ref().map(|l| l.is_alive()).unwrap_or(false) => {
                     let sent = leg2_opt
                         .as_mut()
                         .map(|leg2| leg2.send(&buf, id))
@@ -223,7 +227,10 @@ impl ProxyInstance {
                     }
                 }
 
-                () = &mut retry_to_2, if pending_to_2.is_some() && leg2_connected && leg2_opt.as_ref().map(|l| l.is_alive()).unwrap_or(false) => {
+                () = &mut retry_to_2,
+                if pending_to_2.is_some()
+                    && leg2_connected
+                    && leg2_opt.as_ref().map(|l| l.is_alive()).unwrap_or(false) => {
                     let sent = if let Some((id, buf)) = pending_to_2.as_ref() {
                         leg2_opt
                             .as_mut()
@@ -289,8 +296,17 @@ impl ProxyInstance {
                         let d2 = leg2.download_rate_bps();
                         let u2 = leg2.upload_rate_bps();
                         log::info!(
-                            "[relay-server] stats {session_id} leg1 down={:.0}B/s up={:.0}B/s leg2 down={:.0}B/s up={:.0}B/s q(A->B)={}B q(B->A)={}B",
-                            d1, u1, d2, u2, queued_bytes_to_2, queued_bytes_to_1,
+                            concat!(
+                                "[relay-server] stats {} leg1 down={:.0}B/s up={:.0}B/s ",
+                                "leg2 down={:.0}B/s up={:.0}B/s q(A->B)={}B q(B->A)={}B"
+                            ),
+                            session_id,
+                            d1,
+                            u1,
+                            d2,
+                            u2,
+                            queued_bytes_to_2,
+                            queued_bytes_to_1,
                         );
                     } else {
                         log::info!(

@@ -58,8 +58,7 @@ impl P2PTransferService {
             return Ok(updated_session);
         }
 
-        let new_session =
-            P2PSession::new(device_id, user_id, alias, Some(device_name), signalling_key, signalling_route).await;
+        let new_session = P2PSession::new(device_id, user_id, alias, Some(device_name), signalling_key, signalling_route).await;
         let created_session = self.p2p_repository.create_session(new_session).await?;
 
         Ok(created_session)

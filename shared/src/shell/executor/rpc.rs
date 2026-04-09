@@ -41,8 +41,7 @@ where
                 signalling_key,
                 signalling_route
             } => {
-                let p2p_session =
-                    self.app_server().create_device_session(alias, signalling_key, signalling_route).await?;
+                let p2p_session = self.app_server().create_device_session(alias, signalling_key, signalling_route).await?;
                 Ok(CoreOperationOutput::P2PSession(p2p_session))
             }
             RpcOperation::GetDeviceAliases => {

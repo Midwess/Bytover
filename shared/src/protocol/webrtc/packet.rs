@@ -33,13 +33,13 @@ impl WebRtcPacket {
             let prefix = u16::from_le_bytes(*(data.as_ptr() as *const [u8; 2]));
             // Read offset from the next 8 bytes (Starting at index 2)
             let offset = u64::from_le_bytes(*(data.as_ptr().add(2) as *const [u8; 8]));
-            
+
             let len = data.len();
             // Shift the rest of the data 10 bytes to the left
             std::ptr::copy(data.as_ptr().add(10), data.as_mut_ptr(), len - 10);
             // Adjust length to exclude the prefix and offset
             data.set_len(len - 10);
-            
+
             (prefix, offset, data)
         }
     }
@@ -63,7 +63,7 @@ mod tests {
         assert_eq!(serialized[2], 0x88);
         assert_eq!(serialized[9], 0x11);
         assert_eq!(&serialized[10..], &payload[..]);
-        
+
         let (d_prefix, d_offset, d_payload) = WebRtcPacket::deserialize(serialized);
         assert_eq!(d_prefix, prefix);
         assert_eq!(d_offset, offset);
@@ -77,7 +77,7 @@ mod tests {
         let payload = vec![];
         let serialized = WebRtcPacket::serialize(prefix, offset, &payload);
         assert_eq!(serialized.len(), 10);
-        
+
         let (d_prefix, d_offset, d_payload) = WebRtcPacket::deserialize(serialized);
         assert_eq!(d_prefix, prefix);
         assert_eq!(d_offset, offset);

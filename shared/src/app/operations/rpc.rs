@@ -16,10 +16,19 @@ pub enum RpcOperation {
     GetAuthenticateUrl(DeviceInfo),
     GetMe(),
     GetUserById(u64),
-    Feedback { email: String, message: String },
-    CreateP2PSession { alias: String, signalling_key: String, signalling_route: String },
+    Feedback {
+        email: String,
+        message: String
+    },
+    CreateP2PSession {
+        alias: String,
+        signalling_key: String,
+        signalling_route: String
+    },
     GetDeviceAliases,
-    GenPeer { device: DeviceInfo }
+    GenPeer {
+        device: DeviceInfo
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -76,13 +85,11 @@ impl RpcOperation {
             signalling_key,
             signalling_route
         }))
-        .map(
-            |res| match res {
-                CoreOperationOutput::P2PSession(session) => Ok(session),
-                CoreOperationOutput::Error(error) => Err(error),
-                _ => panic!("Invalid output for RpcOperation::CreateP2PSession")
-            }
-        )
+        .map(|res| match res {
+            CoreOperationOutput::P2PSession(session) => Ok(session),
+            CoreOperationOutput::Error(error) => Err(error),
+            _ => panic!("Invalid output for RpcOperation::CreateP2PSession")
+        })
     }
 
     pub fn get_device_aliases() -> AppRequestBuilder<impl Future<Output = Result<Vec<String>, CoreError>>> {

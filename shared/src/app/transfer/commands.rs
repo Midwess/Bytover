@@ -528,11 +528,7 @@ impl AppCommand {
                 };
                 self.update_model(TransferSessionModelEvent::Update(
                     session_id_obj,
-                    PeerReceivedEvent {
-                        resource_order_id,
-                        peer
-                    }
-                    .into()
+                    PeerReceivedEvent { resource_order_id, peer }.into()
                 ));
             }
             Err(e) => {

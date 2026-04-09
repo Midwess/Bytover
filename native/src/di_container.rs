@@ -1,7 +1,4 @@
-use crate::config::{
-    get_gateway_grpc_url,
-    GATEWAY_HOST
-};
+use crate::config::{get_gateway_grpc_url, GATEWAY_HOST};
 use crate::core_api_impl::net_stream::NetStreamImpl;
 use crate::native::executor::NativeExecutor;
 use crate::native::p2p::P2PNativeExecutorImpl;
@@ -186,7 +183,7 @@ impl DiContainer {
 
         let executor = NativeExecutor {
             rpc: Box::new(NativeRpcImpl {
-                auth_server: self.get_authentication_server(),
+                auth_server: self.get_authentication_server()
             }),
             persistent: Box::new(NativePersistentImpl {
                 auth_session_repository: Box::new(self.get_auth_session_repository()),

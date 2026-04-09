@@ -11,8 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::net::Ipv4Addr;
 use std::time::Duration;
 
-use devlog_sdk::tcp::listener::find_grpc_listener;
-use devlog_sdk::tcp::listener::find_udp_socket;
+use devlog_sdk::tcp::listener::{find_grpc_listener, find_udp_socket};
 use schema::devlog::bitbridge::p2p_orchestration_service_client::P2pOrchestrationServiceClient;
 use schema::devlog::bitbridge::relay_service_server::RelayServiceServer;
 use std::env;
@@ -31,15 +30,16 @@ enum MainErrors {
     #[error("DI container error {0}")]
     DiContainerError(String),
     #[error("Execution error {0}")]
-    ExecutionError(String),
+    ExecutionError(String)
 }
 
 fn main() -> Result<(), MainErrors> {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
 
+    // 32 MB guard for deep RTC/DTLS/SCTP poll paths.
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
-        .thread_stack_size(32 * 1024 * 1024) // 32 MB guard for deep RTC/DTLS/SCTP poll paths
+        .thread_stack_size(32 * 1024 * 1024)
         .build()
         .expect("Failed to build tokio runtime")
         .block_on(async_main())
@@ -77,7 +77,7 @@ async fn async_main() -> Result<(), MainErrors> {
     let grpc_server = Server::builder()
         .add_service(InterceptorFor::new(
             RelayServiceServer::new(RelayServiceImpl::new(di.proxy_manager.clone())),
-            di.get_auth_middleware(),
+            di.get_auth_middleware()
         ))
         .serve_with_incoming(connection.listener);
 
@@ -108,12 +108,12 @@ struct RegisterRelayRequest {
     stun_port: u16,
     relay_port: u16,
     relay_host: String,
-    public_ip: Option<String>,
+    public_ip: Option<String>
 }
 
 #[derive(Debug, Deserialize)]
 struct RegisterRelayResponse {
-    ip_address: String,
+    ip_address: String
 }
 
 fn relay_auth_header() -> String {
@@ -140,7 +140,7 @@ async fn register_relay_once(url: &str, stun_port: u16, relay_port: u16) -> Resu
         stun_port,
         relay_port,
         relay_host: config::get_relay_control_host(),
-        public_ip: config::get_relay_public_ip(),
+        public_ip: config::get_relay_public_ip()
     };
 
     let response = client

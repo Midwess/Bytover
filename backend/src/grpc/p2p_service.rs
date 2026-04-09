@@ -12,10 +12,10 @@ use schema::devlog::bitbridge::{
     FindP2pSessionResponse,
     GenPeerRequest,
     GenPeerResponse,
-    GetRegionRequest,
-    GetRegionResponse,
     GetDeviceAliasesRequest,
     GetDeviceAliasesResponse,
+    GetRegionRequest,
+    GetRegionResponse,
     P2pSession,
     PeerMessage
 };
@@ -38,11 +38,7 @@ fn normalize_signalling_route(signalling_route: &str) -> Result<String, Status> 
 }
 
 fn derive_signalling_region(region_code: Option<&str>) -> (String, String) {
-    let region_code = region_code
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .unwrap_or("local")
-        .to_string();
+    let region_code = region_code.map(str::trim).filter(|value| !value.is_empty()).unwrap_or("local").to_string();
 
     let signalling_route = format!("rpc-signalling-{region_code}");
 
@@ -158,8 +154,7 @@ impl P2pOrchestrationService for P2PGrpcService {
         let device = request.into_inner().device;
 
         let peer_id = devlog_sdk::distributed_id::gen_id().await.to_string();
-        let (region_code, signalling_route) =
-            derive_signalling_region(std::env::var("BYTOVER_REGION_CODE").ok().as_deref());
+        let (region_code, signalling_route) = derive_signalling_region(std::env::var("BYTOVER_REGION_CODE").ok().as_deref());
 
         let (name, avatar_url, email, signalling_id) = match user {
             Some(user) => {
@@ -174,7 +169,7 @@ impl P2pOrchestrationService for P2PGrpcService {
                     Some(user.display_name.clone()),
                     user.avatar_url.unwrap_or_default(),
                     Some(user.email.clone()),
-                    Some(signalling_id),
+                    Some(signalling_id)
                 )
             }
             None => {
@@ -189,24 +184,23 @@ impl P2pOrchestrationService for P2PGrpcService {
             avatar_url,
             email,
             device,
-            region_code: Some(region_code.clone()),
+            region_code: Some(region_code.clone())
         };
 
         Ok(Response::new(GenPeerResponse {
             peer,
             signalling_id,
             region_code,
-            signalling_route,
+            signalling_route
         }))
     }
 
     async fn get_region(&self, _request: Request<GetRegionRequest>) -> Result<Response<GetRegionResponse>, Status> {
-        let (region_code, signalling_route) =
-            derive_signalling_region(std::env::var("BYTOVER_REGION_CODE").ok().as_deref());
+        let (region_code, signalling_route) = derive_signalling_region(std::env::var("BYTOVER_REGION_CODE").ok().as_deref());
 
         Ok(Response::new(GetRegionResponse {
             region_code,
-            signalling_route,
+            signalling_route
         }))
     }
 }

@@ -13,7 +13,7 @@ pub struct NativeExecutor {
     pub rpc: Box<dyn NativeRpc<Client>>,
     pub persistent: Box<dyn NativePersistent>,
     pub transfer: Box<dyn TransferNative<Client>>,
-    pub p2p: Box<dyn P2PNativeExecutor>,
+    pub p2p: Box<dyn P2PNativeExecutor>
 }
 
 impl NativeExecutor {

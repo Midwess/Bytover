@@ -27,7 +27,7 @@ pub struct ProxyManager {
     proxies: Mutex<HashMap<String, Weak<ProxyInstance>>>,
     run_tx: Mutex<Option<tokio::sync::mpsc::UnboundedSender<Arc<ProxyInstance>>>>,
     running: AtomicBool,
-    public_ipv4: Ipv4Addr,
+    public_ipv4: Ipv4Addr
 }
 
 impl ProxyManager {
@@ -36,7 +36,7 @@ impl ProxyManager {
             proxies: Mutex::new(HashMap::new()),
             run_tx: Mutex::new(None),
             running: AtomicBool::new(false),
-            public_ipv4,
+            public_ipv4
         })
     }
 
@@ -98,7 +98,7 @@ impl ProxyManager {
         self: &Arc<Self>,
         session_id: String,
         sdp_offer: String,
-        channels: Vec<DataChannel>,
+        channels: Vec<DataChannel>
     ) -> Result<String, ProxyManagerError> {
         log::info!("[relay-server] Handling connect for session {}", session_id);
 

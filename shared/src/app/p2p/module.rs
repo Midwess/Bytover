@@ -56,9 +56,7 @@ impl AppModule<BitBridge> for P2PModule {
                 model.p2p.me = Some(new_peer);
                 Command::render()
             }
-            P2PEvent::PeerDisconnected { .. } => {
-                Command::render()
-            }
+            P2PEvent::PeerDisconnected { .. } => Command::render()
         }
     }
 

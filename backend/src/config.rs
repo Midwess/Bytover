@@ -1,7 +1,7 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PublicEndpointConfig {
     pub host: String,
-    pub port: u16,
+    pub port: u16
 }
 
 pub fn resolve_public_grpc_endpoint(default_host: &str, default_port: u16) -> PublicEndpointConfig {
@@ -16,10 +16,7 @@ fn resolve_public_endpoint(default_host: &str, default_port: u16) -> PublicEndpo
 }
 
 fn read_string(key: &str) -> Option<String> {
-    std::env::var(key)
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
+    std::env::var(key).ok().map(|value| value.trim().to_string()).filter(|value| !value.is_empty())
 }
 
 fn read_port(key: &str) -> Option<u16> {

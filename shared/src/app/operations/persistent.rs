@@ -113,8 +113,10 @@ impl LocalResourcePersistentOperation {
     }
 
     pub fn update(resource: LocalResource) -> AppRequestBuilder<impl Future<Output = Result<LocalResource, CoreError>>> {
-        AppCommand::request_from_shell(PersistentOperation::LocalResource(LocalResourcePersistentOperation::Update(resource)))
-            .map(|it| it.result())
+        AppCommand::request_from_shell(PersistentOperation::LocalResource(LocalResourcePersistentOperation::Update(
+            resource
+        )))
+        .map(|it| it.result())
     }
 
     pub fn remove(path: LocalResourcePath, shelf_id: u64) -> AppRequestBuilder<impl Future<Output = Result<bool, CoreError>>> {

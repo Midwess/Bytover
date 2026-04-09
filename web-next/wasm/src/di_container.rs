@@ -172,7 +172,7 @@ impl DiContainer {
     pub fn get_signalling_client_for_route(&self, route: &str) -> SignalingClient {
         SignalingClient::new(
             get_signalling_server_ws_url_for_route(route),
-            get_signalling_server_http_url_for_route(route),
+            get_signalling_server_http_url_for_route(route)
         )
     }
 
@@ -191,7 +191,7 @@ impl DiContainer {
 
         let executor = NativeExecutor {
             rpc: Box::new(NativeRpcImpl {
-                auth_server: self.get_authentication_server(),
+                auth_server: self.get_authentication_server()
             }),
             persistent: Box::new(NativePersistentImpl {
                 auth_session_repository: Box::new(self.get_auth_session_repository()),

@@ -6,9 +6,8 @@ use std::time::Duration;
 use bytes::Bytes;
 use core_services::utils::cancellation::FutureExtension;
 use core_services::utils::yield_container::YieldContainer;
-use futures::channel::mpsc;
 use futures::channel::mpsc::unbounded;
-use futures::channel::oneshot;
+use futures::channel::{mpsc, oneshot};
 use futures::select_biased;
 use futures::stream::StreamExt;
 use futures_util::lock::Mutex;
@@ -56,10 +55,14 @@ pub struct WebRtcClient {
     relay_reliable_channel: OnceCell<Arc<RtcDataChannelWrapper>>,
     disconnect_signal: Mutex<Option<oneshot::Sender<()>>>,
     disconnect_receiver: YieldContainer<oneshot::Receiver<()>>,
-    disconnect_requested: AtomicBool,
+    disconnect_requested: AtomicBool
 }
 
-fn spawn_outbound_sender(channel: Arc<RtcDataChannelWrapper>, relay_channel: Arc<RtcDataChannelWrapper>, mut rx: mpsc::Receiver<Vec<u8>>) {
+fn spawn_outbound_sender(
+    channel: Arc<RtcDataChannelWrapper>,
+    relay_channel: Arc<RtcDataChannelWrapper>,
+    mut rx: mpsc::Receiver<Vec<u8>>
+) {
     wasm_bindgen_futures::spawn_local(async move {
         while let Some(data) = rx.next().await {
             let arr = js_sys::Uint8Array::from(&data[..]);
@@ -100,14 +103,10 @@ impl WebRtcClient {
         let session_id = uuid::Uuid::new_v4().to_string();
 
         let api = WebRtcApi::new(ice_config.clone());
-        let connection = api
-            .create_peer_connection()
-            .map_err(|e| WebRtcClientError::Connection(e.to_string()))?;
+        let connection = api.create_peer_connection().map_err(|e| WebRtcClientError::Connection(e.to_string()))?;
 
         let relay_api = WebRtcApi::new(ice_config);
-        let relay_connection = relay_api
-            .create_peer_connection()
-            .map_err(|e| WebRtcClientError::Connection(e.to_string()))?;
+        let relay_connection = relay_api.create_peer_connection().map_err(|e| WebRtcClientError::Connection(e.to_string()))?;
 
         let (msg_inbound_tx, msg_inbound_rx) = unbounded();
         let (data_inbound_tx, data_inbound_rx) = unbounded();
@@ -162,7 +161,7 @@ impl WebRtcClient {
             .await
             .map_err(|e| WebRtcClientError::Connection(e.to_string()))?;
 
-        // ICE gathering for P2P might take longer, we wait for both. 
+        // ICE gathering for P2P might take longer, we wait for both.
         ice_agent
             .wait_for_gathering_complete(&connection)
             .await
@@ -190,19 +189,19 @@ impl WebRtcClient {
                 max_retransmit: 0,
                 ordered: false,
                 negotiate: RELIABLE_DATA_CHANNEL_ID as i32,
-                label: "reliable".to_string(),
+                label: "reliable".to_string()
             },
             schema::devlog::bitbridge::DataChannel {
                 max_retransmit: 0,
                 ordered: false,
                 negotiate: UNORDERED_MSG_CHANNEL_ID as i32,
-                label: "unordered_msg".to_string(),
+                label: "unordered_msg".to_string()
             },
             schema::devlog::bitbridge::DataChannel {
                 max_retransmit: 0,
                 ordered: true,
                 negotiate: ORDERED_MSG_CHANNEL_ID as i32,
-                label: "ordered_msg".to_string(),
+                label: "ordered_msg".to_string()
             },
         ];
 
@@ -217,7 +216,7 @@ impl WebRtcClient {
         let reliable_channel_p2p = reliable_channel.clone();
         let unordered_channel_p2p = unordered_channel.clone();
         let ordered_channel_p2p = ordered_channel.clone();
-        
+
         let me_proto = schema::devlog::bitbridge::PeerMessage::from(me.clone());
 
         let client = Arc::new(WebRtcClient {
@@ -238,7 +237,7 @@ impl WebRtcClient {
             relay_reliable_channel: OnceCell::new(),
             disconnect_signal: Mutex::new(Some(disconnect_tx)),
             disconnect_receiver: YieldContainer::new(disconnect_rx),
-            disconnect_requested: AtomicBool::new(false),
+            disconnect_requested: AtomicBool::new(false)
         });
 
         let _ = client.me.set(me);
@@ -316,7 +315,7 @@ impl WebRtcClient {
         spawn_outbound_sender(ordered_channel.clone(), relay_ordered_channel.clone(), ordered_out_rx);
         spawn_outbound_sender(unordered_channel.clone(), relay_unordered_channel.clone(), unordered_out_rx);
 
-        // Wait for connection to open but we should theoretically wait for EITHER to open. 
+        // Wait for connection to open but we should theoretically wait for EITHER to open.
         let _ = open_rx.next().await;
 
         log::info!("WebRtcClient connection established (at least one leg open), peer info exchanged via signaling.");
@@ -376,9 +375,7 @@ impl WebRtcClient {
             .get()
             .ok_or_else(|| WebRtcClientError::Connection("No message channel".to_string()))?;
 
-        let response = msg_channel
-            .send(Request::IntroduceRequest(introduce_request), None)
-            .await?;
+        let response = msg_channel.send(Request::IntroduceRequest(introduce_request), None).await?;
 
         match response {
             Response::IntroduceResponse(resp) => {
@@ -397,9 +394,9 @@ impl WebRtcClient {
         order_id: u64,
         password: Option<String>
     ) -> Result<(), WebRtcClientError> {
+        use core_services::utils::cancellation::CancellationToken;
         use schema::devlog::bitbridge::view_session_detail_response::Result as ResponseResult;
         use schema::devlog::bitbridge::PeerErrorsMessage;
-        use core_services::utils::cancellation::CancellationToken;
 
         let request = schema::devlog::bitbridge::ViewSessionDetailRequest { order_id, password };
 
@@ -420,13 +417,17 @@ impl WebRtcClient {
             Response::ViewSessionResponse(resp) => match resp.result {
                 Some(ResponseResult::Session(session)) => {
                     core_request
-                        .response(CoreOperationOutput::Transfer(TransferOperationOutput::SessionDetailReceived(session)))
+                        .response(CoreOperationOutput::Transfer(TransferOperationOutput::SessionDetailReceived(
+                            session
+                        )))
                         .await;
                 }
                 Some(ResponseResult::Error(error_type)) => {
                     let error_msg = PeerErrorsMessage::try_from(error_type).unwrap_or(PeerErrorsMessage::InvalidRequest);
                     core_request
-                        .response(CoreOperationOutput::Error(shared::errors::CoreError::PeerRequestError(error_msg)))
+                        .response(CoreOperationOutput::Error(shared::errors::CoreError::PeerRequestError(
+                            error_msg
+                        )))
                         .await;
                     return Err(WebRtcClientError::PeerError(error_msg.to_string()));
                 }
@@ -462,10 +463,7 @@ impl WebRtcClient {
         let (tx, mut rx) = mpsc::channel::<(u64, Vec<u8>)>(10);
         self.prefix_channels.lock().await.insert(transfer_id, tx);
 
-        let resource_token = self
-            .transfers_context
-            .get_or_create_resource_token(session_order_id, resource_order_id)
-            .await;
+        let resource_token = self.transfers_context.get_or_create_resource_token(session_order_id, resource_order_id).await;
 
         progress.update_progress(1);
         core_request
@@ -477,9 +475,7 @@ impl WebRtcClient {
             .get()
             .ok_or_else(|| WebRtcClientError::Connection("No message channel".to_string()))?;
 
-        msg_channel
-            .notify(Request::DownloadResourceRequest(request))
-            .await?;
+        msg_channel.notify(Request::DownloadResourceRequest(request)).await?;
 
         let start_delimiter = loop {
             match rx.next().with_cancel(&resource_token).await? {
@@ -496,17 +492,15 @@ impl WebRtcClient {
         };
 
         let compressed = start_delimiter.compressed();
-        let mut writer = self
-            .resource_repo
-            .write(resource.path.clone(), compressed)
-            .await?;
+        let mut writer = self.resource_repo.write(resource.path.clone(), compressed).await?;
 
         let mut expected_size: Option<u64> = None;
         loop {
             match rx.next().with_cancel(&resource_token).await? {
                 Some((offset, packet)) => {
                     if let Ok(delimiter) = TransferDelimiterShema::from_bytes(&packet) {
-                        if matches!(delimiter, TransferDelimiterShema::End { .. }) && delimiter.session_id() == Some(session_order_id) {
+                        if matches!(delimiter, TransferDelimiterShema::End { .. }) && delimiter.session_id() == Some(session_order_id)
+                        {
                             expected_size = delimiter.total_size();
 
                             if let Some(target) = expected_size {
@@ -534,7 +528,9 @@ impl WebRtcClient {
                     }
 
                     let bytes = Bytes::from(packet.to_vec());
-                    if let Some(written) = writer.d_write_at(bytes, offset).await.map_err(|e| WebRtcClientError::Transfer(e.to_string()))? {
+                    if let Some(written) =
+                        writer.d_write_at(bytes, offset).await.map_err(|e| WebRtcClientError::Transfer(e.to_string()))?
+                    {
                         progress.update_progress(written as u64);
                         core_request
                             .response_throttle(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
@@ -579,7 +575,10 @@ impl WebRtcClient {
 
         if let Err(e) = self.transfer_session_repo.start_download_session(zip_path.clone()).await {
             self.cancel_resource_transfer(session_order_id, session_resource.order_id).await;
-            return Err(WebRtcClientError::Transfer(format!("Failed to start download session: {:?}", e)));
+            return Err(WebRtcClientError::Transfer(format!(
+                "Failed to start download session: {:?}",
+                e
+            )));
         }
 
         let mut download_failed = false;
@@ -618,7 +617,9 @@ impl WebRtcClient {
         let mut session_progress = TransferProgress::new(session_resource.order_id, session_resource.size, TransferType::Receive);
         session_progress.update_progress(session_resource.size);
         core_request
-            .response(TransferOperationOutput::TransferResourceProgressUpdate(session_progress.clone()))
+            .response(TransferOperationOutput::TransferResourceProgressUpdate(
+                session_progress.clone()
+            ))
             .await;
 
         if let Err(e) = self.transfer_session_repo.stop_download_session(zip_path).await {
@@ -631,7 +632,9 @@ impl WebRtcClient {
 
         session_progress.success();
         core_request
-            .response(TransferOperationOutput::TransferResourceProgressUpdate(session_progress.clone()))
+            .response(TransferOperationOutput::TransferResourceProgressUpdate(
+                session_progress.clone()
+            ))
             .await;
 
         Ok(session_progress)
@@ -686,9 +689,7 @@ impl WebRtcClient {
                         peer: schema::devlog::bitbridge::PeerMessage::from(me.clone())
                     };
                     if let Some(msg_channel) = self.msg_channel.get() {
-                        let _ = msg_channel
-                            .send_response(request_id, Response::IntroduceResponse(response))
-                            .await;
+                        let _ = msg_channel.send_response(request_id, Response::IntroduceResponse(response)).await;
                     }
                 } else {
                     log::warn!("Cannot respond to IntroduceRequest: current user not set (call introduce() first)");
@@ -712,7 +713,11 @@ impl WebRtcClient {
             }
             Request::ResourceNotification(notification) => {
                 let session_order_id = notification.session_order_id;
-                log::info!("Received resource notification for session order_id {} resource_id {:?}", session_order_id, notification.resource.as_ref().map(|it| it.order_id)); 
+                log::info!(
+                    "Received resource notification for session order_id {} resource_id {:?}",
+                    session_order_id,
+                    notification.resource.as_ref().map(|it| it.order_id)
+                );
                 if let Some(resource_proto) = notification.resource {
                     let mut resource = LocalResource {
                         order_id: resource_proto.order_id,
@@ -752,9 +757,7 @@ impl WebRtcClient {
                 }
 
                 if let Some(msg_channel) = self.msg_channel.get() {
-                    let _ = msg_channel
-                        .send_response(request_id, Response::VoidResponse(VoidResponseMessage {}))
-                        .await;
+                    let _ = msg_channel.send_response(request_id, Response::VoidResponse(VoidResponseMessage {})).await;
                 }
             }
             _ => {

@@ -114,33 +114,29 @@ impl IceAgent {
         resolved_lines.join("\r\n")
     }
 
-    pub async fn gather_candidates(
-        socket: &tokio::net::UdpSocket,
-        config: &IceConfig
-    ) -> Result<Vec<Candidate>, IceError> {
+    pub async fn gather_candidates(socket: &tokio::net::UdpSocket, config: &IceConfig) -> Result<Vec<Candidate>, IceError> {
         log::info!("[ice] Gathering candidates using config {config:?}");
 
         let mut candidates: HashSet<Candidate> = HashSet::new();
         let local_port = socket.local_addr().map(|a| a.port()).unwrap_or(0);
 
-            if let Ok(ifaces) = if_addrs::get_if_addrs() {
-                for iface in ifaces {
-                    if !is_usable_interface(&iface) {
-                        continue;
+        if let Ok(ifaces) = if_addrs::get_if_addrs() {
+            for iface in ifaces {
+                if !is_usable_interface(&iface) {
+                    continue;
+                }
+                let addr = SocketAddr::new(iface.ip(), local_port);
+                match Candidate::host(addr, "udp") {
+                    Ok(c) => {
+                        log::debug!("[ice] Host candidate: {}", c);
+                        candidates.insert(c);
                     }
-                    let addr = SocketAddr::new(iface.ip(), local_port);
-                    match Candidate::host(addr, "udp") {
-                        Ok(c) => {
-                            log::debug!("[ice] Host candidate: {}", c);
-                            candidates.insert(c);
-                        }
-                        Err(e) => {
-                            log::warn!("[ice] Failed to create host candidate for {}: {:?}", addr, e);
-                        }
+                    Err(e) => {
+                        log::warn!("[ice] Failed to create host candidate for {}: {:?}", addr, e);
                     }
                 }
             }
-        
+        }
 
         let stun_urls = parse_stun_urls(config);
         if !stun_urls.is_empty() {
@@ -184,39 +180,36 @@ impl IceAgent {
                     break;
                 }
 
-                match tokio::time::timeout(remaining, socket.recv_from(&mut buf)).await {
-                    Ok(Ok((n, src))) => {
-                        if let Ok(msg) = Message::from_bytes(&buf[..n]) {
-                            if msg.is_response() {
-                                let mut matched = None;
-                                for (idx, (agent, _)) in pending.iter_mut().enumerate() {
-                                    if agent.handle_stun_message(&msg, src) {
-                                        matched = Some(idx);
-                                        break;
-                                    }
+                if let Ok(Ok((n, src))) = tokio::time::timeout(remaining, socket.recv_from(&mut buf)).await {
+                    if let Ok(msg) = Message::from_bytes(&buf[..n]) {
+                        if msg.is_response() {
+                            let mut matched = None;
+                            for (idx, (agent, _)) in pending.iter_mut().enumerate() {
+                                if agent.handle_stun_message(&msg, src) {
+                                    matched = Some(idx);
+                                    break;
                                 }
-                                if let Some(idx) = matched {
-                                    pending.remove(idx);
-                                    if let Some(mapped) = extract_mapped_addr(&msg) {
-                                        let mut base = local_addr;
-                                        if mapped.is_ipv4() && base.is_ipv6() {
-                                            base = SocketAddr::new(std::net::Ipv4Addr::UNSPECIFIED.into(), base.port());
-                                        } else if mapped.is_ipv6() && base.is_ipv4() {
-                                            base = SocketAddr::new(std::net::Ipv6Addr::UNSPECIFIED.into(), base.port());
+                            }
+                            if let Some(idx) = matched {
+                                pending.remove(idx);
+                                if let Some(mapped) = extract_mapped_addr(&msg) {
+                                    let mut base = local_addr;
+                                    if mapped.is_ipv4() && base.is_ipv6() {
+                                        base = SocketAddr::new(std::net::Ipv4Addr::UNSPECIFIED.into(), base.port());
+                                    } else if mapped.is_ipv6() && base.is_ipv4() {
+                                        base = SocketAddr::new(std::net::Ipv6Addr::UNSPECIFIED.into(), base.port());
+                                    }
+                                    match Candidate::server_reflexive(mapped, base, "udp") {
+                                        Ok(c) => {
+                                            log::debug!("[ice] Srflx candidate: {} (base: {})", c, base);
+                                            candidates.insert(c);
                                         }
-                                        match Candidate::server_reflexive(mapped, base, "udp") {
-                                            Ok(c) => {
-                                                log::debug!("[ice] Srflx candidate: {} (base: {})", c, base);
-                                                candidates.insert(c);
-                                            }
-                                            Err(e) => log::warn!("[ice] Srflx for {mapped}: {e:?}"),
-                                        }
+                                        Err(e) => log::warn!("[ice] Srflx for {mapped}: {e:?}")
                                     }
                                 }
                             }
                         }
                     }
-                    _ => {}
                 }
 
                 let now = stun_now();

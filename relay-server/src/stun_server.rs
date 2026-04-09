@@ -31,8 +31,8 @@ pub async fn run_stun_server(conn: UdpConnection) -> anyhow::Result<()> {
                 Box::new(BINDING_SUCCESS),
                 Box::new(XorMappedAddress {
                     ip: src_addr.ip(),
-                    port: src_addr.port(),
-                }),
+                    port: src_addr.port()
+                })
             ]) {
                 error!("STUN server build response error: {}", e);
                 continue;

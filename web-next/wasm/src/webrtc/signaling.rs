@@ -1,8 +1,8 @@
 use prost::Message as ProstMessage;
 
 use core_services::wasm::http::HttpClient;
-use schema::devlog::rpc_signalling::server::{IceConfig, OfferMessage, OfferRequest, OfferResponse};
 use schema::devlog::bitbridge::PeerMessage;
+use schema::devlog::rpc_signalling::server::{IceConfig, OfferMessage, OfferRequest, OfferResponse};
 
 #[derive(Debug, Clone)]
 pub struct SignalingClient {
@@ -11,18 +11,22 @@ pub struct SignalingClient {
 
 impl SignalingClient {
     pub fn new(_ws_url: impl Into<String>, http_url: impl Into<String>) -> Self {
-        Self {
-            http_url: http_url.into()
-        }
+        Self { http_url: http_url.into() }
     }
 
-    pub async fn send_offer(&self, peer_id: &str, offer_sdp: &str, session_id: &str, me: PeerMessage) -> Result<(String, PeerMessage), SignalingError> {
+    pub async fn send_offer(
+        &self,
+        peer_id: &str,
+        offer_sdp: &str,
+        session_id: &str,
+        me: PeerMessage
+    ) -> Result<(String, PeerMessage), SignalingError> {
         let url = format!("{}/offer/{}", self.http_url.trim_end_matches('/'), peer_id);
 
         let offer_req = OfferRequest {
             offer: OfferMessage {
                 sdp: offer_sdp.to_string(),
-                peer: me.clone(),
+                peer: me.clone()
             },
             peer: me,
             session_id: Some(session_id.to_string())
@@ -70,14 +74,20 @@ impl SignalingClient {
         IceConfig::decode(&bytes[..]).map_err(|e| SignalingError::Decoding(e.to_string()))
     }
 
-    pub async fn relay_connect(&self, key: &str, session_id: &str, sdp: &str, channels: Vec<schema::devlog::bitbridge::DataChannel>) -> Result<schema::devlog::bitbridge::ConnectResponse, SignalingError> {
+    pub async fn relay_connect(
+        &self,
+        key: &str,
+        session_id: &str,
+        sdp: &str,
+        channels: Vec<schema::devlog::bitbridge::DataChannel>
+    ) -> Result<schema::devlog::bitbridge::ConnectResponse, SignalingError> {
         let url = format!("{}/relay/{}", self.http_url.trim_end_matches('/'), key);
         let request = schema::devlog::bitbridge::ConnectRequest {
             sdp: sdp.to_string(),
             session_id: session_id.to_string(),
-            channels,
+            channels
         };
-        
+
         let mut encoded = Vec::new();
         prost::Message::encode(&request, &mut encoded).map_err(|e| SignalingError::Encoding(e.to_string()))?;
 

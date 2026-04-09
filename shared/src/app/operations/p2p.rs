@@ -103,7 +103,7 @@ pub enum P2POperationOutput {
         peer_id: String
     },
     PeerConnected(Peer),
-    PeerDisconnected(Peer),
+    PeerDisconnected(Peer)
 }
 
 impl Operation for P2POperation {
