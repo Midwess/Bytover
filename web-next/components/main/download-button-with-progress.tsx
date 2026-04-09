@@ -68,6 +68,7 @@ export default function DownloadButtonWithProgress({
     const commonClasses = cn(
         isPill ? "h-12 px-8 w-auto min-w-[200px]" : "w-12 h-12",
         "rounded-full flex items-center justify-center transition-all duration-500 shrink-0",
+        className,
         containerClass
     )
 

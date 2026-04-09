@@ -44,7 +44,6 @@ export function ResourceDownload({
             buttonVariant={buttonVariant}
             buttonSize={buttonSize}
             className={className}
-            containerClass={className}
         />
     );
 }
