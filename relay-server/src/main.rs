@@ -19,6 +19,7 @@ use tonic::transport::Server;
 use tonic::Request;
 use tonic_middleware::InterceptorFor;
 
+use crate::connection::proxy_manager::ProxyManager;
 use crate::di::DiContainer;
 use crate::gateway::GatewayChannel;
 use crate::grpc_service::RelayServiceImpl;
@@ -70,8 +71,15 @@ async fn async_main() -> Result<(), MainErrors> {
     );
 
     // Start registration loop
+    let proxy_manager = di.proxy_manager.clone();
     tokio::spawn(async move {
-        start_registration_loop(stun_port, relay_port, public_ip).await;
+        start_registration_loop(
+            stun_port,
+            relay_port,
+            RegistrationState::new(registration_url, public_ip),
+            proxy_manager
+        )
+        .await;
     });
 
     let grpc_server = Server::builder()
@@ -114,6 +122,36 @@ struct RegisterRelayRequest {
 #[derive(Debug, Deserialize)]
 struct RegisterRelayResponse {
     ip_address: String
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RegistrationState {
+    registration_url: String,
+    public_ip: Ipv4Addr
+}
+
+impl RegistrationState {
+    fn new(registration_url: String, public_ip: Ipv4Addr) -> Self {
+        Self { registration_url, public_ip }
+    }
+
+    fn update_registration_url(&mut self, next_url: String) -> Option<(String, String)> {
+        if self.registration_url == next_url {
+            return None;
+        }
+
+        let previous_url = std::mem::replace(&mut self.registration_url, next_url);
+        Some((previous_url, self.registration_url.clone()))
+    }
+
+    fn update_public_ip(&mut self, next_ip: Ipv4Addr) -> Option<(Ipv4Addr, Ipv4Addr)> {
+        if self.public_ip == next_ip {
+            return None;
+        }
+
+        let previous_ip = std::mem::replace(&mut self.public_ip, next_ip);
+        Some((previous_ip, self.public_ip))
+    }
 }
 
 fn relay_auth_header() -> String {
@@ -163,10 +201,13 @@ async fn register_relay_once(url: &str, stun_port: u16, relay_port: u16) -> Resu
     parse_registered_ipv4(&body.ip_address)
 }
 
-async fn start_registration_loop(stun_port: u16, relay_port: u16, public_ip: Ipv4Addr) {
+async fn start_registration_loop(
+    stun_port: u16,
+    relay_port: u16,
+    mut state: RegistrationState,
+    proxy_manager: std::sync::Arc<ProxyManager>
+) {
     let grpc_gateway = GatewayChannel::new(config::get_gateway_grpc_url(), config::get_gateway_grpc_host());
-
-    let mut registration_url = None::<String>;
 
     let mut interval = tokio::time::interval(Duration::from_secs(5));
     loop {
@@ -174,30 +215,31 @@ async fn start_registration_loop(stun_port: u16, relay_port: u16, public_ip: Ipv
 
         let url = match resolve_registration_url(&grpc_gateway).await {
             Ok(url) => {
-                if registration_url.as_deref() != Some(url.as_str()) {
-                    log::info!("Resolved relay registration URL to {}", url);
-                    registration_url = Some(url.clone());
+                if let Some((previous_url, next_url)) = state.update_registration_url(url.clone()) {
+                    log::info!(
+                        "Relay registration URL changed from {} to {}",
+                        previous_url,
+                        next_url
+                    );
                 }
 
                 url
             }
             Err(error) => {
                 log::error!("Failed to resolve relay registration URL: {}", error);
-                let Some(url) = registration_url.clone() else {
-                    continue;
-                };
-                url
+                state.registration_url.clone()
             }
         };
 
         match register_relay_once(&url, stun_port, relay_port).await {
             Ok(ip) => {
-                if ip != public_ip {
-                    log::error!(
-                        "Relay registration returned unexpected IPv4 {} after startup cached {}",
-                        ip,
-                        public_ip
+                if let Some((previous_ip, next_ip)) = state.update_public_ip(ip) {
+                    log::info!(
+                        "Relay registration public IPv4 changed from {} to {}",
+                        previous_ip,
+                        next_ip
                     );
+                    proxy_manager.set_public_ipv4(next_ip);
                 }
             }
             Err(error) => {
@@ -222,7 +264,7 @@ async fn resolve_registration_url(grpc_gateway: &GatewayChannel) -> Result<Strin
 
 #[cfg(test)]
 mod tests {
-    use super::parse_registered_ipv4;
+    use super::{parse_registered_ipv4, RegistrationState};
     use std::net::Ipv4Addr;
 
     #[test]
@@ -235,5 +277,52 @@ mod tests {
     fn parse_registered_ipv4_rejects_ipv6() {
         let error = parse_registered_ipv4("2001:db8::1").unwrap_err();
         assert!(error.contains("non-IPv4"));
+    }
+
+    #[test]
+    fn registration_state_tracks_registration_url_changes() {
+        let mut state = RegistrationState::new(
+            "https://gateway.example/rpc-signalling-local/register-relay".to_string(),
+            Ipv4Addr::new(203, 0, 113, 10)
+        );
+
+        let changed = state.update_registration_url("https://gateway.example/rpc-signalling-europe/register-relay".to_string());
+
+        assert_eq!(
+            changed,
+            Some((
+                "https://gateway.example/rpc-signalling-local/register-relay".to_string(),
+                "https://gateway.example/rpc-signalling-europe/register-relay".to_string()
+            ))
+        );
+    }
+
+    #[test]
+    fn registration_state_tracks_public_ip_changes() {
+        let mut state = RegistrationState::new(
+            "https://gateway.example/rpc-signalling-local/register-relay".to_string(),
+            Ipv4Addr::new(203, 0, 113, 10)
+        );
+
+        let changed = state.update_public_ip(Ipv4Addr::new(203, 0, 113, 11));
+
+        assert_eq!(
+            changed,
+            Some((Ipv4Addr::new(203, 0, 113, 10), Ipv4Addr::new(203, 0, 113, 11)))
+        );
+    }
+
+    #[test]
+    fn registration_state_ignores_unchanged_values() {
+        let mut state = RegistrationState::new(
+            "https://gateway.example/rpc-signalling-local/register-relay".to_string(),
+            Ipv4Addr::new(203, 0, 113, 10)
+        );
+
+        assert_eq!(
+            state.update_registration_url("https://gateway.example/rpc-signalling-local/register-relay".to_string()),
+            None
+        );
+        assert_eq!(state.update_public_ip(Ipv4Addr::new(203, 0, 113, 10)), None);
     }
 }
