@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   relay-server:
-    image: midwess/bytover-relay:${RELAY_SERVER_IMAGE_TAG:?set RELAY_SERVER_IMAGE_TAG to the short git SHA image tag}
+    image: midwesshub/bytover-relay:${RELAY_SERVER_IMAGE_TAG:?set RELAY_SERVER_IMAGE_TAG to the short git SHA image tag}
     networks:
       - host
     environment:
