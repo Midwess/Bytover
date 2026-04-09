@@ -1,0 +1,14 @@
+syntax="proto3";
+
+package devlog.devblog.entities;
+
+message AuthorId {
+    string email = 1; // required
+}
+
+message Author {
+    string email = 2; // optional
+    string avatar_url = 3; // optional
+    string full_name = 4; // optional
+    string display_name = 5; // optional
+}

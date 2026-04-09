@@ -1,0 +1,41 @@
+syntax = "proto2";
+
+package devlog.bitbridge;
+
+enum ResourceTypeMessage {
+    IMAGE = 0;
+    VIDEO = 1;
+    FILE = 2;
+    FOLDER = 3;
+}
+
+message ResourceMessage {
+    required ResourceTypeMessage type = 1;
+    required string name = 2;
+    required uint64 order_id = 3;
+    required int64 size = 4;
+    optional bytes thumbnail_png = 5;
+}
+
+message NetworkStats {
+    required float loss_rate = 1;
+    optional uint32 rtt = 2;
+    optional uint32 current_block_id = 3;
+    optional uint32 hold_counter = 4;
+}
+
+message MissingFrames {
+    required uint32 block_id = 1;
+    repeated uint32 frames = 2;
+}
+
+message MissingBlocks {
+    repeated MissingFrames blocks = 1;
+}
+
+message FecFeedback {
+    oneof feedback {
+        MissingBlocks missing = 1;
+        NetworkStats network = 2;
+    }
+}

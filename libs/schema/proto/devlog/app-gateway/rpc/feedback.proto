@@ -1,0 +1,18 @@
+syntax = "proto2";
+
+package devlog.app_gateway.rpc;
+
+import "devlog/app-gateway/models/application.proto";
+
+service FeedbackService {
+  rpc feedback_app(AppFeedbackRequest) returns (AppFeedbackResponse);
+}
+
+message AppFeedbackRequest {
+  required string app_name = 1;
+  optional string user_email = 2;
+  optional string title = 3;
+  required string message = 4;
+}
+
+message AppFeedbackResponse {}

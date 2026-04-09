@@ -1,0 +1,8 @@
+**/src/schema/*
+node_modules
+.DS_Store
+target
+out
+.idea
+dist
+.dev

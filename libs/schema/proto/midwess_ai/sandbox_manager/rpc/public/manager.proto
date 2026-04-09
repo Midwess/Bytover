@@ -1,0 +1,24 @@
+syntax = "proto2";
+
+package midwess.sandbox_manager.rpc.public.manager;
+
+service SandboxManagerPublicService {
+    rpc RegisterSandbox(RegisterSandboxRequest) returns (RegisterSandboxResponse);
+    rpc RegisterApplicationPort(RegisterApplicationPortRequest) returns (RegisterApplicationPortResponse);
+}
+
+message RegisterSandboxRequest {
+    required string sandbox_token = 1;
+}
+
+message RegisterSandboxResponse {
+    required string token = 1;
+}
+
+message RegisterApplicationPortRequest {
+    required int32 port = 1;
+}
+
+message RegisterApplicationPortResponse {
+    required string domain = 1;
+}

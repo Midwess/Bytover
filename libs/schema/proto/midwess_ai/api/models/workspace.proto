@@ -1,0 +1,26 @@
+syntax = "proto2";
+
+package midwess.api.models;
+
+import "value/datetime.proto";
+
+message Workspace {
+    required int64 id = 1;
+    required string name = 2;
+    required value.datetime.Datetime created_at = 3;
+    optional value.datetime.Datetime updated_at = 4;
+}
+
+enum MemberRole {
+    MEMBER_ROLE_UNSPECIFIED = 0;
+    MEMBER_ROLE_ADMIN = 1;
+    MEMBER_ROLE_MAINTAINER = 2;
+}
+
+message Member {
+    required int64 id = 1;
+    required int64 workspace_id = 2;
+    required int64 user_id = 3;
+    required MemberRole role = 4;
+    required value.datetime.Datetime created_at = 5;
+}

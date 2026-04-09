@@ -1,0 +1,6 @@
+/target
+.shuttle-storage
+Secrets*.toml
+out
+.DS_store
+.idea

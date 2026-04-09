@@ -1,0 +1,22 @@
+syntax = "proto2";
+
+package value.device;
+
+import "value/platform.proto";
+
+enum DeviceType {
+    ApplePhone = 1;
+    OtherPhone = 2;
+    Macbook = 3;
+    OtherLaptop = 4;
+}
+
+message RegisteringDevice {
+    required value.platform.Platform platform = 1;
+    required string device_name = 2;
+    required string device_unique_key = 3;
+    required DeviceType device_type = 4;
+
+    // The URL that server can use to open the client on this device
+    required string url = 5;
+}

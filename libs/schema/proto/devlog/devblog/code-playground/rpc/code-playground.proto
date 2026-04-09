@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package devlog.devblog.code_playground;
+
+import "devlog/devblog/code-playground/entities/file.proto";
+
+service CodePlaygroundService {
+  rpc run(CodePlaygroundRunRequest) returns (stream CodePlaygroundRunResponse);
+}
+
+message CodePlaygroundRunRequest {
+  string root_path = 1;
+  repeated CodePlaygroundFile files = 2;
+}
+
+message CodePlaygroundRunResponse {
+  string line = 1;
+}
+

@@ -1,0 +1,14 @@
+syntax = "proto2";
+
+package devlog.bitbridge;
+
+import "value/device.proto";
+
+message PeerMessage {
+    required string peer_id = 1;
+    optional string name = 2;
+    required string avatar_url = 3;
+    optional string email = 5;
+    required value.device.RegisteringDevice device = 6;
+    optional string region_code = 7;
+}

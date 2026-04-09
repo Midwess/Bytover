@@ -1,0 +1,53 @@
+syntax = "proto2";
+
+package midwess.api.public;
+
+import "midwess_ai/api/models/workspace.proto";
+import "midwess_ai/api/models/project.proto";
+
+service WorkspaceService {
+    rpc Get(GetWorkspaceRequest) returns (GetWorkspaceResponse);
+    rpc Create(CreateWorkspaceRequest) returns (CreateWorkspaceResponse);
+    rpc List(ListWorkspacesRequest) returns (ListWorkspacesResponse);
+    rpc GetCurrent(GetCurrentWorkspaceRequest) returns (GetCurrentWorkspaceResponse);
+}
+
+message GetWorkspaceRequest {
+    required int64 id = 1;
+}
+
+message GetWorkspaceResponse {
+    optional midwess.api.models.Workspace workspace = 1;
+    repeated midwess.api.models.Project projects = 2;
+    repeated midwess.api.models.Member members = 3;
+}
+
+message CreateWorkspaceRequest {
+    required string name = 1;
+}
+
+message CreateWorkspaceResponse {
+    optional midwess.api.models.Workspace workspace = 1;
+    repeated midwess.api.models.Project projects = 2;
+    repeated midwess.api.models.Member members = 3;
+}
+
+message ListWorkspacesRequest {
+}
+
+message WorkspaceWithDetails {
+    optional midwess.api.models.Workspace workspace = 1;
+    repeated midwess.api.models.Project projects = 2;
+    repeated midwess.api.models.Member members = 3;
+}
+
+message ListWorkspacesResponse {
+    repeated WorkspaceWithDetails workspaces = 1;
+}
+
+message GetCurrentWorkspaceRequest {
+}
+
+message GetCurrentWorkspaceResponse {
+    optional WorkspaceWithDetails workspace = 1;
+}

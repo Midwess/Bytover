@@ -1,0 +1,50 @@
+{
+  "name": "@midwess/schema",
+  "version": "1.9.0",
+  "license": "MIT",
+  "main": "dist/bundle.cjs.js",
+  "module": "dist/bundle.esm.js",
+  "types": "./dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "require": "./dist/bundle.cjs.js",
+      "import": "./dist/bundle.esm.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Midwess/schema.git"
+  },
+  "scripts": {
+    "schema:compile": "bash compile.sh && npm run build",
+    "build": "rm -rf dist 2>/dev/null && rollup -c"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "^2.2.2",
+    "@connectrpc/connect": "^2.0.0",
+    "@connectrpc/connect-node": "^2.0.0",
+    "@connectrpc/connect-web": "^2.0.0"
+  },
+  "devDependencies": {
+    "@bufbuild/buf": "1.35.1",
+    "@bufbuild/protoc-gen-es": "^2.2.2",
+    "@rollup/plugin-commonjs": "^26.0.1",
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "crypto": "^1.0.1",
+    "protoc-gen-js": "^3.21.2",
+    "rollup": "^4.20.0",
+    "rollup-plugin-typescript2": "^0.36.0",
+    "ts-loader": "^8.0.14",
+    "ts-protoc-gen": "0.14.0",
+    "tsc-alias": "1.8.10",
+    "typescript": "^5.5.4"
+  }
+}

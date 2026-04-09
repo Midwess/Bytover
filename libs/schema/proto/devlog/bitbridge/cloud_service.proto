@@ -1,0 +1,193 @@
+syntax = "proto2";
+
+package devlog.bitbridge;
+
+import "value/static_resource.proto";
+
+service BitBridgeCloudService {
+  // Create a transfer session with optional password-protected
+  rpc create_public_transfer_session(CreatePublicTransferSessionRequest) returns (CreatePublicTransferSessionResponse);
+  // Add resources to upload, returns thumbnails upload requests
+  rpc add_resources(AddResourcesRequest) returns (AddResourcesResponse);
+  // Update the transfer progress
+  rpc update_transfer_progress(UpdateTransferProgressRequest) returns (UpdateTransferProgressResponse);
+  // This could be called even the session is already completed, it will delete the session
+  rpc cancel_session(CancelSessionRequest) returns (CancelSessionResponse);
+  // Find a public transfer session
+  rpc find_session(FindSessionRequest) returns (FindSessionResponse);
+  // Streaming back session info in realtime
+  rpc subscribe_session_info(SubscribeSessionInfoRequest) returns (stream SubscribeSessionInfoResponse);
+  // Complete upload part and return next upload part if any
+  rpc complete_upload_part(CompleteUploadPartRequest) returns (CompleteUploadPartResponse);
+}
+
+message PublicSessionId {
+  required uint64 order_id = 1;
+  required uint64 user_id = 2;
+}
+
+message FindSessionRequest {
+  optional string alias = 1;
+}
+
+message FindSessionResponse {
+  optional PublicSessionId session = 1;
+  required bool is_required_password = 2;
+  required string access_url = 3;
+  required string alias = 4;
+}
+
+message SubscribeSessionInfoRequest {
+  required PublicSessionId id = 1;
+  optional string password = 2;
+}
+
+message SubscribeSessionInfoResponse {
+  message ProgressUpdated {
+    repeated PublicTransferSessionMessage.Progress progress_update = 1;
+  }
+
+  message SessionUpdated {
+    required PublicTransferSessionMessage session_updated = 1;
+  }
+
+  message ResourceUpdated {
+    repeated CloudResourceMessage resource_update = 1;
+  }
+
+  oneof event {
+    ProgressUpdated progress_updated = 1;
+    SessionUpdated session_updated = 2;
+    ResourceUpdated resource_updated = 3;
+  }
+}
+
+message CloudResourceMessage {   
+  enum ResourceType {
+    IMAGE = 0;
+    VIDEO = 1;
+    FILE = 2;
+    FOLDER = 3;
+  }
+
+  required ResourceType type = 1;
+  required string name = 2;
+  required uint64 order_id = 3;
+  required int64 size = 4;
+  optional string thumbnail_download_url = 5;
+  required string download_url = 6;
+}
+
+enum ProgressStatusMessage {
+    PROGRESS_STATUS_UNSPECIFIED = 0;
+    PROGRESS_STATUS_SUCCESS = 1;
+    PROGRESS_STATUS_FAILED = 2;
+    PROGRESS_STATUS_CANCELED = 3;
+}
+
+message PublicTransferSessionMessage {
+  message Progress {
+    required uint64 resource_order_id = 1;
+    required uint64 transfered_amount = 2;
+    required uint64 total_size = 3;
+    optional string error_message = 4;
+    optional ProgressStatusMessage status = 5;
+  }
+
+  required uint64 order_id = 1;
+  required uint64 user_id = 2;
+  optional string password = 4;
+  required string access_url = 5;
+  repeated CloudResourceMessage resources = 6;
+  repeated Progress progresses = 7;
+  repeated string to_emails = 8;
+  required string alias = 9;
+}
+
+// Client after upload successfully
+// will giving back the context_token and all etags.
+message MultiPartUploadComplete {
+  required string context_token = 1;
+  repeated string e_tags = 2;
+}
+
+// Complete a single part upload
+message CompleteUploadPartRequest {
+  required string context_token = 1;
+}
+
+// Return next part if any
+message CompleteUploadPartResponse {
+  optional MultiPartUpload part = 1;
+}
+
+// The server asking the client
+// to upload their resource to this url
+message ClientUploadRequest {
+  required uint64 resource_order_id = 1;
+  oneof upload {
+    string single_url = 2;
+    MultiPartUpload multipart = 3;
+  }
+}
+
+message UpdateTransferProgressRequest {
+  oneof status {
+    // Submit failed reason
+    string failed = 1;
+    // Submit the in progress bytes transferred
+    uint32 transferred_amount_in_bytes = 2;
+    // Submit the multipart upload
+    MultiPartUploadComplete success = 3;
+  }
+
+  required uint64 session_order_id = 4;
+  required uint64 resource_id = 5;
+}
+
+message MultiPartUpload {
+  required string upload_url = 1;
+  // A recommended content-length
+  // client can freely choose on it's own
+  // but this number correctly reflect how max number of
+  // parts per resource is calculated.
+  required uint32 x_content_length = 2;
+  required string context_token = 3;
+  // Web not allow upload with a custom source stream.
+  // So that the server will allow some specific case (type = Folder)
+  // that is uploaded by web to use smaller chunk size
+  // to stream.
+  required bool chunk_stream_enabled = 4;
+  // True if this part is the last one
+  // the client need to know to prepare to flushing all of their remaining data.
+  required bool is_last = 5;
+}
+
+message UpdateTransferProgressResponse {
+  optional ClientUploadRequest next_upload_request = 1;
+}
+
+message CreatePublicTransferSessionRequest {
+  optional string password = 1;
+  repeated string to_emails = 2;
+}
+
+message CreatePublicTransferSessionResponse {
+  required PublicTransferSessionMessage session = 1;
+}
+
+message AddResourcesRequest {
+  required uint64 session_order_id = 1;
+  repeated CloudResourceMessage resources = 2;
+}
+
+message AddResourcesResponse {
+  required ClientUploadRequest first_resource_upload_request = 1;
+  repeated ClientUploadRequest thumbnail_upload_requests = 2;
+}
+
+message CancelSessionRequest {
+  required uint64 session_order_id = 1;
+}
+
+message CancelSessionResponse {}

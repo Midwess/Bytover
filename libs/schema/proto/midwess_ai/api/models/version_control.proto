@@ -1,0 +1,9 @@
+syntax = "proto2";
+
+package midwess.api.models;
+
+message VersionControlRepository {
+    required int64 id = 1;
+    required string url = 2;
+    optional string token = 3;
+}

@@ -1,0 +1,52 @@
+syntax = "proto2";
+
+package devlog.rpc_signalling;
+
+import "devlog/bitbridge/peer.proto";
+
+// The main message type for all WebRTC signaling
+message Message {
+    // Request/response correlation ID
+    optional string request_id = 1;
+
+    optional OfferMessage offer = 2;
+
+    optional AnswerMessage answer = 3;
+
+    optional string error = 4;
+
+    // Relay/STUN config injected by the signalling server when forwarding an offer.
+    optional IceConfig ice_config = 5;
+
+    // Relay Session ID used for dual-connection synchronization
+    optional string session_id = 6;
+}
+
+message IceConfig {
+    repeated string urls = 1;
+    optional string username = 2;
+    optional string credential = 3;
+}
+
+// Message containing an offer to a new join id
+message OfferMessage {
+    required string sdp = 1;
+    required devlog.bitbridge.PeerMessage peer = 2;
+}
+
+// Message containing an answer to a WebRTC offer
+message AnswerMessage {
+    required string sdp = 1;
+    optional devlog.bitbridge.PeerMessage peer = 2;
+}
+
+message OfferRequest {
+    required OfferMessage offer = 1;
+    required devlog.bitbridge.PeerMessage peer = 2;
+    optional string session_id = 3;
+}
+
+message OfferResponse {
+    required AnswerMessage answer = 1;
+    required devlog.bitbridge.PeerMessage peer = 2;
+}

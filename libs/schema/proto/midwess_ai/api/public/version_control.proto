@@ -1,0 +1,42 @@
+syntax = "proto2";
+
+package midwess.api.public;
+
+import "midwess_ai/api/models/version_control.proto";
+
+service VersionControlService {
+    rpc CreateRepository(CreateRepositoryRequest) returns (CreateRepositoryResponse);
+    rpc GetRepository(GetRepositoryRequest) returns (GetRepositoryResponse);
+    rpc GenerateToken(GenerateTokenRequest) returns (GenerateTokenResponse);
+}
+
+message CreateRepositoryRequest {
+    required int64 project_id = 1;
+    required int64 workspace_id = 2;
+}
+
+message RepositoryVersionControl {
+    required int64 id = 1;
+    required string url = 2;
+    required string token = 3;
+}
+
+message CreateRepositoryResponse {
+    required RepositoryVersionControl repository = 1;
+}
+
+message GetRepositoryRequest {
+    required int64 repository_id = 1;
+}
+
+message GetRepositoryResponse {
+    optional midwess.api.models.VersionControlRepository repository = 1;
+}
+
+message GenerateTokenRequest {
+    required int64 repository_id = 1;
+}
+
+message GenerateTokenResponse {
+    required string token = 1;
+}

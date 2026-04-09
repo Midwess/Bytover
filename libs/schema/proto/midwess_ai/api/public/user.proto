@@ -1,0 +1,15 @@
+syntax = "proto2";
+
+package midwess.api.public;
+
+import "midwess_ai/api/models/user.proto";
+
+service UserService {
+    rpc Me(MeRequest) returns (MeResponse);
+}
+
+message MeRequest {}
+
+message MeResponse {
+    optional midwess.api.models.User user = 1;
+}

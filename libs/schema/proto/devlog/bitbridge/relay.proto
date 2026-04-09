@@ -1,0 +1,26 @@
+syntax = "proto2";
+
+package devlog.bitbridge;
+
+message DataChannel {
+  required uint32 max_retransmit = 1;
+  required bool ordered = 2;
+  required int32 negotiate = 3;
+  required string label = 4;
+}
+
+message ConnectRequest {
+  required string sdp = 1;
+  required string session_id = 2;
+  repeated DataChannel channels = 3;
+}
+
+message ConnectResponse {
+  required bool success = 1;
+  optional string sdp = 2;
+  optional string error_message = 3;
+}
+
+service RelayService {
+  rpc connect(ConnectRequest) returns (ConnectResponse);
+}

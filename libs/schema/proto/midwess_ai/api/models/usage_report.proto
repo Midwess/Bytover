@@ -1,0 +1,12 @@
+syntax = "proto2";
+
+package midwess.api.models;
+
+import "value/datetime.proto";
+
+message ComputationUsage {
+    required value.datetime.Datetime from = 3;
+    required value.datetime.Datetime to = 4;
+    required float total_cpu_in_sec_percent = 1;
+    required int64 total_memory_in_sec_percent = 2;
+}

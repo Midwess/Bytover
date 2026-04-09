@@ -1,0 +1,13 @@
+syntax = "proto2";
+
+package midwess.api.models;
+
+import "value/datetime.proto";
+
+message User {
+    required int64 id = 1;
+    required string email = 2;
+    required string name = 3;
+    required value.datetime.Datetime created_at = 4;
+    optional value.datetime.Datetime updated_at = 5;
+}

@@ -1,0 +1,27 @@
+syntax = "proto2";
+
+package midwess.builder.rpc;
+
+service BuilderService {
+    rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse);
+}
+
+message LlmProviderConfig {
+    required string api_key = 1;
+    required string base_url = 2;
+    required string model_name = 3;
+    optional int32 max_tokens = 4;
+}
+
+message CreateProjectRequest {
+    required string project_id = 1;
+    required string agent_repository_url = 2;
+    required string project_repository_url = 3;
+    required string agent_repository_token = 4;
+    required string project_repository_token = 5;
+    optional string prompt = 6;
+    required int64 template_id = 7;
+    optional LlmProviderConfig llm_provider = 8;
+}
+
+message CreateProjectResponse {}

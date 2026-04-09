@@ -1,0 +1,17 @@
+syntax = "proto2";
+
+import "devlog/app-gateway/models/user.proto";
+
+package devlog.app_gateway.rpc;
+
+service PeopleService {
+  rpc find_user(FindUserRequest) returns (FindUserResponse);
+}
+
+message FindUserResponse {
+    optional devlog.app_gateway.models.PublicUser user = 1;
+}
+
+message FindUserRequest {
+    optional uint64 order_id = 1;
+}

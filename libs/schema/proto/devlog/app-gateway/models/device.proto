@@ -1,0 +1,15 @@
+syntax = "proto2";
+
+package devlog.app_gateway.models;
+
+import "value/platform.proto";
+
+message Device {
+    required uint64 order_id = 1;
+    required string app_name = 2;
+    required string user_email = 3;
+    required string name = 4;
+    required value.platform.Platform platform = 5;
+    required string unique_key = 6;
+    required string url = 7;
+}
