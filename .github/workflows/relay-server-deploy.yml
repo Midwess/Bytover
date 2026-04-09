@@ -16,6 +16,7 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: production
     env:
       BYTOVER_WITH_SSL: ${{ vars.BYTOVER_WITH_SSL }}
       BYTOVER_PUBLIC_GATEWAY_HOST: ${{ vars.BYTOVER_PUBLIC_GATEWAY_HOST }}
@@ -59,31 +60,106 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Trigger Portainer stack redeploy
+        if: github.ref_name == 'production'
         env:
-          PORTAINER_STACK_WEBHOOK_URL: ${{ secrets.PORTAINER_RELAY_SERVER_STACK_WEBHOOK_URL }}
+          PORTAINER_URL: https://portainerportainer-celatest-production-109a.up.railway.app
+          PORTAINER_ENDPOINT_ID: "8"
+          PORTAINER_STACK_ID: "4"
+          PORTAINER_API_KEY: ${{ secrets.PORTAINER_API_KEY }}
         run: |
-          if [ -z "$PORTAINER_STACK_WEBHOOK_URL" ]; then
-            echo "::error::Missing secret PORTAINER_RELAY_SERVER_STACK_WEBHOOK_URL"
-            exit 1
-          fi
+          set -euo pipefail
 
-          if [ -z "$RELAY_SERVER_SECRET" ]; then
-            echo "::error::Missing secret RELAY_SERVER_SECRET"
-            exit 1
-          fi
+          for required_var in \
+            PORTAINER_URL \
+            PORTAINER_ENDPOINT_ID \
+            PORTAINER_STACK_ID \
+            PORTAINER_API_KEY \
+            RELAY_SERVER_SECRET
+          do
+            if [ -z "${!required_var:-}" ]; then
+              echo "::error::Missing required value: $required_var"
+              exit 1
+            fi
+          done
+
+          portainer_headers=(
+            -H "Content-Type: application/json"
+            -H "X-API-Key: $PORTAINER_API_KEY"
+          )
+
+          stack_response="$(
+            curl --fail --show-error --silent \
+              --retry 3 \
+              --retry-all-errors \
+              --connect-timeout 10 \
+              --max-time 60 \
+              "${portainer_headers[@]}" \
+              "$PORTAINER_URL/api/stacks/$PORTAINER_STACK_ID"
+          )"
+
+          stack_file_response="$(
+            curl --fail --show-error --silent \
+              --retry 3 \
+              --retry-all-errors \
+              --connect-timeout 10 \
+              --max-time 60 \
+              "${portainer_headers[@]}" \
+              "$PORTAINER_URL/api/stacks/$PORTAINER_STACK_ID/file"
+          )"
+
+          updated_env="$(
+            printf '%s' "$stack_response" | jq \
+              --arg relay_server_image_tag "${{ steps.image_tag.outputs.value }}" \
+              --arg relay_server_secret "$RELAY_SERVER_SECRET" \
+              --arg bytover_with_ssl "$BYTOVER_WITH_SSL" \
+              --arg bytover_public_gateway_host "$BYTOVER_PUBLIC_GATEWAY_HOST" \
+              --arg bytover_public_gateway_port "$BYTOVER_PUBLIC_GATEWAY_PORT" \
+              --arg bytover_public_http1_gateway_host "$BYTOVER_PUBLIC_HTTP1_GATEWAY_HOST" \
+              --arg bytover_public_http1_gateway_port "$BYTOVER_PUBLIC_HTTP1_GATEWAY_PORT" \
+              '
+              reduce [
+                {"name":"RELAY_SERVER_IMAGE_TAG","value":$relay_server_image_tag},
+                {"name":"RELAY_SERVER_SECRET","value":$relay_server_secret},
+                {"name":"BYTOVER_WITH_SSL","value":$bytover_with_ssl},
+                {"name":"BYTOVER_PUBLIC_GATEWAY_HOST","value":$bytover_public_gateway_host},
+                {"name":"BYTOVER_PUBLIC_GATEWAY_PORT","value":$bytover_public_gateway_port},
+                {"name":"BYTOVER_PUBLIC_HTTP1_GATEWAY_HOST","value":$bytover_public_http1_gateway_host},
+                {"name":"BYTOVER_PUBLIC_HTTP1_GATEWAY_PORT","value":$bytover_public_http1_gateway_port}
+              ][] as $item
+              ((.Env // []);
+                if any(.[]?; .name == $item.name) then
+                  map(if .name == $item.name then .value = $item.value else . end)
+                else
+                  . + [$item]
+                end
+              )
+              '
+          )"
+
+          payload="$(
+            jq -n \
+              --arg stack_file_content "$(printf '%s' "$stack_file_response" | jq -r '.StackFileContent')" \
+              --argjson env "$updated_env" \
+              --argjson webhook "$(printf '%s' "$stack_response" | jq '.Webhook // null')" \
+              '{
+                StackFileContent: $stack_file_content,
+                Env: $env,
+                Prune: true,
+                PullImage: true,
+                Webhook: $webhook
+              }'
+          )"
 
           curl --fail --show-error --silent \
             --retry 3 \
             --retry-all-errors \
             --connect-timeout 10 \
             --max-time 60 \
-            -X POST \
-            -G \
-            --data-urlencode "RELAY_SERVER_IMAGE_TAG=${{ steps.image_tag.outputs.value }}" \
-            --data-urlencode "RELAY_SERVER_SECRET=$RELAY_SERVER_SECRET" \
-            --data-urlencode "BYTOVER_WITH_SSL=$BYTOVER_WITH_SSL" \
-            --data-urlencode "BYTOVER_PUBLIC_GATEWAY_HOST=$BYTOVER_PUBLIC_GATEWAY_HOST" \
-            --data-urlencode "BYTOVER_PUBLIC_GATEWAY_PORT=$BYTOVER_PUBLIC_GATEWAY_PORT" \
-            --data-urlencode "BYTOVER_PUBLIC_HTTP1_GATEWAY_HOST=$BYTOVER_PUBLIC_HTTP1_GATEWAY_HOST" \
-            --data-urlencode "BYTOVER_PUBLIC_HTTP1_GATEWAY_PORT=$BYTOVER_PUBLIC_HTTP1_GATEWAY_PORT" \
-            "$PORTAINER_STACK_WEBHOOK_URL"
+            -X PUT \
+            "${portainer_headers[@]}" \
+            --data "$payload" \
+            "$PORTAINER_URL/api/stacks/$PORTAINER_STACK_ID?endpointId=$PORTAINER_ENDPOINT_ID"
+
+      - name: Skip Portainer redeploy outside production
+        if: github.ref_name != 'production'
+        run: echo "Skipping Portainer redeploy because branch is not production."
