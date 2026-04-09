@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  IMAGE_NAME: midwess/bytover-relay
+  IMAGE_NAME: midwesshub/bytover-relay
 
 jobs:
   deploy:

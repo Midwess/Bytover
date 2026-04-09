@@ -2,12 +2,10 @@ name: Railway Deployment
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 jobs:
   deploy:
+    if: github.ref_name == 'production'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -19,7 +17,7 @@ jobs:
       - name: Push to deploy branch
         shell: bash
         run: |
-          DEPLOY_BRANCH="${{ github.ref_name == 'production' && 'deploy-production' || 'deploy' }}"
+          DEPLOY_BRANCH="deploy-production"
           git checkout -b $DEPLOY_BRANCH
 
           # Remove cached submodules
