@@ -32,7 +32,7 @@ enum MainErrors {
     #[error("DI container error {0}")]
     DiContainerError(String),
     #[error("Execution error {0}")]
-    ExecutionError(String),
+    ExecutionError(String)
 }
 
 fn main() -> Result<(), MainErrors> {
@@ -81,7 +81,7 @@ async fn async_main() -> Result<(), MainErrors> {
         start_registration_loop(
             stun_port,
             relay_port,
-            RegistrationState::new(registration_url, public_addresses),
+            RegistrationState::new(registration_url, public_addresses)
         )
         .await;
     });
@@ -89,7 +89,7 @@ async fn async_main() -> Result<(), MainErrors> {
     let grpc_server = Server::builder()
         .add_service(InterceptorFor::new(
             RelayServiceServer::new(RelayServiceImpl::new(di.proxy_manager.clone())),
-            di.get_auth_middleware(),
+            di.get_auth_middleware()
         ))
         .serve_with_incoming(connection.listener);
 
@@ -120,20 +120,20 @@ struct RegisterRelayRequest {
     stun_port: u16,
     relay_port: u16,
     public_ipv4: Option<String>,
-    public_ipv6: Option<String>,
+    public_ipv6: Option<String>
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct RegistrationState {
     registration_url: String,
-    public_addresses: PublicAddresses,
+    public_addresses: PublicAddresses
 }
 
 impl RegistrationState {
     fn new(registration_url: String, public_addresses: PublicAddresses) -> Self {
         Self {
             registration_url,
-            public_addresses,
+            public_addresses
         }
     }
 
@@ -171,7 +171,7 @@ async fn register_relay_once(url: &str, stun_port: u16, relay_port: u16, public_
         stun_port,
         relay_port,
         public_ipv4: public_addresses.ipv4.map(|ip| ip.to_string()),
-        public_ipv6: public_addresses.ipv6.map(|ip| ip.to_string()),
+        public_ipv6: public_addresses.ipv6.map(|ip| ip.to_string())
     };
 
     let response = client
@@ -242,7 +242,7 @@ mod tests {
     fn relay_proxy_ipv4_uses_discovered_ipv4() {
         let ip = relay_proxy_ipv4(&PublicAddresses {
             ipv4: Some(Ipv4Addr::new(203, 0, 113, 10)),
-            ipv6: Some(Ipv6Addr::LOCALHOST),
+            ipv6: Some(Ipv6Addr::LOCALHOST)
         });
 
         assert_eq!(ip, Ipv4Addr::new(203, 0, 113, 10));
@@ -252,7 +252,7 @@ mod tests {
     fn relay_proxy_ipv4_falls_back_to_unspecified() {
         let ip = relay_proxy_ipv4(&PublicAddresses {
             ipv4: None,
-            ipv6: Some(Ipv6Addr::LOCALHOST),
+            ipv6: Some(Ipv6Addr::LOCALHOST)
         });
 
         assert_eq!(ip, Ipv4Addr::UNSPECIFIED);
@@ -264,8 +264,8 @@ mod tests {
             "https://gateway.example/rpc-signalling-local/register-relay".to_string(),
             PublicAddresses {
                 ipv4: Some(Ipv4Addr::new(203, 0, 113, 10)),
-                ipv6: Some(Ipv6Addr::LOCALHOST),
-            },
+                ipv6: Some(Ipv6Addr::LOCALHOST)
+            }
         );
 
         let changed = state.update_registration_url("https://gateway.example/rpc-signalling-europe/register-relay".to_string());
@@ -285,8 +285,8 @@ mod tests {
             "https://gateway.example/rpc-signalling-local/register-relay".to_string(),
             PublicAddresses {
                 ipv4: Some(Ipv4Addr::new(203, 0, 113, 10)),
-                ipv6: Some(Ipv6Addr::LOCALHOST),
-            },
+                ipv6: Some(Ipv6Addr::LOCALHOST)
+            }
         );
 
         assert_eq!(

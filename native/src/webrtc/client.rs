@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -31,9 +32,11 @@ use crate::webrtc::rtc::{RtcEvent, RtcHandle};
 use crate::webrtc::signalling::SignallingSender;
 use str0m::channel::ChannelId;
 
-pub static CHUNK_SIZE: usize = 250 * 1024;
+pub static CHUNK_SIZE: usize = 64 * 1024;
 pub static MAX_BUFFER_SIZE: usize = 1024 * 1024 * 5;
 pub static MIN_BUFFER_SIZE: usize = CHUNK_SIZE;
+const RELIABLE_DATA_QUEUE_CAPACITY: usize = MAX_BUFFER_SIZE / CHUNK_SIZE + 1;
+const OUTBOUND_RETRY_DELAY: Duration = Duration::from_millis(3);
 
 pub type WebRtcClientError = WebRtcErrors;
 
@@ -141,7 +144,8 @@ impl WebRtcClient {
 
         let (ordered_msg_tx, ordered_msg_rx) = futures_mpsc::channel::<Vec<u8>>(64);
         let (_unordered_msg_tx, unordered_msg_rx) = futures_mpsc::channel::<Vec<u8>>(64);
-        let (reliable_data_tx, reliable_data_rx) = mpsc::channel::<Vec<u8>>(MAX_BUFFER_SIZE / CHUNK_SIZE + 1);
+        // Keep roughly one SCTP buffer worth of reliable packets queued by bytes, not by packet count.
+        let (reliable_data_tx, reliable_data_rx) = mpsc::channel::<Vec<u8>>(RELIABLE_DATA_QUEUE_CAPACITY);
         let (outbound_tx, outbound_rx) = futures_mpsc::channel::<(u16, u64, Vec<u8>, bool)>(32);
 
         let msg_channel = DirectMessageChannel::new(ordered_msg_tx);
@@ -233,9 +237,9 @@ impl WebRtcClient {
         let mut ordered_msg_rx = ordered_msg_rx_guard.value.take().unwrap();
         let mut unordered_msg_rx = unordered_msg_rx_guard.value.take().unwrap();
         let mut reliable_data_rx = reliable_data_rx;
-        let mut pending_data: Option<(Vec<u8>, ChannelId)> = None;
+        let mut pending_data: VecDeque<(Vec<u8>, ChannelId)> = VecDeque::new();
 
-        let mut retry_timer = Box::pin(tokio::time::sleep(Duration::from_millis(3)));
+        let mut retry_timer = Box::pin(tokio::time::sleep(OUTBOUND_RETRY_DELAY));
 
         while p2p_rtc.as_ref().is_some_and(|r| r.is_alive()) ||
             relay_rtc.as_ref().is_some_and(|r| r.is_alive()) ||
@@ -267,6 +271,7 @@ impl WebRtcClient {
             }
 
             let mut outbound_data = None;
+            let mut flush_pending = false;
 
             tokio::select! {
                 biased;
@@ -291,34 +296,12 @@ impl WebRtcClient {
                         log::info!("[webrtc-client] Relay joined the run loop");
                         relay_rtc = Some(c.1);
                     }
+                    flush_pending = !pending_data.is_empty();
                 }
 
                 // 2. Retry mechanism for pending outbound data blocked by backpressure
-                () = &mut retry_timer, if pending_data.is_some() => {
-                    let (ref data, cid) = pending_data.as_ref().unwrap();
-                    let mut sent = false;
-
-                    if let Some(ref rtc) = p2p_rtc {
-                        if rtc.is_alive() && rtc.send(data, *cid) {
-                            sent = true;
-                        }
-                    }
-                    if !sent {
-                        if let Some(ref rtc) = relay_rtc {
-                            if rtc.is_alive() && rtc.send(data, *cid) {
-                                sent = true;
-                            }
-                        }
-                    }
-
-                    if sent {
-                        if *cid == cids.reliable {
-                            self.bytes_sent_counter.fetch_add(data.len(), Ordering::Relaxed);
-                        }
-                        pending_data = None;
-                    } else {
-                        retry_timer.as_mut().reset(tokio::time::Instant::now() + Duration::from_millis(3));
-                    }
+                () = &mut retry_timer, if !pending_data.is_empty() => {
+                    flush_pending = true;
                 }
 
                 // 3. P2P events
@@ -328,6 +311,10 @@ impl WebRtcClient {
                         None => std::future::pending().await,
                     }
                 } => {
+                    flush_pending = matches!(
+                        &rtc_event, RtcEvent::Str0mEvent(str0m::Event::ChannelBufferedAmountLow(cid))
+                        if *cid == cids.reliable
+                    );
                     if !self.handle_rtc_event(rtc_event, &cids, &msg_tx, true).await {
                         p2p_rtc = None;
                     }
@@ -340,47 +327,38 @@ impl WebRtcClient {
                         None => std::future::pending().await,
                     }
                 } => {
+                    flush_pending = matches!(
+                        &rtc_event, RtcEvent::Str0mEvent(str0m::Event::ChannelBufferedAmountLow(cid))
+                        if *cid == cids.reliable
+                    );
                     if !self.handle_rtc_event(rtc_event, &cids, &msg_tx, false).await {
                         relay_rtc = None;
                     }
                 }
 
-                // 5. Outbound sending from queues (only processed if no pending_data is blocking)
-                Some(d) = ordered_msg_rx.next(), if pending_data.is_none() => {
+                // 5. Outbound sending from queues
+                Some(d) = ordered_msg_rx.next() => {
                     log::info!("Received ordered msg request");
                     outbound_data = Some((cids.ordered_msg, d));
                 }
-                Some(d) = unordered_msg_rx.next(), if pending_data.is_none() => {
+                Some(d) = unordered_msg_rx.next() => {
                     log::info!("Received unordered msg request");
                     outbound_data = Some((cids.unordered_msg, d));
                 }
-                Some(d) = reliable_data_rx.recv(), if pending_data.is_none() => {
+                Some(d) = reliable_data_rx.recv() => {
                     outbound_data = Some((cids.reliable, d));
                 }
             }
 
             if let Some((cid, d)) = outbound_data {
-                let mut sent = false;
+                pending_data.push_back((d, cid));
+                flush_pending = true;
+            }
 
-                // Priority: P2P first, then Relay as fallback
-                if let Some(ref rtc) = p2p_rtc {
-                    if rtc.is_alive() && rtc.send(&d, cid) {
-                        sent = true;
-                    }
-                }
-                if !sent {
-                    if let Some(ref rtc) = relay_rtc {
-                        if rtc.is_alive() && rtc.send(&d, cid) {
-                            sent = true;
-                        }
-                    }
-                }
-
-                if !sent {
-                    pending_data = Some((d, cid));
-                    retry_timer.as_mut().reset(tokio::time::Instant::now() + Duration::from_millis(3));
-                } else if cid == cids.reliable {
-                    self.bytes_sent_counter.fetch_add(d.len(), Ordering::Relaxed);
+            if flush_pending {
+                self.flush_pending_outbound(&mut pending_data, p2p_rtc.as_ref(), relay_rtc.as_ref(), &cids);
+                if !pending_data.is_empty() {
+                    retry_timer.as_mut().reset(tokio::time::Instant::now() + OUTBOUND_RETRY_DELAY);
                 }
             }
         }
@@ -390,6 +368,46 @@ impl WebRtcClient {
 
         self.peer_disconnected().await;
         Ok(())
+    }
+
+    fn try_send_outbound(data: &[u8], channel_id: ChannelId, p2p_rtc: Option<&RtcHandle>, relay_rtc: Option<&RtcHandle>) -> bool {
+        if let Some(rtc) = p2p_rtc {
+            if rtc.is_alive() && rtc.send(data, channel_id) {
+                return true;
+            }
+        }
+
+        if let Some(rtc) = relay_rtc {
+            if rtc.is_alive() && rtc.send(data, channel_id) {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    fn flush_pending_outbound(
+        &self,
+        pending_data: &mut VecDeque<(Vec<u8>, ChannelId)>,
+        p2p_rtc: Option<&RtcHandle>,
+        relay_rtc: Option<&RtcHandle>,
+        cids: &crate::webrtc::rtc::ChannelIds
+    ) {
+        loop {
+            let Some((data, channel_id)) = pending_data.pop_front() else {
+                break;
+            };
+
+            if Self::try_send_outbound(&data, channel_id, p2p_rtc, relay_rtc) {
+                if channel_id == cids.reliable {
+                    self.bytes_sent_counter.fetch_add(data.len(), Ordering::Relaxed);
+                }
+                continue;
+            }
+
+            pending_data.push_front((data, channel_id));
+            break;
+        }
     }
 
     async fn handle_rtc_event(

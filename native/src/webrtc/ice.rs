@@ -35,19 +35,43 @@ fn is_usable_interface(iface: &if_addrs::Interface) -> bool {
     if iface.is_loopback() {
         return false;
     }
-    let name = &iface.name;
-    if name.starts_with("docker") ||
-        name.starts_with("vbox") ||
-        name.starts_with("br-") ||
-        name.starts_with("veth") ||
-        name.starts_with("virbr")
-    {
+    if is_filtered_interface_name(&iface.name, cfg!(target_os = "windows")) {
         return false;
     }
     match iface.ip() {
         IpAddr::V4(v4) => !v4.is_link_local(),
         IpAddr::V6(v6) => (v6.segments()[0] & 0xffc0) != 0xfe80
     }
+}
+
+fn is_filtered_interface_name(name: &str, apply_windows_rules: bool) -> bool {
+    let lowered = name.trim().to_ascii_lowercase();
+    if lowered.starts_with("docker") ||
+        lowered.starts_with("vbox") ||
+        lowered.starts_with("br-") ||
+        lowered.starts_with("veth") ||
+        lowered.starts_with("virbr")
+    {
+        return true;
+    }
+
+    apply_windows_rules && is_windows_virtual_interface_name(&lowered)
+}
+
+fn is_windows_virtual_interface_name(lowered_name: &str) -> bool {
+    lowered_name.starts_with("vethernet") ||
+        lowered_name.contains("hyper-v") ||
+        lowered_name.contains("wsl") ||
+        lowered_name.contains("npcap") ||
+        lowered_name.contains("tailscale") ||
+        lowered_name.contains("zerotier") ||
+        lowered_name.contains("wireguard") ||
+        lowered_name.contains("loopback pseudo-interface") ||
+        lowered_name.contains("teredo") ||
+        lowered_name.contains("isatap") ||
+        lowered_name.contains("6to4") ||
+        lowered_name.contains("openvpn") ||
+        lowered_name.contains("hamachi")
 }
 
 fn to_v6_mapped(addr: SocketAddr) -> SocketAddr {
@@ -253,5 +277,61 @@ impl IceAgent {
         let result: Vec<Candidate> = candidates.into_iter().collect();
         log::info!("[ice] Gathered {:?} candidates", result);
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{is_filtered_interface_name, is_windows_virtual_interface_name};
+
+    #[test]
+    fn filters_common_windows_virtual_adapter_names() {
+        for name in [
+            "vEthernet (Default Switch)",
+            "Hyper-V Virtual Ethernet Adapter",
+            "WSL (Hyper-V firewall)",
+            "Npcap Loopback Adapter",
+            "Tailscale Tunnel",
+            "ZeroTier One [ab12cd34ef]",
+            "WireGuard Tunnel",
+            "Microsoft ISATAP Adapter",
+            "Teredo Tunneling Pseudo-Interface",
+            "OpenVPN TAP-Windows6",
+            "Hamachi"
+        ] {
+            assert!(is_windows_virtual_interface_name(&name.to_ascii_lowercase()), "{name}");
+            assert!(is_filtered_interface_name(name, true), "{name}");
+        }
+    }
+
+    #[test]
+    fn keeps_physical_lan_adapter_names() {
+        for name in [
+            "Ethernet",
+            "Ethernet 2",
+            "Wi-Fi",
+            "Intel(R) Ethernet Controller I225-V",
+            "Realtek Gaming 2.5GbE Family Controller",
+            "en0",
+            "eth0",
+            "wlan0"
+        ] {
+            assert!(!is_filtered_interface_name(name, true), "{name}");
+            assert!(!is_filtered_interface_name(name, false), "{name}");
+        }
+    }
+
+    #[test]
+    fn windows_rules_do_not_change_non_windows_generic_filtering() {
+        for name in [
+            "docker0",
+            "vboxnet0",
+            "br-4c0f6d9a33f3",
+            "veth7f2a",
+            "virbr0"
+        ] {
+            assert!(is_filtered_interface_name(name, false), "{name}");
+            assert!(is_filtered_interface_name(name, true), "{name}");
+        }
     }
 }

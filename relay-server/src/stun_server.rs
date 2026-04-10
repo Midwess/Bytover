@@ -10,7 +10,7 @@ pub struct BoundStunSockets {
     sockets: Vec<UdpSocket>,
     pub port: u16,
     pub has_ipv4: bool,
-    pub has_ipv6: bool,
+    pub has_ipv6: bool
 }
 
 impl BoundStunSockets {
@@ -36,7 +36,7 @@ impl BoundStunSockets {
             sockets,
             port,
             has_ipv4: true,
-            has_ipv6,
+            has_ipv6
         })
     }
 }
@@ -104,8 +104,8 @@ async fn serve_socket(socket: UdpSocket) -> anyhow::Result<()> {
                 Box::new(BINDING_SUCCESS),
                 Box::new(XorMappedAddress {
                     ip: src_addr.ip(),
-                    port: src_addr.port(),
-                }),
+                    port: src_addr.port()
+                })
             ]) {
                 error!("STUN server build response error: {}", e);
                 continue;
@@ -136,7 +136,7 @@ mod tests {
     async fn probe(addr: SocketAddr) -> anyhow::Result<()> {
         let bind_addr = match addr {
             SocketAddr::V4(_) => SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 0),
-            SocketAddr::V6(_) => SocketAddr::new(Ipv6Addr::LOCALHOST.into(), 0),
+            SocketAddr::V6(_) => SocketAddr::new(Ipv6Addr::LOCALHOST.into(), 0)
         };
 
         let socket = UdpSocket::bind(bind_addr).await?;
@@ -144,9 +144,9 @@ mod tests {
             .send_to(
                 &[
                     0x00, 0x01, 0x00, 0x00, 0x21, 0x12, 0xA4, 0x42, 0x63, 0x6F, 0x64, 0x65, 0x78, 0x74, 0x65, 0x73, 0x74, 0x31, 0x32,
-                    0x33,
+                    0x33
                 ],
-                addr,
+                addr
             )
             .await?;
 

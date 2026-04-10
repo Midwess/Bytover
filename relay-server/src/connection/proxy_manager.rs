@@ -14,7 +14,7 @@ use schema::devlog::bitbridge::DataChannel;
 #[derive(Debug, Error)]
 pub enum ProxyManagerError {
     #[error("Relay RTC error: {0}")]
-    RelayRtc(#[from] RelayRtcError),
+    RelayRtc(#[from] RelayRtcError)
 }
 
 use crate::connection::proxy::ProxyInstance;
@@ -27,7 +27,7 @@ pub struct ProxyManager {
     proxies: Mutex<HashMap<String, Weak<ProxyInstance>>>,
     run_tx: Mutex<Option<tokio::sync::mpsc::UnboundedSender<Arc<ProxyInstance>>>>,
     running: AtomicBool,
-    public_ipv4: AtomicU32,
+    public_ipv4: AtomicU32
 }
 
 impl ProxyManager {
@@ -36,7 +36,7 @@ impl ProxyManager {
             proxies: Mutex::new(HashMap::new()),
             run_tx: Mutex::new(None),
             running: AtomicBool::new(false),
-            public_ipv4: AtomicU32::new(u32::from(public_ipv4)),
+            public_ipv4: AtomicU32::new(u32::from(public_ipv4))
         })
     }
 
@@ -102,7 +102,7 @@ impl ProxyManager {
         self: &Arc<Self>,
         session_id: String,
         sdp_offer: String,
-        channels: Vec<DataChannel>,
+        channels: Vec<DataChannel>
     ) -> Result<String, ProxyManagerError> {
         log::info!("[relay-server] Handling connect for session {}", session_id);
 

@@ -6,7 +6,7 @@ use tonic_middleware::RequestInterceptor;
 
 #[derive(Clone)]
 pub struct RelayAuthInterceptor {
-    secret: String,
+    secret: String
 }
 
 impl RelayAuthInterceptor {
@@ -46,7 +46,7 @@ impl RequestInterceptor for RelayAuthInterceptor {
 
                 Err(Status::unauthenticated("Invalid credentials"))
             }
-            None => Err(Status::unauthenticated("Missing authorization header")),
+            None => Err(Status::unauthenticated("Missing authorization header"))
         }
     }
 }

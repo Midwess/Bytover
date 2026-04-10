@@ -1,4 +1,5 @@
 use socket2::{Domain, Socket, Type};
+use std::collections::VecDeque;
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 use str0m::channel::{ChannelConfig, ChannelId};
@@ -28,6 +29,12 @@ const ICE_DISCONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Maximum number of consecutive `MorePending` cycles
 const MAX_PENDING_SPINS_PER_STEP: usize = 8;
+
+/// Reliable channel low watermark that triggers a refill event from str0m.
+const RELIABLE_BUFFERED_AMOUNT_LOW_THRESHOLD: usize = 256 * 1024;
+
+/// Refill reliable buffered data only up to this target to avoid large burst-then-drain cycles.
+const RELIABLE_BUFFERED_AMOUNT_REFILL_TARGET: usize = 512 * 1024;
 
 /// Events emitted from the RTC thread to the outside world.
 pub enum RtcEvent {
@@ -127,7 +134,7 @@ struct RtcClient {
     buf: Vec<u8>,
     cached_timeout: Instant,
     channel_ids: ChannelIds,
-    pending_transmit: Option<(Vec<u8>, str0m::channel::ChannelId)>,
+    pending_transmits: VecDeque<(Vec<u8>, str0m::channel::ChannelId)>,
     /// Events received during the connect/handshake phase that need to be
     /// replayed once the run loop starts (e.g. early ChannelData).
     early_events: Vec<Event>
@@ -156,8 +163,8 @@ impl RtcClient {
         socket.set_only_v6(false)?;
         socket.set_nonblocking(true)?;
         socket.bind(&"[::]:0".parse::<SocketAddr>().unwrap().into())?;
-        let _ = socket.set_send_buffer_size(MAX_BUFFER_SIZE * 3);
-        let _ = socket.set_recv_buffer_size(MAX_BUFFER_SIZE * 3);
+        let _ = socket.set_send_buffer_size(MAX_BUFFER_SIZE);
+        let _ = socket.set_recv_buffer_size(MAX_BUFFER_SIZE);
         let socket: std::net::UdpSocket = socket.into();
         let socket = tokio::net::UdpSocket::from_std(socket)?;
 
@@ -228,7 +235,7 @@ impl RtcClient {
             buf: vec![0u8; 2000],
             cached_timeout: Instant::now(),
             channel_ids,
-            pending_transmit: None,
+            pending_transmits: VecDeque::new(),
             early_events: Vec::new()
         };
 
@@ -370,7 +377,7 @@ impl RtcClient {
             buf: vec![0u8; 2000],
             cached_timeout: Instant::now(),
             channel_ids,
-            pending_transmit: None,
+            pending_transmits: VecDeque::new(),
             early_events: Vec::new()
         };
 
@@ -439,21 +446,9 @@ impl RtcClient {
                 }
             }
 
-            if let Some((data, channel_id)) = self.pending_transmit.take() {
-                if self.send(&data, channel_id) {
-                } else {
-                    self.pending_transmit = Some((data, channel_id));
-                }
-            }
-
-            if self.pending_transmit.is_none() {
-                while let Ok(cmd) = data_rx.try_recv() {
-                    self.handle_command(cmd);
-                    if self.pending_transmit.is_some() {
-                        break;
-                    }
-                }
-            }
+            self.drain_pending_transmits();
+            self.fill_transmit_queue(&mut data_rx);
+            self.drain_pending_transmits();
 
             let outcome = match self.poll_event().await {
                 Ok(o) => o,
@@ -483,6 +478,10 @@ impl RtcClient {
                             }
                             _ => {}
                         }
+                    }
+
+                    if matches!(&event, Event::ChannelBufferedAmountLow(cid) if *cid == self.channel_ids.reliable) {
+                        self.drain_pending_transmits();
                     }
 
                     if event_tx.send(RtcEvent::Str0mEvent(event)).await.is_err() {
@@ -518,9 +517,12 @@ impl RtcClient {
                         return;
                     }
                 }
-                res = data_rx.recv(), if self.pending_transmit.is_none() => {
+                res = data_rx.recv() => {
                     match res {
-                        Some(cmd) => self.handle_command(cmd),
+                        Some(cmd) => {
+                            self.enqueue_command(cmd);
+                            self.drain_pending_transmits();
+                        }
                         None => {
                             log::info!("[rtc-client] RTC I/O thread shutdown: data channel closed");
                             self.rtc.disconnect();
@@ -536,13 +538,8 @@ impl RtcClient {
     }
 
     /// Handle a command.
-    fn handle_command(&mut self, cmd: (Vec<u8>, ChannelId)) {
-        let (data, channel_id) = cmd;
-        if self.pending_transmit.is_none() && self.send(&data, channel_id) {
-            // Sent successfully
-        } else {
-            self.pending_transmit = Some((data, channel_id));
-        }
+    fn enqueue_command(&mut self, cmd: (Vec<u8>, ChannelId)) {
+        self.pending_transmits.push_back(cmd);
     }
 
     async fn wait_for_connected(mut self, mut connected: bool) -> Result<Self, WebRtcClientError> {
@@ -582,6 +579,7 @@ impl RtcClient {
                 .all(|&cid| self.rtc.channel(cid).is_some());
 
                 if ready {
+                    self.configure_channel_watermarks();
                     log::info!("[rtc-client] Connected, negotiated channels ready");
                     return Ok(self);
                 }
@@ -670,6 +668,46 @@ impl RtcClient {
             }
         } else {
             false
+        }
+    }
+
+    fn configure_channel_watermarks(&mut self) {
+        if let Some(mut channel) = self.rtc.channel(self.channel_ids.reliable) {
+            channel.set_buffered_amount_low_threshold(RELIABLE_BUFFERED_AMOUNT_LOW_THRESHOLD);
+        }
+    }
+
+    fn channel_buffered_amount(&mut self, channel_id: ChannelId) -> Option<usize> {
+        self.rtc.channel(channel_id).map(|mut ch| ch.buffered_amount())
+    }
+
+    fn should_pause_transmit(&mut self, channel_id: ChannelId) -> bool {
+        channel_id == self.channel_ids.reliable &&
+            self.channel_buffered_amount(channel_id)
+                .is_some_and(|buffered| buffered >= RELIABLE_BUFFERED_AMOUNT_REFILL_TARGET)
+    }
+
+    fn drain_pending_transmits(&mut self) {
+        loop {
+            let Some((data, channel_id)) = self.pending_transmits.pop_front() else {
+                break;
+            };
+
+            if self.should_pause_transmit(channel_id) {
+                self.pending_transmits.push_front((data, channel_id));
+                break;
+            }
+
+            if !self.send(&data, channel_id) {
+                self.pending_transmits.push_front((data, channel_id));
+                break;
+            }
+        }
+    }
+
+    fn fill_transmit_queue(&mut self, data_rx: &mut tokio::sync::mpsc::Receiver<(Vec<u8>, ChannelId)>) {
+        while let Ok(cmd) = data_rx.try_recv() {
+            self.enqueue_command(cmd);
         }
     }
 }
