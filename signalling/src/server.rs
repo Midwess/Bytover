@@ -247,7 +247,7 @@ async fn relay_proxy_handler(key: web::Path<String>, body: Bytes, state: web::Da
         Ok(endpoint) => match endpoint.connect().await {
             Ok(channel) => channel,
             Err(error) => {
-                return HttpResponse::InternalServerError().body(format!("failed to connect to relay server channel: {error}"));
+                return HttpResponse::InternalServerError().body(format!("failed to connect to relay server channel: {error:?}"));
             }
         },
         Err(error) => return HttpResponse::InternalServerError().body(format!("invalid relay server url: {error}"))
