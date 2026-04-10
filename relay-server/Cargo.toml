@@ -27,3 +27,4 @@ core-services = { workspace = true }
 thiserror = { workspace = true }
 stun = "0.17.1"
 tokio-util = { workspace = true, features = ["net"] }
+public-ip = "0.2"

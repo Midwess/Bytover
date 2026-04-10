@@ -9,7 +9,8 @@ use uuid::Uuid;
 #[derive(Debug, Clone)]
 pub struct RegisteredRelay {
     pub id: String,
-    pub public_ip: String,
+    pub public_ipv4: Option<String>,
+    pub public_ipv6: Option<String>,
     pub relay_host: String,
     pub stun_port: u16,
     pub relay_port: u16,
@@ -44,9 +45,10 @@ impl TurnManager {
                 relays.retain(|id, relay| {
                     if now.duration_since(relay.last_ping) > Duration::from_secs(30) {
                         log::info!(
-                            "Relay {} (IP: {}, host: {}) timed out, removing",
+                            "Relay {} (IPv4: {:?}, IPv6: {:?}, host: {}) timed out, removing",
                             id,
-                            relay.public_ip,
+                            relay.public_ipv4,
+                            relay.public_ipv6,
                             relay.relay_host
                         );
                         removed_ids.push(id.clone());
@@ -67,13 +69,23 @@ impl TurnManager {
         manager
     }
 
-    pub async fn register_relay(&self, public_ip: String, relay_host: String, stun_port: u16, relay_port: u16) {
+    pub async fn register_relay(&self, public_ipv4: Option<String>, public_ipv6: Option<String>, stun_port: u16, relay_port: u16) {
         let mut relays = self.relays.lock().await;
+        let relay_host = public_ipv4
+            .clone()
+            .or(public_ipv6.clone())
+            .expect("relay registration requires at least one public IP");
 
         // Use composite characteritics to find an existing relay instance
         let existing_id = relays
             .values()
-            .find(|r| r.public_ip == public_ip && r.relay_host == relay_host && r.stun_port == stun_port && r.relay_port == relay_port)
+            .find(|r| {
+                r.public_ipv4 == public_ipv4 &&
+                    r.public_ipv6 == public_ipv6 &&
+                    r.relay_host == relay_host &&
+                    r.stun_port == stun_port &&
+                    r.relay_port == relay_port
+            })
             .map(|r| r.id.clone());
 
         if let Some(id) = existing_id {
@@ -83,8 +95,9 @@ impl TurnManager {
         } else {
             let id = Uuid::new_v4().to_string();
             log::info!(
-                "New relay registered: public_ip={} host={} (ID: {}, STUN: {}, Relay: {})",
-                public_ip,
+                "New relay registered: public_ipv4={:?} public_ipv6={:?} host={} (ID: {}, STUN: {}, Relay: {})",
+                public_ipv4,
+                public_ipv6,
                 relay_host,
                 id,
                 stun_port,
@@ -94,7 +107,8 @@ impl TurnManager {
                 id.clone(),
                 RegisteredRelay {
                     id,
-                    public_ip,
+                    public_ipv4,
+                    public_ipv6,
                     relay_host,
                     stun_port,
                     relay_port,
@@ -143,18 +157,18 @@ impl TurnManager {
 
     pub async fn get_relay_config(&self, client_id: &str) -> Option<IceConfig> {
         let final_relay = self.get_assigned_relay(client_id).await?;
+        let mut urls = Vec::new();
 
-        let ip_url = if final_relay.public_ip.contains(':') {
-            format!("[{}]", final_relay.public_ip)
-        } else {
-            final_relay.public_ip.clone()
-        };
+        if let Some(public_ipv4) = final_relay.public_ipv4.as_ref() {
+            urls.push(format!("stun:{}:{}", public_ipv4, final_relay.stun_port));
+        }
+
+        if let Some(public_ipv6) = final_relay.public_ipv6.as_ref() {
+            urls.push(format!("stun:[{}]:{}", public_ipv6, final_relay.stun_port));
+        }
 
         Some(IceConfig {
-            urls: vec![format!(
-                "stun:{}:{}",
-                ip_url, final_relay.stun_port
-            )],
+            urls,
             username: None,
             credential: None
         })
@@ -168,13 +182,34 @@ mod tests {
     #[tokio::test]
     async fn assigned_relay_keeps_registered_relay_port() {
         let manager = TurnManager::new().await;
-        manager.register_relay("198.51.100.10".to_string(), "127.0.0.1".to_string(), 3478, 19101).await;
+        manager
+            .register_relay(Some("198.51.100.10".to_string()), Some("2001:db8::10".to_string()), 3478, 19101)
+            .await;
 
         let relay = manager.get_assigned_relay("client-1").await.unwrap();
 
-        assert_eq!(relay.public_ip, "198.51.100.10");
-        assert_eq!(relay.relay_host, "127.0.0.1");
+        assert_eq!(relay.public_ipv4.as_deref(), Some("198.51.100.10"));
+        assert_eq!(relay.public_ipv6.as_deref(), Some("2001:db8::10"));
+        assert_eq!(relay.relay_host, "198.51.100.10");
         assert_eq!(relay.stun_port, 3478);
         assert_eq!(relay.relay_port, 19101);
+    }
+
+    #[tokio::test]
+    async fn relay_config_publishes_dual_stack_urls() {
+        let manager = TurnManager::new().await;
+        manager
+            .register_relay(Some("198.51.100.10".to_string()), Some("2001:db8::10".to_string()), 3478, 19101)
+            .await;
+
+        let relay = manager.get_relay_config("client-1").await.unwrap();
+
+        assert_eq!(
+            relay.urls,
+            vec![
+                "stun:198.51.100.10:3478".to_string(),
+                "stun:[2001:db8::10]:3478".to_string()
+            ]
+        );
     }
 }

@@ -59,12 +59,15 @@ fn current_region_code() -> Option<String> {
 }
 
 fn resolve_region_code(bytover_region_code: Option<&str>, railway_replica_region: Option<&str>) -> Option<String> {
-    [bytover_region_code, railway_replica_region]
-        .into_iter()
-        .flatten()
-        .map(str::trim)
-        .find(|value| !value.is_empty())
-        .map(str::to_string)
+    [
+        bytover_region_code,
+        railway_replica_region
+    ]
+    .into_iter()
+    .flatten()
+    .map(str::trim)
+    .find(|value| !value.is_empty())
+    .map(str::to_string)
 }
 
 fn normalize_railway_region(region: Option<&str>) -> Option<String> {

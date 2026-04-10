@@ -61,13 +61,29 @@ fn parse_stun_urls(config: &IceConfig) -> Vec<String> {
     config.urls.iter().filter(|u| u.starts_with("stun:")).cloned().collect()
 }
 
-fn stun_url_to_host_port(url: &str) -> Option<String> {
-    let stripped = url.strip_prefix("stun:")?;
-    if stripped.contains(':') {
-        Some(stripped.to_string())
-    } else {
-        Some(format!("{}:3478", stripped))
+pub(crate) fn stun_url_to_host_port(url: &str) -> Option<String> {
+    let stripped = url.strip_prefix("stun:")?.trim();
+    if stripped.is_empty() {
+        return None;
     }
+
+    if stripped.starts_with('[') {
+        return if stripped.contains("]:") {
+            Some(stripped.to_string())
+        } else {
+            Some(format!("{}:3478", stripped))
+        };
+    }
+
+    if stripped.parse::<std::net::Ipv6Addr>().is_ok() {
+        return Some(format!("[{}]:3478", stripped));
+    }
+
+    if stripped.rsplit_once(':').and_then(|(_, port)| port.parse::<u16>().ok()).is_some() {
+        return Some(stripped.to_string());
+    }
+
+    Some(format!("{}:3478", stripped))
 }
 
 fn extract_mapped_addr(msg: &Message<'_>) -> Option<SocketAddr> {

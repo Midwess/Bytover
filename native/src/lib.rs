@@ -182,3 +182,32 @@ pub fn serialize<E: Serialize>(data: &E) -> Vec<u8> {
 fn bincode_options() -> impl bincode::Options + Copy {
     bincode::DefaultOptions::new().with_fixint_encoding().allow_trailing_bytes()
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::webrtc::ice::stun_url_to_host_port;
+
+    #[test]
+    fn defaults_ipv4_stun_urls_to_default_port() {
+        assert_eq!(
+            stun_url_to_host_port("stun:198.51.100.10"),
+            Some("198.51.100.10:3478".to_string())
+        );
+    }
+
+    #[test]
+    fn preserves_bracketed_ipv6_with_explicit_port() {
+        assert_eq!(
+            stun_url_to_host_port("stun:[2001:db8::7]:3478"),
+            Some("[2001:db8::7]:3478".to_string())
+        );
+    }
+
+    #[test]
+    fn brackets_raw_ipv6_literals_with_default_port() {
+        assert_eq!(
+            stun_url_to_host_port("stun:2001:db8::7"),
+            Some("[2001:db8::7]:3478".to_string())
+        );
+    }
+}

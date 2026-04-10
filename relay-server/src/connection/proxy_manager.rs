@@ -48,10 +48,6 @@ impl ProxyManager {
         Ipv4Addr::from(self.public_ipv4.load(Ordering::SeqCst))
     }
 
-    pub fn set_public_ipv4(&self, public_ipv4: Ipv4Addr) {
-        self.public_ipv4.store(u32::from(public_ipv4), Ordering::SeqCst);
-    }
-
     /// Starts the ProxyManager run loop. This is an async loop (like WebRtcServer::start)
     /// that owns all proxy run tasks via FuturesUnordered and cleans up when they finish.
     pub async fn start(self: &Arc<Self>) {

@@ -47,7 +47,7 @@ str0m = { workspace = true }
 thiserror.workspace = true
 crossbeam = { workspace = true }
 rand.workspace = true
-tokio-tungstenite.workspace = true
+tokio-tungstenite = { workspace = true, features = ["rustls-tls-webpki-roots"] }
 socket2.workspace = true
 stun-proto = { workspace = true }
 if-addrs = { workspace = true }

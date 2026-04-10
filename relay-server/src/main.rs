@@ -4,10 +4,11 @@ mod di;
 mod gateway;
 mod grpc_middleware;
 mod grpc_service;
+mod public_ip;
 mod stun_server;
 
 use base64::Engine;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::net::Ipv4Addr;
 use std::time::Duration;
 
@@ -19,10 +20,10 @@ use tonic::transport::Server;
 use tonic::Request;
 use tonic_middleware::InterceptorFor;
 
-use crate::connection::proxy_manager::ProxyManager;
 use crate::di::DiContainer;
 use crate::gateway::GatewayChannel;
 use crate::grpc_service::RelayServiceImpl;
+use crate::public_ip::{discover_public_addresses, PublicAddresses};
 
 #[derive(thiserror::Error, Debug)]
 enum MainErrors {
@@ -58,26 +59,24 @@ async fn async_main() -> Result<(), MainErrors> {
     let relay_port = connection.port;
     let grpc_gateway = GatewayChannel::new(config::get_gateway_grpc_url(), config::get_gateway_grpc_host());
     let registration_url = resolve_registration_url(&grpc_gateway).await.map_err(MainErrors::ExecutionError)?;
-    let public_ip = register_relay_once(&registration_url, stun_port, relay_port)
+    let public_addresses = discover_public_addresses().await.map_err(MainErrors::ExecutionError)?;
+    register_relay_once(&registration_url, stun_port, relay_port, &public_addresses)
         .await
         .map_err(MainErrors::ExecutionError)?;
-    let di = DiContainer::init(public_ip).await;
+    let di = DiContainer::init(relay_proxy_ipv4(&public_addresses)).await;
 
     log::info!(
-        "Relay Server bound on [::]:{} and advertising {}:{}",
+        "Relay Server bound on [::]:{} and advertising public addresses {:?}",
         relay_port,
-        public_ip,
-        relay_port
+        public_addresses
     );
 
     // Start registration loop
-    let proxy_manager = di.proxy_manager.clone();
     tokio::spawn(async move {
         start_registration_loop(
             stun_port,
             relay_port,
-            RegistrationState::new(registration_url, public_ip),
-            proxy_manager
+            RegistrationState::new(registration_url, public_addresses)
         )
         .await;
     });
@@ -115,24 +114,22 @@ async fn async_main() -> Result<(), MainErrors> {
 struct RegisterRelayRequest {
     stun_port: u16,
     relay_port: u16,
-    relay_host: String,
-    public_ip: Option<String>
-}
-
-#[derive(Debug, Deserialize)]
-struct RegisterRelayResponse {
-    ip_address: String
+    public_ipv4: Option<String>,
+    public_ipv6: Option<String>
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct RegistrationState {
     registration_url: String,
-    public_ip: Ipv4Addr
+    public_addresses: PublicAddresses
 }
 
 impl RegistrationState {
-    fn new(registration_url: String, public_ip: Ipv4Addr) -> Self {
-        Self { registration_url, public_ip }
+    fn new(registration_url: String, public_addresses: PublicAddresses) -> Self {
+        Self {
+            registration_url,
+            public_addresses
+        }
     }
 
     fn update_registration_url(&mut self, next_url: String) -> Option<(String, String)> {
@@ -143,15 +140,6 @@ impl RegistrationState {
         let previous_url = std::mem::replace(&mut self.registration_url, next_url);
         Some((previous_url, self.registration_url.clone()))
     }
-
-    fn update_public_ip(&mut self, next_ip: Ipv4Addr) -> Option<(Ipv4Addr, Ipv4Addr)> {
-        if self.public_ip == next_ip {
-            return None;
-        }
-
-        let previous_ip = std::mem::replace(&mut self.public_ip, next_ip);
-        Some((previous_ip, self.public_ip))
-    }
 }
 
 fn relay_auth_header() -> String {
@@ -161,14 +149,14 @@ fn relay_auth_header() -> String {
     format!("Basic {}", b64_auth)
 }
 
-fn parse_registered_ipv4(ip_address: &str) -> Result<Ipv4Addr, String> {
-    ip_address
-        .trim()
-        .parse::<Ipv4Addr>()
-        .map_err(|error| format!("signalling returned non-IPv4 address `{}`: {}", ip_address, error))
+fn relay_proxy_ipv4(public_addresses: &PublicAddresses) -> Ipv4Addr {
+    public_addresses.ipv4.unwrap_or_else(|| {
+        log::warn!("No public IPv4 discovered for relay RTC candidate publication; falling back to 0.0.0.0");
+        Ipv4Addr::UNSPECIFIED
+    })
 }
 
-async fn register_relay_once(url: &str, stun_port: u16, relay_port: u16) -> Result<Ipv4Addr, String> {
+async fn register_relay_once(url: &str, stun_port: u16, relay_port: u16, public_addresses: &PublicAddresses) -> Result<(), String> {
     let client = reqwest::Client::builder()
         .no_proxy()
         .build()
@@ -177,8 +165,8 @@ async fn register_relay_once(url: &str, stun_port: u16, relay_port: u16) -> Resu
     let req_body = RegisterRelayRequest {
         stun_port,
         relay_port,
-        relay_host: config::get_relay_control_host(),
-        public_ip: config::get_relay_public_ip()
+        public_ipv4: public_addresses.ipv4.map(|ip| ip.to_string()),
+        public_ipv6: public_addresses.ipv6.map(|ip| ip.to_string())
     };
 
     let response = client
@@ -193,20 +181,10 @@ async fn register_relay_once(url: &str, stun_port: u16, relay_port: u16) -> Resu
         return Err(format!("failed to register relay: status {}", response.status()));
     }
 
-    let body: RegisterRelayResponse = response
-        .json()
-        .await
-        .map_err(|error| format!("failed to decode relay registration response: {error}"))?;
-
-    parse_registered_ipv4(&body.ip_address)
+    Ok(())
 }
 
-async fn start_registration_loop(
-    stun_port: u16,
-    relay_port: u16,
-    mut state: RegistrationState,
-    proxy_manager: std::sync::Arc<ProxyManager>
-) {
+async fn start_registration_loop(stun_port: u16, relay_port: u16, mut state: RegistrationState) {
     let grpc_gateway = GatewayChannel::new(config::get_gateway_grpc_url(), config::get_gateway_grpc_host());
 
     let mut interval = tokio::time::interval(Duration::from_secs(5));
@@ -216,11 +194,7 @@ async fn start_registration_loop(
         let url = match resolve_registration_url(&grpc_gateway).await {
             Ok(url) => {
                 if let Some((previous_url, next_url)) = state.update_registration_url(url.clone()) {
-                    log::info!(
-                        "Relay registration URL changed from {} to {}",
-                        previous_url,
-                        next_url
-                    );
+                    log::info!("Relay registration URL changed from {} to {}", previous_url, next_url);
                 }
 
                 url
@@ -231,17 +205,8 @@ async fn start_registration_loop(
             }
         };
 
-        match register_relay_once(&url, stun_port, relay_port).await {
-            Ok(ip) => {
-                if let Some((previous_ip, next_ip)) = state.update_public_ip(ip) {
-                    log::info!(
-                        "Relay registration public IPv4 changed from {} to {}",
-                        previous_ip,
-                        next_ip
-                    );
-                    proxy_manager.set_public_ipv4(next_ip);
-                }
-            }
+        match register_relay_once(&url, stun_port, relay_port, &state.public_addresses).await {
+            Ok(()) => {}
             Err(error) => {
                 log::error!("Failed to register relay heartbeat: {}", error);
             }
@@ -264,26 +229,38 @@ async fn resolve_registration_url(grpc_gateway: &GatewayChannel) -> Result<Strin
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_registered_ipv4, RegistrationState};
-    use std::net::Ipv4Addr;
+    use super::{relay_proxy_ipv4, RegistrationState};
+    use crate::public_ip::PublicAddresses;
+    use std::net::{Ipv4Addr, Ipv6Addr};
 
     #[test]
-    fn parse_registered_ipv4_accepts_ipv4() {
-        let ip = parse_registered_ipv4("203.0.113.10").unwrap();
+    fn relay_proxy_ipv4_uses_discovered_ipv4() {
+        let ip = relay_proxy_ipv4(&PublicAddresses {
+            ipv4: Some(Ipv4Addr::new(203, 0, 113, 10)),
+            ipv6: Some(Ipv6Addr::LOCALHOST)
+        });
+
         assert_eq!(ip, Ipv4Addr::new(203, 0, 113, 10));
     }
 
     #[test]
-    fn parse_registered_ipv4_rejects_ipv6() {
-        let error = parse_registered_ipv4("2001:db8::1").unwrap_err();
-        assert!(error.contains("non-IPv4"));
+    fn relay_proxy_ipv4_falls_back_to_unspecified() {
+        let ip = relay_proxy_ipv4(&PublicAddresses {
+            ipv4: None,
+            ipv6: Some(Ipv6Addr::LOCALHOST)
+        });
+
+        assert_eq!(ip, Ipv4Addr::UNSPECIFIED);
     }
 
     #[test]
     fn registration_state_tracks_registration_url_changes() {
         let mut state = RegistrationState::new(
             "https://gateway.example/rpc-signalling-local/register-relay".to_string(),
-            Ipv4Addr::new(203, 0, 113, 10)
+            PublicAddresses {
+                ipv4: Some(Ipv4Addr::new(203, 0, 113, 10)),
+                ipv6: Some(Ipv6Addr::LOCALHOST)
+            }
         );
 
         let changed = state.update_registration_url("https://gateway.example/rpc-signalling-europe/register-relay".to_string());
@@ -298,31 +275,18 @@ mod tests {
     }
 
     #[test]
-    fn registration_state_tracks_public_ip_changes() {
-        let mut state = RegistrationState::new(
-            "https://gateway.example/rpc-signalling-local/register-relay".to_string(),
-            Ipv4Addr::new(203, 0, 113, 10)
-        );
-
-        let changed = state.update_public_ip(Ipv4Addr::new(203, 0, 113, 11));
-
-        assert_eq!(
-            changed,
-            Some((Ipv4Addr::new(203, 0, 113, 10), Ipv4Addr::new(203, 0, 113, 11)))
-        );
-    }
-
-    #[test]
     fn registration_state_ignores_unchanged_values() {
         let mut state = RegistrationState::new(
             "https://gateway.example/rpc-signalling-local/register-relay".to_string(),
-            Ipv4Addr::new(203, 0, 113, 10)
+            PublicAddresses {
+                ipv4: Some(Ipv4Addr::new(203, 0, 113, 10)),
+                ipv6: Some(Ipv6Addr::LOCALHOST)
+            }
         );
 
         assert_eq!(
             state.update_registration_url("https://gateway.example/rpc-signalling-local/register-relay".to_string()),
             None
         );
-        assert_eq!(state.update_public_ip(Ipv4Addr::new(203, 0, 113, 10)), None);
     }
 }

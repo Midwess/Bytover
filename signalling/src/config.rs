@@ -39,13 +39,16 @@ fn env_trimmed(key: &str) -> Option<String> {
 }
 
 fn resolve_region_code(bytover_region_code: Option<&str>, railway_replica_region: Option<&str>) -> String {
-    [bytover_region_code, railway_replica_region]
-        .into_iter()
-        .flatten()
-        .map(str::trim)
-        .find(|value| !value.is_empty())
-        .unwrap_or(DEFAULT_REGION_CODE)
-        .to_string()
+    [
+        bytover_region_code,
+        railway_replica_region
+    ]
+    .into_iter()
+    .flatten()
+    .map(str::trim)
+    .find(|value| !value.is_empty())
+    .unwrap_or(DEFAULT_REGION_CODE)
+    .to_string()
 }
 
 fn normalize_railway_region(region: Option<&str>) -> Option<String> {
