@@ -8,7 +8,7 @@ use crate::grpc_middleware::auth::RelayAuthInterceptor;
 static DI_CONTAINER: OnceCell<DiContainer> = OnceCell::const_new();
 
 pub struct DiContainer {
-    pub proxy_manager: Arc<ProxyManager>
+    pub proxy_manager: Arc<ProxyManager>,
 }
 
 impl DiContainer {

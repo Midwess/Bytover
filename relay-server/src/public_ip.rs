@@ -3,15 +3,27 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PublicAddresses {
     pub ipv4: Option<Ipv4Addr>,
-    pub ipv6: Option<Ipv6Addr>
+    pub ipv6: Option<Ipv6Addr>,
 }
 
 impl PublicAddresses {
     pub fn localhost() -> Self {
         Self {
             ipv4: Some(Ipv4Addr::LOCALHOST),
-            ipv6: Some(Ipv6Addr::LOCALHOST)
+            ipv6: Some(Ipv6Addr::LOCALHOST),
         }
+    }
+
+    pub fn retain_families(mut self, has_ipv4: bool, has_ipv6: bool) -> Self {
+        if !has_ipv4 {
+            self.ipv4 = None;
+        }
+
+        if !has_ipv6 {
+            self.ipv6 = None;
+        }
+
+        self
     }
 
     pub fn ensure_any(self) -> Result<Self, String> {
@@ -55,5 +67,17 @@ mod tests {
         let error = PublicAddresses { ipv4: None, ipv6: None }.ensure_any().unwrap_err();
 
         assert!(error.contains("failed to discover any public IP address"));
+    }
+
+    #[test]
+    fn retain_families_drops_unbound_socket_families() {
+        let addresses = PublicAddresses {
+            ipv4: Some(Ipv4Addr::new(203, 0, 113, 10)),
+            ipv6: Some(Ipv6Addr::LOCALHOST),
+        }
+        .retain_families(true, false);
+
+        assert_eq!(addresses.ipv4, Some(Ipv4Addr::new(203, 0, 113, 10)));
+        assert_eq!(addresses.ipv6, None);
     }
 }

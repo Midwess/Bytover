@@ -16,7 +16,7 @@ fn sync_upload_limits(
     leg1: &mut Yieldable<Box<RelayRtcClient>>,
     leg2: Option<&mut Yieldable<Box<RelayRtcClient>>>,
     queued_bytes_to_2: usize,
-    queued_bytes_to_1: usize
+    queued_bytes_to_1: usize,
 ) {
     let leg2_other_side_download_bps = leg1.peer_download_rate_bps();
 
@@ -34,7 +34,7 @@ pub struct ProxyInstance {
     leg1: YieldContainer<Box<RelayRtcClient>>,
     leg2: YieldContainer<Box<RelayRtcClient>>,
     notify_leg2: Notify,
-    public_ipv4: Ipv4Addr
+    public_ipv4: Ipv4Addr,
 }
 
 impl ProxyInstance {
@@ -44,7 +44,7 @@ impl ProxyInstance {
             leg1: YieldContainer::empty(),
             leg2: YieldContainer::empty(),
             notify_leg2: Notify::new(),
-            public_ipv4
+            public_ipv4,
         })
     }
 

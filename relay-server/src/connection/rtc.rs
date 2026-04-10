@@ -30,7 +30,7 @@ const MAX_PENDING_SPINS_PER_STEP: usize = 8;
 pub struct SpeedMeter {
     window: Duration,
     samples: VecDeque<(Instant, u64)>,
-    total: u64
+    total: u64,
 }
 
 impl SpeedMeter {
@@ -38,7 +38,7 @@ impl SpeedMeter {
         Self {
             window,
             samples: VecDeque::new(),
-            total: 0
+            total: 0,
         }
     }
 
@@ -72,7 +72,7 @@ struct RateLimitedUdpSocket {
     upload_limiter: Limiter,
     upload_speed_limit_bps: f64,
     down_meter: SpeedMeter,
-    up_meter: SpeedMeter
+    up_meter: SpeedMeter,
 }
 
 impl RateLimitedUdpSocket {
@@ -82,7 +82,7 @@ impl RateLimitedUdpSocket {
             upload_limiter: Limiter::new(f64::INFINITY),
             upload_speed_limit_bps: f64::INFINITY,
             down_meter: SpeedMeter::new(SPEED_METER_WINDOW),
-            up_meter: SpeedMeter::new(SPEED_METER_WINDOW)
+            up_meter: SpeedMeter::new(SPEED_METER_WINDOW),
         }
     }
 
@@ -110,10 +110,10 @@ impl RateLimitedUdpSocket {
     }
 
     fn set_upload_speed_limit(&mut self, speed_limit_bps: f64) {
-        if (self.upload_speed_limit_bps.is_infinite() && speed_limit_bps.is_infinite()) ||
-            (!self.upload_speed_limit_bps.is_infinite() &&
-                !speed_limit_bps.is_infinite() &&
-                (self.upload_speed_limit_bps - speed_limit_bps).abs() < 1.0)
+        if (self.upload_speed_limit_bps.is_infinite() && speed_limit_bps.is_infinite())
+            || (!self.upload_speed_limit_bps.is_infinite()
+                && !speed_limit_bps.is_infinite()
+                && (self.upload_speed_limit_bps - speed_limit_bps).abs() < 1.0)
         {
             return;
         }
@@ -135,7 +135,7 @@ impl RateLimitedUdpSocket {
 struct UploadLimitState {
     measured_upload_bps: Option<f64>,
     limit_active_logged: bool,
-    hard_cap_logged: bool
+    hard_cap_logged: bool,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -143,20 +143,20 @@ pub enum RelayRtcError {
     #[error("Socket error: {0}")]
     Socket(#[from] std::io::Error),
     #[error("RTC error: {0}")]
-    Rtc(#[from] str0m::error::RtcError)
+    Rtc(#[from] str0m::error::RtcError),
 }
 
 #[derive(Debug)]
 pub enum PollOutcome {
     Event(Event),
     Idle,
-    MorePending
+    MorePending,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum PendingEvent {
     Connected,
-    ChannelOpen(ChannelId)
+    ChannelOpen(ChannelId),
 }
 
 pub struct RelayRtcClient {
@@ -169,14 +169,14 @@ pub struct RelayRtcClient {
     pending_events: Vec<PendingEvent>,
     connected: bool,
     ice_disconnected_since: Option<Instant>,
-    upload_limit: UploadLimitState
+    upload_limit: UploadLimitState,
 }
 
 impl RelayRtcClient {
     pub async fn accept_offer(
         sdp_offer: &str,
         channels: Vec<DataChannel>,
-        public_ipv4: Ipv4Addr
+        public_ipv4: Ipv4Addr,
     ) -> Result<(Box<Self>, String), RelayRtcError> {
         let socket = Socket::new(Domain::IPV6, Type::DGRAM, Some(socket2::Protocol::UDP))?;
         socket.set_only_v6(false)?;
@@ -234,7 +234,7 @@ impl RelayRtcClient {
             pending_events,
             connected: false,
             ice_disconnected_since: None,
-            upload_limit: UploadLimitState::default()
+            upload_limit: UploadLimitState::default(),
         });
 
         Ok((client, sdp_answer.to_sdp_string()))
@@ -378,7 +378,7 @@ impl RelayRtcClient {
                     tokio::task::yield_now().await;
                     continue;
                 }
-                PollOutcome::Idle => break
+                PollOutcome::Idle => break,
             }
         }
 
@@ -445,15 +445,15 @@ impl RelayRtcClient {
                 interpolate(
                     measured_upload_bps.max(other_side_download_bps),
                     other_side_download_bps,
-                    progress
-                )
+                    progress,
+                ),
             )
         } else if queued_bytes < QUEUE_HARD_LIMIT_BYTES {
             let progress =
                 (queued_bytes - QUEUE_MATCH_TARGET_BYTES) as f64 / (QUEUE_HARD_LIMIT_BYTES - QUEUE_MATCH_TARGET_BYTES) as f64;
             (
                 "ramp_to_min",
-                interpolate(other_side_download_bps, MIN_UPLOAD_SPEED_BPS, progress)
+                interpolate(other_side_download_bps, MIN_UPLOAD_SPEED_BPS, progress),
             )
         } else {
             ("min_cap", MIN_UPLOAD_SPEED_BPS)
@@ -467,7 +467,7 @@ impl RelayRtcClient {
             other_side_download_bps,
             measured_upload_bps,
             current_upload_bps,
-            applied_limit_bps
+            applied_limit_bps,
         );
     }
 
@@ -478,7 +478,7 @@ impl RelayRtcClient {
         other_side_download_bps: f64,
         measured_upload_bps: f64,
         current_upload_bps: f64,
-        applied_limit_bps: f64
+        applied_limit_bps: f64,
     ) {
         if !self.upload_limit.limit_active_logged {
             self.upload_limit.limit_active_logged = true;
@@ -546,9 +546,9 @@ fn from_v6_mapped(addr: SocketAddr) -> SocketAddr {
     match addr {
         SocketAddr::V6(v6) => {
             let octets = v6.ip().octets();
-            if octets[0..12] ==
-                [
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff
+            if octets[0..12]
+                == [
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff,
                 ]
             {
                 let v4 = std::net::Ipv4Addr::new(octets[12], octets[13], octets[14], octets[15]);
@@ -557,14 +557,14 @@ fn from_v6_mapped(addr: SocketAddr) -> SocketAddr {
                 addr
             }
         }
-        _ => addr
+        _ => addr,
     }
 }
 
 fn to_v6_mapped(addr: SocketAddr) -> SocketAddr {
     match addr {
         SocketAddr::V4(v4) => SocketAddr::new(v4.ip().to_ipv6_mapped().into(), v4.port()),
-        v6 => v6
+        v6 => v6,
     }
 }
 
