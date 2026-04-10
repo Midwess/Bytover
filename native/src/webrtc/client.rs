@@ -32,7 +32,7 @@ use crate::webrtc::rtc::{RtcEvent, RtcHandle};
 use crate::webrtc::signalling::SignallingSender;
 use str0m::channel::ChannelId;
 
-pub static CHUNK_SIZE: usize = 64 * 1024;
+pub static CHUNK_SIZE: usize = 16 * 1024;
 pub static MAX_BUFFER_SIZE: usize = 1024 * 1024 * 5;
 pub static MIN_BUFFER_SIZE: usize = CHUNK_SIZE;
 const RELIABLE_DATA_QUEUE_CAPACITY: usize = MAX_BUFFER_SIZE / CHUNK_SIZE + 1;
