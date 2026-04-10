@@ -26,8 +26,7 @@ pub struct ChannelIds {
 /// str0m never emits Failed/Closed ICE states, so we need this timeout.
 const ICE_DISCONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Maximum number of consecutive `MorePending` cycles before we force a
-/// cooperative yield in the rtc-io loop.
+/// Maximum number of consecutive `MorePending` cycles
 const MAX_PENDING_SPINS_PER_STEP: usize = 8;
 
 /// Events emitted from the RTC thread to the outside world.
@@ -157,7 +156,8 @@ impl RtcClient {
         socket.set_only_v6(false)?;
         socket.set_nonblocking(true)?;
         socket.bind(&"[::]:0".parse::<SocketAddr>().unwrap().into())?;
-        let _ = socket.set_send_buffer_size(MAX_BUFFER_SIZE * 2);
+        let _ = socket.set_send_buffer_size(MAX_BUFFER_SIZE * 3);
+        let _ = socket.set_recv_buffer_size(MAX_BUFFER_SIZE * 3);
         let socket: std::net::UdpSocket = socket.into();
         let socket = tokio::net::UdpSocket::from_std(socket)?;
 
@@ -496,7 +496,7 @@ impl RtcClient {
                     if pending_spins >= MAX_PENDING_SPINS_PER_STEP {
                         pending_spins = 0;
                     }
-                    tokio::task::yield_now().await;
+
                     continue;
                 }
                 RtcOutcome::Idle(_) => {
