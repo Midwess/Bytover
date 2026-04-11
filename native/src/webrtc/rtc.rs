@@ -432,7 +432,7 @@ impl RtcClient {
 
                 #[cfg(target_os = "windows")]
                 {
-                    use windows::Win32::Media::Multimedia::AvSetMmThreadCharacteristicsW;
+                    use windows::Win32::System::Threading::AvSetMmThreadCharacteristicsW;
                     use windows::core::w;
                     let mut task_index = 0u32;
                     unsafe {

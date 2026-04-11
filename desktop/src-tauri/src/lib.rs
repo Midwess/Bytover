@@ -604,8 +604,7 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
 
 #[cfg(target_os = "windows")]
 fn optimize_windows_performance() {
-    use windows::Win32::System::Threading::{SetPriorityClass, HIGH_PRIORITY_CLASS, GetCurrentProcess};
-    use windows::Win32::Media::Multimedia::{AvSetMmThreadCharacteristicsW};
+    use windows::Win32::System::Threading::{SetPriorityClass, HIGH_PRIORITY_CLASS, GetCurrentProcess, AvSetMmThreadCharacteristicsW};
     use windows::core::w;
 
     unsafe {

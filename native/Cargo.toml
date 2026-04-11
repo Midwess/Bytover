@@ -55,7 +55,7 @@ if-addrs = { workspace = true }
 mdns-sd = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
 [target.'cfg(target_os = "windows")'.dependencies]
-windows = { version = "0.62.2", features = ["Win32_Media_Multimedia"] }
+windows = { version = "0.62.2", features = ["Win32_System_Threading"] }
 [target.uniffi-bindgen.dependencies]
 uniffi = { workspace = true }
 
