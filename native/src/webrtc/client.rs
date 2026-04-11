@@ -377,11 +377,11 @@ impl WebRtcClient {
             }
         }
 
-        if let Some(rtc) = relay_rtc {
-            if rtc.is_alive() && rtc.send(data, channel_id) {
-                return true;
-            }
-        }
+        // if let Some(rtc) = relay_rtc {
+        //     if rtc.is_alive() && rtc.send(data, channel_id) {
+        //         return true;
+        //     }
+        // }
 
         false
     }
