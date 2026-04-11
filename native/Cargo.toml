@@ -44,6 +44,7 @@ tempfile.workspace = true
 lz4_flex = { version = "0.12", default-features = false, features = ["frame"] }
 n0-future = { workspace = true }
 str0m = { workspace = true }
+sctp-proto = { workspace = true }
 thiserror.workspace = true
 crossbeam = { workspace = true }
 rand.workspace = true
@@ -53,6 +54,8 @@ stun-proto = { workspace = true }
 if-addrs = { workspace = true }
 mdns-sd = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.62.2", features = ["Win32_Media_Multimedia"] }
 [target.uniffi-bindgen.dependencies]
 uniffi = { workspace = true }
 

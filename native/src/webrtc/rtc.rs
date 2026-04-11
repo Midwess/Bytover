@@ -4,6 +4,7 @@ use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 use str0m::channel::{ChannelConfig, ChannelId};
 use str0m::net::{Protocol, Receive};
+use sctp_proto::TransportConfig;
 use str0m::{Event, IceConnectionState, Input, Output, Rtc, RtcConfig};
 
 use schema::devlog::rpc_signalling::server::OfferMessage;
@@ -137,7 +138,9 @@ struct RtcClient {
     pending_transmits: VecDeque<(Vec<u8>, str0m::channel::ChannelId)>,
     /// Events received during the connect/handshake phase that need to be
     /// replayed once the run loop starts (e.g. early ChannelData).
-    early_events: Vec<Event>
+    early_events: Vec<Event>,
+    total_bytes_sent: u64,
+    last_stats_log: Instant
 }
 
 impl RtcClient {
@@ -174,7 +177,18 @@ impl RtcClient {
             .await
             .map_err(|e| WebRtcClientError::Signalling(e.to_string()))?;
 
-        let config = RtcConfig::default().set_sctp_max_message_size(256 * 1024).set_sctp_buffer_size(5 * 1024 * 1024);
+        let sctp_config = TransportConfig::default()
+            // Remember the baseline RTT longer to survive Wi-Fi jitter
+            .with_rack_min_rtt_window(Duration::from_secs(10)) 
+            // Give out-of-order internet packets a fair chance to arrive
+            .with_rack_reo_wnd_floor(Duration::from_millis(20)) 
+            // Crucial: Match the standard SCTP receiver delayed ACK timer
+            .with_rack_worst_case_delayed_ack(Duration::from_millis(200)); 
+
+        let config = RtcConfig::default()
+            .set_sctp_max_message_size(256 * 1024)
+            .set_sctp_buffer_size(5 * 1024 * 1024)
+            .set_sctp_transport_config(sctp_config);
 
         let mut rtc = config.build(Instant::now());
         let mut local_v4_addr = None;
@@ -236,7 +250,9 @@ impl RtcClient {
             cached_timeout: Instant::now(),
             channel_ids,
             pending_transmits: VecDeque::new(),
-            early_events: Vec::new()
+            early_events: Vec::new(),
+            total_bytes_sent: 0,
+            last_stats_log: Instant::now()
         };
 
         let connected = false;
@@ -273,7 +289,15 @@ impl RtcClient {
             .await
             .map_err(|e| WebRtcClientError::Signalling(e.to_string()))?;
 
-        let rtc_config = RtcConfig::default().set_sctp_max_message_size(256 * 1024).set_sctp_buffer_size(5 * 1024 * 1024);
+        let sctp_config = TransportConfig::default()
+            .with_rack_min_rtt_window(Duration::from_secs(1))
+            .with_rack_reo_wnd_floor(Duration::from_millis(10))
+            .with_rack_worst_case_delayed_ack(Duration::from_millis(40));
+
+        let rtc_config = RtcConfig::default()
+            .set_sctp_max_message_size(256 * 1024)
+            .set_sctp_buffer_size(5 * 1024 * 1024)
+            .set_sctp_transport_config(sctp_config);
 
         let mut rtc = rtc_config.build(Instant::now());
         let mut local_v4_addr = None;
@@ -378,7 +402,9 @@ impl RtcClient {
             cached_timeout: Instant::now(),
             channel_ids,
             pending_transmits: VecDeque::new(),
-            early_events: Vec::new()
+            early_events: Vec::new(),
+            total_bytes_sent: 0,
+            last_stats_log: Instant::now()
         };
 
         let connected = false;
@@ -403,6 +429,18 @@ impl RtcClient {
                     .enable_all()
                     .build()
                     .expect("Failed to build tokio runtime for RTC thread");
+
+                #[cfg(target_os = "windows")]
+                {
+                    use windows::Win32::Media::Multimedia::AvSetMmThreadCharacteristicsW;
+                    use windows::core::w;
+                    let mut task_index = 0u32;
+                    unsafe {
+                        if let Ok(_) = AvSetMmThreadCharacteristicsW(w!("Pro Audio"), &mut task_index) {
+                            log::info!("[rtc-client] Successfully set MMCSS characteristics to Pro Audio for RTC thread");
+                        }
+                    }
+                }
 
                 rt.block_on(async move {
                     Self::run_loop(self, event_tx, data_rx).await;
@@ -449,6 +487,14 @@ impl RtcClient {
             self.drain_pending_transmits();
             self.fill_transmit_queue(&mut data_rx);
             self.drain_pending_transmits();
+
+            if self.last_stats_log.elapsed() >= Duration::from_secs(3) {
+                let elapsed = self.last_stats_log.elapsed().as_secs_f64();
+                let speed_mbps = (self.total_bytes_sent as f64 * 8.0) / (elapsed * 1024.0 * 1024.0);
+                log::info!("[rtc-client] Current throughput: {:.2} Mbps", speed_mbps);
+                self.total_bytes_sent = 0;
+                self.last_stats_log = Instant::now();
+            }
 
             let outcome = match self.poll_event().await {
                 Ok(o) => o,
@@ -606,6 +652,7 @@ impl RtcClient {
                     log::warn!("[rtc-client] Failed to send to {}: {}", dest, e);
                     return Err(WebRtcClientError::Connection(format!("Failed to send packet: {e}")));
                 }
+                self.total_bytes_sent += t.contents.len() as u64;
                 Ok(RtcOutcome::MorePending)
             }
             Output::Event(e) => {

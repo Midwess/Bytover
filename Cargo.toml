@@ -73,6 +73,7 @@ image = "0.25.8"
 tempfile = "3.23.0"
 tokio-cron-scheduler = { version = "0.15.1", default-features = false }
 str0m = { git = "https://github.com/Midwess/str0m" }
+sctp-proto = { git = "https://github.com/Midwess/sctp-proto.git" }
 tokio-tungstenite = "0.29.0"
 socket2 = "0.6.3"
 base64 = "0.22.1"

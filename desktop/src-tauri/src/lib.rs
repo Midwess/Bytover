@@ -602,8 +602,36 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
     }
 }
 
+#[cfg(target_os = "windows")]
+fn optimize_windows_performance() {
+    use windows::Win32::System::Threading::{SetPriorityClass, HIGH_PRIORITY_CLASS, GetCurrentProcess};
+    use windows::Win32::Media::Multimedia::{AvSetMmThreadCharacteristicsW};
+    use windows::core::w;
+
+    unsafe {
+        let process = GetCurrentProcess();
+        if let Err(e) = SetPriorityClass(process, HIGH_PRIORITY_CLASS) {
+            log::warn!("Failed to set HIGH_PRIORITY_CLASS: {:?}", e);
+        } else {
+            log::info!("Successfully set HIGH_PRIORITY_CLASS");
+        }
+
+        let mut task_index = 0u32;
+        // "Pro Audio" is the most aggressive category for reducing network throttling.
+        let handle = AvSetMmThreadCharacteristicsW(w!("Pro Audio"), &mut task_index);
+        if let Ok(_) = handle {
+            log::info!("Successfully set MMCSS characteristics to Pro Audio for main thread");
+        } else {
+            log::warn!("Failed to set MMCSS characteristics for main thread");
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub async fn run() {
+    #[cfg(target_os = "windows")]
+    optimize_windows_performance();
+
     #[cfg(feature = "log-file")]
     {
         WriteLogger::init(

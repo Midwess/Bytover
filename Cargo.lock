@@ -5721,6 +5721,7 @@ dependencies = [
  "redb",
  "reqwest",
  "schema",
+ "sctp-proto",
  "serde",
  "serde_json",
  "shared",
@@ -5736,6 +5737,7 @@ dependencies = [
  "uniffi",
  "url",
  "uuid",
+ "windows 0.62.2",
 ]
 
 [[package]]
