@@ -18,7 +18,7 @@ use shared::shell::api::CoreRequest;
 
 use crate::config::{get_signalling_server_http_url_for_route, get_signalling_server_ws_url_for_route};
 use crate::webrtc::client::{CachedPreConnection, WebRtcClient, WebRtcClientError};
-use crate::webrtc::signalling::SignalingClient;
+use crate::webrtc::signalling::{SignalingClient, SignallingSender};
 
 /// Cache refresh interval - candidates are refreshed every 15 seconds
 const CACHE_REFRESH_INTERVAL: Duration = Duration::from_secs(15);
@@ -116,6 +116,7 @@ pub struct WebRtcServer {
     core_request: OnceCell<CoreRequest>,
     running: AtomicBool,
     connection_cache: ConnectionCache,
+    signalling_sender: OnceCell<SignallingSender>,
 }
 
 impl WebRtcServer {
@@ -127,6 +128,7 @@ impl WebRtcServer {
             core_request: Default::default(),
             running: AtomicBool::new(false),
             connection_cache: ConnectionCache::new(),
+            signalling_sender: Default::default(),
         })
     }
 
@@ -291,6 +293,11 @@ impl WebRtcServer {
         signalling.start(key.clone()).await;
         log::info!("[webrtc-server] Signalling background task started");
 
+        let signalling_sender = signalling.get_sender().ok_or_else(|| {
+            WebRtcServerError::Signalling("Failed to get signalling sender".to_string())
+        })?;
+        let _ = self.signalling_sender.set(signalling_sender.clone());
+
         let mut connect_futs: FuturesUnordered<_> = FuturesUnordered::new();
         let mut run_handles: FuturesUnordered<_> = FuturesUnordered::new();
         let resource_repo = self.resource_repo.clone();
@@ -300,9 +307,11 @@ impl WebRtcServer {
 
         // Spawn initial cache generation
         let server = self.clone();
+        let sender_for_initial = signalling_sender.clone();
+        let key_for_initial = key.clone();
         tokio::spawn(async move {
             log::info!("[webrtc-server] Generating initial cached connection");
-            if let Err(e) = generate_cached_connection(&server).await {
+            if let Err(e) = generate_cached_connection(&server, &sender_for_initial, &key_for_initial).await {
                 log::warn!("[webrtc-server] Initial cache generation failed: {:?}", e);
             }
         });
@@ -316,9 +325,11 @@ impl WebRtcServer {
                 _ = cache_refresh_interval.tick() => {
                     if self.connection_cache.needs_refresh() {
                         let server = self.clone();
+                        let sender = signalling_sender.clone();
+                        let signalling_id = key.clone();
                         log::info!("[webrtc-server] Cache refresh triggered");
                         tokio::spawn(async move {
-                            if let Err(e) = generate_cached_connection(&server).await {
+                            if let Err(e) = generate_cached_connection(&server, &sender, &signalling_id).await {
                                 log::warn!("[webrtc-server] Cache refresh failed: {:?}", e);
                             }
                         });
@@ -425,12 +436,27 @@ impl WebRtcServer {
 
 /// Generate a cached pre-connection by creating a socket and gathering ICE candidates.
 /// This is called periodically to keep the cache fresh.
-async fn generate_cached_connection(server: &Arc<WebRtcServer>) -> Result<(), WebRtcServerError> {
+async fn generate_cached_connection(
+    server: &Arc<WebRtcServer>,
+    signalling_sender: &SignallingSender,
+    signalling_id: &str,
+) -> Result<(), WebRtcServerError> {
     use socket2::{Domain, Socket, Type};
     use std::net::SocketAddr;
 
-    use crate::config::get_relay_server_override;
     use crate::webrtc::ice::IceAgent;
+
+    // Fetch relay config from signalling server (same as RtcClient::connect)
+    let config = match signalling_sender.fetch_relay_config(signalling_id).await {
+        Ok(cfg) => {
+            log::info!("[webrtc-server] Using relay config with {} URLs", cfg.urls.len());
+            cfg
+        }
+        Err(e) => {
+            log::warn!("[webrtc-server] Failed to fetch relay config, using P2P only: {}", e);
+            schema::devlog::rpc_signalling::server::IceConfig::default()
+        }
+    };
 
     // Create socket
     let socket = Socket::new(Domain::IPV6, Type::DGRAM, Some(socket2::Protocol::UDP))?;
@@ -441,21 +467,6 @@ async fn generate_cached_connection(server: &Arc<WebRtcServer>) -> Result<(), We
     let socket = tokio::net::UdpSocket::from_std(socket)?;
 
     let local_addr = socket.local_addr()?;
-
-    // Build IceConfig from relay server override
-    let config = if let Some(relay_server) = get_relay_server_override() {
-        schema::devlog::rpc_signalling::server::IceConfig {
-            urls: vec![
-                format!("stun:{}", relay_server),
-                format!("turn:{}?transport=udp", relay_server),
-                format!("turn:{}?transport=tcp", relay_server),
-            ],
-            username: Some("guest".to_string()),
-            credential: Some("guest".to_string()),
-        }
-    } else {
-        schema::devlog::rpc_signalling::server::IceConfig::default()
-    };
 
     // Gather candidates
     let (candidates, _turn_info) = IceAgent::gather_candidates(&socket, &config)
