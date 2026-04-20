@@ -69,7 +69,7 @@ async fn async_main() -> Result<(), MainErrors> {
     let registration_url = resolve_registration_url(&grpc_gateway).await.map_err(MainErrors::ExecutionError)?;
 
     let turn_port = requested_turn_port;
-    register_relay_once(&registration_url, 3478, turn_port, &public_addresses)
+    register_relay_once(&registration_url, 3478, turn_port, turn_port, &public_addresses)
         .await
         .map_err(MainErrors::ExecutionError)?;
 
@@ -82,6 +82,7 @@ async fn async_main() -> Result<(), MainErrors> {
     tokio::spawn(async move {
         start_registration_loop(
             3478,
+            turn_port,
             turn_port,
             RegistrationState::new(registration_url, public_addresses)
         )
@@ -111,6 +112,7 @@ async fn async_main() -> Result<(), MainErrors> {
 struct RegisterRelayRequest {
     stun_port: u16,
     relay_port: u16,
+    turn_port: u16,
     public_ipv4: Option<String>,
     public_ipv6: Option<String>,
 }
@@ -142,7 +144,7 @@ fn relay_auth_header() -> String {
     format!("Basic {}", b64_auth)
 }
 
-async fn register_relay_once(url: &str, stun_port: u16, relay_port: u16, public_addresses: &PublicAddresses) -> Result<(), String> {
+async fn register_relay_once(url: &str, stun_port: u16, relay_port: u16, turn_port: u16, public_addresses: &PublicAddresses) -> Result<(), String> {
     let client = reqwest::Client::builder()
         .no_proxy()
         .build()
@@ -151,6 +153,7 @@ async fn register_relay_once(url: &str, stun_port: u16, relay_port: u16, public_
     let req_body = RegisterRelayRequest {
         stun_port,
         relay_port,
+        turn_port,
         public_ipv4: public_addresses.ipv4.map(|ip| ip.to_string()),
         public_ipv6: public_addresses.ipv6.map(|ip| ip.to_string()),
     };
@@ -170,7 +173,7 @@ async fn register_relay_once(url: &str, stun_port: u16, relay_port: u16, public_
     Ok(())
 }
 
-async fn start_registration_loop(stun_port: u16, relay_port: u16, mut state: RegistrationState) {
+async fn start_registration_loop(stun_port: u16, relay_port: u16, turn_port: u16, mut state: RegistrationState) {
     let grpc_gateway = GatewayChannel::new(config::get_gateway_grpc_url(), config::get_gateway_grpc_host());
 
     let mut interval = tokio::time::interval(Duration::from_secs(5));
@@ -190,7 +193,7 @@ async fn start_registration_loop(stun_port: u16, relay_port: u16, mut state: Reg
             }
         };
 
-        match register_relay_once(&url, stun_port, relay_port, &state.public_addresses).await {
+        match register_relay_once(&url, stun_port, relay_port, turn_port, &state.public_addresses).await {
             Ok(()) => {}
             Err(error) => {
                 log::error!("Failed to register relay heartbeat: {}", error);
