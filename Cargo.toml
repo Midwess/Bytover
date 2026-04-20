@@ -20,6 +20,7 @@ authors = ["Jimmy"]
 edition = "2021"
 rust-version = "1.74.0"
 version = "0.1.0"
+repository = "https://github.com/your-repo/bit-bridge"
 
 [profile.dev]
 debug-assertions = false
@@ -83,6 +84,17 @@ hmac = "0.12.1"
 actix-web = "4.11.0"
 jsonwebtoken = "9.3"
 turn-server = { git = "https://github.com/mycrl/turn-rs.git" }
+turn-client-proto = { version = "0.7.1", default-features = false }
+turn-types = { version = "0.7.1", default-features = false }
+byteorder = { version = "1", default-features = false }
+smallvec = "1"
+tracing = { version = "0.1", default-features = false, features = ["attributes"] }
+tracing-subscriber = "0.3"
+criterion = "0.7"
+stun-types = { version = "2.0.0", default-features = false }
+openssl = "0.10"
+rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }
+rustls-platform-verifier = "0.6"
 
 [workspace.metadata.bin]
 cargo-xcode = { version = "=1.7.0" }

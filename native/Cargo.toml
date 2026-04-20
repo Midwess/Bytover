@@ -50,6 +50,8 @@ rand.workspace = true
 tokio-tungstenite = { workspace = true, features = ["rustls-tls-webpki-roots"] }
 socket2.workspace = true
 stun-proto = { workspace = true }
+turn-client-proto = { workspace = true }
+turn-types = { workspace = true }
 if-addrs = { workspace = true }
 mdns-sd = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
