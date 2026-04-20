@@ -322,7 +322,9 @@ struct RegisterRelayRequest {
     stun_port: u16,
     relay_port: u16,
     public_ipv4: Option<String>,
-    public_ipv6: Option<String>
+    public_ipv6: Option<String>,
+    #[serde(default)]
+    turn_port: u16
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -367,7 +369,7 @@ async fn register_relay_handler(
         None => return HttpResponse::BadRequest().body("relay registration requires at least one public IP address")
     };
 
-    state.turn_manager.register_relay(public_ipv4, public_ipv6, body.stun_port, body.relay_port).await;
+    state.turn_manager.register_relay(public_ipv4, public_ipv6, body.stun_port, body.relay_port, body.turn_port).await;
 
     HttpResponse::Ok().json(RegisterRelayResponse { ip_address: response_ip })
 }
@@ -414,7 +416,8 @@ mod tests {
             stun_port: 3478,
             relay_port: 9101,
             public_ipv4: Some("198.51.100.7".to_string()),
-            public_ipv6: Some("2001:db8::7".to_string())
+            public_ipv6: Some("2001:db8::7".to_string()),
+            turn_port: 19101
         });
 
         let response = register_relay_handler(req, body, state).await;
@@ -446,7 +449,8 @@ mod tests {
             stun_port: 3478,
             relay_port: 9101,
             public_ipv4: None,
-            public_ipv6: Some("2001:db8::8".to_string())
+            public_ipv6: Some("2001:db8::8".to_string()),
+            turn_port: 19101
         });
 
         let response = register_relay_handler(req, body, state).await;
@@ -468,7 +472,8 @@ mod tests {
             stun_port: 3478,
             relay_port: 9101,
             public_ipv4: None,
-            public_ipv6: None
+            public_ipv6: None,
+            turn_port: 19101
         });
 
         let response = register_relay_handler(req, body, state).await;

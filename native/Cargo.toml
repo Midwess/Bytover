@@ -30,7 +30,7 @@ log = { workspace = true }
 bincode = { workspace = true }
 erased-serde = { workspace = true }
 tonic = { workspace = true, features = ["tls-webpki-roots", "tls-native-roots"] }
-reqwest = { workspace = true, features = ["json", "rustls-tls-webpki-roots", "stream"] }
+reqwest = { workspace = true, features = ["json", "rustls", "stream"] }
 futures-util = { workspace = true }
 url = { workspace = true }
 bytes = { workspace = true }

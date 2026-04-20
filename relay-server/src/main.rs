@@ -1,15 +1,12 @@
 mod config;
-mod connection;
 mod di;
 mod gateway;
 mod grpc_middleware;
 mod grpc_service;
 mod public_ip;
-mod stun_server;
 
 use base64::Engine;
 use serde::Serialize;
-use std::net::Ipv4Addr;
 use std::time::Duration;
 
 use devlog_sdk::tcp::listener::find_grpc_listener;
@@ -24,6 +21,7 @@ use crate::di::DiContainer;
 use crate::gateway::GatewayChannel;
 use crate::grpc_service::RelayServiceImpl;
 use crate::public_ip::{discover_public_addresses, PublicAddresses};
+use turn_server::config::{Auth, Config, Interface, Server as TurnServerConfig};
 
 #[derive(thiserror::Error, Debug)]
 enum MainErrors {
@@ -38,7 +36,6 @@ enum MainErrors {
 fn main() -> Result<(), MainErrors> {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
 
-    // 32 MB guard for deep RTC/DTLS/SCTP poll paths.
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .thread_stack_size(32 * 1024 * 1024)
@@ -50,50 +47,74 @@ fn main() -> Result<(), MainErrors> {
 async fn async_main() -> Result<(), MainErrors> {
     log::info!("Starting relay server...");
 
-    // Prepare STUN server
-    let requested_stun_port = 3478;
-    let stun_sockets =
-        stun_server::BoundStunSockets::bind(requested_stun_port).map_err(|e| MainErrors::DiContainerError(e.to_string()))?;
-    let stun_port = stun_sockets.port;
-
-    // Prepare gRPC server
-    let connection = find_grpc_listener(Some(9101)).await.map_err(|e| MainErrors::DiContainerError(e.to_string()))?;
-    let relay_port = connection.port;
-    let grpc_gateway = GatewayChannel::new(config::get_gateway_grpc_url(), config::get_gateway_grpc_host());
-    let registration_url = resolve_registration_url(&grpc_gateway).await.map_err(MainErrors::ExecutionError)?;
+    let requested_turn_port = 19101;
     let public_addresses = discover_public_addresses()
         .await
         .map_err(MainErrors::ExecutionError)?
-        .retain_families(stun_sockets.has_ipv4, stun_sockets.has_ipv6);
-    register_relay_once(&registration_url, stun_port, relay_port, &public_addresses)
+        .retain_families(true, true);
+
+    let turn_external_addr = format!(
+        "{}:{}",
+        public_addresses.ipv4.map(|ip| ip.to_string()).unwrap_or_else(|| "0.0.0.0".to_string()),
+        requested_turn_port
+    ).parse().map_err(|e| MainErrors::DiContainerError(format!("invalid turn external address: {e}")))?;
+
+    let turn_config = Config {
+        server: TurnServerConfig {
+            interfaces: vec![Interface::Udp {
+                listen: format!("0.0.0.0:{}", requested_turn_port).parse().unwrap(),
+                external: turn_external_addr,
+                idle_timeout: 20,
+                mtu: 1500,
+            }],
+            ..Default::default()
+        },
+        auth: Auth {
+            static_credentials: Default::default(),
+            static_auth_secret: Some(env::var("TURN_AUTH_SECRET").unwrap_or_else(|_| "relay-secret".to_string())),
+            enable_hooks_auth: false,
+        },
+        ..Default::default()
+    };
+
+    let connection = find_grpc_listener(Some(9101)).await.map_err(|e| MainErrors::DiContainerError(e.to_string()))?;
+    let grpc_gateway = GatewayChannel::new(config::get_gateway_grpc_url(), config::get_gateway_grpc_host());
+    let registration_url = resolve_registration_url(&grpc_gateway).await.map_err(MainErrors::ExecutionError)?;
+
+    let turn_port = requested_turn_port;
+    register_relay_once(&registration_url, 3478, turn_port, &public_addresses)
         .await
         .map_err(MainErrors::ExecutionError)?;
-    let di = DiContainer::init(relay_proxy_ipv4(&public_addresses)).await;
 
     log::info!(
-        "Relay Server bound on [::]:{} and advertising public addresses {:?}",
-        relay_port,
-        public_addresses
+        "Relay Server advertising public addresses {:?}, STUN=3478, TURN={}",
+        public_addresses,
+        turn_port
     );
 
-    // Start registration loop
     tokio::spawn(async move {
         start_registration_loop(
-            stun_port,
-            relay_port,
+            3478,
+            turn_port,
             RegistrationState::new(registration_url, public_addresses)
         )
         .await;
     });
 
+    let di = DiContainer::init().await;
+
     let grpc_server = Server::builder()
         .add_service(InterceptorFor::new(
-            RelayServiceServer::new(RelayServiceImpl::new(di.proxy_manager.clone())),
+            RelayServiceServer::new(RelayServiceImpl::new()),
             di.get_auth_middleware()
         ))
         .serve_with_incoming(connection.listener);
 
-    let stun_server = stun_server::run_stun_server(stun_sockets);
+    let turn_handle = tokio::spawn(async move {
+        if let Err(e) = turn_server::start_server(turn_config).await {
+            log::error!("TURN server exited with error: {:?}", e);
+        }
+    });
 
     tokio::select! {
         res = grpc_server => {
@@ -103,12 +124,12 @@ async fn async_main() -> Result<(), MainErrors> {
             }
             log::info!("gRPC server stopped");
         },
-        res = stun_server => {
+        res = turn_handle => {
             if let Err(e) = res {
-                log::error!("STUN server exited with error: {:?}", e);
-                return Err(MainErrors::ExecutionError(e.to_string()));
+                log::error!("TURN server task panicked: {:?}", e);
+                return Err(MainErrors::ExecutionError(format!("TURN server panicked: {e:?}")));
             }
-            log::info!("STUN server stopped");
+            log::info!("TURN server stopped");
         }
     }
 
@@ -120,7 +141,7 @@ struct RegisterRelayRequest {
     stun_port: u16,
     relay_port: u16,
     public_ipv4: Option<String>,
-    public_ipv6: Option<String>
+    public_ipv6: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -131,17 +152,13 @@ struct RegistrationState {
 
 impl RegistrationState {
     fn new(registration_url: String, public_addresses: PublicAddresses) -> Self {
-        Self {
-            registration_url,
-            public_addresses
-        }
+        Self { registration_url, public_addresses }
     }
 
     fn update_registration_url(&mut self, next_url: String) -> Option<(String, String)> {
         if self.registration_url == next_url {
             return None;
         }
-
         let previous_url = std::mem::replace(&mut self.registration_url, next_url);
         Some((previous_url, self.registration_url.clone()))
     }
@@ -154,13 +171,6 @@ fn relay_auth_header() -> String {
     format!("Basic {}", b64_auth)
 }
 
-fn relay_proxy_ipv4(public_addresses: &PublicAddresses) -> Ipv4Addr {
-    public_addresses.ipv4.unwrap_or_else(|| {
-        log::warn!("No public IPv4 discovered for relay RTC candidate publication; falling back to 0.0.0.0");
-        Ipv4Addr::UNSPECIFIED
-    })
-}
-
 async fn register_relay_once(url: &str, stun_port: u16, relay_port: u16, public_addresses: &PublicAddresses) -> Result<(), String> {
     let client = reqwest::Client::builder()
         .no_proxy()
@@ -171,7 +181,7 @@ async fn register_relay_once(url: &str, stun_port: u16, relay_port: u16, public_
         stun_port,
         relay_port,
         public_ipv4: public_addresses.ipv4.map(|ip| ip.to_string()),
-        public_ipv6: public_addresses.ipv6.map(|ip| ip.to_string())
+        public_ipv6: public_addresses.ipv6.map(|ip| ip.to_string()),
     };
 
     let response = client
@@ -201,7 +211,6 @@ async fn start_registration_loop(stun_port: u16, relay_port: u16, mut state: Reg
                 if let Some((previous_url, next_url)) = state.update_registration_url(url.clone()) {
                     log::info!("Relay registration URL changed from {} to {}", previous_url, next_url);
                 }
-
                 url
             }
             Err(error) => {
@@ -234,29 +243,9 @@ async fn resolve_registration_url(grpc_gateway: &GatewayChannel) -> Result<Strin
 
 #[cfg(test)]
 mod tests {
-    use super::{relay_proxy_ipv4, RegistrationState};
+    use super::RegistrationState;
     use crate::public_ip::PublicAddresses;
     use std::net::{Ipv4Addr, Ipv6Addr};
-
-    #[test]
-    fn relay_proxy_ipv4_uses_discovered_ipv4() {
-        let ip = relay_proxy_ipv4(&PublicAddresses {
-            ipv4: Some(Ipv4Addr::new(203, 0, 113, 10)),
-            ipv6: Some(Ipv6Addr::LOCALHOST)
-        });
-
-        assert_eq!(ip, Ipv4Addr::new(203, 0, 113, 10));
-    }
-
-    #[test]
-    fn relay_proxy_ipv4_falls_back_to_unspecified() {
-        let ip = relay_proxy_ipv4(&PublicAddresses {
-            ipv4: None,
-            ipv6: Some(Ipv6Addr::LOCALHOST)
-        });
-
-        assert_eq!(ip, Ipv4Addr::UNSPECIFIED);
-    }
 
     #[test]
     fn registration_state_tracks_registration_url_changes() {

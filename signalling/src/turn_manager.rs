@@ -14,6 +14,7 @@ pub struct RegisteredRelay {
     pub relay_host: String,
     pub stun_port: u16,
     pub relay_port: u16,
+    pub turn_port: u16,
     pub last_ping: Instant,
     pub counter: Arc<AtomicUsize>
 }
@@ -69,14 +70,13 @@ impl TurnManager {
         manager
     }
 
-    pub async fn register_relay(&self, public_ipv4: Option<String>, public_ipv6: Option<String>, stun_port: u16, relay_port: u16) {
+    pub async fn register_relay(&self, public_ipv4: Option<String>, public_ipv6: Option<String>, stun_port: u16, relay_port: u16, turn_port: u16) {
         let mut relays = self.relays.lock().await;
         let relay_host = public_ipv4
             .clone()
             .or(public_ipv6.clone())
             .expect("relay registration requires at least one public IP");
 
-        // Use composite characteritics to find an existing relay instance
         let existing_id = relays
             .values()
             .find(|r| {
@@ -84,7 +84,8 @@ impl TurnManager {
                     r.public_ipv6 == public_ipv6 &&
                     r.relay_host == relay_host &&
                     r.stun_port == stun_port &&
-                    r.relay_port == relay_port
+                    r.relay_port == relay_port &&
+                    r.turn_port == turn_port
             })
             .map(|r| r.id.clone());
 
@@ -95,13 +96,14 @@ impl TurnManager {
         } else {
             let id = Uuid::new_v4().to_string();
             log::info!(
-                "New relay registered: public_ipv4={:?} public_ipv6={:?} host={} (ID: {}, STUN: {}, Relay: {})",
+                "New relay registered: public_ipv4={:?} public_ipv6={:?} host={} (ID: {}, STUN: {}, Relay: {}, TURN: {})",
                 public_ipv4,
                 public_ipv6,
                 relay_host,
                 id,
                 stun_port,
-                relay_port
+                relay_port,
+                turn_port
             );
             relays.insert(
                 id.clone(),
@@ -112,6 +114,7 @@ impl TurnManager {
                     relay_host,
                     stun_port,
                     relay_port,
+                    turn_port,
                     last_ping: Instant::now(),
                     counter: Arc::new(AtomicUsize::new(0))
                 }
@@ -167,6 +170,16 @@ impl TurnManager {
             urls.push(format!("stun:[{}]:{}", public_ipv6, final_relay.stun_port));
         }
 
+        if final_relay.turn_port > 0 {
+            if let Some(public_ipv4) = final_relay.public_ipv4.as_ref() {
+                urls.push(format!("turn:{}:{}", public_ipv4, final_relay.turn_port));
+            }
+
+            if let Some(public_ipv6) = final_relay.public_ipv6.as_ref() {
+                urls.push(format!("turn:[{}]:{}", public_ipv6, final_relay.turn_port));
+            }
+        }
+
         Some(IceConfig {
             urls,
             username: None,
@@ -183,7 +196,7 @@ mod tests {
     async fn assigned_relay_keeps_registered_relay_port() {
         let manager = TurnManager::new().await;
         manager
-            .register_relay(Some("198.51.100.10".to_string()), Some("2001:db8::10".to_string()), 3478, 19101)
+            .register_relay(Some("198.51.100.10".to_string()), Some("2001:db8::10".to_string()), 3478, 19101, 19101)
             .await;
 
         let relay = manager.get_assigned_relay("client-1").await.unwrap();
@@ -199,7 +212,7 @@ mod tests {
     async fn relay_config_publishes_dual_stack_urls() {
         let manager = TurnManager::new().await;
         manager
-            .register_relay(Some("198.51.100.10".to_string()), Some("2001:db8::10".to_string()), 3478, 19101)
+            .register_relay(Some("198.51.100.10".to_string()), Some("2001:db8::10".to_string()), 3478, 19101, 19101)
             .await;
 
         let relay = manager.get_relay_config("client-1").await.unwrap();
