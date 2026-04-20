@@ -27,14 +27,14 @@ const MAX_UPLOAD_SPEED_BYTES_PER_SEC: u64 = 5 * 1024 * 1024;
 
 pub struct NetStreamImpl {
     pub resource_repo: Arc<dyn LocalResourceRepository>,
-    pub server: &'static CloudServer<Client>
+    pub server: &'static CloudServer<Client>,
 }
 
 pub struct NetStreamInnerBlobImpl {
     upload: Upload,
     path: LocalResourcePath,
     server: &'static CloudServer<Client>,
-    handle: Option<JoinHandle<Result<()>>>
+    handle: Option<JoinHandle<Result<()>>>,
 }
 
 pub struct NetStreamInnerChunkStreamImpl {
@@ -42,7 +42,7 @@ pub struct NetStreamInnerChunkStreamImpl {
     path: LocalResourcePath,
     server: &'static CloudServer<Client>,
     resource_repo: Arc<dyn LocalResourceRepository>,
-    handle: Option<JoinHandle<()>>
+    handle: Option<JoinHandle<()>>,
 }
 
 #[async_trait::async_trait(?Send)]
@@ -57,14 +57,14 @@ impl NetStream for NetStreamImpl {
                 server: self.server,
                 upload,
                 path,
-                handle: None
+                handle: None,
             }))
         } else {
             Ok(Box::new(NetStreamInnerBlobImpl {
                 server: self.server,
                 upload,
                 path,
-                handle: None
+                handle: None,
             }))
         }
     }
@@ -94,7 +94,7 @@ impl NetStreamInner for NetStreamInnerBlobImpl {
 
             let event = match result {
                 Ok(completion) => NetStreamEvent::Completed(completion),
-                Err(e) => NetStreamEvent::Error(anyhow!("Upload failed: {:?}", e))
+                Err(e) => NetStreamEvent::Error(anyhow!("Upload failed: {:?}", e)),
             };
 
             let _ = tx.send(event).await;
@@ -132,7 +132,7 @@ impl NetStreamInner for NetStreamInnerChunkStreamImpl {
 
             let event = match result {
                 Ok(completion) => NetStreamEvent::Completed(Some(completion)),
-                Err(e) => NetStreamEvent::Error(anyhow!("Upload failed: {:?}", e))
+                Err(e) => NetStreamEvent::Error(anyhow!("Upload failed: {:?}", e)),
             };
 
             let _ = tx.try_send(event);
@@ -157,13 +157,13 @@ async fn get_blob_from_path(path: &LocalResourcePath) -> Option<Blob> {
     let resp = OPFS_WORKER
         .send(WorkerMessage::new(OpfsOperation {
             file_path: opfs_path,
-            operation: FileOperation::Blob
+            operation: FileOperation::Blob,
         }))
         .await?;
 
     match resp.message {
         OpfsOperationOutput::Blob(blob) => Some(blob),
-        _ => None
+        _ => None,
     }
 }
 
@@ -176,11 +176,11 @@ async fn upload_multipart_blob(
     mut request: MultiPartUpload,
     blob: Blob,
     tx: &mut mpsc::Sender<NetStreamEvent>,
-    server: &'static CloudServer<Client>
+    server: &'static CloudServer<Client>,
 ) -> Result<MultiPartUploadComplete> {
     let mut completion = MultiPartUploadComplete {
         e_tags: vec![],
-        context_token: request.context_token.clone()
+        context_token: request.context_token.clone(),
     };
 
     let mut uploaded = 0u64;
@@ -222,12 +222,12 @@ async fn upload_multipart_stream(
     mut request: MultiPartUpload,
     cursor: &mut Box<dyn IOCursor>,
     server: &'static CloudServer<Client>,
-    tx: &mut mpsc::Sender<NetStreamEvent>
+    tx: &mut mpsc::Sender<NetStreamEvent>,
 ) -> Result<MultiPartUploadComplete> {
     let mut uploaded = 0u64;
     let mut completion = MultiPartUploadComplete {
         e_tags: vec![],
-        context_token: request.context_token.clone()
+        context_token: request.context_token.clone(),
     };
 
     let mut bytes = BytesMut::with_capacity(request.x_content_length as usize);

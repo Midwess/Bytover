@@ -17,12 +17,8 @@ use shared::app::operations::device::{DeviceOperation, GeoLocation};
 use shared::app::operations::dialog::{AlertDialog, DialogOperation, MessageReason};
 use shared::app::operations::p2p::{P2POperation, P2POperationOutput};
 use shared::app::operations::persistent::{
-    DeviceAliasPersistentOperation,
-    LocalResourcePersistentOperation,
-    PersistentOperation,
-    SessionPersistentOperation,
-    ShelfPersistentOperation,
-    TransferSessionPersistentOperation
+    DeviceAliasPersistentOperation, LocalResourcePersistentOperation, PersistentOperation, SessionPersistentOperation,
+    ShelfPersistentOperation, TransferSessionPersistentOperation,
 };
 use shared::app::operations::rpc::{RpcOperation, RpcOperationOutput};
 use shared::app::operations::transfer::{TransferOperation, TransferOperationOutput};

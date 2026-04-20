@@ -38,7 +38,7 @@ pub enum TransferErrors {
     #[error("Failed to generate alias {}", .0)]
     MarkovError(#[from] MarkovErrors),
     #[error("Application service error {0}")]
-    ApplicationServiceError(#[from] AppInfoErrors)
+    ApplicationServiceError(#[from] AppInfoErrors),
 }
 
 pub struct TransferResourceRequest {
@@ -47,7 +47,7 @@ pub struct TransferResourceRequest {
     pub order_id: Option<u64>,
     pub name: String,
     pub r#type: TransferResourceType,
-    pub size: u64
+    pub size: u64,
 }
 
 pub struct TransferResourcesResponse {
@@ -55,7 +55,7 @@ pub struct TransferResourcesResponse {
     pub first_resource: TransferResource,
     pub first_resource_upload_request: Upload,
     pub thumbnail_upload_urls: Vec<(u64, String)>,
-    pub thumbnails: Vec<(u64, StaticResource)>
+    pub thumbnails: Vec<(u64, StaticResource)>,
 }
 
 pub struct TransferService {
@@ -63,7 +63,7 @@ pub struct TransferService {
     pub cloud_storage: Box<dyn CloudStorage>,
     pub app_service: Box<dyn AppInfoService>,
     pub markov_generator: Box<dyn Markov>,
-    pub email_service: Box<dyn EmailService>
+    pub email_service: Box<dyn EmailService>,
 }
 
 impl TransferService {
@@ -71,13 +71,13 @@ impl TransferService {
         &self,
         user: &User,
         password: Option<String>,
-        to_emails: Vec<String>
+        to_emails: Vec<String>,
     ) -> Result<TransferSession, TransferErrors> {
         let user_id = user.id.id;
         let mut password = password.map(|it| it.trim().to_owned());
         if let Some(ref value) = password {
             if value.len() > 20 {
-                return Err(TransferErrors::PasswordLengthExceed(20))
+                return Err(TransferErrors::PasswordLengthExceed(20));
             }
 
             if value.is_empty() {
@@ -100,15 +100,15 @@ impl TransferService {
         device: &Device,
         session_id: u64,
         resource_id: u64,
-        status: &ClientUploadStatus
+        status: &ClientUploadStatus,
     ) -> Result<Option<(u64, Upload)>, TransferErrors> {
         let session_id = TransferSessionId {
             order_id: Some(session_id),
-            user_order_id: Some(user.order_id)
+            user_order_id: Some(user.order_id),
         };
 
         let Some(mut session) = self.transfer_repository.find_one(&session_id).await? else {
-            return Err(TransferErrors::SessionNotFound)
+            return Err(TransferErrors::SessionNotFound);
         };
 
         match status {
@@ -123,7 +123,7 @@ impl TransferService {
                 let platform = device.platform();
                 let gen_upload_request = async {
                     if let Some(next_resource) = next_resource {
-                        return self.cloud_storage.get_upload_solution(user, platform, next_resource).await.map(Some)
+                        return self.cloud_storage.get_upload_solution(user, platform, next_resource).await.map(Some);
                     }
 
                     Ok(None)
@@ -133,13 +133,13 @@ impl TransferService {
                     join!(gen_upload_request, self.cloud_storage.complete_upload(user, completion));
                 let current_resource_id = session.current_resource().map(|it| it.order_id()).unwrap_or(0);
                 let Some(current_progress) = session.current_resource_progress_mut() else {
-                    return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted)
+                    return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted);
                 };
                 if let Err(e) = complete_upload_result {
                     current_progress.cancel();
                     self.transfer_repository.update_one(session).await?;
                     log::info!("Failed to complete upload for completion {completion:?}: {e}");
-                    return Err(TransferErrors::CloudStorageError(e))
+                    return Err(TransferErrors::CloudStorageError(e));
                 }
 
                 let expected_id = current_resource_id;
@@ -149,7 +149,7 @@ impl TransferService {
                         session.order_id()
                     );
 
-                    return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted)
+                    return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted);
                 }
 
                 current_progress.commit(TransferProgressStatus::Success)?;
@@ -166,12 +166,12 @@ impl TransferService {
                         Err(TransferErrors::CloudStorageError(e))
                     }
                     Ok(None) => Ok(None),
-                    Ok(Some(next_upload_request)) => Ok(Some((next_resource_id.unwrap_or(0), next_upload_request)))
+                    Ok(Some(next_upload_request)) => Ok(Some((next_resource_id.unwrap_or(0), next_upload_request))),
                 }
             }
             ClientUploadStatus::Failed(error_message) => {
                 let Some(current_progress) = session.current_resource_progress_mut() else {
-                    return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted)
+                    return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted);
                 };
 
                 current_progress.commit(TransferProgressStatus::Failed(error_message.clone()))?;
@@ -187,19 +187,19 @@ impl TransferService {
         device: &Device,
         app: &Application,
         session_order_id: u64,
-        requests: Vec<TransferResourceRequest>
+        requests: Vec<TransferResourceRequest>,
     ) -> Result<TransferResourcesResponse, TransferErrors> {
         if requests.is_empty() {
-            return Err(TransferErrors::EmptyResources)
+            return Err(TransferErrors::EmptyResources);
         }
 
         let session_id = TransferSessionId {
             order_id: Some(session_order_id),
-            user_order_id: Some(user.order_id)
+            user_order_id: Some(user.order_id),
         };
 
         let Some(mut session) = self.transfer_repository.find_one(&session_id).await? else {
-            return Err(TransferErrors::SessionNotFound)
+            return Err(TransferErrors::SessionNotFound);
         };
 
         for request in requests.iter() {
@@ -212,7 +212,7 @@ impl TransferService {
 
         let Some(first_resource_id) = session.current_resource().map(|it| it.order_id()) else {
             log::warn!("The first resource must be defined, session id = {}", session.order_id());
-            return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted)
+            return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted);
         };
 
         let mut thumbnails = session.thumbnail_resources();
@@ -222,7 +222,7 @@ impl TransferService {
         }
 
         let Some(first_resource) = session.resources().iter().find(|it| it.order_id() == first_resource_id).cloned() else {
-            return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted)
+            return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted);
         };
 
         let platform = device.platform();
@@ -233,7 +233,7 @@ impl TransferService {
             .iter()
             .map(|it| MailFileResource {
                 name: it.name().to_string(),
-                size_in_bytes: it.size_in_bytes() as i32
+                size_in_bytes: it.size_in_bytes() as i32,
             })
             .collect::<Vec<_>>();
 
@@ -243,8 +243,8 @@ impl TransferService {
                 sender_display_name: Some(user.display_name.clone()),
                 download_url,
                 datetime: Datetime::now(),
-                files: resources
-            }))
+                files: resources,
+            })),
         };
 
         for to_email in session.to_emails() {
@@ -283,7 +283,7 @@ impl TransferService {
             first_resource,
             thumbnails,
             first_resource_upload_request,
-            thumbnail_upload_urls
+            thumbnail_upload_urls,
         };
 
         Ok(response)
@@ -292,11 +292,11 @@ impl TransferService {
     pub async fn cancel_transfer(&self, user_id: u64, session_order_id: u64) -> Result<(), TransferErrors> {
         let session_id = TransferSessionId {
             order_id: Some(session_order_id),
-            user_order_id: Some(user_id)
+            user_order_id: Some(user_id),
         };
 
         let Some(mut session) = self.transfer_repository.find_one(&session_id).await? else {
-            return Err(TransferErrors::SessionNotFound)
+            return Err(TransferErrors::SessionNotFound);
         };
 
         session.cancel();

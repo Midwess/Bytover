@@ -1,7 +1,7 @@
-use cacao::pasteboard::{Pasteboard, PasteboardName, PasteboardType};
 use cacao::foundation::{id, nil, NSData, NSString};
-use dispatch::Queue;
 use cacao::objc::{msg_send, sel, sel_impl};
+use cacao::pasteboard::{Pasteboard, PasteboardName, PasteboardType};
+use dispatch::Queue;
 use shared::app::shelf::module::ResourceSelection;
 use shared::entities::local_resource::LocalResourcePath;
 use tokio::fs;
@@ -37,9 +37,7 @@ pub async fn read_drag_pasteboard_selections() -> Result<Vec<ResourceSelection>,
             let filename = generate_filename("png");
             let file_path = get_dropped_content_path(&filename).await;
 
-            fs::write(&file_path, &data)
-                .await
-                .map_err(|e| format!("Failed to write image: {}", e))?;
+            fs::write(&file_path, &data).await.map_err(|e| format!("Failed to write image: {}", e))?;
 
             let path_str = file_path.to_string_lossy().to_string();
             Ok(vec![ResourceSelection {
@@ -68,9 +66,7 @@ pub async fn read_drag_pasteboard_selections() -> Result<Vec<ResourceSelection>,
             let filename = generate_filename("txt");
             let file_path = get_dropped_content_path(&filename).await;
 
-            fs::write(&file_path, &text)
-                .await
-                .map_err(|e| format!("Failed to write text: {}", e))?;
+            fs::write(&file_path, &text).await.map_err(|e| format!("Failed to write text: {}", e))?;
 
             let path_str = file_path.to_string_lossy().to_string();
             Ok(vec![ResourceSelection {
@@ -94,9 +90,7 @@ fn read_drag_content_on_main_thread() -> DragContent {
                 .iter()
                 .map(|url| url.absolute_string())
                 .filter(|s| s.starts_with("file://"))
-                .map(|s| {
-                    percent_decode(&s.replacen("file://", "", 1))
-                })
+                .map(|s| percent_decode(&s.replacen("file://", "", 1)))
                 .filter(|p| !p.is_empty())
                 .collect();
 
@@ -119,9 +113,7 @@ fn read_drag_content_on_main_thread() -> DragContent {
 
         if let Some(url) = read_string_for_type(&pb, PasteboardType::URL) {
             let trimmed = url.trim();
-            if !trimmed.is_empty()
-                && (trimmed.starts_with("http://") || trimmed.starts_with("https://"))
-            {
+            if !trimmed.is_empty() && (trimmed.starts_with("http://") || trimmed.starts_with("https://")) {
                 return DragContent::Url(trimmed.to_string());
             }
         }
@@ -173,10 +165,7 @@ fn percent_decode(s: &str) -> String {
     let mut i = 0;
     while i < bytes.len() {
         if bytes[i] == b'%' && i + 2 < bytes.len() {
-            if let Ok(byte) = u8::from_str_radix(
-                &s[i + 1..i + 3],
-                16,
-            ) {
+            if let Ok(byte) = u8::from_str_radix(&s[i + 1..i + 3], 16) {
                 result.push(byte as char);
                 i += 3;
                 continue;

@@ -9,7 +9,7 @@ pub struct P2PSession {
     pub alias: String,
     pub description: Option<String>,
     pub signalling_key: String,
-    pub signalling_route: String
+    pub signalling_route: String,
 }
 
 impl P2PSession {
@@ -19,7 +19,7 @@ impl P2PSession {
         alias: String,
         description: Option<String>,
         signalling_key: String,
-        signalling_route: String
+        signalling_route: String,
     ) -> Self {
         Self {
             session_id: gen_id().await,
@@ -28,7 +28,7 @@ impl P2PSession {
             alias,
             description,
             signalling_key,
-            signalling_route
+            signalling_route,
         }
     }
 
@@ -39,7 +39,7 @@ impl P2PSession {
         alias: String,
         description: Option<String>,
         signalling_key: String,
-        signalling_route: String
+        signalling_route: String,
     ) -> Self {
         Self {
             session_id,
@@ -48,7 +48,7 @@ impl P2PSession {
             alias,
             description,
             signalling_key,
-            signalling_route
+            signalling_route,
         }
     }
 

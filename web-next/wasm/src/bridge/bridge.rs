@@ -11,7 +11,7 @@ use std::time::Duration;
 
 pub struct CoreBridgeImpl {
     pub shell: Arc<ShellRuntime>,
-    pub throttle_shell_runtime: ThrottleShellRuntime
+    pub throttle_shell_runtime: ThrottleShellRuntime,
 }
 
 impl CoreBridgeImpl {
@@ -19,7 +19,7 @@ impl CoreBridgeImpl {
         let shell = Arc::new(ShellRuntime {});
         Self {
             throttle_shell_runtime: ThrottleShellRuntime::new(shell.clone(), Duration::from_millis(500)),
-            shell
+            shell,
         }
     }
 }
@@ -65,7 +65,7 @@ impl ShellRuntime {
 }
 
 pub struct ThrottleShellRuntime {
-    latest_event: Arc<Mutex<Option<(u32, CoreOperationOutput)>>>
+    latest_event: Arc<Mutex<Option<(u32, CoreOperationOutput)>>>,
 }
 
 impl ThrottleShellRuntime {

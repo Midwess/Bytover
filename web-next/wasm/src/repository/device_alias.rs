@@ -10,7 +10,7 @@ const DEVICE_ALIAS_STORE: &str = "device_alias";
 const ALIASES_KEY: &str = "aliases";
 
 pub struct DeviceAliasRepositoryImpl {
-    pub db: PoolRequest<NeverSend<Database>>
+    pub db: PoolRequest<NeverSend<Database>>,
 }
 
 impl DeviceAliasRepositoryImpl {
@@ -66,7 +66,7 @@ impl DeviceAliasRepository for DeviceAliasRepositoryImpl {
                     serde_wasm_bindgen::from_value(value).map_err(|e| PersistenceError::IOError(format!("{:?}", e)))?;
                 Ok(aliases)
             }
-            None => Ok(vec![])
+            None => Ok(vec![]),
         }
     }
 

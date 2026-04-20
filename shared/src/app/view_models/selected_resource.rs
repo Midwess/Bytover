@@ -17,7 +17,7 @@ pub struct SelectedResourceViewModel {
     pub thumbnail_path: Option<LocalResourcePath>,
     pub r#type: ResourceType,
     #[serde(default)]
-    pub received_by_peers: Vec<PeerAvatarViewModel>
+    pub received_by_peers: Vec<PeerAvatarViewModel>,
 }
 
 impl From<&LocalResource> for SelectedResourceViewModel {
@@ -40,7 +40,7 @@ impl From<&LocalResource> for SelectedResourceViewModel {
             path: resource.path.clone(),
             thumbnail_path: resource.thumbnail_path.clone(),
             r#type: resource.r#type.clone(),
-            received_by_peers: Vec::new()
+            received_by_peers: Vec::new(),
         };
 
         if view_model.size_gb < 0.1 {

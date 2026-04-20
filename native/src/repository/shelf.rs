@@ -13,7 +13,7 @@ use shared::repository::errors::PersistenceError;
 use shared::repository::shelf::{ShelfId, ShelfRepository};
 
 pub struct ShelfRepositoryImpl {
-    pub db: PoolRequest<Database>
+    pub db: PoolRequest<Database>,
 }
 
 impl RedbId for RedbIdWrapper<ShelfId> {
@@ -46,7 +46,7 @@ impl RedbRepository<Shelf, RedbIdWrapper<ShelfId>> for ShelfRepositoryImpl {
 impl Repository<Shelf, ShelfId> for ShelfRepositoryImpl {
     async fn create(&self, data: Shelf) -> Resolve<Shelf>
     where
-        Shelf: 'async_trait
+        Shelf: 'async_trait,
     {
         RedbRepository::<Shelf, RedbIdWrapper<ShelfId>>::create(self, data).await
     }
@@ -69,7 +69,7 @@ impl Repository<Shelf, ShelfId> for ShelfRepositoryImpl {
             self,
             from_id.map(|it| RedbIdWrapper(it.clone())).as_ref(),
             to_id.as_ref(),
-            count
+            count,
         )
         .await
     }

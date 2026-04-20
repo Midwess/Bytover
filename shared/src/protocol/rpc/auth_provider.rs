@@ -8,7 +8,7 @@ use crate::protocol::rpc::errors::RpcErrors;
 use crate::repository::auth_session::{AuthSessionId, AuthSessionRepository};
 
 pub struct AuthProvider {
-    pub session_repository: Box<dyn AuthSessionRepository>
+    pub session_repository: Box<dyn AuthSessionRepository>,
 }
 
 impl AuthProvider {
@@ -16,7 +16,7 @@ impl AuthProvider {
         let session = self
             .session_repository
             .find_one(&AuthSessionId {
-                r#type: SessionType::Access
+                r#type: SessionType::Access,
             })
             .await
             .map_err(|e| RpcErrors::AuthError(anyhow!("Failed to load authentication session {e:?}")))?;

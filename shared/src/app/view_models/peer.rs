@@ -13,7 +13,7 @@ pub struct PeerViewModel {
     pub device: DeviceInfo,
     pub transfer_progress: f64,
     pub display_upload_speed: Option<String>,
-    pub display_download_speed: Option<String>
+    pub display_download_speed: Option<String>,
 }
 
 impl From<&Peer> for PeerViewModel {
@@ -25,7 +25,7 @@ impl From<&Peer> for PeerViewModel {
             device: peer.device.clone(),
             transfer_progress: 0.0,
             display_upload_speed: None,
-            display_download_speed: None
+            display_download_speed: None,
         }
     }
 }

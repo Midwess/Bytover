@@ -7,7 +7,7 @@ pub enum AppInfoErrors {
     #[error("Connection error: {0}")]
     ConnectionError(#[from] tonic::transport::Error),
     #[error("Server error: {0}")]
-    TonicStatus(#[from] Status)
+    TonicStatus(#[from] Status),
 }
 
 #[async_trait::async_trait]

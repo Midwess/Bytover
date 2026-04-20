@@ -10,7 +10,7 @@ pub struct NativePersistentImpl {
     pub local_resource_repository: Box<dyn LocalResourceRepository>,
     pub transfer_session_repository: Box<dyn TransferSessionRepository>,
     pub shelf_repository: Box<dyn ShelfRepository>,
-    pub device_alias_repository: Box<dyn DeviceAliasRepository>
+    pub device_alias_repository: Box<dyn DeviceAliasRepository>,
 }
 
 #[async_trait::async_trait]

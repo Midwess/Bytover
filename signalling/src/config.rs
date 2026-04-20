@@ -3,19 +3,19 @@ const DEFAULT_REGION_CODE: &str = "local";
 #[derive(Debug, Clone)]
 pub struct SignallingConfig {
     pub region_code: String,
-    pub signalling_route: String
+    pub signalling_route: String,
 }
 
 impl SignallingConfig {
     pub fn from_env() -> Self {
         let region_code = resolve_region_code(
             env_trimmed("BYTOVER_REGION_CODE").as_deref(),
-            normalize_railway_region(env_trimmed("RAILWAY_REPLICA_REGION").as_deref()).as_deref()
+            normalize_railway_region(env_trimmed("RAILWAY_REPLICA_REGION").as_deref()).as_deref(),
         );
 
         Self {
             signalling_route: format!("rpc-signalling-{region_code}"),
-            region_code
+            region_code,
         }
     }
 
@@ -41,7 +41,7 @@ fn env_trimmed(key: &str) -> Option<String> {
 fn resolve_region_code(bytover_region_code: Option<&str>, railway_replica_region: Option<&str>) -> String {
     [
         bytover_region_code,
-        railway_replica_region
+        railway_replica_region,
     ]
     .into_iter()
     .flatten()

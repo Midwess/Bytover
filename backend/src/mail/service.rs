@@ -7,7 +7,7 @@ pub enum EmailServiceErrors {
     #[error("Template rendering error: {0}")]
     TemplateError(String),
     #[error("Invalid user email: {0}")]
-    InvalidUserEmail(String)
+    InvalidUserEmail(String),
 }
 
 #[async_trait::async_trait]

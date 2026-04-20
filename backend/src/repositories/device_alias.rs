@@ -6,7 +6,7 @@ use core_services::db::repository::abstraction::table::Table;
 
 #[derive(Clone, Default)]
 pub struct DeviceAliasId {
-    pub alias: Option<String>
+    pub alias: Option<String>,
 }
 
 impl Table<DeviceAliasId> for DeviceAlias {
@@ -16,7 +16,7 @@ impl Table<DeviceAliasId> for DeviceAlias {
 
     fn id(&self) -> DeviceAliasId {
         DeviceAliasId {
-            alias: Some(self.alias().to_string())
+            alias: Some(self.alias().to_string()),
         }
     }
 }

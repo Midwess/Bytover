@@ -24,7 +24,7 @@ use std::sync::Arc;
 
 pub struct LocalResourceRepositoryImpl {
     pub db: PoolRequest<Database>,
-    pub path_resolver: Arc<dyn PathResolver>
+    pub path_resolver: Arc<dyn PathResolver>,
 }
 
 impl RedbId for RedbIdWrapper<LocalResourceId> {
@@ -58,7 +58,7 @@ impl RedbRepository<LocalResource, RedbIdWrapper<LocalResourceId>> for LocalReso
 impl Repository<LocalResource, LocalResourceId> for LocalResourceRepositoryImpl {
     async fn create(&self, data: LocalResource) -> Resolve<LocalResource>
     where
-        LocalResource: 'async_trait
+        LocalResource: 'async_trait,
     {
         RedbRepository::<LocalResource, RedbIdWrapper<LocalResourceId>>::create(self, data).await
     }
@@ -79,14 +79,14 @@ impl Repository<LocalResource, LocalResourceId> for LocalResourceRepositoryImpl 
         &self,
         from_id: Option<&LocalResourceId>,
         to_id: Option<&LocalResourceId>,
-        count: Option<usize>
+        count: Option<usize>,
     ) -> Resolve<Vec<LocalResource>> {
         let to_id = to_id.map(|it| RedbIdWrapper(it.clone()));
         RedbRepository::<LocalResource, RedbIdWrapper<LocalResourceId>>::find_all(
             self,
             from_id.map(|it| RedbIdWrapper(it.clone())).as_ref(),
             to_id.as_ref(),
-            count
+            count,
         )
         .await
     }
@@ -108,15 +108,15 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
                 path,
                 thumbnail_path: None,
                 r#type: ResourceType::Folder,
-                shelf_id: 0
+                shelf_id: 0,
             };
 
-            return Ok(Some(resource))
+            return Ok(Some(resource));
         } else if path_buf.is_symlink() {
             log::warn!("Symlink is not supported: {absolute_path:?}");
-            return Ok(None)
+            return Ok(None);
         } else if !path_buf.exists() {
-            return Ok(None)
+            return Ok(None);
         }
 
         let file = FileEntry::existing(absolute_path)
@@ -130,7 +130,7 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
             path,
             thumbnail_path: None,
             r#type: resource_type,
-            shelf_id: 0
+            shelf_id: 0,
         };
 
         Ok(Some(resource))
@@ -170,11 +170,11 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
             &RedbIdWrapper(LocalResourceId {
                 order_id: Some(resource_id),
                 ..Default::default()
-            })
+            }),
         )
         .await?
         else {
-            return Err(PersistenceError::NotFound(format!("Resource {resource_id}")))
+            return Err(PersistenceError::NotFound(format!("Resource {resource_id}")));
         };
 
         let path = self.path_resolver.get_thumbnail_file_path(resource_id).await;
@@ -213,7 +213,7 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         &self,
         path: LocalResourcePath,
         buffer_size: usize,
-        compressed: bool
+        compressed: bool,
     ) -> Result<Box<dyn CIOCursor>, PersistenceError> {
         let absolute_path = self.path_resolver.get_absolute_path(path).await;
         let path = PathBuf::from(absolute_path);
@@ -244,7 +244,7 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
     async fn generate_thumbnail_paths(
         &self,
         _: Option<u64>,
-        resource_ids: Vec<u64>
+        resource_ids: Vec<u64>,
     ) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError> {
         let mut result = HashMap::new();
         for resource_id in resource_ids.iter() {
@@ -279,7 +279,7 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         let from_id = LocalResourceId {
             path: Some(path),
             order_id: None,
-            shelf_id: Some(shelf_id)
+            shelf_id: Some(shelf_id),
         };
 
         let items =

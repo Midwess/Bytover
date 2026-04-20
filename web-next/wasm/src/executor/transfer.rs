@@ -9,7 +9,7 @@ pub struct TransferNativeImpl {
     pub web_rtc: Arc<WebRtc>,
     pub cloud_service: CloudService<Client>,
     pub cloud_server: &'static CloudServer<Client>,
-    pub auth_server: AppServer<Client>
+    pub auth_server: AppServer<Client>,
 }
 
 #[async_trait::async_trait(?Send)]

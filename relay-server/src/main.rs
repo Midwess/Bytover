@@ -5,9 +5,9 @@ mod public_ip;
 use base64::Engine;
 use serde::Serialize;
 use std::collections::HashMap;
+use std::net::SocketAddr;
 use std::time::Duration;
 
-use devlog_sdk::tcp::listener::find_grpc_listener;
 use schema::devlog::bitbridge::p2p_orchestration_service_client::P2pOrchestrationServiceClient;
 use std::env;
 use tonic::Request;
@@ -19,7 +19,7 @@ use turn_server::config::{Auth, Config, Interface, Server as TurnServerConfig};
 #[derive(thiserror::Error, Debug)]
 enum MainErrors {
     #[error("Execution error {0}")]
-    ExecutionError(String)
+    ExecutionError(String),
 }
 
 fn main() -> Result<(), MainErrors> {
@@ -36,17 +36,10 @@ fn main() -> Result<(), MainErrors> {
 async fn async_main() -> Result<(), MainErrors> {
     log::info!("Starting relay server...");
 
-    let requested_turn_port = 19101;
-    let public_addresses = discover_public_addresses()
-        .await
-        .map_err(MainErrors::ExecutionError)?
-        .retain_families(true, true);
+    let turn_port = 19101;
+    let public_addresses = discover_public_addresses().await.map_err(MainErrors::ExecutionError)?.retain_families(true, true);
 
-    let turn_external_addr = format!(
-        "{}:{}",
-        public_addresses.ipv4.map(|ip| ip.to_string()).unwrap_or_else(|| "0.0.0.0".to_string()),
-        requested_turn_port
-    ).parse().map_err(|e| MainErrors::ExecutionError(format!("invalid turn external address: {e}")))?;
+    let turn_external_addr = turn_external_addr(&public_addresses, turn_port).map_err(MainErrors::ExecutionError)?;
 
     let turn_username = env::var("TURN_USERNAME").unwrap_or_else(|_| "relay".to_string());
     let turn_password = env::var("TURN_PASSWORD").unwrap_or_else(|_| "relay-secret".to_string());
@@ -54,7 +47,7 @@ async fn async_main() -> Result<(), MainErrors> {
     let turn_config = Config {
         server: TurnServerConfig {
             interfaces: vec![Interface::Udp {
-                listen: format!("0.0.0.0:{}", requested_turn_port).parse().unwrap(),
+                listen: format!("[::]:{}", turn_port).parse().unwrap(),
                 external: turn_external_addr,
                 idle_timeout: 20,
                 mtu: 1500,
@@ -75,34 +68,22 @@ async fn async_main() -> Result<(), MainErrors> {
         ..Default::default()
     };
 
-    let grpc_gateway = GatewayChannel::new(config::get_gateway_grpc_url(), config::get_gateway_grpc_host());
-    let registration_url = resolve_registration_url(&grpc_gateway).await.map_err(MainErrors::ExecutionError)?;
-
-    let turn_port = requested_turn_port;
-    register_relay_once(&registration_url, 3478, turn_port, turn_port, &turn_username, &turn_password, &public_addresses)
-        .await
-        .map_err(MainErrors::ExecutionError)?;
-
     log::info!(
-        "Relay Server advertising public addresses {:?}, STUN=3478, TURN={}",
+        "Relay Server serving public addresses {:?}, STUN/TURN={}",
         public_addresses,
         turn_port
     );
 
-    tokio::spawn(async move {
-        start_registration_loop(
-            3478,
-            turn_port,
-            turn_port,
-            RegistrationState::new(registration_url, public_addresses, turn_username, turn_password)
-        )
-        .await;
-    });
+    let registration_state = RegistrationState::new(public_addresses, turn_username.clone(), turn_password.clone());
 
     let turn_handle = tokio::spawn(async move {
         if let Err(e) = turn_server::start_server(turn_config).await {
             log::error!("TURN server exited with error: {:?}", e);
         }
+    });
+
+    tokio::spawn(async move {
+        start_registration_loop(turn_port, turn_port, turn_port, registration_state).await;
     });
 
     tokio::select! {
@@ -118,6 +99,14 @@ async fn async_main() -> Result<(), MainErrors> {
     Ok(())
 }
 
+fn turn_external_addr(public_addresses: &PublicAddresses, port: u16) -> Result<SocketAddr, String> {
+    match (public_addresses.ipv4, public_addresses.ipv6) {
+        (Some(ipv4), _) => Ok(SocketAddr::new(ipv4.into(), port)),
+        (None, Some(ipv6)) => Ok(SocketAddr::new(ipv6.into(), port)),
+        (None, None) => Err("relay registration requires at least one public IP address".to_string()),
+    }
+}
+
 #[derive(Serialize)]
 struct RegisterRelayRequest {
     stun_port: u16,
@@ -131,23 +120,31 @@ struct RegisterRelayRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct RegistrationState {
-    registration_url: String,
+    registration_url: Option<String>,
     public_addresses: PublicAddresses,
     turn_username: String,
-    turn_password: String
+    turn_password: String,
 }
 
 impl RegistrationState {
-    fn new(registration_url: String, public_addresses: PublicAddresses, turn_username: String, turn_password: String) -> Self {
-        Self { registration_url, public_addresses, turn_username, turn_password }
+    fn new(public_addresses: PublicAddresses, turn_username: String, turn_password: String) -> Self {
+        Self {
+            registration_url: None,
+            public_addresses,
+            turn_username,
+            turn_password,
+        }
     }
 
-    fn update_registration_url(&mut self, next_url: String) -> Option<(String, String)> {
-        if self.registration_url == next_url {
+    fn update_registration_url(&mut self, next_url: String) -> Option<(Option<String>, String)> {
+        if self.registration_url.as_deref() == Some(next_url.as_str()) {
             return None;
         }
-        let previous_url = std::mem::replace(&mut self.registration_url, next_url);
-        Some((previous_url, self.registration_url.clone()))
+        let previous_url = self.registration_url.replace(next_url);
+        Some((
+            previous_url,
+            self.registration_url.clone().expect("registration url was just set"),
+        ))
     }
 }
 
@@ -158,7 +155,15 @@ fn relay_auth_header() -> String {
     format!("Basic {}", b64_auth)
 }
 
-async fn register_relay_once(url: &str, stun_port: u16, relay_port: u16, turn_port: u16, turn_username: &str, turn_password: &str, public_addresses: &PublicAddresses) -> Result<(), String> {
+async fn register_relay_once(
+    url: &str,
+    stun_port: u16,
+    relay_port: u16,
+    turn_port: u16,
+    turn_username: &str,
+    turn_password: &str,
+    public_addresses: &PublicAddresses,
+) -> Result<(), String> {
     let client = reqwest::Client::builder()
         .no_proxy()
         .build()
@@ -199,9 +204,13 @@ async fn start_registration_loop(stun_port: u16, relay_port: u16, turn_port: u16
         let url = match resolve_registration_url(&grpc_gateway).await {
             Ok(url) => {
                 if let Some((previous_url, next_url)) = state.update_registration_url(url.clone()) {
-                    log::info!("Relay registration URL changed from {} to {}", previous_url, next_url);
+                    if let Some(previous_url) = previous_url {
+                        log::info!("Relay registration URL changed from {} to {}", previous_url, next_url);
+                    } else {
+                        log::info!("Relay registration URL resolved to {}", next_url);
+                    }
                 }
-                url
+                Some(url)
             }
             Err(error) => {
                 log::error!("Failed to resolve relay registration URL: {}", error);
@@ -209,7 +218,21 @@ async fn start_registration_loop(stun_port: u16, relay_port: u16, turn_port: u16
             }
         };
 
-        match register_relay_once(&url, stun_port, relay_port, turn_port, &state.turn_username, &state.turn_password, &state.public_addresses).await {
+        let Some(url) = url else {
+            continue;
+        };
+
+        match register_relay_once(
+            &url,
+            stun_port,
+            relay_port,
+            turn_port,
+            &state.turn_username,
+            &state.turn_password,
+            &state.public_addresses,
+        )
+        .await
+        {
             Ok(()) => {}
             Err(error) => {
                 log::error!("Failed to register relay heartbeat: {}", error);
@@ -233,28 +256,46 @@ async fn resolve_registration_url(grpc_gateway: &GatewayChannel) -> Result<Strin
 
 #[cfg(test)]
 mod tests {
-    use super::RegistrationState;
+    use super::{turn_external_addr, RegistrationState};
     use crate::public_ip::PublicAddresses;
-    use std::net::{Ipv4Addr, Ipv6Addr};
+    use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
+
+    #[test]
+    fn registration_state_tracks_initial_resolution() {
+        let mut state = RegistrationState::new(
+            PublicAddresses {
+                ipv4: Some(Ipv4Addr::new(203, 0, 113, 10)),
+                ipv6: Some(Ipv6Addr::LOCALHOST),
+            },
+            "user".to_string(),
+            "pass".to_string(),
+        );
+
+        let changed = state.update_registration_url("https://gateway.example/rpc-signalling-local/register-relay".to_string());
+
+        assert_eq!(
+            changed,
+            Some((None, "https://gateway.example/rpc-signalling-local/register-relay".to_string()))
+        );
+    }
 
     #[test]
     fn registration_state_tracks_registration_url_changes() {
         let mut state = RegistrationState::new(
-            "https://gateway.example/rpc-signalling-local/register-relay".to_string(),
             PublicAddresses {
                 ipv4: Some(Ipv4Addr::new(203, 0, 113, 10)),
-                ipv6: Some(Ipv6Addr::LOCALHOST)
+                ipv6: Some(Ipv6Addr::LOCALHOST),
             },
             "user".to_string(),
-            "pass".to_string()
+            "pass".to_string(),
         );
 
-        let changed = state.update_registration_url("https://gateway.example/rpc-signalling-europe/register-relay".to_string());
+        state.update_registration_url("https://gateway.example/rpc-signalling-local/register-relay".to_string());
 
         assert_eq!(
-            changed,
+            state.update_registration_url("https://gateway.example/rpc-signalling-europe/register-relay".to_string()),
             Some((
-                "https://gateway.example/rpc-signalling-local/register-relay".to_string(),
+                Some("https://gateway.example/rpc-signalling-local/register-relay".to_string()),
                 "https://gateway.example/rpc-signalling-europe/register-relay".to_string()
             ))
         );
@@ -263,18 +304,47 @@ mod tests {
     #[test]
     fn registration_state_ignores_unchanged_values() {
         let mut state = RegistrationState::new(
-            "https://gateway.example/rpc-signalling-local/register-relay".to_string(),
             PublicAddresses {
                 ipv4: Some(Ipv4Addr::new(203, 0, 113, 10)),
-                ipv6: Some(Ipv6Addr::LOCALHOST)
+                ipv6: Some(Ipv6Addr::LOCALHOST),
             },
             "user".to_string(),
-            "pass".to_string()
+            "pass".to_string(),
         );
+
+        state.update_registration_url("https://gateway.example/rpc-signalling-local/register-relay".to_string());
 
         assert_eq!(
             state.update_registration_url("https://gateway.example/rpc-signalling-local/register-relay".to_string()),
             None
         );
+    }
+
+    #[test]
+    fn turn_external_addr_prefers_ipv4_when_available() {
+        let addr = turn_external_addr(
+            &PublicAddresses {
+                ipv4: Some(Ipv4Addr::new(203, 0, 113, 10)),
+                ipv6: Some(Ipv6Addr::LOCALHOST),
+            },
+            19101,
+        )
+        .unwrap();
+
+        assert_eq!(addr, SocketAddr::new(Ipv4Addr::new(203, 0, 113, 10).into(), 19101));
+    }
+
+    #[test]
+    fn turn_external_addr_falls_back_to_ipv6() {
+        let addr = turn_external_addr(
+            &PublicAddresses {
+                ipv4: None,
+                ipv6: Some(Ipv6Addr::LOCALHOST),
+            },
+            19101,
+        )
+        .unwrap();
+
+        assert_eq!(addr, SocketAddr::new(Ipv6Addr::LOCALHOST.into(), 19101));
     }
 }

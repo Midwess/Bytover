@@ -22,7 +22,7 @@ use web_sys::{Blob, File};
 pub fn wasm_file(file: File) -> WebFile {
     WebFile {
         webkit_path: file.webkit_path(),
-        file
+        file,
     }
 }
 
@@ -30,7 +30,7 @@ pub fn wasm_file(file: File) -> WebFile {
 pub struct WebFile {
     #[serde(with = "serde_wasm_bindgen::preserve")]
     pub file: File,
-    pub webkit_path: Option<String>
+    pub webkit_path: Option<String>,
 }
 
 impl Debug for WebFile {
@@ -69,7 +69,7 @@ impl Deref for WebFile {
 pub struct DeviceFolder {
     pub(crate) files: Arc<Vec<WebFile>>,
     pub(crate) base_path: String,
-    pub(crate) resource_instance: LocalResource
+    pub(crate) resource_instance: LocalResource,
 }
 
 impl DeviceFolder {
@@ -86,13 +86,13 @@ impl DeviceFolder {
             path: local_resource_path,
             thumbnail_path: None,
             r#type: ResourceType::Folder,
-            shelf_id: 0
+            shelf_id: 0,
         };
 
         Self {
             files: Arc::new(files),
             base_path: path.to_str().unwrap().to_string(),
-            resource_instance
+            resource_instance,
         }
     }
 
@@ -109,11 +109,11 @@ impl DeviceFolder {
             is_dir: false,
             modified_at: Utc::now().into(),
             size: self.resource_instance.size,
-            path: self.base_path.clone().into()
+            path: self.base_path.clone().into(),
         };
 
         Ok(Box::new(
-            ZipStream::new_from_stream(Box::pin(stream), entry, buffer_size).await?
+            ZipStream::new_from_stream(Box::pin(stream), entry, buffer_size).await?,
         ))
     }
 }
@@ -126,7 +126,7 @@ pub struct DeviceFile {
     pub(crate) resource: Uint8Array,
 
     #[serde(skip)]
-    pub(crate) resource_instance: OnceCell<LocalResource>
+    pub(crate) resource_instance: OnceCell<LocalResource>,
 }
 
 impl DeviceFile {
@@ -148,7 +148,7 @@ impl DeviceFile {
             thumbnail_path: None,
             r#type: resource_type,
             order_id,
-            shelf_id: 0
+            shelf_id: 0,
         };
 
         let resource = serialize(&resource_instance);
@@ -158,7 +158,7 @@ impl DeviceFile {
         Self {
             file: wasm_file(file),
             resource_instance: resource_cell,
-            resource
+            resource,
         }
     }
 

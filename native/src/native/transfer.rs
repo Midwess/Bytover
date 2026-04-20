@@ -7,7 +7,7 @@ use tonic::transport::Channel;
 
 pub struct TransferNativeImpl {
     pub web_rtc: Arc<WebRtc>,
-    pub cloud_service: CloudService<Channel>
+    pub cloud_service: CloudService<Channel>,
 }
 
 #[async_trait::async_trait]

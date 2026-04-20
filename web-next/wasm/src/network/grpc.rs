@@ -4,7 +4,7 @@ use tonic_web_wasm_client::Client;
 
 #[derive(Clone)]
 pub struct RpcNetworkModuleImpl {
-    pub endpoint: String
+    pub endpoint: String,
 }
 
 impl RpcNetworkModuleImpl {

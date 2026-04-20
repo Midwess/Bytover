@@ -8,17 +8,8 @@ use wasm_bindgen::closure::Closure;
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
-    Event,
-    MessageEvent,
-    RtcConfiguration,
-    RtcDataChannel,
-    RtcDataChannelInit,
-    RtcDataChannelType,
-    RtcIceServer,
-    RtcIceTransportPolicy,
-    RtcPeerConnection,
-    RtcSdpType,
-    RtcSessionDescriptionInit
+    Event, MessageEvent, RtcConfiguration, RtcDataChannel, RtcDataChannelInit, RtcDataChannelType, RtcIceServer,
+    RtcIceTransportPolicy, RtcPeerConnection, RtcSdpType, RtcSessionDescriptionInit,
 };
 
 pub struct RtcConnectionWrapper(pub(crate) RtcPeerConnection);
@@ -77,7 +68,7 @@ impl Drop for RtcDataChannelWrapper {
 pub struct ChannelConfig {
     pub ordered: bool,
     pub max_retransmits: Option<u16>,
-    pub buffer_low_threshold: Option<usize>
+    pub buffer_low_threshold: Option<usize>,
 }
 
 impl Default for ChannelConfig {
@@ -85,7 +76,7 @@ impl Default for ChannelConfig {
         Self {
             ordered: true,
             max_retransmits: None,
-            buffer_low_threshold: Some(16 * 1024)
+            buffer_low_threshold: Some(16 * 1024),
         }
     }
 }
@@ -97,7 +88,7 @@ pub mod channel_ids {
 }
 
 pub struct WebRtcApi {
-    config: schema::devlog::rpc_signalling::server::IceConfig
+    config: schema::devlog::rpc_signalling::server::IceConfig,
 }
 
 impl WebRtcApi {
@@ -134,7 +125,7 @@ impl WebRtcApi {
     pub fn create_reliable_channel(
         &self,
         connection: Arc<RtcConnectionWrapper>,
-        channel_id: u16
+        channel_id: u16,
     ) -> Result<Arc<RtcDataChannelWrapper>, WebError> {
         let config = RtcDataChannelInit::new();
         config.set_ordered(true);
@@ -148,7 +139,7 @@ impl WebRtcApi {
     pub fn create_unreliable_channel(
         &self,
         connection: Arc<RtcConnectionWrapper>,
-        channel_id: u16
+        channel_id: u16,
     ) -> Result<Arc<RtcDataChannelWrapper>, WebError> {
         let config = RtcDataChannelInit::new();
         config.set_ordered(false);
@@ -163,7 +154,7 @@ impl WebRtcApi {
     pub fn create_unordered_channel(
         &self,
         connection: Arc<RtcConnectionWrapper>,
-        channel_id: u16
+        channel_id: u16,
     ) -> Result<Arc<RtcDataChannelWrapper>, WebError> {
         let config = RtcDataChannelInit::new();
         config.set_ordered(false);
@@ -177,7 +168,7 @@ impl WebRtcApi {
     pub fn create_ordered_channel(
         &self,
         connection: Arc<RtcConnectionWrapper>,
-        channel_id: u16
+        channel_id: u16,
     ) -> Result<Arc<RtcDataChannelWrapper>, WebError> {
         let config = RtcDataChannelInit::new();
         config.set_ordered(true);
@@ -191,7 +182,7 @@ impl WebRtcApi {
     pub fn setup_channel_handlers(
         &self,
         channel: Arc<RtcDataChannelWrapper>,
-        inbound_tx: mpsc::UnboundedSender<Vec<u8>>
+        inbound_tx: mpsc::UnboundedSender<Vec<u8>>,
     ) -> Result<(), WebError> {
         let onmessage = {
             let inbound_tx = inbound_tx.clone();
@@ -286,5 +277,5 @@ pub enum WebError {
     Connection(String),
 
     #[error("SDP error: {0}")]
-    Sdp(String)
+    Sdp(String),
 }

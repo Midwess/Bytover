@@ -13,14 +13,14 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct DirectMessageChannel {
     response_streams: Arc<Mutex<HashMap<String, mpsc::Sender<Response>>>>,
-    outbound_sender: mpsc::Sender<Vec<u8>>
+    outbound_sender: mpsc::Sender<Vec<u8>>,
 }
 
 impl DirectMessageChannel {
     pub fn new(outbound_sender: mpsc::Sender<Vec<u8>>) -> Self {
         DirectMessageChannel {
             response_streams: Arc::new(Mutex::new(HashMap::new())),
-            outbound_sender
+            outbound_sender,
         }
     }
 

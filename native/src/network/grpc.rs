@@ -11,7 +11,7 @@ use tonic::transport::{Channel, ClientTlsConfig};
 pub struct RpcNetworkModuleImpl {
     channel: Arc<Mutex<Option<Channel>>>,
     endpoint: String,
-    domain: String
+    domain: String,
 }
 
 impl RpcNetworkModuleImpl {
@@ -19,7 +19,7 @@ impl RpcNetworkModuleImpl {
         Self {
             channel: Default::default(),
             endpoint,
-            domain
+            domain,
         }
     }
 
@@ -52,7 +52,7 @@ impl RpcNetworkModuleImpl {
 impl RpcNetworkModule<Channel> for RpcNetworkModuleImpl {
     async fn connect(&self) -> Result<Channel, RpcErrors> {
         if self.is_connected().await {
-            return Ok(self.channel.lock().await.clone().unwrap())
+            return Ok(self.channel.lock().await.clone().unwrap());
         }
 
         self.new_connection().await?;

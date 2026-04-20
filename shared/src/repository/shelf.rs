@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default, PartialEq)]
 pub struct ShelfId {
-    pub id: Option<u64>
+    pub id: Option<u64>,
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]

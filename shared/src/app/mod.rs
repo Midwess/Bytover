@@ -32,7 +32,7 @@ pub struct BitBridge {
     authentication: AuthenticationModule,
     transfer: TransferModule,
     p2p: P2PModule,
-    shelf: ShelfModule
+    shelf: ShelfModule,
 }
 
 impl Default for BitBridge {
@@ -42,7 +42,7 @@ impl Default for BitBridge {
             authentication: AuthenticationModule,
             shelf: ShelfModule,
             transfer: TransferModule,
-            p2p: P2PModule
+            p2p: P2PModule,
         }
     }
 }
@@ -53,7 +53,7 @@ pub struct AppModel {
     transfer: TransferModel,
     pub p2p: P2PModel,
     shelf: ShelfModel,
-    environment: EnvironmentModel
+    environment: EnvironmentModel,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -62,7 +62,7 @@ pub struct AppViewModel {
     pub authentication: Option<AuthenticationViewModel>,
     pub transfer: Option<TransferViewModel>,
     pub p2p: Option<P2PViewModel>,
-    pub shelf: Option<ShelfViewModel>
+    pub shelf: Option<ShelfViewModel>,
 }
 
 /// The effects that shell need to handle
@@ -70,7 +70,7 @@ pub struct AppViewModel {
 #[effect(typegen)]
 #[derive(Debug)]
 pub enum AppOperation {
-    Operation(CoreOperation)
+    Operation(CoreOperation),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, From)]
@@ -80,7 +80,7 @@ pub enum AppEvent {
     Transfer(TransferEvent),
     P2P(P2PEvent),
     Shelf(ShelfEvent),
-    Void
+    Void,
 }
 
 impl App for BitBridge {
@@ -97,7 +97,7 @@ impl App for BitBridge {
             AppEvent::Transfer(event) => self.transfer.update(event, model, caps),
             AppEvent::P2P(event) => self.p2p.update(event, model, caps),
             AppEvent::Shelf(event) => self.shelf.update(event, model, caps),
-            AppEvent::Void => Command::done()
+            AppEvent::Void => Command::done(),
         }
     }
 
@@ -107,7 +107,7 @@ impl App for BitBridge {
             authentication: Some(self.authentication.view(model)),
             transfer: Some(self.transfer.view(model)),
             p2p: Some(self.p2p.view(model)),
-            shelf: Some(self.shelf.view(model))
+            shelf: Some(self.shelf.view(model)),
         }
     }
 }

@@ -9,5 +9,5 @@ pub enum PersistenceError {
     #[error("Not found {0}")]
     NotFound(String),
     #[error("System error {0}")]
-    SystemError(#[from] anyhow::Error)
+    SystemError(#[from] anyhow::Error),
 }

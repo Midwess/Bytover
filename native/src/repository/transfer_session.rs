@@ -19,7 +19,7 @@ use std::sync::Arc;
 
 pub struct TransferSessionRepositoryImpl {
     pub db: PoolRequest<Database>,
-    pub path_resolver: Arc<dyn PathResolver>
+    pub path_resolver: Arc<dyn PathResolver>,
 }
 
 impl RedbId for RedbIdWrapper<TransferSessionId> {
@@ -53,7 +53,7 @@ impl RedbRepository<TransferSession, RedbIdWrapper<TransferSessionId>> for Trans
 impl Repository<TransferSession, TransferSessionId> for TransferSessionRepositoryImpl {
     async fn create(&self, data: TransferSession) -> Resolve<TransferSession>
     where
-        TransferSession: 'async_trait
+        TransferSession: 'async_trait,
     {
         RedbRepository::<TransferSession, RedbIdWrapper<TransferSessionId>>::create(self, data).await
     }
@@ -74,14 +74,14 @@ impl Repository<TransferSession, TransferSessionId> for TransferSessionRepositor
         &self,
         from_id: Option<&TransferSessionId>,
         to_id: Option<&TransferSessionId>,
-        count: Option<usize>
+        count: Option<usize>,
     ) -> Resolve<Vec<TransferSession>> {
         let to_id = to_id.map(|it| RedbIdWrapper(it.clone()));
         RedbRepository::<TransferSession, RedbIdWrapper<TransferSessionId>>::find_all(
             self,
             from_id.map(|it| RedbIdWrapper(it.clone())).as_ref(),
             to_id.as_ref(),
-            count
+            count,
         )
         .await
     }
@@ -92,7 +92,7 @@ impl TransferSessionRepository for TransferSessionRepositoryImpl {
     async fn generate_resource_saved_paths(
         &self,
         session_order_id: u64,
-        resource_names: HashMap<u64, (String, ResourceType)>
+        resource_names: HashMap<u64, (String, ResourceType)>,
     ) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError> {
         let workdir = PathBuf::from(self.path_resolver.get_session_dir_path(session_order_id).await);
         let mut result = HashMap::new();
@@ -101,7 +101,7 @@ impl TransferSessionRepository for TransferSessionRepositoryImpl {
         for (resource_id, (resource_name, resource_type)) in resource_names {
             let final_name = match resource_type {
                 ResourceType::Folder => format!("{}.zip", resource_name),
-                _ => resource_name.clone()
+                _ => resource_name.clone(),
             };
 
             let mut candidate_name = final_name.clone();
@@ -126,10 +126,10 @@ impl TransferSessionRepository for TransferSessionRepositoryImpl {
     async fn generate_zip_download_paths(
         &self,
         _session_order_id: u64,
-        _resource_names: HashMap<u64, String>
+        _resource_names: HashMap<u64, String>,
     ) -> Result<ZipDownloadPaths, PersistenceError> {
         Err(PersistenceError::IOError(
-            "generate_zip_download_paths is not supported on native platform".to_string()
+            "generate_zip_download_paths is not supported on native platform".to_string(),
         ))
     }
 

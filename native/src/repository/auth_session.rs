@@ -13,7 +13,7 @@ use shared::repository::auth_session::{AuthSessionId, AuthSessionRepository};
 use crate::repository::id::RedbIdWrapper;
 
 pub struct AuthSessionRepositoryImpl {
-    pub db: PoolRequest<Database>
+    pub db: PoolRequest<Database>,
 }
 
 impl RedbId for RedbIdWrapper<AuthSessionId> {
@@ -46,7 +46,7 @@ impl RedbRepository<Session, RedbIdWrapper<AuthSessionId>> for AuthSessionReposi
 impl Repository<Session, AuthSessionId> for AuthSessionRepositoryImpl {
     async fn create(&self, data: Session) -> Resolve<Session>
     where
-        Session: 'async_trait
+        Session: 'async_trait,
     {
         RedbRepository::<Session, RedbIdWrapper<AuthSessionId>>::create(self, data).await
     }
@@ -67,14 +67,14 @@ impl Repository<Session, AuthSessionId> for AuthSessionRepositoryImpl {
         &self,
         from_id: Option<&AuthSessionId>,
         to_id: Option<&AuthSessionId>,
-        count: Option<usize>
+        count: Option<usize>,
     ) -> Resolve<Vec<Session>> {
         let to_id = to_id.map(|it| RedbIdWrapper(it.clone()));
         RedbRepository::<Session, RedbIdWrapper<AuthSessionId>>::find_all(
             self,
             from_id.map(|it| RedbIdWrapper(it.clone())).as_ref(),
             to_id.as_ref(),
-            count
+            count,
         )
         .await
     }

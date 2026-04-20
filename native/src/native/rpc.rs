@@ -3,7 +3,7 @@ use shared::shell::executor::rpc::NativeRpc;
 use tonic::transport::Channel;
 
 pub struct NativeRpcImpl {
-    pub auth_server: AppServer<Channel>
+    pub auth_server: AppServer<Channel>,
 }
 
 #[async_trait::async_trait]

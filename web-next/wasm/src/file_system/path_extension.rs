@@ -17,7 +17,7 @@ impl WebExtLocalResourcePath for LocalResourcePath {
     fn device_file_id(&self) -> Option<u64> {
         match self {
             Self::PlatformIdentifier(path) => path.trim_start_matches("opfs://device/").to_string().parse::<u64>().ok(),
-            _ => None
+            _ => None,
         }
     }
 
@@ -28,7 +28,7 @@ impl WebExtLocalResourcePath for LocalResourcePath {
     fn resource_thumbnail(session_id: Option<u64>, resource_id: u64) -> Self {
         match session_id {
             None => Self::PlatformIdentifier(format!("opfs://thumbnails/{}.png", resource_id)),
-            Some(session_id) => Self::PlatformIdentifier(format!("opfs://sessions-{session_id}/thumbnails/{}.png", resource_id))
+            Some(session_id) => Self::PlatformIdentifier(format!("opfs://sessions-{session_id}/thumbnails/{}.png", resource_id)),
         }
     }
 
@@ -45,7 +45,7 @@ impl WebExtLocalResourcePath for LocalResourcePath {
 
                 Some(path.trim_start_matches("opfs://").to_string())
             }
-            _ => None
+            _ => None,
         }
     }
 }

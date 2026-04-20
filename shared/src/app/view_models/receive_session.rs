@@ -8,7 +8,7 @@ pub struct ReceiveResourceViewModel {
     pub is_completed: bool,
     pub is_ready: bool,
     pub is_success: bool,
-    pub error_message: Option<String>
+    pub error_message: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -35,5 +35,5 @@ pub struct ReceiveSessionViewModel {
     pub display_download_speed: String,
     pub progress: f64,
     pub display_datetime: String,
-    pub download_all_resource: Option<ReceiveResourceViewModel>
+    pub download_all_resource: Option<ReceiveResourceViewModel>,
 }

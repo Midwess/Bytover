@@ -23,7 +23,7 @@ const MB: u64 = 1024 * 1024;
 
 pub struct NetStreamImpl {
     pub repository: Arc<dyn LocalResourceRepository>,
-    pub server: &'static CloudServer<Channel>
+    pub server: &'static CloudServer<Channel>,
 }
 
 pub struct NetStreamInnerImpl {
@@ -31,7 +31,7 @@ pub struct NetStreamInnerImpl {
     path: LocalResourcePath,
     upload: Upload,
     server: &'static CloudServer<Channel>,
-    repository: Arc<dyn LocalResourceRepository>
+    repository: Arc<dyn LocalResourceRepository>,
 }
 
 #[async_trait::async_trait]
@@ -42,7 +42,7 @@ impl NetStream for NetStreamImpl {
             server: self.server,
             handle: None,
             upload,
-            repository: self.repository.clone()
+            repository: self.repository.clone(),
         }))
     }
 }
@@ -73,16 +73,16 @@ impl NetStreamInnerImpl {
         mut cursor: Box<dyn IOCursor>,
         upload: Upload,
         server: &'static CloudServer<Channel>,
-        mut tx: Sender<NetStreamEvent>
+        mut tx: Sender<NetStreamEvent>,
     ) {
         let result = match upload {
             Upload::SingleUrl(url) => Self::single_upload(&url, &mut cursor, &mut tx).await,
-            Upload::Multipart(upload_info) => Self::multipart_upload(upload_info, &mut cursor, &mut tx, server).await
+            Upload::Multipart(upload_info) => Self::multipart_upload(upload_info, &mut cursor, &mut tx, server).await,
         };
 
         let event = match result {
             Ok(completion) => NetStreamEvent::Completed(completion),
-            Err(e) => NetStreamEvent::Error(e)
+            Err(e) => NetStreamEvent::Error(e),
         };
 
         let _ = tx.send(event).await;
@@ -91,7 +91,7 @@ impl NetStreamInnerImpl {
     async fn single_upload(
         url: &str,
         cursor: &mut Box<dyn IOCursor>,
-        tx: &mut Sender<NetStreamEvent>
+        tx: &mut Sender<NetStreamEvent>,
     ) -> Result<Option<MultiPartUploadComplete>> {
         let chunk_size = cursor.entry().await?.size.min(1024 * 1024 * 1024 * 5);
         Self::upload_chunk(url, cursor, tx, &mut 0, chunk_size).await?;
@@ -102,11 +102,11 @@ impl NetStreamInnerImpl {
         mut upload: MultiPartUpload,
         cursor: &mut Box<dyn IOCursor>,
         tx: &mut Sender<NetStreamEvent>,
-        server: &CloudServer<Channel>
+        server: &CloudServer<Channel>,
     ) -> Result<Option<MultiPartUploadComplete>> {
         let mut completion = MultiPartUploadComplete {
             e_tags: vec![],
-            context_token: upload.context_token.clone()
+            context_token: upload.context_token.clone(),
         };
 
         let mut uploaded = 0u64;
@@ -195,7 +195,7 @@ impl NetStreamInnerImpl {
         cursor: &mut Box<dyn IOCursor>,
         tx: &mut Sender<NetStreamEvent>,
         uploaded: &mut u64,
-        chunk_size: u64
+        chunk_size: u64,
     ) -> Result<String> {
         log::info!("Uploading chunk of size {} bytes", chunk_size);
 
@@ -236,11 +236,11 @@ impl NetStreamInnerImpl {
         cursor: &mut Box<dyn IOCursor>,
         tx: &mut Sender<NetStreamEvent>,
         chunk_size: u64,
-        total_uploaded: &mut u64
+        total_uploaded: &mut u64,
     ) -> Result<()> {
         let mut remaining = chunk_size;
         let _ = tx.try_send(NetStreamEvent::Progress {
-            uploaded_bytes: *total_uploaded
+            uploaded_bytes: *total_uploaded,
         });
 
         let mut _uploaded_amount = 0;
@@ -254,7 +254,7 @@ impl NetStreamInnerImpl {
             _uploaded_amount += data_len;
 
             let _ = tx.try_send(NetStreamEvent::Progress {
-                uploaded_bytes: *total_uploaded
+                uploaded_bytes: *total_uploaded,
             });
 
             writer.flush().await?;

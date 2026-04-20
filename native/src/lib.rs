@@ -54,7 +54,7 @@ pub trait ShellRuntime: Send + Sync + 'static {
 
 pub struct ThrottleShellRuntime<E: Serialize + Send + 'static> {
     latest_event: Arc<Mutex<Option<E>>>,
-    join_handle: JoinHandle<()>
+    join_handle: JoinHandle<()>,
 }
 
 impl<E: Serialize + Send + Sync + 'static> ThrottleShellRuntime<E> {
@@ -99,7 +99,7 @@ impl<E: Serialize + Send + 'static> Drop for ThrottleShellRuntime<E> {
 }
 
 pub struct NativeProcessor {
-    native_executor: &'static NativeExecutor
+    native_executor: &'static NativeExecutor,
 }
 
 pub fn get_tokio_rt() -> &'static tokio::runtime::Runtime {

@@ -12,14 +12,14 @@ pub mod transfer_session;
 pub mod user;
 
 pub struct RedbPoolProvider {
-    pub path: String
+    pub path: String,
 }
 
 #[async_trait]
 impl PoolResourceProvider<Database> for RedbPoolProvider {
     async fn new(&self) -> Database
     where
-        Self: 'async_trait
+        Self: 'async_trait,
     {
         Database::create(self.path.clone()).unwrap()
     }

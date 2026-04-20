@@ -7,7 +7,7 @@ use std::future::Future;
 use std::ops::{Deref, DerefMut};
 
 pub struct AppCommand {
-    ctx: AppCommandContext
+    ctx: AppCommandContext,
 }
 
 impl AppCommand {
@@ -38,7 +38,7 @@ impl AppCommand {
     pub async fn run<T, F>(&self, request: AppRequestBuilder<F>) -> T
     where
         F: Future<Output = T> + Send + 'static,
-        T: Send + 'static
+        T: Send + 'static,
     {
         request.into_future(self.ctx()).await
     }
@@ -49,7 +49,7 @@ impl AppCommand {
 
     pub fn request_from_shell<O>(operation: O) -> AppRequestBuilder<impl Future<Output = CoreOperationOutput>>
     where
-        O: Into<CoreOperation>
+        O: Into<CoreOperation>,
     {
         Command::request_from_shell(operation.into())
     }

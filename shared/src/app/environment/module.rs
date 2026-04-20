@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct EnvironmentModel {
     pub device: Option<DeviceInfo>,
-    pub allowed_nearby_anonymous: bool
+    pub allowed_nearby_anonymous: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -23,7 +23,7 @@ pub struct EnvironmentModule;
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum EnvironmentEvent {
     AppLaunched { allowed_nearby_anonymous: bool },
-    DeviceInfoUpdated(DeviceInfo)
+    DeviceInfoUpdated(DeviceInfo),
 }
 
 impl AppModule<BitBridge> for EnvironmentModule {
@@ -34,7 +34,7 @@ impl AppModule<BitBridge> for EnvironmentModule {
         &self,
         event: Self::Event,
         model: &mut AppModel,
-        _caps: &<BitBridge as App>::Capabilities
+        _caps: &<BitBridge as App>::Capabilities,
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
             EnvironmentEvent::DeviceInfoUpdated(device) => {

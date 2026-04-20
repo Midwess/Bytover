@@ -11,11 +11,11 @@ use std::path::PathBuf;
 
 pub struct DIOWriterWrapper<W: IOWriter> {
     inner: W,
-    compression_support: bool
+    compression_support: bool,
 }
 
 pub struct FileEntryWriter {
-    file: FileEntry
+    file: FileEntry,
 }
 
 #[async_trait]
@@ -38,7 +38,7 @@ impl DIOWriterWrapper<FileEntryWriter> {
         let file = FileEntry::new(None, path).await?;
         Ok(Self {
             inner: FileEntryWriter { file },
-            compression_support
+            compression_support,
         })
     }
 }
@@ -106,7 +106,7 @@ impl<W: IOWriter> DIOWriter for DIOWriterWrapper<W> {
 pub struct CIOCursorBoxWrapper {
     inner: Box<dyn IOCursor>,
     stats: CompressStats,
-    buffer: BytesMut
+    buffer: BytesMut,
 }
 
 impl CIOCursorBoxWrapper {

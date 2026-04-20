@@ -10,30 +10,19 @@ use devlog_sdk::distributed_id::{gen_id, EPOCH_SINCE};
 use sea_orm::entity::prelude::*;
 use sea_orm::ActiveValue::Set;
 use sea_orm::{
-    AccessMode,
-    ActiveModelTrait,
-    ColumnTrait,
-    DatabaseBackend,
-    DatabaseConnection,
-    EntityTrait,
-    IsolationLevel,
-    QueryFilter,
-    Statement,
-    TransactionTrait,
-    Value as SeaValue
+    AccessMode, ActiveModelTrait, ColumnTrait, DatabaseBackend, DatabaseConnection, EntityTrait, IsolationLevel, QueryFilter,
+    Statement, TransactionTrait, Value as SeaValue,
 };
 use serde_json::{json, Value};
 
 use migration::model::transfer_session as transfer_session_model;
 use transfer_session_model::{
-    ActiveModel as TransferSessionActiveModel,
-    Column as TransferSessionColumn,
-    Entity as TransferSessionEntity,
-    Model as TransferSessionModel
+    ActiveModel as TransferSessionActiveModel, Column as TransferSessionColumn, Entity as TransferSessionEntity,
+    Model as TransferSessionModel,
 };
 
 pub struct TransferSessionPostgresRepository {
-    pub db: DatabaseConnection
+    pub db: DatabaseConnection,
 }
 
 enum TransferSessionStatus {
@@ -41,7 +30,7 @@ enum TransferSessionStatus {
     InProgress,
     Success,
     Failed,
-    Canceled
+    Canceled,
 }
 
 impl std::fmt::Display for TransferSessionStatus {
@@ -51,7 +40,7 @@ impl std::fmt::Display for TransferSessionStatus {
             TransferSessionStatus::InProgress => "InProgress",
             TransferSessionStatus::Success => "Success",
             TransferSessionStatus::Failed => "Failed",
-            TransferSessionStatus::Canceled => "Canceled"
+            TransferSessionStatus::Canceled => "Canceled",
         };
         write!(f, "{}", s)
     }
@@ -94,15 +83,15 @@ impl TryFrom<TransferSessionModel> for TransferSession {
     fn try_from(m: TransferSessionModel) -> Result<Self, Self::Error> {
         let progresses: Vec<Value> = match m.progress {
             Some(v) => serde_json::from_value(v)?,
-            None => Vec::new()
+            None => Vec::new(),
         };
         let resources: Vec<Value> = match m.resources {
             Some(v) => serde_json::from_value(v)?,
-            None => Vec::new()
+            None => Vec::new(),
         };
         let to_emails: Vec<String> = match m.to_emails {
             Some(v) => serde_json::from_value(v)?,
-            None => Vec::new()
+            None => Vec::new(),
         };
 
         let v = json!({
@@ -130,7 +119,7 @@ impl TransferSessionRepository for TransferSessionPostgresRepository {
 
         match row {
             Some(model) => TransferSession::try_from(model).map(Some).map_err(|e| RepositoryError::DbError(e.to_string())),
-            None => Ok(None)
+            None => Ok(None),
         }
     }
 
@@ -160,7 +149,7 @@ impl TransferSessionRepository for TransferSessionPostgresRepository {
             vec![
                 SeaValue::from(cutoff_order_id),
                 SeaValue::from(seven_days_cutoff),
-            ]
+            ],
         );
 
         let rows = txn.query_all(select_statement).await.map_err(|e| RepositoryError::DbError(e.to_string()))?;
@@ -179,7 +168,7 @@ impl TransferSessionRepository for TransferSessionPostgresRepository {
 
             let resources: Vec<TransferResource> = match resources_json {
                 Some(v) => serde_json::from_value(v).unwrap_or_default(),
-                None => Vec::new()
+                None => Vec::new(),
             };
 
             let mut s3_deletion_failed = false;
@@ -226,7 +215,7 @@ impl TransferSessionRepository for TransferSessionPostgresRepository {
             let delete_statement = Statement::from_sql_and_values(
                 DatabaseBackend::Postgres,
                 &delete_sql,
-                session_ids_to_delete.into_iter().map(SeaValue::from)
+                session_ids_to_delete.into_iter().map(SeaValue::from),
             );
 
             txn.execute(delete_statement).await.map_err(|e| RepositoryError::DbError(e.to_string()))?;
@@ -256,7 +245,7 @@ impl Repository<TransferSession, TransferSessionId> for TransferSessionPostgresR
             owner_user_order_id: Set(data.user_order_id() as i64),
             progress: Set(Some(progress_val)),
             resources: Set(Some(resources_val)),
-            status: Set(compute_status(&data).to_string())
+            status: Set(compute_status(&data).to_string()),
         };
 
         let _ = active.insert(&self.db).await.map_err(|e| RepositoryError::DbError(e.to_string()))?;
@@ -277,7 +266,7 @@ impl Repository<TransferSession, TransferSessionId> for TransferSessionPostgresR
 
         match row {
             Some(model) => TransferSession::try_from(model).map(Some).map_err(|e| RepositoryError::DbError(e.to_string())),
-            None => Ok(None)
+            None => Ok(None),
         }
     }
 
@@ -285,7 +274,7 @@ impl Repository<TransferSession, TransferSessionId> for TransferSessionPostgresR
         &self,
         _from_id: Option<&TransferSessionId>,
         _to_id: Option<&TransferSessionId>,
-        _count: Option<usize>
+        _count: Option<usize>,
     ) -> Result<Vec<TransferSession>, RepositoryError> {
         Err(RepositoryError::DbError("Not implemented for Postgres repository".to_string()))
     }

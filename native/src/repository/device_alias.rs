@@ -8,7 +8,7 @@ const DEVICE_ALIAS_TABLE: TableDefinition<&str, Vec<u8>> = TableDefinition::new(
 const ALIASES_KEY: &str = "aliases";
 
 pub struct DeviceAliasRepositoryImpl {
-    pub db: PoolRequest<Database>
+    pub db: PoolRequest<Database>,
 }
 
 impl DeviceAliasRepositoryImpl {
@@ -36,7 +36,7 @@ impl DeviceAliasRepository for DeviceAliasRepositoryImpl {
         let read_txn = db.begin_read().map_err(|e| PersistenceError::IOError(e.to_string()))?;
         let table = match read_txn.open_table(DEVICE_ALIAS_TABLE) {
             Ok(t) => t,
-            Err(_) => return Ok(vec![])
+            Err(_) => return Ok(vec![]),
         };
 
         match table.get(ALIASES_KEY) {
@@ -46,7 +46,7 @@ impl DeviceAliasRepository for DeviceAliasRepositoryImpl {
                 Ok(aliases)
             }
             Ok(None) => Ok(vec![]),
-            Err(e) => Err(PersistenceError::IOError(e.to_string()))
+            Err(e) => Err(PersistenceError::IOError(e.to_string())),
         }
     }
 

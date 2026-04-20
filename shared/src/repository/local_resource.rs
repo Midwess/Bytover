@@ -11,7 +11,7 @@ use std::collections::HashMap;
 pub struct LocalResourceId {
     pub path: Option<LocalResourcePath>,
     pub order_id: Option<u64>,
-    pub shelf_id: Option<u64>
+    pub shelf_id: Option<u64>,
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
@@ -25,14 +25,14 @@ pub trait LocalResourceRepository: Repository<LocalResource, LocalResourceId> {
         &self,
         path: LocalResourcePath,
         buffer_size: usize,
-        compressed: bool
+        compressed: bool,
     ) -> Result<Box<dyn CIOCursor>, PersistenceError>;
     async fn write(&self, path: LocalResourcePath, compressed: bool) -> Result<Box<dyn DIOWriter>, PersistenceError>;
     async fn size(&self, path: LocalResourcePath) -> Result<u64, PersistenceError>;
     async fn generate_thumbnail_paths(
         &self,
         session_id: Option<u64>,
-        resource_ids: Vec<u64>
+        resource_ids: Vec<u64>,
     ) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError>;
     async fn remove(&self, path: LocalResourcePath, shelf_id: u64) -> Result<Vec<LocalResource>, PersistenceError>;
 }
@@ -46,7 +46,7 @@ impl Table<LocalResourceId> for LocalResource {
         LocalResourceId {
             path: Some(self.path.clone()),
             order_id: Some(self.order_id),
-            shelf_id: None
+            shelf_id: None,
         }
     }
 }

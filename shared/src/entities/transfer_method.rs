@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 pub enum TransferMethodSelection {
     User(),
     Device(),
-    Internet()
+    Internet(),
 }
 
 impl Default for TransferMethodSelection {

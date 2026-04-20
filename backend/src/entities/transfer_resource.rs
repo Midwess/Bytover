@@ -8,7 +8,7 @@ pub enum TransferResourceType {
     File,
     Folder,
     Image,
-    Video
+    Video,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -18,7 +18,7 @@ pub struct TransferResource {
     name: String,
     size: u64,
     #[serde(rename = "r#type")]
-    r#type: TransferResourceType
+    r#type: TransferResourceType,
 }
 
 impl TransferResource {
@@ -27,7 +27,7 @@ impl TransferResource {
         session_id: u64,
         name: impl Into<String>,
         size: u64,
-        r#type: TransferResourceType
+        r#type: TransferResourceType,
     ) -> Self {
         let name = name.into();
         let order_id = order_id.unwrap_or(gen_id().await);
@@ -37,7 +37,7 @@ impl TransferResource {
             order_id,
             session_id,
             size,
-            r#type
+            r#type,
         }
     }
 
@@ -69,24 +69,24 @@ impl TransferResource {
             let name = self.name.trim_end_matches(".tar").trim_end_matches(".zip").trim_end_matches(".rar");
             return StaticResource::s3_path(S3Path::new(
                 self.bucket_name(),
-                format!("sessions/{}/{}.zip", self.session_id, name)
-            ))
+                format!("sessions/{}/{}.zip", self.session_id, name),
+            ));
         }
 
         StaticResource::s3_path(S3Path::new(
             self.bucket_name(),
-            format!("sessions/{}/{}", self.session_id, self.name)
+            format!("sessions/{}/{}", self.session_id, self.name),
         ))
     }
 
     pub fn thumbnail_source(&self) -> Option<StaticResource> {
         if matches!(self.r#type, TransferResourceType::Folder) {
-            return None
+            return None;
         }
 
         Some(StaticResource::s3_path(S3Path::new(
             self.bucket_name(),
-            format!("thumbnails/sessions/{}/{}.png", self.session_id, self.order_id)
+            format!("thumbnails/sessions/{}/{}.png", self.session_id, self.order_id),
         )))
     }
 }

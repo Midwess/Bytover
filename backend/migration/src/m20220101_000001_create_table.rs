@@ -12,48 +12,15 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(TransferSession::Table)
                     .if_not_exists()
-                    .col(
-                        ColumnDef::new(TransferSession::Id)
-                            .big_integer()
-                            .not_null()
-                            .primary_key(),
-                    )
-                    .col(
-                        ColumnDef::new(TransferSession::Alias)
-                            .text()
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(TransferSession::Id).big_integer().not_null().primary_key())
+                    .col(ColumnDef::new(TransferSession::Alias).text().not_null())
                     .col(ColumnDef::new(TransferSession::Password).text().null())
-                    .col(
-                        ColumnDef::new(TransferSession::ToEmails)
-                            .json_binary()
-                            .null(),
-                    )
-                    .col(
-                        ColumnDef::new(TransferSession::OrderId)
-                            .big_integer()
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(TransferSession::OwnerUserOrderId)
-                            .big_integer()
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(TransferSession::Progress)
-                            .json_binary()
-                            .null(),
-                    )
-                    .col(
-                        ColumnDef::new(TransferSession::Resources)
-                            .json_binary()
-                            .null(),
-                    )
-                    .col(
-                        ColumnDef::new(TransferSession::Status)
-                            .text()
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(TransferSession::ToEmails).json_binary().null())
+                    .col(ColumnDef::new(TransferSession::OrderId).big_integer().not_null())
+                    .col(ColumnDef::new(TransferSession::OwnerUserOrderId).big_integer().not_null())
+                    .col(ColumnDef::new(TransferSession::Progress).json_binary().null())
+                    .col(ColumnDef::new(TransferSession::Resources).json_binary().null())
+                    .col(ColumnDef::new(TransferSession::Status).text().not_null())
                     .to_owned(),
             )
             .await?;
@@ -100,21 +67,11 @@ impl MigrationTrait for Migration {
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         // Drop indexes first, then table
         manager
-            .drop_index(
-                Index::drop()
-                    .name("idx_transfer_session_order_id_status")
-                    .table(TransferSession::Table)
-                    .to_owned(),
-            )
+            .drop_index(Index::drop().name("idx_transfer_session_order_id_status").table(TransferSession::Table).to_owned())
             .await?;
 
         manager
-            .drop_index(
-                Index::drop()
-                    .name("idx_transfer_session_alias")
-                    .table(TransferSession::Table)
-                    .to_owned(),
-            )
+            .drop_index(Index::drop().name("idx_transfer_session_alias").table(TransferSession::Table).to_owned())
             .await?;
 
         manager
@@ -126,9 +83,7 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
-        manager
-            .drop_table(Table::drop().table(TransferSession::Table).to_owned())
-            .await
+        manager.drop_table(Table::drop().table(TransferSession::Table).to_owned()).await
     }
 }
 

@@ -12,7 +12,7 @@ pub struct ResourceReceivedPeer {
     #[serde(default)]
     pub name: String,
     #[serde(default)]
-    pub avatar_url: String
+    pub avatar_url: String,
 }
 
 impl ResourceReceivedPeer {
@@ -20,7 +20,7 @@ impl ResourceReceivedPeer {
         Self {
             name: id.clone(),
             id,
-            avatar_url: String::new()
+            avatar_url: String::new(),
         }
     }
 }
@@ -30,7 +30,7 @@ impl From<&Peer> for ResourceReceivedPeer {
         Self {
             id: peer.id.clone(),
             name: peer.name.clone().unwrap_or_else(|| peer.device.name.clone()),
-            avatar_url: peer.avatar_url.clone()
+            avatar_url: peer.avatar_url.clone(),
         }
     }
 }
@@ -47,7 +47,7 @@ pub struct Peer {
     pub user_id: Option<u64>,
     pub signalling_id: Option<String>,
     #[serde(default)]
-    pub signalling_route: Option<String>
+    pub signalling_route: Option<String>,
 }
 
 impl From<PeerMessage> for Peer {
@@ -61,7 +61,7 @@ impl From<PeerMessage> for Peer {
             region_code: value.region_code.unwrap_or_else(default_region_code),
             user_id: None,
             signalling_id: None,
-            signalling_route: None
+            signalling_route: None,
         }
     }
 }
@@ -74,7 +74,7 @@ impl From<Peer> for PeerMessage {
             avatar_url: value.avatar_url,
             email: value.email,
             device: value.device.into(),
-            region_code: Some(value.region_code)
+            region_code: Some(value.region_code),
         }
     }
 }

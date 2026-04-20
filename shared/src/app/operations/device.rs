@@ -12,7 +12,7 @@ use super::CoreOperationOutput;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct GeoLocation {
     pub latitude: f64,
-    pub longitude: f64
+    pub longitude: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -24,10 +24,10 @@ pub enum DeviceOperation {
     LoadThumbnailPng {
         resource_type: ResourceType,
         path: LocalResourcePath,
-        id: u64
+        id: u64,
     },
     CloseShelf(u64),
-    PasteClipboard(u64)
+    PasteClipboard(u64),
 }
 
 impl DeviceOperation {
@@ -42,17 +42,17 @@ impl DeviceOperation {
     pub fn load_thumbnail_png(
         resource_id: u64,
         path: LocalResourcePath,
-        resource_type: ResourceType
+        resource_type: ResourceType,
     ) -> AppRequestBuilder<impl Future<Output = (Option<Vec<u8>>, Option<LocalResourcePath>)>> {
         AppCommand::request_from_shell(Self::LoadThumbnailPng {
             path,
             resource_type,
-            id: resource_id
+            id: resource_id,
         })
         .map(|output| match output {
             CoreOperationOutput::ThumbnailPng(data) => (Some(data), None),
             CoreOperationOutput::LocalResourcePath(path) => (None, Some(path)),
-            _ => (None, None)
+            _ => (None, None),
         })
     }
 
@@ -65,11 +65,11 @@ impl DeviceOperation {
     }
 
     pub fn paste_clipboard(
-        shelf_id: u64
+        shelf_id: u64,
     ) -> AppRequestBuilder<impl Future<Output = Vec<crate::app::shelf::module::ResourceSelection>>> {
         AppCommand::request_from_shell(DeviceOperation::PasteClipboard(shelf_id)).map(|output| match output {
             super::CoreOperationOutput::ResourceSelections(selections) => selections,
-            _ => vec![]
+            _ => vec![],
         })
     }
 }

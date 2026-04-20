@@ -23,7 +23,7 @@ pub struct IOReaderBlobImpl {
     entry: FileEntry,
     blob: NeverSend<Blob>,
     buffer: BytesMut,
-    current_pos: u64
+    current_pos: u64,
 }
 
 impl IOReaderBlobImpl {
@@ -38,14 +38,14 @@ impl IOReaderBlobImpl {
             is_dir: false,
             modified_at,
             size: file.size() as u64,
-            path: PathBuf::from(file.webkit_path.clone().unwrap_or(file.name().to_string()))
+            path: PathBuf::from(file.webkit_path.clone().unwrap_or(file.name().to_string())),
         };
 
         Ok(Self {
             entry,
             blob: NeverSend(file.slice().map_err(|it| anyhow!("Failed to slice file {:?}", it))?),
             buffer,
-            current_pos: 0
+            current_pos: 0,
         })
     }
 
@@ -65,7 +65,7 @@ impl IOCursor for IOReaderBlobImpl {
         let from = self.current_pos;
         let to = (from + max.unwrap_or(self.buffer.len() as u64).min(self.buffer.len() as u64)).min(self.entry.size);
         if from >= to {
-            return Ok(None)
+            return Ok(None);
         }
 
         let amount = to - from;
@@ -93,7 +93,7 @@ pub struct IOReaderOpfsImpl {
     path: PathBuf,
     buffer: BytesMut,
     instance_id: u32,
-    compression_stats: CompressStats
+    compression_stats: CompressStats,
 }
 
 impl IOReaderOpfsImpl {
@@ -102,7 +102,7 @@ impl IOReaderOpfsImpl {
 
         let msg = WorkerMessage::new(OpfsOperation {
             file_path: path_str,
-            operation: FileOperation::Cursor { buffer_size }
+            operation: FileOperation::Cursor { buffer_size },
         });
 
         let response = OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to open file"))?;
@@ -116,17 +116,17 @@ impl IOReaderOpfsImpl {
                     path,
                     buffer,
                     instance_id,
-                    compression_stats
+                    compression_stats,
                 })
             }
-            r => Err(anyhow::anyhow!("Failed to open file: {:?}", r))
+            r => Err(anyhow::anyhow!("Failed to open file: {:?}", r)),
         }
     }
 
     pub fn stop(&mut self) {
         let msg = WorkerMessage::new(OpfsOperation {
             file_path: self.path.to_string_lossy().to_string(),
-            operation: FileOperation::CursorEnd(self.instance_id)
+            operation: FileOperation::CursorEnd(self.instance_id),
         });
 
         OPFS_WORKER.unbounded_send(msg);
@@ -141,7 +141,7 @@ impl CIOCursor for IOReaderOpfsImpl {
 
     async fn c_next(&mut self, max: Option<u64>) -> Result<Option<(&[u8], usize)>> {
         if !self.compression_stats.is_compression_support() {
-            return self.next(max).await.map(|it| it.map(|it| (it, it.len())))
+            return self.next(max).await.map(|it| it.map(|it| (it, it.len())));
         }
 
         // Capture the compression decision for THIS chunk before sending to worker
@@ -152,8 +152,8 @@ impl CIOCursor for IOReaderOpfsImpl {
             operation: FileOperation::CursorNext {
                 instance_id: self.instance_id,
                 max,
-                compressed: should_compress_current
-            }
+                compressed: should_compress_current,
+            },
         });
 
         let response = OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to read"))?;
@@ -173,7 +173,7 @@ impl CIOCursor for IOReaderOpfsImpl {
                         raw_size,
                         compression_time_in_micros,
                         data.length() as usize,
-                        read_time_in_micros
+                        read_time_in_micros,
                     );
 
                     // Flag reflects what we asked the worker to do for THIS chunk
@@ -193,7 +193,7 @@ impl CIOCursor for IOReaderOpfsImpl {
                     Ok(Some((&self.buffer[..data.length() as usize + 1], raw_size)))
                 }
             }
-            r => Err(anyhow::anyhow!("Read error: {:?}", r))
+            r => Err(anyhow::anyhow!("Read error: {:?}", r)),
         }
     }
 }
@@ -210,8 +210,8 @@ impl IOReader for IOReaderOpfsImpl {
             operation: FileOperation::CursorNext {
                 instance_id: self.instance_id,
                 max,
-                compressed: false
-            }
+                compressed: false,
+            },
         });
 
         let response = OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to read"))?;
@@ -229,14 +229,14 @@ impl IOReader for IOReaderOpfsImpl {
                     Ok(Some(&self.buffer[..data.length() as usize]))
                 }
             }
-            r => Err(anyhow::anyhow!("Read error: {:?}", r))
+            r => Err(anyhow::anyhow!("Read error: {:?}", r)),
         }
     }
 
     async fn entry(&self) -> Result<FileEntry> {
         let msg = WorkerMessage::new(OpfsOperation {
             file_path: self.path.to_string_lossy().to_string(),
-            operation: FileOperation::FileEntry
+            operation: FileOperation::FileEntry,
         });
 
         let response = OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to get size"))?;
@@ -244,7 +244,7 @@ impl IOReader for IOReaderOpfsImpl {
         match response.message {
             OpfsOperationOutput::FileEntry(entry) => Ok(entry),
             OpfsOperationOutput::Error(e) => Err(anyhow::anyhow!("Size error: {:?}", e)),
-            _ => Err(anyhow::anyhow!("Unexpected response"))
+            _ => Err(anyhow::anyhow!("Unexpected response")),
         }
     }
 
@@ -263,7 +263,7 @@ impl Drop for IOReaderOpfsImpl {
 pub struct IOWriterOpfsImpl {
     path: PathBuf,
     position: usize,
-    compression_support: bool
+    compression_support: bool,
 }
 
 impl IOWriterOpfsImpl {
@@ -272,7 +272,7 @@ impl IOWriterOpfsImpl {
 
         let msg = WorkerMessage::new(OpfsOperation {
             file_path: path_str,
-            operation: FileOperation::Open
+            operation: FileOperation::Open,
         });
 
         let response = OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to open file for writing"))?;
@@ -281,10 +281,10 @@ impl IOWriterOpfsImpl {
             OpfsOperationOutput::Void => Ok(Self {
                 path,
                 position: 0,
-                compression_support
+                compression_support,
             }),
             OpfsOperationOutput::Error(e) => Err(anyhow::anyhow!("Failed to open file for writing: {:?}", e)),
-            _ => Err(anyhow::anyhow!("Unexpected response"))
+            _ => Err(anyhow::anyhow!("Unexpected response")),
         }
     }
 }
@@ -297,8 +297,8 @@ impl IOWriterOpfsImpl {
             operation: FileOperation::Write {
                 data: uint8_array,
                 position,
-                decompress
-            }
+                decompress,
+            },
         });
 
         let response = OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to write"))?;
@@ -309,7 +309,7 @@ impl IOWriterOpfsImpl {
                 Ok(written)
             }
             OpfsOperationOutput::Error(e) => Err(anyhow::anyhow!("Write error: {:?}", e)),
-            _ => Err(anyhow::anyhow!("Unexpected response"))
+            _ => Err(anyhow::anyhow!("Unexpected response")),
         }
     }
 
@@ -332,7 +332,7 @@ impl IOWriter for IOWriterOpfsImpl {
     async fn flush(&mut self) -> Result<()> {
         let msg = WorkerMessage::new(OpfsOperation {
             file_path: self.path.to_string_lossy().to_string(),
-            operation: FileOperation::Flush
+            operation: FileOperation::Flush,
         });
 
         OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to flush"))?;

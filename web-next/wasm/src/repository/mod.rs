@@ -13,14 +13,14 @@ pub mod transfer_session;
 pub mod user;
 
 pub struct IdbPoolProvider {
-    pub name: String
+    pub name: String,
 }
 
 #[async_trait(?Send)]
 impl PoolResourceProvider<NeverSend<Database>> for IdbPoolProvider {
     async fn new(&self) -> NeverSend<Database>
     where
-        Self: 'async_trait
+        Self: 'async_trait,
     {
         let factory = NeverSend(Factory::new().unwrap());
         let mut open_request = factory.open("db", Some(1)).unwrap();

@@ -19,62 +19,62 @@ pub enum P2POperation {
     ConnectPeer {
         signalling_key: String,
         signalling_route: String,
-        current_user: Peer
+        current_user: Peer,
     },
     IsRunning,
     GetPeer {
-        peer_id: String
+        peer_id: String,
     },
     ViewSessionDetail {
         peer_id: String,
         order_id: u64,
-        password: Option<String>
+        password: Option<String>,
     },
     SendSessionDetail {
         peer_id: String,
         request_id: String,
         session_message: Option<schema::devlog::bitbridge::P2pTransferSessionMessage>,
         resources: Option<Vec<LocalResource>>,
-        error: Option<CoreError>
+        error: Option<CoreError>,
     },
     DownloadResource {
         peer_id: String,
         session_id: u64,
         resource: LocalResource,
-        progress: TransferProgress
+        progress: TransferProgress,
     },
     StreamResourceToPeer {
         peer_id: String,
         session_id: u64,
         transfer_id: u16,
-        resource: LocalResource
+        resource: LocalResource,
     },
     CancelResource {
         peer_id: String,
         session_id: u64,
-        resource_id: u64
+        resource_id: u64,
     },
     BroadcastCancelSession {
         session_id: u64,
-        resource_id: Option<u64>
+        resource_id: Option<u64>,
     },
     DownloadAllResources {
         peer_id: String,
         session_id: u64,
         session_path: LocalResource,
         resources: Vec<LocalResource>,
-        aggregate_progress: TransferProgress
+        aggregate_progress: TransferProgress,
     },
     SendResourceNotification {
         session_id: u64,
-        resource: LocalResource
-    }
+        resource: LocalResource,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum P2POperationOutput {
     CancelSessionRequest {
-        session_id: u64
+        session_id: u64,
     },
     NearbyServerStopped,
     AlreadyRunning,
@@ -82,28 +82,28 @@ pub enum P2POperationOutput {
         peer_id: String,
         request_id: String,
         order_id: u64,
-        password: Option<String>
+        password: Option<String>,
     },
     SessionDetailReceived {
-        session: TransferSession
+        session: TransferSession,
     },
     SessionDetailFailed {
         order_id: u64,
-        error: String
+        error: String,
     },
     ReceivedDownloadRequest {
         peer_id: String,
         session_order_id: u64,
         resource_order_id: u64,
-        transfer_id: u16
+        transfer_id: u16,
     },
     ReceivedResourceNotification {
         session_order_id: u64,
         resource: LocalResource,
-        peer_id: String
+        peer_id: String,
     },
     PeerConnected(Peer),
-    PeerDisconnected(Peer)
+    PeerDisconnected(Peer),
 }
 
 impl Operation for P2POperation {
@@ -130,12 +130,12 @@ impl P2POperation {
     pub fn view_session_detail(
         peer_id: String,
         order_id: u64,
-        password: Option<String>
+        password: Option<String>,
     ) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
         Command::request_from_shell(CoreOperation::P2P(P2POperation::ViewSessionDetail {
             peer_id,
             order_id,
-            password
+            password,
         }))
         .map(|it| it.result())
     }
@@ -144,14 +144,14 @@ impl P2POperation {
         peer_id: String,
         request_id: String,
         session_message: Option<schema::devlog::bitbridge::P2pTransferSessionMessage>,
-        resources: Option<Vec<LocalResource>>
+        resources: Option<Vec<LocalResource>>,
     ) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
         Command::request_from_shell(CoreOperation::P2P(P2POperation::SendSessionDetail {
             peer_id,
             request_id,
             session_message,
             resources,
-            error: None
+            error: None,
         }))
         .map(|it| it.result())
     }
@@ -159,14 +159,14 @@ impl P2POperation {
     pub fn send_session_detail_error(
         peer_id: String,
         request_id: String,
-        error: CoreError
+        error: CoreError,
     ) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
         Command::request_from_shell(CoreOperation::P2P(P2POperation::SendSessionDetail {
             peer_id,
             request_id,
             session_message: None,
             resources: None,
-            error: Some(error)
+            error: Some(error),
         }))
         .map(|it| it.result())
     }
@@ -175,13 +175,13 @@ impl P2POperation {
         peer_id: String,
         session_id: u64,
         transfer_id: u16,
-        resource: LocalResource
+        resource: LocalResource,
     ) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
         Command::request_from_shell(CoreOperation::P2P(P2POperation::StreamResourceToPeer {
             peer_id,
             session_id,
             transfer_id,
-            resource
+            resource,
         }))
         .map(|it| it.result())
     }
@@ -189,23 +189,23 @@ impl P2POperation {
     pub fn cancel_resource(
         peer_id: String,
         session_id: u64,
-        resource_id: u64
+        resource_id: u64,
     ) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
         Command::request_from_shell(CoreOperation::P2P(P2POperation::CancelResource {
             peer_id,
             session_id,
-            resource_id
+            resource_id,
         }))
         .map(|it| it.result())
     }
 
     pub fn broadcast_cancel_session(
         session_id: u64,
-        resource_id: Option<u64>
+        resource_id: Option<u64>,
     ) -> AppRequestBuilder<impl Future<Output = Result<(), CoreError>>> {
         Command::request_from_shell(CoreOperation::P2P(P2POperation::BroadcastCancelSession {
             session_id,
-            resource_id
+            resource_id,
         }))
         .map(|it| it.result())
     }

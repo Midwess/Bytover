@@ -8,7 +8,7 @@ use schema::devlog::app_gateway::rpc::markov_generator_service_client::MarkovGen
 use schema::devlog::app_gateway::rpc::{GenerateNameRequest, GenerateRandomAvatarRequest, GetApplicationInfoRequest};
 
 pub struct AppGatewayImpl {
-    pub channel: GrpcGatewayChannel
+    pub channel: GrpcGatewayChannel,
 }
 
 #[async_trait]
@@ -39,7 +39,7 @@ impl AppInfoService for AppGatewayImpl {
         let channel = self.channel.connect().await?;
         let mut client = ApplicationServiceClient::new(channel);
         let request = GenerateRandomAvatarRequest {
-            app_name: Some("BitBridge".to_owned())
+            app_name: Some("BitBridge".to_owned()),
         };
         let response = client.get_avatar(request).await?;
         Ok(response.into_inner().avatar.unwrap_or_default())

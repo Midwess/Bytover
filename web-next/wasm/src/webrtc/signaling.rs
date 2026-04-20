@@ -6,7 +6,7 @@ use schema::devlog::rpc_signalling::server::{IceConfig, OfferMessage, OfferReque
 
 #[derive(Debug, Clone)]
 pub struct SignalingClient {
-    http_url: String
+    http_url: String,
 }
 
 impl SignalingClient {
@@ -19,17 +19,17 @@ impl SignalingClient {
         peer_id: &str,
         offer_sdp: &str,
         session_id: &str,
-        me: PeerMessage
+        me: PeerMessage,
     ) -> Result<(String, PeerMessage), SignalingError> {
         let url = format!("{}/offer/{}", self.http_url.trim_end_matches('/'), peer_id);
 
         let offer_req = OfferRequest {
             offer: OfferMessage {
                 sdp: offer_sdp.to_string(),
-                peer: me.clone()
+                peer: me.clone(),
             },
             peer: me,
-            session_id: Some(session_id.to_string())
+            session_id: Some(session_id.to_string()),
         };
 
         let mut encoded = Vec::new();
@@ -93,5 +93,5 @@ pub enum SignalingError {
     Timeout,
 
     #[error("Invalid response")]
-    InvalidResponse
+    InvalidResponse,
 }

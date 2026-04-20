@@ -14,7 +14,7 @@ where
     T::Future: MaybeSend,
     T::Error: Into<tonic::codegen::StdError>,
     T::ResponseBody: http_body::Body<Data = bytes::Bytes> + Send + 'static,
-    <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send
+    <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send,
 {
     fn app_server(&self) -> &AppServer<T>;
 
@@ -39,7 +39,7 @@ where
             RpcOperation::CreateP2PSession {
                 alias,
                 signalling_key,
-                signalling_route
+                signalling_route,
             } => {
                 let p2p_session = self.app_server().create_device_session(alias, signalling_key, signalling_route).await?;
                 Ok(CoreOperationOutput::P2PSession(p2p_session))

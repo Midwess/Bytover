@@ -9,7 +9,7 @@ use tonic::Request;
 
 pub struct EmailServiceImpl {
     pub mail_service: MailServiceClient<Channel>,
-    pub user_token: Option<Token>
+    pub user_token: Option<Token>,
 }
 
 impl EmailServiceImpl {
@@ -24,7 +24,7 @@ impl EmailService for EmailServiceImpl {
         let request = Request::new(SendMailRequest {
             from: "team@bytover.com".to_owned(),
             to: user_email.to_string(),
-            template
+            template,
         });
         let mut request = request;
         if let Some(token) = &self.user_token {
@@ -42,8 +42,8 @@ impl EmailService for EmailServiceImpl {
         if !send_mail_response.success {
             return Err(EmailServiceErrors::SmtpErrors(
                 core_services::services::errors::Errors::FailedToSendEmail(
-                    send_mail_response.message.unwrap_or("Unknown error".to_string())
-                )
+                    send_mail_response.message.unwrap_or("Unknown error".to_string()),
+                ),
             ));
         }
 

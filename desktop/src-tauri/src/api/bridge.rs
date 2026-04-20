@@ -6,7 +6,7 @@ use tauri::AppHandle;
 use tokio::spawn;
 
 pub struct BridgeImpl {
-    pub app_handle: AppHandle
+    pub app_handle: AppHandle,
 }
 
 #[async_trait::async_trait]

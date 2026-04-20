@@ -18,24 +18,24 @@ pub enum RpcOperation {
     GetUserById(u64),
     Feedback {
         email: String,
-        message: String
+        message: String,
     },
     CreateP2PSession {
         alias: String,
         signalling_key: String,
-        signalling_route: String
+        signalling_route: String,
     },
     GetDeviceAliases,
     GenPeer {
-        device: DeviceInfo
-    }
+        device: DeviceInfo,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum RpcOperationOutput {
     GetMe(User),
     GetUserById(User),
-    GenPeer(crate::entities::peer::Peer)
+    GenPeer(crate::entities::peer::Peer),
 }
 
 impl Operation for RpcOperation {
@@ -47,7 +47,7 @@ impl RpcOperation {
         Command::request_from_shell(CoreOperation::Rpc(RpcOperation::GetMe())).map(|res| match res {
             CoreOperationOutput::Rpc(RpcOperationOutput::GetMe(user)) => Ok(user),
             CoreOperationOutput::Error(error) => Err(error),
-            e => panic!("Invalid output for RpcOperation::GetMe got {e:?}")
+            e => panic!("Invalid output for RpcOperation::GetMe got {e:?}"),
         })
     }
 
@@ -55,7 +55,7 @@ impl RpcOperation {
         Command::request_from_shell(CoreOperation::Rpc(RpcOperation::GetUserById(user_id))).map(|res| match res {
             CoreOperationOutput::Rpc(RpcOperationOutput::GetUserById(user)) => Ok(user),
             CoreOperationOutput::Error(error) => Err(error),
-            e => panic!("Invalid output for RpcOperation::GetUserById got {e:?}")
+            e => panic!("Invalid output for RpcOperation::GetUserById got {e:?}"),
         })
     }
 
@@ -63,7 +63,7 @@ impl RpcOperation {
         Command::request_from_shell(CoreOperation::Rpc(RpcOperation::GetAuthenticateUrl(device_info))).map(|res| match res {
             CoreOperationOutput::String(value) => Ok(value),
             CoreOperationOutput::Error(error) => Err(error),
-            _ => panic!("Invalid output for RpcOperation::GetSignInUrl")
+            _ => panic!("Invalid output for RpcOperation::GetSignInUrl"),
         })
     }
 
@@ -71,24 +71,24 @@ impl RpcOperation {
         Command::request_from_shell(CoreOperation::Rpc(RpcOperation::Feedback { email, message })).map(|res| match res {
             CoreOperationOutput::None => Ok(()),
             CoreOperationOutput::Error(error) => Err(error),
-            _ => panic!("Invalid output for RpcOperation::Feedback")
+            _ => panic!("Invalid output for RpcOperation::Feedback"),
         })
     }
 
     pub fn create_p2p_session(
         alias: String,
         signalling_key: String,
-        signalling_route: String
+        signalling_route: String,
     ) -> AppRequestBuilder<impl Future<Output = Result<schema::devlog::bitbridge::P2pSession, CoreError>>> {
         Command::request_from_shell(CoreOperation::Rpc(RpcOperation::CreateP2PSession {
             alias,
             signalling_key,
-            signalling_route
+            signalling_route,
         }))
         .map(|res| match res {
             CoreOperationOutput::P2PSession(session) => Ok(session),
             CoreOperationOutput::Error(error) => Err(error),
-            _ => panic!("Invalid output for RpcOperation::CreateP2PSession")
+            _ => panic!("Invalid output for RpcOperation::CreateP2PSession"),
         })
     }
 
@@ -96,7 +96,7 @@ impl RpcOperation {
         Command::request_from_shell(CoreOperation::Rpc(RpcOperation::GetDeviceAliases)).map(|res| match res {
             CoreOperationOutput::DeviceAliases(aliases) => Ok(aliases),
             CoreOperationOutput::Error(error) => Err(error),
-            _ => panic!("Invalid output for RpcOperation::GetDeviceAliases")
+            _ => panic!("Invalid output for RpcOperation::GetDeviceAliases"),
         })
     }
 
@@ -104,7 +104,7 @@ impl RpcOperation {
         Command::request_from_shell(CoreOperation::Rpc(RpcOperation::GenPeer { device })).map(|res| match res {
             CoreOperationOutput::Rpc(RpcOperationOutput::GenPeer(peer)) => Ok(peer),
             CoreOperationOutput::Error(error) => Err(error),
-            _ => panic!("Invalid output for RpcOperation::GenPeer")
+            _ => panic!("Invalid output for RpcOperation::GenPeer"),
         })
     }
 }

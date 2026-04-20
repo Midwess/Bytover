@@ -11,8 +11,8 @@ use uuid::Uuid;
 
 const HTTP_TIMEOUT_SECS: u64 = 30;
 
-use crate::process_event;
 use crate::mouse_tracking::notify_user_did_drop;
+use crate::process_event;
 
 pub(crate) fn generate_filename(extension: &str) -> String {
     let timestamp = chrono::Utc::now().timestamp_millis();
@@ -33,10 +33,7 @@ pub(crate) fn generate_redirect_html(url: &str) -> String {
 }
 
 pub(crate) async fn get_dropped_content_path(filename: &str) -> PathBuf {
-    let dir = DiContainer::get_instance()
-        .path_resolver()
-        .get_dropped_content_dir_path()
-        .await;
+    let dir = DiContainer::get_instance().path_resolver().get_dropped_content_dir_path().await;
     PathBuf::from(dir).join(filename)
 }
 
@@ -46,34 +43,17 @@ async fn fetch_url_with_timeout(url: &str) -> Result<reqwest::Response, String> 
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
-    client
-        .get(url)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to download: {}", e))
+    client.get(url).send().await.map_err(|e| format!("Failed to download: {}", e))
 }
 
-async fn stream_response_to_file(
-    mut response: reqwest::Response,
-    file_path: &PathBuf,
-) -> Result<(), String> {
-    let mut file = File::create(file_path)
-        .await
-        .map_err(|e| format!("Failed to create file: {}", e))?;
+async fn stream_response_to_file(mut response: reqwest::Response, file_path: &PathBuf) -> Result<(), String> {
+    let mut file = File::create(file_path).await.map_err(|e| format!("Failed to create file: {}", e))?;
 
-    while let Some(chunk) = response
-        .chunk()
-        .await
-        .map_err(|e| format!("Failed to read chunk: {}", e))?
-    {
-        file.write_all(&chunk)
-            .await
-            .map_err(|e| format!("Failed to write chunk: {}", e))?;
+    while let Some(chunk) = response.chunk().await.map_err(|e| format!("Failed to read chunk: {}", e))? {
+        file.write_all(&chunk).await.map_err(|e| format!("Failed to write chunk: {}", e))?;
     }
 
-    file.flush()
-        .await
-        .map_err(|e| format!("Failed to flush file: {}", e))?;
+    file.flush().await.map_err(|e| format!("Failed to flush file: {}", e))?;
 
     Ok(())
 }
@@ -83,23 +63,16 @@ async fn add_resource_from_path(shelf_id: u64, path: String, app_handle: AppHand
         path: LocalResourcePath::AbsolutePath(path),
         r#type: None,
     }];
-    process_event(
-        ShelfEvent::AddResources {
-            shelf_id,
-            selections,
-        },
-        app_handle,
-    )
-    .await;
+    process_event(ShelfEvent::AddResources { shelf_id, selections }, app_handle).await;
 }
 
 #[tauri::command]
-pub async fn add_url_resource(
-    shelf_id: String,
-    url: String,
-    app_handle: AppHandle,
-) -> Result<(), String> {
-    log::info!("[content_handlers] add_url_resource called - shelf_id: {}, url: {}", shelf_id, url);
+pub async fn add_url_resource(shelf_id: String, url: String, app_handle: AppHandle) -> Result<(), String> {
+    log::info!(
+        "[content_handlers] add_url_resource called - shelf_id: {}, url: {}",
+        shelf_id,
+        url
+    );
     notify_user_did_drop();
     let shelf_id = shelf_id.parse::<u64>().map_err(|e| e.to_string())?;
 
@@ -120,13 +93,12 @@ pub async fn add_url_resource(
         t if t.starts_with("text/html") => "html",
         t if t.starts_with("text/plain") => "txt",
         t if t.starts_with("application/pdf") => "pdf",
-        _ => {
-            url.split('/')
-                .last()
-                .and_then(|s| s.split('.').last())
-                .filter(|ext| ext.len() <= 5 && ext.chars().all(|c| c.is_alphanumeric()))
-                .unwrap_or("bin")
-        }
+        _ => url
+            .split('/')
+            .last()
+            .and_then(|s| s.split('.').last())
+            .filter(|ext| ext.len() <= 5 && ext.chars().all(|c| c.is_alphanumeric()))
+            .unwrap_or("bin"),
     };
 
     let filename = generate_filename(extension);
@@ -141,21 +113,19 @@ pub async fn add_url_resource(
 }
 
 #[tauri::command]
-pub async fn add_text_resource(
-    shelf_id: String,
-    content: String,
-    app_handle: AppHandle,
-) -> Result<(), String> {
-    log::info!("[content_handlers] add_text_resource called - shelf_id: {}, content_len: {}", shelf_id, content.len());
+pub async fn add_text_resource(shelf_id: String, content: String, app_handle: AppHandle) -> Result<(), String> {
+    log::info!(
+        "[content_handlers] add_text_resource called - shelf_id: {}, content_len: {}",
+        shelf_id,
+        content.len()
+    );
     notify_user_did_drop();
     let shelf_id = shelf_id.parse::<u64>().map_err(|e| e.to_string())?;
 
     let filename = generate_filename("txt");
     let file_path = get_dropped_content_path(&filename).await;
 
-    fs::write(&file_path, &content)
-        .await
-        .map_err(|e| format!("Failed to write file: {}", e))?;
+    fs::write(&file_path, &content).await.map_err(|e| format!("Failed to write file: {}", e))?;
 
     let path_str = file_path.to_string_lossy().to_string();
     add_resource_from_path(shelf_id, path_str, app_handle).await;
@@ -164,21 +134,19 @@ pub async fn add_text_resource(
 }
 
 #[tauri::command]
-pub async fn add_html_resource(
-    shelf_id: String,
-    content: String,
-    app_handle: AppHandle,
-) -> Result<(), String> {
-    log::info!("[content_handlers] add_html_resource called - shelf_id: {}, content_len: {}", shelf_id, content.len());
+pub async fn add_html_resource(shelf_id: String, content: String, app_handle: AppHandle) -> Result<(), String> {
+    log::info!(
+        "[content_handlers] add_html_resource called - shelf_id: {}, content_len: {}",
+        shelf_id,
+        content.len()
+    );
     notify_user_did_drop();
     let shelf_id = shelf_id.parse::<u64>().map_err(|e| e.to_string())?;
 
     let filename = generate_filename("html");
     let file_path = get_dropped_content_path(&filename).await;
 
-    fs::write(&file_path, &content)
-        .await
-        .map_err(|e| format!("Failed to write file: {}", e))?;
+    fs::write(&file_path, &content).await.map_err(|e| format!("Failed to write file: {}", e))?;
 
     let path_str = file_path.to_string_lossy().to_string();
     add_resource_from_path(shelf_id, path_str, app_handle).await;
@@ -186,9 +154,7 @@ pub async fn add_html_resource(
     Ok(())
 }
 
-pub async fn read_clipboard_selections(
-    app_handle: &AppHandle,
-) -> Result<Vec<ResourceSelection>, String> {
+pub async fn read_clipboard_selections(app_handle: &AppHandle) -> Result<Vec<ResourceSelection>, String> {
     log::info!("[content_handlers] read_clipboard_selections called");
 
     let clipboard = app_handle.state::<Clipboard>();
@@ -212,9 +178,7 @@ pub async fn read_clipboard_selections(
         let filename = generate_filename("png");
         let file_path = get_dropped_content_path(&filename).await;
 
-        fs::write(&file_path, &img)
-            .await
-            .map_err(|e| format!("Failed to write image: {}", e))?;
+        fs::write(&file_path, &img).await.map_err(|e| format!("Failed to write image: {}", e))?;
 
         let path_str = file_path.to_string_lossy().to_string();
         return Ok(vec![ResourceSelection {
@@ -247,9 +211,7 @@ pub async fn read_clipboard_selections(
         let filename = generate_filename("txt");
         let file_path = get_dropped_content_path(&filename).await;
 
-        fs::write(&file_path, &text)
-            .await
-            .map_err(|e| format!("Failed to write text: {}", e))?;
+        fs::write(&file_path, &text).await.map_err(|e| format!("Failed to write text: {}", e))?;
 
         let path_str = file_path.to_string_lossy().to_string();
         return Ok(vec![ResourceSelection {
@@ -262,10 +224,7 @@ pub async fn read_clipboard_selections(
 }
 
 #[tauri::command]
-pub async fn paste_from_clipboard(
-    shelf_id: String,
-    app_handle: AppHandle,
-) -> Result<(), String> {
+pub async fn paste_from_clipboard(shelf_id: String, app_handle: AppHandle) -> Result<(), String> {
     notify_user_did_drop();
     let shelf_id_u64 = shelf_id.parse::<u64>().map_err(|e| e.to_string())?;
 

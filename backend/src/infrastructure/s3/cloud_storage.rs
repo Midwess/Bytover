@@ -13,7 +13,7 @@ use tokio::time::Instant;
 
 pub struct S3CloudStorageImpl {
     pub s3_client: S3Client,
-    pub cached_sign: Arc<Mutex<HashMap<StaticResource, (Instant, String)>>>
+    pub cached_sign: Arc<Mutex<HashMap<StaticResource, (Instant, String)>>>,
 }
 
 #[async_trait::async_trait]
@@ -22,7 +22,7 @@ impl CloudStorage for S3CloudStorageImpl {
         &self,
         user: &User,
         platform: Platform,
-        resource: &TransferResource
+        resource: &TransferResource,
     ) -> Result<Upload, CloudStorageErrors> {
         let file_size = resource.size_in_bytes();
         let (chunk_size, chunk_stream_enabled) = match (resource.r#type(), platform) {
@@ -68,7 +68,7 @@ impl CloudStorage for S3CloudStorageImpl {
             source.clone(),
             file_size,
             chunk_size,
-            chunk_stream_enabled
+            chunk_stream_enabled,
         )?;
 
         let token = context.as_token(self.get_jwt_secret());
@@ -77,7 +77,7 @@ impl CloudStorage for S3CloudStorageImpl {
             upload_url,
             x_content_length: context.x_content_length,
             chunk_stream_enabled,
-            is_last: context.is_last()
+            is_last: context.is_last(),
         };
 
         Ok(Upload::Multipart(part))
@@ -100,7 +100,7 @@ impl CloudStorage for S3CloudStorageImpl {
                 &next_part.resource,
                 &next_part.upload_id,
                 next_part.part_number,
-                self.get_download_duration()
+                self.get_download_duration(),
             )
             .await?;
 
@@ -109,7 +109,7 @@ impl CloudStorage for S3CloudStorageImpl {
             context_token: next_part.as_token(self.get_jwt_secret()),
             x_content_length: next_part.x_content_length,
             chunk_stream_enabled,
-            is_last: next_part.is_last()
+            is_last: next_part.is_last(),
         }))
     }
 
@@ -128,7 +128,7 @@ impl CloudStorage for S3CloudStorageImpl {
         let mut cached_sign = self.cached_sign.lock().await;
         if let Some((since, signed)) = cached_sign.get_mut(source) {
             if since.elapsed() < duration / 2 {
-                return Ok(signed.clone())
+                return Ok(signed.clone());
             }
         }
 
@@ -146,7 +146,7 @@ impl CloudStorage for S3CloudStorageImpl {
 
         let s3_path = match &source.source {
             Some(Source::S3Path(path)) => path.clone(),
-            _ => return Ok(false)
+            _ => return Ok(false),
         };
 
         match self.s3_client.head_object(s3_path.clone()).await {
@@ -155,7 +155,7 @@ impl CloudStorage for S3CloudStorageImpl {
                 Ok(true)
             }
             Err(core_services::services::errors::Errors::S3NotFound(_)) => Ok(false),
-            Err(e) => Err(CloudStorageErrors::S3Errors(e))
+            Err(e) => Err(CloudStorageErrors::S3Errors(e)),
         }
     }
 
@@ -164,7 +164,7 @@ impl CloudStorage for S3CloudStorageImpl {
 
         let s3_path = match &source.source {
             Some(Source::S3Path(path)) => path.clone(),
-            _ => return
+            _ => return,
         };
 
         if let Err(e) = self.s3_client.abort_incomplete_multipart_uploads(s3_path).await {

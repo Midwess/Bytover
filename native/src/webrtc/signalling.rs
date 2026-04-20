@@ -29,7 +29,7 @@ pub enum SignallingError {
     HttpFailed(String),
 
     #[error("Yield error: {0}")]
-    YieldError(#[from] YieldError)
+    YieldError(#[from] YieldError),
 }
 
 pub struct SignalingClient {
@@ -37,13 +37,13 @@ pub struct SignalingClient {
     http_url: String,
     msg_rx: Option<mpsc::Receiver<Result<Message, SignallingError>>>,
     msg_transfer_tx: Option<mpsc::Sender<Vec<u8>>>,
-    run_handle: Option<JoinHandle<()>>
+    run_handle: Option<JoinHandle<()>>,
 }
 
 #[derive(Clone)]
 pub struct SignallingSender {
     http_url: String,
-    msg_transfer_tx: mpsc::Sender<Vec<u8>>
+    msg_transfer_tx: mpsc::Sender<Vec<u8>>,
 }
 
 impl SignallingSender {
@@ -56,8 +56,8 @@ impl SignallingSender {
                     format!("turn:{}?transport=udp", server),
                     format!("turn:{}?transport=tcp", server),
                 ],
-                username: Some("guest".to_string()),
-                credential: Some("guest".to_string())
+                username: Some(crate::config::get_relay_turn_username()),
+                credential: Some(crate::config::get_relay_turn_password()),
             });
         }
 
@@ -80,7 +80,7 @@ impl SignallingSender {
         &self,
         sdp: String,
         peer: schema::devlog::bitbridge::PeerMessage,
-        request_id: &str
+        request_id: &str,
     ) -> Result<(), SignallingError> {
         let msg = Message {
             request_id: Some(request_id.to_string()),
@@ -106,14 +106,14 @@ impl SignalingClient {
             http_url,
             msg_rx: None,
             msg_transfer_tx: None,
-            run_handle: None
+            run_handle: None,
         }
     }
 
     pub fn get_sender(&self) -> Option<SignallingSender> {
         self.msg_transfer_tx.clone().map(|tx| SignallingSender {
             http_url: self.http_url.clone(),
-            msg_transfer_tx: tx
+            msg_transfer_tx: tx,
         })
     }
 

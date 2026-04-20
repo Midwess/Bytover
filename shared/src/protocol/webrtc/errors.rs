@@ -80,7 +80,7 @@ pub enum WebRtcErrors {
     InvalidResponse(String),
 
     #[error("Turn send error")]
-    TurnSendError(anyhow::Error)
+    TurnSendError(anyhow::Error),
 }
 
 impl From<WebRtcErrors> for CoreError {

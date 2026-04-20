@@ -8,14 +8,14 @@ use std::time::Duration;
 
 pub struct CoreBridgeImpl {
     pub shell: Arc<dyn ShellRuntime>,
-    pub throttle_shell_runtime: ThrottleShellRuntime<MessageToShell>
+    pub throttle_shell_runtime: ThrottleShellRuntime<MessageToShell>,
 }
 
 impl CoreBridgeImpl {
     pub fn new(shell: Arc<dyn ShellRuntime>) -> Self {
         Self {
             throttle_shell_runtime: ThrottleShellRuntime::new(shell.clone(), Duration::from_millis(300)),
-            shell
+            shell,
         }
     }
 }

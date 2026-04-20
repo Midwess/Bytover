@@ -9,20 +9,20 @@ pub struct UpdateManifest {
     pub notes: Option<String>,
     pub pubdate: String,
     pub is_critical: bool,
-    pub platforms: std::collections::HashMap<String, PlatformInfo>
+    pub platforms: std::collections::HashMap<String, PlatformInfo>,
 }
 
 #[derive(serde::Serialize)]
 pub struct PlatformInfo {
     pub signature: String,
-    pub url: String
+    pub url: String,
 }
 
 #[derive(Deserialize)]
 pub struct UpdatePath {
     target: String,
     arch: String,
-    current_version: String
+    current_version: String,
 }
 
 #[get("/update/{target}/{arch}/{current_version}")]
@@ -69,8 +69,8 @@ pub async fn get_update_manifest(path: web::Path<UpdatePath>) -> Result<HttpResp
                 target.clone(),
                 PlatformInfo {
                     signature: release.signature,
-                    url: release.download_url
-                }
+                    url: release.download_url,
+                },
             );
 
             let manifest = UpdateManifest {
@@ -78,7 +78,7 @@ pub async fn get_update_manifest(path: web::Path<UpdatePath>) -> Result<HttpResp
                 notes: release.release_notes,
                 pubdate: release.created_at.format("%Y-%m-%d").to_string(),
                 is_critical: release.is_critical,
-                platforms
+                platforms,
             };
 
             log::info!("Update available: v{}", manifest.version);

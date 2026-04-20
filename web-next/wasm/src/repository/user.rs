@@ -14,7 +14,7 @@ use shared::repository::user::{UserId, UserRepository};
 use wasm_bindgen::JsValue;
 
 pub struct UserRepositoryImpl {
-    pub db: PoolRequest<NeverSend<Database>>
+    pub db: PoolRequest<NeverSend<Database>>,
 }
 
 impl IdbId for IdbIdWrapper<UserId> {
@@ -24,21 +24,21 @@ impl IdbId for IdbIdWrapper<UserId> {
         if !json.is_array() {
             return Err(RepositoryError::Conflict(
                 table_name.to_owned(),
-                "The id must be an array of primitive types".to_owned()
+                "The id must be an array of primitive types".to_owned(),
             ));
         }
 
         let Some(json_array) = json.as_array_mut() else {
             return Err(RepositoryError::Conflict(
                 table_name.to_owned(),
-                "The id must be an array of primitive types".to_owned()
+                "The id must be an array of primitive types".to_owned(),
             ));
         };
 
         let Some(email) = json_array.get(1).and_then(|it| serde_json::from_value(it.clone()).ok()) else {
             return Err(RepositoryError::Conflict(
                 table_name.to_owned(),
-                "The id must be an array of primitive types".to_owned()
+                "The id must be an array of primitive types".to_owned(),
             ));
         };
 
@@ -69,7 +69,7 @@ impl IdbRepository<User, IdbIdWrapper<UserId>> for UserRepositoryImpl {
 impl Repository<User, UserId> for UserRepositoryImpl {
     async fn create(&self, data: User) -> Resolve<User>
     where
-        User: 'async_trait
+        User: 'async_trait,
     {
         IdbRepository::<User, IdbIdWrapper<UserId>>::create(self, data).await
     }
@@ -84,7 +84,7 @@ impl Repository<User, UserId> for UserRepositoryImpl {
             self,
             from_id.map(|it| IdbIdWrapper(it.clone())).as_ref(),
             to_id.as_ref(),
-            count
+            count,
         )
         .await
     }

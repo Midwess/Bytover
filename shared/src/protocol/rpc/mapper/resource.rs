@@ -12,7 +12,7 @@ impl From<Progress> for TransferProgress {
                 1 => TransferStatus::Success,
                 2 => TransferStatus::Fail(value.error_message.unwrap_or_default()),
                 3 => TransferStatus::Canceled,
-                _ => infer_status_from_legacy_fields(&value)
+                _ => infer_status_from_legacy_fields(&value),
             };
         } else {
             this.status = infer_status_from_legacy_fields(&value);
@@ -42,7 +42,7 @@ impl From<cloud_resource_message::ResourceType> for ResourceType {
             cloud_resource_message::ResourceType::Image => Self::Image,
             cloud_resource_message::ResourceType::Video => Self::Video,
             cloud_resource_message::ResourceType::File => Self::File,
-            cloud_resource_message::ResourceType::Folder => Self::Folder
+            cloud_resource_message::ResourceType::Folder => Self::Folder,
         }
     }
 }
@@ -58,7 +58,7 @@ impl From<CloudResourceMessage> for LocalResource {
             r#type: cloud_resource_message::ResourceType::try_from(value.r#type)
                 .unwrap_or(cloud_resource_message::ResourceType::File)
                 .into(),
-            shelf_id: 0
+            shelf_id: 0,
         }
     }
 }
@@ -69,7 +69,7 @@ impl LocalResource {
             ResourceType::Image => ResourceTypeMessage::Image,
             ResourceType::Video => ResourceTypeMessage::Video,
             ResourceType::File => ResourceTypeMessage::File,
-            ResourceType::Folder => ResourceTypeMessage::Folder
+            ResourceType::Folder => ResourceTypeMessage::Folder,
         };
 
         ResourceMessage {
@@ -77,7 +77,7 @@ impl LocalResource {
             name: self.name.clone(),
             size: self.size as i64,
             r#type: proto_type as i32,
-            thumbnail_png: None
+            thumbnail_png: None,
         }
     }
 }
@@ -88,7 +88,7 @@ impl From<ResourceTypeMessage> for ResourceType {
             ResourceTypeMessage::Image => ResourceType::Image,
             ResourceTypeMessage::Video => ResourceType::Video,
             ResourceTypeMessage::File => ResourceType::File,
-            ResourceTypeMessage::Folder => ResourceType::Folder
+            ResourceTypeMessage::Folder => ResourceType::Folder,
         }
     }
 }

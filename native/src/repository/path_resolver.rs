@@ -13,7 +13,7 @@ pub enum PathResolverMessage {
     GetThumbnailDirPath,
     GetSessionDirPath { session_id: u64 },
     GetSystemDirPath,
-    GetDroppedContentDirPath
+    GetDroppedContentDirPath,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -23,11 +23,11 @@ pub enum PathResolverResponseMessage {
     GetThumbnailDirPath { path: String },
     GetSessionDirPath { path: String },
     GetSystemDirPath { path: String },
-    GetDroppedContentDirPath { path: String }
+    GetDroppedContentDirPath { path: String },
 }
 
 pub struct PathResolverImpl {
-    pub shell: Arc<dyn ShellRuntime>
+    pub shell: Arc<dyn ShellRuntime>,
 }
 
 #[async_trait::async_trait]
@@ -48,7 +48,7 @@ impl PathResolver for PathResolverImpl {
         let MessageToShellResponse::PathResolverResponse(PathResolverResponseMessage::GetLocalResourcePath { path }) = self
             .shell
             .request(MessageToShell::PathResolver(PathResolverMessage::GetLocalResourcePath {
-                absolute_path
+                absolute_path,
             }))
             .await
         else {
@@ -72,7 +72,7 @@ impl PathResolver for PathResolverImpl {
         let MessageToShellResponse::PathResolverResponse(PathResolverResponseMessage::GetSessionDirPath { path }) = self
             .shell
             .request(MessageToShell::PathResolver(PathResolverMessage::GetSessionDirPath {
-                session_id
+                session_id,
             }))
             .await
         else {

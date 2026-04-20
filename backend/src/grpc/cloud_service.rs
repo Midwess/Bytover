@@ -10,22 +10,10 @@ use schema::devlog::bitbridge::bit_bridge_cloud_service_server::BitBridgeCloudSe
 use schema::devlog::bitbridge::cloud_resource_message::ResourceType as CloudResourceType;
 use schema::devlog::bitbridge::subscribe_session_info_response::{Event, SessionUpdated};
 use schema::devlog::bitbridge::{
-    AddResourcesRequest,
-    AddResourcesResponse,
-    CancelSessionRequest,
-    CancelSessionResponse,
-    ClientUploadRequest,
-    CompleteUploadPartRequest,
-    CompleteUploadPartResponse,
-    CreatePublicTransferSessionRequest,
-    CreatePublicTransferSessionResponse,
-    FindSessionRequest,
-    FindSessionResponse,
-    PublicSessionId,
-    SubscribeSessionInfoRequest,
-    SubscribeSessionInfoResponse,
-    UpdateTransferProgressRequest,
-    UpdateTransferProgressResponse
+    AddResourcesRequest, AddResourcesResponse, CancelSessionRequest, CancelSessionResponse, ClientUploadRequest,
+    CompleteUploadPartRequest, CompleteUploadPartResponse, CreatePublicTransferSessionRequest, CreatePublicTransferSessionResponse,
+    FindSessionRequest, FindSessionResponse, PublicSessionId, SubscribeSessionInfoRequest, SubscribeSessionInfoResponse,
+    UpdateTransferProgressRequest, UpdateTransferProgressResponse,
 };
 use std::pin::Pin;
 use std::sync::Arc;
@@ -39,7 +27,7 @@ use tonic::{Request, Response, Status};
 pub struct CloudGrpcService {
     pub cloud_storage: Arc<dyn CloudStorage>,
     pub session_repository: Arc<dyn TransferSessionRepository>,
-    pub app_service: Box<dyn AppInfoService>
+    pub app_service: Box<dyn AppInfoService>,
 }
 
 type SubscribeSessionResponseStream = Pin<Box<dyn tokio_stream::Stream<Item = Result<SubscribeSessionInfoResponse, Status>> + Send>>;
@@ -51,7 +39,7 @@ impl BitBridgeCloudService for CloudGrpcService {
     async fn find_session(&self, request: Request<FindSessionRequest>) -> Result<Response<FindSessionResponse>, Status> {
         let request = request.into_inner();
         let Some(alias) = request.alias else {
-            return Err(Status::invalid_argument("Alias must be defined"))
+            return Err(Status::invalid_argument("Alias must be defined"));
         };
 
         let Some(session) = self.session_repository.find_session_by_alias(alias).await? else {
@@ -59,8 +47,8 @@ impl BitBridgeCloudService for CloudGrpcService {
                 session: None,
                 access_url: "".to_string(),
                 is_required_password: false,
-                alias: "".to_string()
-            }))
+                alias: "".to_string(),
+            }));
         };
 
         if session.is_failed() {
@@ -68,19 +56,19 @@ impl BitBridgeCloudService for CloudGrpcService {
                 session: None,
                 access_url: "".to_string(),
                 is_required_password: false,
-                alias: "".to_string()
-            }))
+                alias: "".to_string(),
+            }));
         }
 
         let app = self.app_service.get_app_info("BitBridge".to_owned()).await?;
         let response = FindSessionResponse {
             session: Some(PublicSessionId {
                 order_id: session.order_id(),
-                user_id: session.user_order_id()
+                user_id: session.user_order_id(),
             }),
             access_url: session.access_url(app.unwrap().web_url().to_string()),
             is_required_password: session.password().is_some(),
-            alias: session.alias()
+            alias: session.alias(),
         };
 
         Ok(Response::new(response))
@@ -88,26 +76,26 @@ impl BitBridgeCloudService for CloudGrpcService {
 
     async fn subscribe_session_info(
         &self,
-        request: Request<SubscribeSessionInfoRequest>
+        request: Request<SubscribeSessionInfoRequest>,
     ) -> Result<Response<Self::subscribe_session_infoStream>, Status> {
         let request = request.into_inner();
         let (tx, rx) = mpsc::channel(16);
 
         let session_id = TransferSessionId {
             order_id: Some(request.id.order_id),
-            user_order_id: Some(request.id.user_id)
+            user_order_id: Some(request.id.user_id),
         };
 
         let Some(initial_session) = self.session_repository.find_one(&session_id).await? else {
-            return Err(Status::invalid_argument("Session not found or password is not correct"))
+            return Err(Status::invalid_argument("Session not found or password is not correct"));
         };
 
         if !initial_session.validate_access(request.password.clone()) {
-            return Err(Status::invalid_argument("Session not found or password is not correct"))
+            return Err(Status::invalid_argument("Session not found or password is not correct"));
         }
 
         if initial_session.is_failed() {
-            return Err(Status::invalid_argument("Session not found or password is not correct"))
+            return Err(Status::invalid_argument("Session not found or password is not correct"));
         }
 
         let app = self.app_service.get_app_info("BitBridge".to_owned()).await?.unwrap();
@@ -115,14 +103,14 @@ impl BitBridgeCloudService for CloudGrpcService {
 
         tx.send(Ok(SubscribeSessionInfoResponse {
             event: Some(Event::SessionUpdated(SessionUpdated {
-                session_updated: initial_session.into_msg(&self.cloud_storage, &app).await
-            }))
+                session_updated: initial_session.into_msg(&self.cloud_storage, &app).await,
+            })),
         }))
         .await
         .map_err(|_| Status::internal("Cannot send initial session"))?;
 
         if is_completed {
-            return Ok(Response::new(Box::pin(ReceiverStream::new(rx))))
+            return Ok(Response::new(Box::pin(ReceiverStream::new(rx))));
         }
 
         let TransferSessionId { order_id, user_order_id } = session_id;
@@ -138,7 +126,7 @@ impl BitBridgeCloudService for CloudGrpcService {
         tokio::spawn(async move {
             let session_id = TransferSessionId {
                 order_id: Some(order_id),
-                user_order_id: Some(user_order_id)
+                user_order_id: Some(user_order_id),
             };
 
             let mut interval = time::interval(Duration::from_secs(5));
@@ -198,7 +186,7 @@ impl BitBridgeCloudService for CloudGrpcService {
 
     async fn create_public_transfer_session(
         &self,
-        request: Request<CreatePublicTransferSessionRequest>
+        request: Request<CreatePublicTransferSessionRequest>,
     ) -> Result<Response<CreatePublicTransferSessionResponse>, Status> {
         let Some(token) = request.extensions().get::<Token>() else {
             return Err(Status::unauthenticated("Unauthenticated".to_owned()));
@@ -219,7 +207,7 @@ impl BitBridgeCloudService for CloudGrpcService {
             .await?;
 
         let response_body = CreatePublicTransferSessionResponse {
-            session: new_session.into_msg(&self.cloud_storage, app).await
+            session: new_session.into_msg(&self.cloud_storage, app).await,
         };
 
         let response = Response::new(response_body);
@@ -251,14 +239,14 @@ impl BitBridgeCloudService for CloudGrpcService {
             .filter_map(|it| {
                 let Ok(schema_type) = CloudResourceType::try_from(it.r#type) else {
                     log::warn!("The type {} is not supported", it.r#type);
-                    return None
+                    return None;
                 };
 
                 Some(TransferResourceRequest {
                     order_id: Some(it.order_id),
                     name: it.name.clone(),
                     r#type: (&schema_type).into(),
-                    size: it.size as u64
+                    size: it.size as u64,
                 })
             })
             .collect::<Vec<_>>();
@@ -268,16 +256,16 @@ impl BitBridgeCloudService for CloudGrpcService {
         let response_body = AddResourcesResponse {
             first_resource_upload_request: ClientUploadRequest {
                 resource_order_id: response.first_resource.order_id(),
-                upload: Some(response.first_resource_upload_request)
+                upload: Some(response.first_resource_upload_request),
             },
             thumbnail_upload_requests: response
                 .thumbnail_upload_urls
                 .iter()
                 .map(|(order_id, url)| ClientUploadRequest {
                     resource_order_id: *order_id,
-                    upload: Some(schema::devlog::bitbridge::client_upload_request::Upload::SingleUrl(url.clone()))
+                    upload: Some(schema::devlog::bitbridge::client_upload_request::Upload::SingleUrl(url.clone())),
                 })
-                .collect::<Vec<_>>()
+                .collect::<Vec<_>>(),
         };
 
         let response = Response::new(response_body);
@@ -307,7 +295,7 @@ impl BitBridgeCloudService for CloudGrpcService {
 
     async fn update_transfer_progress(
         &self,
-        request: Request<UpdateTransferProgressRequest>
+        request: Request<UpdateTransferProgressRequest>,
     ) -> Result<Response<UpdateTransferProgressResponse>, Status> {
         let Some(token) = request.extensions().get::<Token>() else {
             return Err(Status::unauthenticated("Unauthenticated".to_owned()));
@@ -331,20 +319,20 @@ impl BitBridgeCloudService for CloudGrpcService {
             .update_transfer_progress(user, device, request.session_order_id, request.resource_id, status)
             .await?
         else {
-            return Ok(Response::new(UpdateTransferProgressResponse { next_upload_request: None }))
+            return Ok(Response::new(UpdateTransferProgressResponse { next_upload_request: None }));
         };
 
         Ok(Response::new(UpdateTransferProgressResponse {
             next_upload_request: Some(ClientUploadRequest {
                 resource_order_id: next_resource_id,
-                upload: Some(next_upload_request.clone())
-            })
+                upload: Some(next_upload_request.clone()),
+            }),
         }))
     }
 
     async fn complete_upload_part(
         &self,
-        request: Request<CompleteUploadPartRequest>
+        request: Request<CompleteUploadPartRequest>,
     ) -> Result<Response<CompleteUploadPartResponse>, Status> {
         let Some(user) = request.extensions().get::<User>() else {
             return Err(Status::unauthenticated("Unauthenticated".to_owned()));

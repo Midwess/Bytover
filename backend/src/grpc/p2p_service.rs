@@ -5,26 +5,16 @@ use crate::transfer::p2p_transfer_service::P2PTransferErrors;
 use schema::devlog::app_gateway::models::{Device, User};
 use schema::devlog::bitbridge::p2p_orchestration_service_server::P2pOrchestrationService;
 use schema::devlog::bitbridge::{
-    find_p2p_session_request,
-    CreateDeviceSessionRequest,
-    CreateDeviceSessionResponse,
-    FindP2pSessionRequest,
-    FindP2pSessionResponse,
-    GenPeerRequest,
-    GenPeerResponse,
-    GetDeviceAliasesRequest,
-    GetDeviceAliasesResponse,
-    GetRegionRequest,
-    GetRegionResponse,
-    P2pSession,
-    PeerMessage
+    find_p2p_session_request, CreateDeviceSessionRequest, CreateDeviceSessionResponse, FindP2pSessionRequest, FindP2pSessionResponse,
+    GenPeerRequest, GenPeerResponse, GetDeviceAliasesRequest, GetDeviceAliasesResponse, GetRegionRequest, GetRegionResponse,
+    P2pSession, PeerMessage,
 };
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
 pub struct P2PGrpcService {
     pub p2p_repository: Arc<dyn P2PSessionRepository>,
-    pub app_service: Box<dyn AppInfoService>
+    pub app_service: Box<dyn AppInfoService>,
 }
 
 const DEFAULT_REGION_CODE: &str = "local";
@@ -54,14 +44,14 @@ fn derive_signalling_region(region_code: Option<&str>) -> (String, String) {
 fn current_region_code() -> Option<String> {
     resolve_region_code(
         std::env::var("BYTOVER_REGION_CODE").ok().as_deref(),
-        normalize_railway_region(std::env::var("RAILWAY_REPLICA_REGION").ok().as_deref()).as_deref()
+        normalize_railway_region(std::env::var("RAILWAY_REPLICA_REGION").ok().as_deref()).as_deref(),
     )
 }
 
 fn resolve_region_code(bytover_region_code: Option<&str>, railway_replica_region: Option<&str>) -> Option<String> {
     [
         bytover_region_code,
-        railway_replica_region
+        railway_replica_region,
     ]
     .into_iter()
     .flatten()
@@ -81,7 +71,7 @@ fn normalize_railway_region(region: Option<&str>) -> Option<String> {
 impl P2pOrchestrationService for P2PGrpcService {
     async fn create_device_session(
         &self,
-        request: Request<CreateDeviceSessionRequest>
+        request: Request<CreateDeviceSessionRequest>,
     ) -> Result<Response<CreateDeviceSessionResponse>, Status> {
         let Some(user) = request.extensions().get::<User>() else {
             return Err(Status::unauthenticated("Unauthenticated".to_owned()));
@@ -105,12 +95,12 @@ impl P2pOrchestrationService for P2PGrpcService {
                 device.name.clone(),
                 alias,
                 signalling_key,
-                signalling_route
+                signalling_route,
             )
             .await
             .map_err(|e| match e {
                 P2PTransferErrors::AliasNotFound => Status::invalid_argument("Alias not found for this device"),
-                _ => Status::internal(e.to_string())
+                _ => Status::internal(e.to_string()),
             })?;
 
         let app = self.app_service.get_app_info("BitBridge".to_owned()).await?.unwrap();
@@ -123,8 +113,8 @@ impl P2pOrchestrationService for P2PGrpcService {
                 description: session.description().map(|s| s.to_string()),
                 access_url: session.access_url(app.web_url().to_string()),
                 alias: session.alias().to_string(),
-                signalling_route: session.signalling_route().to_string()
-            }
+                signalling_route: session.signalling_route().to_string(),
+            },
         };
 
         Ok(Response::new(response))
@@ -135,7 +125,7 @@ impl P2pOrchestrationService for P2PGrpcService {
 
         let alias = match request_body.key {
             Some(find_p2p_session_request::Key::Alias(alias)) => alias,
-            None => return Err(Status::invalid_argument("Alias must be defined"))
+            None => return Err(Status::invalid_argument("Alias must be defined")),
         };
 
         let Some(session) = self.p2p_repository.find_by_alias(alias).await? else {
@@ -152,8 +142,8 @@ impl P2pOrchestrationService for P2PGrpcService {
                 description: session.description().map(|s| s.to_string()),
                 access_url: session.access_url(app.web_url().to_string()),
                 alias: session.alias().to_string(),
-                signalling_route: session.signalling_route().to_string()
-            })
+                signalling_route: session.signalling_route().to_string(),
+            }),
         };
 
         Ok(Response::new(response))
@@ -161,7 +151,7 @@ impl P2pOrchestrationService for P2PGrpcService {
 
     async fn get_device_aliases(
         &self,
-        request: Request<GetDeviceAliasesRequest>
+        request: Request<GetDeviceAliasesRequest>,
     ) -> Result<Response<GetDeviceAliasesResponse>, Status> {
         let Some(user) = request.extensions().get::<User>() else {
             return Err(Status::unauthenticated("Unauthenticated".to_owned()));
@@ -202,7 +192,7 @@ impl P2pOrchestrationService for P2PGrpcService {
                     Some(user.display_name.clone()),
                     user.avatar_url.unwrap_or_default(),
                     Some(user.email.clone()),
-                    Some(signalling_id)
+                    Some(signalling_id),
                 )
             }
             None => {
@@ -217,14 +207,14 @@ impl P2pOrchestrationService for P2PGrpcService {
             avatar_url,
             email,
             device,
-            region_code: Some(region_code.clone())
+            region_code: Some(region_code.clone()),
         };
 
         Ok(Response::new(GenPeerResponse {
             peer,
             signalling_id,
             region_code,
-            signalling_route
+            signalling_route,
         }))
     }
 
@@ -234,7 +224,7 @@ impl P2pOrchestrationService for P2PGrpcService {
 
         Ok(Response::new(GetRegionResponse {
             region_code,
-            signalling_route
+            signalling_route,
         }))
     }
 }

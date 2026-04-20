@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub enum TransferType {
     Send { from_shelf_id: u64 },
-    Receive
+    Receive,
 }
 
 impl TransferType {
@@ -28,16 +28,16 @@ impl TransferType {
 pub enum TransferSessionStatus {
     Initializing {
         loading_error: Option<String>,
-        loading_state: Option<String>
+        loading_state: Option<String>,
     },
     InProgress {
         bytes_per_second: u64,
-        percentage: f64
+        percentage: f64,
     },
     Saving,
     Success,
     Failed(String),
-    Canceled
+    Canceled,
 }
 
 impl TransferSessionStatus {
@@ -54,7 +54,7 @@ impl Display for TransferSessionStatus {
         match self {
             TransferSessionStatus::Initializing {
                 loading_state: Some(text),
-                loading_error: None
+                loading_error: None,
             } => write!(f, "{text}"),
             TransferSessionStatus::Initializing {
                 loading_error: Some(text), ..
@@ -75,7 +75,7 @@ impl Display for TransferSessionStatus {
             TransferSessionStatus::Saving => write!(f, "Saving..."),
             TransferSessionStatus::Success => write!(f, ""),
             TransferSessionStatus::Failed(msg) => write!(f, "Failed 🫨 {msg}"),
-            TransferSessionStatus::Canceled => write!(f, "Canceled")
+            TransferSessionStatus::Canceled => write!(f, "Canceled"),
         }
     }
 }
@@ -96,7 +96,7 @@ pub struct TransferSession {
     pub is_required_password: bool,
     pub connection_error: Option<SessionLoadError>,
     #[serde(skip)]
-    pub cancellation_token: CancellationToken
+    pub cancellation_token: CancellationToken,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
@@ -111,7 +111,7 @@ pub struct TransferProgress {
     pub transfer_type: TransferType,
     pub status: TransferStatus,
     #[serde(default)]
-    pub received_by_peers: Vec<ResourceReceivedPeer>
+    pub received_by_peers: Vec<ResourceReceivedPeer>,
 }
 
 impl TransferProgress {
@@ -126,7 +126,7 @@ impl TransferProgress {
             start_time_utc_ms: Utc::now().timestamp_millis() as u64,
             transfer_type,
             status: TransferStatus::Pending,
-            received_by_peers: Vec::new()
+            received_by_peers: Vec::new(),
         }
     }
 
@@ -255,7 +255,7 @@ pub enum TransferStatus {
     Saving,
     Fail(String),
     Success,
-    Canceled
+    Canceled,
 }
 
 impl TransferStatus {
@@ -280,7 +280,7 @@ impl TransferSession {
         alias: String,
         access_url: String,
         id: u64,
-        from_shelf_id: u64
+        from_shelf_id: u64,
     ) -> Self {
         resources.sort_by(|a, b| a.size.cmp(&b.size));
         let is_required_password = password.is_some();
@@ -301,18 +301,18 @@ impl TransferSession {
                 from_peer: None,
                 connection_state: P2PConnectionState::NotConnected,
                 signalling_key: Some(signalling_key),
-                signalling_route: Some(signalling_route)
+                signalling_route: Some(signalling_route),
             },
             from_user: User {
                 id: 0,
                 email: String::new(),
                 name: String::new(),
-                avatar: String::new()
+                avatar: String::new(),
             },
             password,
             is_required_password,
             connection_error: None,
-            cancellation_token: CancellationToken::new()
+            cancellation_token: CancellationToken::new(),
         }
     }
 
@@ -321,7 +321,7 @@ impl TransferSession {
         password: Option<String>,
         resources: Vec<LocalResource>,
         to_emails: Vec<String>,
-        from_shelf_id: u64
+        from_shelf_id: u64,
     ) -> Self {
         let is_required_password = password.is_some();
         let transfer_type = TransferType::Send { from_shelf_id };
@@ -342,7 +342,7 @@ impl TransferSession {
             from_user: current_user,
             password,
             is_required_password,
-            connection_error: None
+            connection_error: None,
         }
     }
 
@@ -409,7 +409,7 @@ impl TransferSession {
         from_user: User,
         access_url: String,
         alias: String,
-        is_required_password: bool
+        is_required_password: bool,
     ) -> Self {
         Self {
             order_id,
@@ -425,7 +425,7 @@ impl TransferSession {
             description: None,
             password: None,
             is_required_password,
-            connection_error: None
+            connection_error: None,
         }
     }
 
@@ -434,13 +434,13 @@ impl TransferSession {
             self.progress.push(TransferProgress::new(
                 resource.order_id,
                 resource.size,
-                self.transfer_type.clone()
+                self.transfer_type.clone(),
             ));
         }
 
         if self.resources.iter().any(|it| it.order_id == resource.order_id) {
             log::info!("Resource {} already exists", resource.order_id);
-            return
+            return;
         }
 
         self.resources.push(resource);
@@ -452,7 +452,7 @@ impl TransferSession {
             self.progress.push(TransferProgress::new(
                 resource.order_id,
                 resource.size,
-                self.transfer_type.clone()
+                self.transfer_type.clone(),
             ));
         }
 
@@ -464,14 +464,14 @@ impl TransferSession {
     pub fn peer_id(&self) -> Option<String> {
         match &self.target {
             TransferTarget::P2P { from_peer, .. } => from_peer.as_ref().map(|p| p.id.clone()),
-            _ => None
+            _ => None,
         }
     }
 
     pub fn peer(&self) -> Option<&Peer> {
         match &self.target {
             TransferTarget::P2P { from_peer, .. } => from_peer.as_ref(),
-            _ => None
+            _ => None,
         }
     }
 
@@ -485,7 +485,7 @@ impl TransferSession {
         let mut name: String = "".to_string();
         if let Ok(url) = url::Url::parse(&self.access_url) {
             let Some(query) = url.query_pairs().find(|(key, _)| key == "session").map(|it| it.1.to_string()) else {
-                return false
+                return false;
             };
 
             name = query;
@@ -603,8 +603,8 @@ impl TransferSession {
                 .iter()
                 .find(|it| it.resource_order_id == resource.order_id)
                 .expect("Resource missing progress")
-                .status ==
-                TransferStatus::Pending
+                .status
+                == TransferStatus::Pending
         })
     }
 
@@ -612,7 +612,7 @@ impl TransferSession {
         if let Some(error) = &self.connection_error {
             return TransferSessionStatus::Initializing {
                 loading_state: None,
-                loading_error: Some(error.0.clone())
+                loading_error: Some(error.0.clone()),
             };
         }
 
@@ -621,20 +621,20 @@ impl TransferSession {
                 P2PConnectionState::NotConnected => {
                     return TransferSessionStatus::Initializing {
                         loading_state: Some("Signalling...".to_owned()),
-                        loading_error: None
+                        loading_error: None,
                     };
                 }
                 P2PConnectionState::Connecting => {
                     return TransferSessionStatus::Initializing {
                         loading_state: Some("Dialing...".to_owned()),
-                        loading_error: None
+                        loading_error: None,
                     };
                 }
                 P2PConnectionState::Failed(msg) => {
                     if self.resources.is_empty() {
                         return TransferSessionStatus::Initializing {
                             loading_state: None,
-                            loading_error: Some(msg.clone())
+                            loading_error: Some(msg.clone()),
                         };
                     } else {
                         return TransferSessionStatus::Failed(msg.clone());
@@ -644,7 +644,7 @@ impl TransferSession {
                     if self.resources.is_empty() {
                         return TransferSessionStatus::Initializing {
                             loading_state: Some("Waiting for resources...".to_owned()),
-                            loading_error: None
+                            loading_error: None,
                         };
                     }
 
@@ -658,7 +658,7 @@ impl TransferSession {
                         // whole session state.
                         return TransferSessionStatus::InProgress {
                             bytes_per_second: self.speed(1000),
-                            percentage: self.total_progress()
+                            percentage: self.total_progress(),
                         };
                     }
                 }
@@ -666,7 +666,7 @@ impl TransferSession {
         } else if self.is_initializing() {
             return TransferSessionStatus::Initializing {
                 loading_state: Some("Initializing...".to_owned()),
-                loading_error: None
+                loading_error: None,
             };
         }
 
@@ -675,7 +675,7 @@ impl TransferSession {
             .iter()
             .filter_map(|it| match &it.status {
                 TransferStatus::Fail(msg) => Some(msg.clone()),
-                _ => None
+                _ => None,
             })
             .collect::<Vec<String>>();
 
@@ -708,7 +708,7 @@ impl TransferSession {
         } else {
             TransferSessionStatus::InProgress {
                 bytes_per_second: self.speed(1000),
-                percentage: self.total_progress()
+                percentage: self.total_progress(),
             }
         }
     }
@@ -753,7 +753,7 @@ impl UpdateAction<TransferSession> for LocalResource {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ThumbnailUpdatedEvent {
     pub resource_id: u64,
-    pub path: LocalResourcePath
+    pub path: LocalResourcePath,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

@@ -7,7 +7,7 @@ impl From<&ResourceType> for SchemaResourceType {
             ResourceType::File => SchemaResourceType::File,
             ResourceType::Image => SchemaResourceType::Image,
             ResourceType::Video => SchemaResourceType::Video,
-            ResourceType::Folder => SchemaResourceType::Folder
+            ResourceType::Folder => SchemaResourceType::Folder,
         }
     }
 }

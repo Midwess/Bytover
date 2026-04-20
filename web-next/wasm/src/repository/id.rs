@@ -10,7 +10,7 @@ where
 impl<T> DbId for IdbIdWrapper<T>
 where
     T: DbId + Debug,
-    <T as DbId>::Table: core_services::db::repository::abstraction::table::Table<IdbIdWrapper<T>>
+    <T as DbId>::Table: core_services::db::repository::abstraction::table::Table<IdbIdWrapper<T>>,
 {
     type Table = <T as DbId>::Table;
 
@@ -29,7 +29,7 @@ where
 
 impl<T: Sized> std::ops::Deref for IdbIdWrapper<T>
 where
-    T: DbId + Debug
+    T: DbId + Debug,
 {
     type Target = T;
 
@@ -40,7 +40,7 @@ where
 
 impl<T: Sized> std::ops::DerefMut for IdbIdWrapper<T>
 where
-    T: DbId + Debug
+    T: DbId + Debug,
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0

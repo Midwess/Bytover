@@ -15,14 +15,14 @@ pub enum TransferDelimiterShema {
         session_id: u64,
         resource_id: u64,
         total_size: Option<u64>,
-        compressed: bool
+        compressed: bool,
     },
     End {
         session_id: u64,
         resource_id: u64,
-        total_size: u64
+        total_size: u64,
     },
-    Hold(u8)
+    Hold(u8),
 }
 
 impl TransferDelimiterShema {
@@ -31,7 +31,7 @@ impl TransferDelimiterShema {
             session_id,
             resource_id,
             total_size: None,
-            compressed
+            compressed,
         }
     }
 
@@ -39,7 +39,7 @@ impl TransferDelimiterShema {
         Self::End {
             session_id,
             resource_id,
-            total_size
+            total_size,
         }
     }
 
@@ -51,7 +51,7 @@ impl TransferDelimiterShema {
         match self {
             Self::Start { session_id, .. } => Some(*session_id),
             Self::End { session_id, .. } => Some(*session_id),
-            Self::Hold(_) => None
+            Self::Hold(_) => None,
         }
     }
 
@@ -59,7 +59,7 @@ impl TransferDelimiterShema {
         match self {
             Self::Start { resource_id, .. } => Some(*resource_id),
             Self::End { resource_id, .. } => Some(*resource_id),
-            Self::Hold(_) => None
+            Self::Hold(_) => None,
         }
     }
 
@@ -67,14 +67,14 @@ impl TransferDelimiterShema {
         match self {
             Self::Start { total_size, .. } => *total_size,
             Self::End { total_size, .. } => Some(*total_size),
-            Self::Hold(_) => None
+            Self::Hold(_) => None,
         }
     }
 
     pub fn compressed(&self) -> bool {
         match self {
             Self::Start { compressed, .. } => *compressed,
-            _ => false
+            _ => false,
         }
     }
 
@@ -85,7 +85,7 @@ impl TransferDelimiterShema {
         let len = bytes.len();
         if len + 2 > 1022 {
             return Err(WebRtcErrors::InvalidDelimiter(
-                "Serialized data is larger than buffer size!".to_owned()
+                "Serialized data is larger than buffer size!".to_owned(),
             ));
         }
 
@@ -100,12 +100,12 @@ impl TransferDelimiterShema {
         loop {
             let Some(packet) = rx.next().await else {
                 return Err(WebRtcErrors::InvalidDelimiter(
-                    "No more data to read, channel closed".to_owned()
-                ))
+                    "No more data to read, channel closed".to_owned(),
+                ));
             };
 
             if let Ok(delimiter) = Self::from_start_packet(&packet, session_id) {
-                return Ok(delimiter)
+                return Ok(delimiter);
             }
         }
     }
@@ -122,7 +122,7 @@ impl TransferDelimiterShema {
 
         if result.session_id() != Some(session_id) {
             return Err(WebRtcErrors::InvalidDelimiter(
-                "Invalid delimiter, session_id does not match".to_owned()
+                "Invalid delimiter, session_id does not match".to_owned(),
             ));
         }
 
@@ -141,7 +141,7 @@ impl TransferDelimiterShema {
 
         if result.session_id() != Some(session_id) {
             return Err(WebRtcErrors::InvalidDelimiter(
-                "Invalid delimiter, session_id does not match".to_owned()
+                "Invalid delimiter, session_id does not match".to_owned(),
             ));
         }
 
@@ -174,18 +174,18 @@ impl TransferDelimiterShema {
             return Err(WebRtcErrors::InvalidDelimiter(format!(
                 "Data buffer must be exactly 1024 bytes got {}",
                 data.len()
-            )))
+            )));
         }
 
         let len_bytes = &data[0..2];
         let len = u16::from_le_bytes([
             len_bytes[0],
-            len_bytes[1]
+            len_bytes[1],
         ]) as usize;
 
         if len > 1022 {
             return Err(WebRtcErrors::InvalidDelimiter(
-                "Serialized data is larger than buffer size!".to_owned()
+                "Serialized data is larger than buffer size!".to_owned(),
             ));
         }
 
@@ -203,7 +203,7 @@ struct SessionContext {
     session_id: u64,
     rtc_request_id: String,
     token: Arc<Mutex<Option<CancellationToken>>>,
-    resource_tokens: Arc<Mutex<HashMap<u64, CancellationToken>>>
+    resource_tokens: Arc<Mutex<HashMap<u64, CancellationToken>>>,
 }
 
 impl SessionContext {
@@ -212,14 +212,14 @@ impl SessionContext {
             token: Arc::new(Mutex::new(Some(CancellationToken::new()))),
             session_id,
             rtc_request_id,
-            resource_tokens: Arc::new(Mutex::new(HashMap::new()))
+            resource_tokens: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct TransfersContext {
-    active_transfers: Arc<Mutex<Vec<SessionContext>>>
+    active_transfers: Arc<Mutex<Vec<SessionContext>>>,
 }
 
 impl Default for TransfersContext {
@@ -231,7 +231,7 @@ impl Default for TransfersContext {
 impl TransfersContext {
     pub fn new() -> Self {
         Self {
-            active_transfers: Arc::new(Mutex::new(Vec::new()))
+            active_transfers: Arc::new(Mutex::new(Vec::new())),
         }
     }
 

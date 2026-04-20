@@ -20,7 +20,7 @@ pub enum CloudStorageErrors {
     #[error("Invalid upload context")]
     InvalidUploadContext,
     #[error("Max upload part reached")]
-    MaxUploadPartReached
+    MaxUploadPartReached,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -31,7 +31,7 @@ pub struct UploadContext {
     pub max_allowed_parts: usize,
     pub resource: StaticResource,
     pub x_content_length: u32,
-    pub chunk_stream_enabled: bool
+    pub chunk_stream_enabled: bool,
 }
 
 impl UploadContext {
@@ -50,7 +50,7 @@ impl UploadContext {
         resource: StaticResource,
         resource_size: u64,
         mut chunk_size: Option<u64>,
-        chunk_stream_enabled: bool
+        chunk_stream_enabled: bool,
     ) -> Result<UploadContext, CloudStorageErrors> {
         if let Some(size) = chunk_size {
             if size < 1 {
@@ -69,7 +69,7 @@ impl UploadContext {
             }
             _ => {
                 log::error!("Invalid resource type: {:?}", resource);
-                return Err(CloudStorageErrors::InvalidUploadContext)
+                return Err(CloudStorageErrors::InvalidUploadContext);
             }
         };
 
@@ -80,7 +80,7 @@ impl UploadContext {
             part_number: 1,
             upload_id,
             user_id,
-            resource
+            resource,
         })
     }
 
@@ -114,7 +114,7 @@ pub trait CloudStorage: Send + Sync {
         &self,
         user: &User,
         platform: Platform,
-        resource: &TransferResource
+        resource: &TransferResource,
     ) -> Result<Upload, CloudStorageErrors>;
     async fn get_upload_url(&self, source: &StaticResource) -> Result<String, CloudStorageErrors>;
     async fn complete_upload_part(&self, user: &User, context_token: &str) -> Result<Option<MultiPartUpload>, CloudStorageErrors>;

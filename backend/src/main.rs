@@ -29,7 +29,7 @@ enum MainErrors {
     #[error("Transport error {0}")]
     TransportError(#[from] tonic::transport::Error),
     #[error("DI container error {0}")]
-    DiContainerError(#[from] di_container::DiContainerError)
+    DiContainerError(#[from] di_container::DiContainerError),
 }
 
 #[tokio::main]
@@ -92,11 +92,11 @@ async fn start_grpc_server(connection: GrpcConnection) -> Result<(), MainErrors>
     Server::builder()
         .add_service(InterceptorFor::new(
             BitBridgeCloudServiceServer::new(di.get_grpc_cloud_service().await),
-            di.get_auth_middleware()
+            di.get_auth_middleware(),
         ))
         .add_service(InterceptorFor::new(
             P2pOrchestrationServiceServer::new(di.get_grpc_p2p_service().await),
-            di.get_auth_middleware()
+            di.get_auth_middleware(),
         ))
         .serve_with_incoming(connection.listener)
         .await?;

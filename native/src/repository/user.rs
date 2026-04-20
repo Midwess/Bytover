@@ -12,7 +12,7 @@ use shared::entities::user::User;
 use shared::repository::user::{UserId, UserRepository};
 
 pub struct UserRepositoryImpl {
-    pub db: PoolRequest<Database>
+    pub db: PoolRequest<Database>,
 }
 
 impl RedbId for RedbIdWrapper<UserId> {
@@ -45,7 +45,7 @@ impl RedbRepository<User, RedbIdWrapper<UserId>> for UserRepositoryImpl {
 impl Repository<User, UserId> for UserRepositoryImpl {
     async fn create(&self, data: User) -> Resolve<User>
     where
-        User: 'async_trait
+        User: 'async_trait,
     {
         RedbRepository::<User, RedbIdWrapper<UserId>>::create(self, data).await
     }
@@ -68,7 +68,7 @@ impl Repository<User, UserId> for UserRepositoryImpl {
             self,
             from_id.map(|it| RedbIdWrapper(it.clone())).as_ref(),
             to_id.as_ref(),
-            count
+            count,
         )
         .await
     }

@@ -3,7 +3,7 @@ use shared::shell::executor::rpc::NativeRpc;
 use tonic_web_wasm_client::Client;
 
 pub struct NativeRpcImpl {
-    pub auth_server: AppServer<Client>
+    pub auth_server: AppServer<Client>,
 }
 
 #[async_trait::async_trait(?Send)]

@@ -50,7 +50,7 @@ pub enum CloudTransferErrors {
     #[error("")]
     TonicStatus(#[from] tonic::Status),
     #[error("Task cancelled")]
-    TaskCancelled(#[from] TaskErrors)
+    TaskCancelled(#[from] TaskErrors),
 }
 
 pub struct CloudService<T>
@@ -62,12 +62,12 @@ where
     T::Future: MaybeSend,
     T::Error: Into<tonic::codegen::StdError>,
     T::ResponseBody: http_body::Body<Data = bytes::Bytes> + Send + 'static,
-    <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send
+    <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send,
 {
     pub server: &'static CloudServer<T>,
     pub active_session: Mutex<Weak<Mutex<TransferSession>>>,
     pub repository: Arc<dyn LocalResourceRepository>,
-    pub net_stream: Box<dyn NetStream>
+    pub net_stream: Box<dyn NetStream>,
 }
 
 impl<T> CloudService<T>
@@ -78,12 +78,12 @@ where
     T: tonic::client::GrpcService<tonic::body::Body>,
     T::Error: Into<tonic::codegen::StdError>,
     T::ResponseBody: http_body::Body<Data = bytes::Bytes> + Send + 'static,
-    <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send
+    <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send,
 {
     pub async fn create_public_session(&self, mut session: TransferSession) -> Result<TransferSession, CloudTransferErrors> {
         let to_emails = match &session.target {
             TransferTarget::Internet { to_emails, .. } => to_emails.clone(),
-            _ => return Err(CloudTransferErrors::UnsupportedTransferTarget)
+            _ => return Err(CloudTransferErrors::UnsupportedTransferTarget),
         };
 
         let user = &session.from_user;
@@ -93,7 +93,7 @@ where
         session.order_id = response.order_id;
         session.access_url = response.access_url;
         session.target = TransferTarget::Internet {
-            to_emails: response.to_emails
+            to_emails: response.to_emails,
         };
         session.from_user = user.clone();
         session.password = response.password.clone();
@@ -105,7 +105,7 @@ where
     pub async fn send_session(
         &self,
         session: TransferSession,
-        core_request: CoreRequest
+        core_request: CoreRequest,
     ) -> Result<TransferSessionStatus, CloudTransferErrors> {
         let mut session_guard = self.active_session.lock().await;
         if session_guard.upgrade().is_some() {
@@ -129,7 +129,7 @@ where
                 order_id: it.order_id,
                 size: it.size as i64,
                 thumbnail_download_url: None,
-                download_url: "".to_string()
+                download_url: "".to_string(),
             })
             .collect();
 
@@ -140,7 +140,7 @@ where
         let session_guard = session.lock().await;
         if session_guard.is_completed() {
             if session_guard.is_canceled() {
-                return Ok(TransferSessionStatus::Canceled)
+                return Ok(TransferSessionStatus::Canceled);
             };
 
             return Ok(TransferSessionStatus::Success);
@@ -166,7 +166,7 @@ where
     pub async fn upload_thumbnails(
         &self,
         session: &Arc<Mutex<TransferSession>>,
-        thumbnail_upload_requests: Vec<ClientUploadRequest>
+        thumbnail_upload_requests: Vec<ClientUploadRequest>,
     ) -> Result<(), CloudTransferErrors> {
         for request in thumbnail_upload_requests {
             let session_guard = session.lock().await;
@@ -176,12 +176,12 @@ where
 
             let resource = match session_guard.resources.iter().find(|it| it.order_id == request.resource_order_id) {
                 Some(resource) => resource,
-                None => continue
+                None => continue,
             };
 
             let thumbnail_file_path = match &resource.thumbnail_path {
                 Some(path) => path.clone(),
-                None => continue
+                None => continue,
             };
 
             drop(session_guard);
@@ -199,11 +199,11 @@ where
             while let Some(event) = rx.next().await {
                 if let NetStreamEvent::Error(e) = event {
                     log::warn!("Failed to upload thumbnail: {e:?}");
-                    break
+                    break;
                 }
 
                 if let NetStreamEvent::Completed { .. } = event {
-                    break
+                    break;
                 }
             }
 
@@ -217,7 +217,7 @@ where
         &self,
         session: &Arc<Mutex<TransferSession>>,
         first_upload_request: ClientUploadRequest,
-        core_request: CoreRequest
+        core_request: CoreRequest,
     ) -> Result<(), CloudTransferErrors> {
         let session_order_id = session.lock().await.order_id;
         let mut current_upload_request = Some(first_upload_request);
@@ -266,9 +266,9 @@ where
             let size = match resource_size_tasks.remove(&order_id) {
                 Some(rx) => match rx.await {
                     Ok(size) => size?,
-                    Err(_) => continue
+                    Err(_) => continue,
                 },
-                None => continue
+                None => continue,
             };
 
             current_upload_request = match self.upload_resource(session, order_id, upload, size, core_request.clone()).await {
@@ -309,13 +309,13 @@ where
         resource_order_id: u64,
         upload: Upload,
         size: u64,
-        core_request: CoreRequest
+        core_request: CoreRequest,
     ) -> Result<MultiPartUploadComplete, CloudTransferErrors> {
         let session_guard = transfer_session.lock().await;
         let token = session_guard.token().clone();
         let resource_path = match session_guard.resources.iter().find(|it| it.order_id == resource_order_id) {
             Some(resource) => resource.path.clone(),
-            None => return Err(CloudTransferErrors::ResourceNotFound)
+            None => return Err(CloudTransferErrors::ResourceNotFound),
         };
 
         let session_order_id = session_guard.order_id;
@@ -350,7 +350,7 @@ where
                             .update_transfer_progress(
                                 session_order_id,
                                 resource_order_id,
-                                Status::TransferredAmountInBytes(total_sent as u32)
+                                Status::TransferredAmountInBytes(total_sent as u32),
                             )
                             .await?;
                     }
@@ -379,7 +379,7 @@ where
         let progress = session_guard.resource_progress(resource_order_id).expect("Progress not found");
         if !progress.is_completed() {
             return Err(CloudTransferErrors::UploadProcessError(
-                "Upload process is interrupted".to_string()
+                "Upload process is interrupted".to_string(),
             ));
         }
 
@@ -392,7 +392,7 @@ where
         }
 
         Err(CloudTransferErrors::UploadProcessError(
-            "Upload completion is not multipart".to_string()
+            "Upload completion is not multipart".to_string(),
         ))
     }
 
@@ -421,7 +421,7 @@ where
         core_request: CoreRequest,
         session_id: u64,
         user_id: u64,
-        password: Option<String>
+        password: Option<String>,
     ) -> Result<(), CloudTransferErrors> {
         let mut stream = self.server.subscribe_public_session_events(user_id, session_id, password).await?;
         while let Some(value) = stream.next().await {
@@ -438,13 +438,13 @@ where
                     let progresses = session.progresses.drain(..).collect::<Vec<_>>();
                     (progresses, resources)
                 }
-                Event::ResourceUpdated(mut s) => (vec![], s.resource_update.drain(..).collect::<Vec<_>>())
+                Event::ResourceUpdated(mut s) => (vec![], s.resource_update.drain(..).collect::<Vec<_>>()),
             };
 
             let _ = core_request
                 .response(TransferOperationOutput::PublicTransferSessionUpdated((
                     resources.into_iter().map(|it| it.into()).collect(),
-                    progresses.into_iter().map(|it| it.into()).collect()
+                    progresses.into_iter().map(|it| it.into()).collect(),
                 )))
                 .await;
         }

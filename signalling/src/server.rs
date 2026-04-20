@@ -15,13 +15,13 @@ use crate::turn_manager::TurnManager;
 #[derive(Clone)]
 struct ServerState {
     client_manager: Arc<ClientManager>,
-    turn_manager: Arc<TurnManager>
+    turn_manager: Arc<TurnManager>,
 }
 
 pub struct SignallingServer {
     config: SignallingConfig,
     client_manager: Arc<ClientManager>,
-    turn_manager: Arc<TurnManager>
+    turn_manager: Arc<TurnManager>,
 }
 
 impl SignallingServer {
@@ -29,7 +29,7 @@ impl SignallingServer {
         Self {
             config,
             client_manager: ClientManager::new(),
-            turn_manager
+            turn_manager,
         }
     }
 
@@ -41,7 +41,7 @@ impl SignallingServer {
 
         let state = web::Data::new(ServerState {
             client_manager: Arc::clone(&self.client_manager),
-            turn_manager: Arc::clone(&self.turn_manager)
+            turn_manager: Arc::clone(&self.turn_manager),
         });
 
         let server = actix_web::HttpServer::new(move || {
@@ -87,7 +87,7 @@ impl SignallingServer {
             .routes(vec![build_gateway_route(
                 format!("devlog-rpc-signalling-{}", self.config.region_code),
                 &self.config.signalling_route,
-                20
+                20,
             )])
             .build();
 
@@ -122,7 +122,7 @@ async fn ws_handler(
     req: HttpRequest,
     stream: web::Payload,
     key: web::Path<String>,
-    state: web::Data<ServerState>
+    state: web::Data<ServerState>,
 ) -> Result<HttpResponse, actix_web::Error> {
     let key = key.into_inner();
 
@@ -150,7 +150,7 @@ async fn offer_handler(key: web::Path<String>, body: Bytes, state: web::Data<Ser
     let key = key.into_inner();
     let client = match state.client_manager.get(&key).await {
         Some(client) => client,
-        None => return HttpResponse::ServiceUnavailable().body("client not connected")
+        None => return HttpResponse::ServiceUnavailable().body("client not connected"),
     };
 
     let offer_request = match OfferRequest::decode(&body[..]) {
@@ -163,7 +163,7 @@ async fn offer_handler(key: web::Path<String>, body: Bytes, state: web::Data<Ser
     let mut message = Message {
         offer: Some(schema::devlog::rpc_signalling::server::OfferMessage {
             sdp: offer_request.offer.sdp,
-            peer: offer_request.peer
+            peer: offer_request.peer,
         }),
         session_id: offer_request.session_id,
         ..Default::default()
@@ -175,27 +175,27 @@ async fn offer_handler(key: web::Path<String>, body: Bytes, state: web::Data<Ser
         Ok(response) => {
             let answer = match response.answer {
                 Some(answer) => answer,
-                None => return HttpResponse::InternalServerError().body("no answer in response")
+                None => return HttpResponse::InternalServerError().body("no answer in response"),
             };
 
             let peer = match answer.peer.clone() {
                 Some(peer) => peer,
-                None => return HttpResponse::InternalServerError().body("no peer info in response")
+                None => return HttpResponse::InternalServerError().body("no peer info in response"),
             };
 
             let offer_response = OfferResponse {
                 answer: AnswerMessage {
                     sdp: answer.sdp,
-                    peer: Some(peer.clone())
+                    peer: Some(peer.clone()),
                 },
-                peer
+                peer,
             };
 
             encode_binary_response(&offer_response)
         }
         Err(crate::client::ClientError::Timeout(_)) => HttpResponse::GatewayTimeout().body("request timed out"),
         Err(crate::client::ClientError::Disconnected) => HttpResponse::ServiceUnavailable().body("client disconnected"),
-        Err(error) => HttpResponse::InternalServerError().body(format!("internal error: {error}"))
+        Err(error) => HttpResponse::InternalServerError().body(format!("internal error: {error}")),
     }
 }
 
@@ -205,7 +205,7 @@ async fn relay_handler(key: web::Path<String>, state: web::Data<ServerState>) ->
 
     let relay_config = match state.turn_manager.get_relay_config(&key).await {
         Some(config) => config,
-        None => return HttpResponse::ServiceUnavailable().body("client not connected")
+        None => return HttpResponse::ServiceUnavailable().body("client not connected"),
     };
 
     encode_binary_response(&relay_config)
@@ -221,14 +221,14 @@ fn parse_submitted_ipv4(value: &str) -> Option<std::net::Ipv4Addr> {
     if let Ok(ip) = value.parse::<std::net::IpAddr>() {
         return match ip {
             std::net::IpAddr::V4(ipv4) => Some(ipv4),
-            std::net::IpAddr::V6(ipv6) => ipv6.to_ipv4()
+            std::net::IpAddr::V6(ipv6) => ipv6.to_ipv4(),
         };
     }
 
     if let Ok(socket_addr) = value.parse::<std::net::SocketAddr>() {
         return match socket_addr.ip() {
             std::net::IpAddr::V4(ipv4) => Some(ipv4),
-            std::net::IpAddr::V6(ipv6) => ipv6.to_ipv4()
+            std::net::IpAddr::V6(ipv6) => ipv6.to_ipv4(),
         };
     }
 
@@ -245,7 +245,7 @@ fn parse_submitted_ipv6(value: &str) -> Option<std::net::Ipv6Addr> {
     if let Ok(ip) = value.parse::<std::net::IpAddr>() {
         return match ip {
             std::net::IpAddr::V6(ipv6) => Some(ipv6),
-            std::net::IpAddr::V4(_) => None
+            std::net::IpAddr::V4(_) => None,
         };
     }
 
@@ -272,17 +272,17 @@ struct RegisterRelayRequest {
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct RegisterRelayResponse {
-    ip_address: String
+    ip_address: String,
 }
 
 async fn register_relay_handler(
     req: HttpRequest,
     body: web::Json<RegisterRelayRequest>,
-    state: web::Data<ServerState>
+    state: web::Data<ServerState>,
 ) -> HttpResponse {
     let auth_header = match req.headers().get("authorization").and_then(|header| header.to_str().ok()) {
         Some(header) => header,
-        None => return HttpResponse::Unauthorized().body("missing authorization header")
+        None => return HttpResponse::Unauthorized().body("missing authorization header"),
     };
 
     if !auth_header.starts_with("Basic ") {
@@ -291,7 +291,7 @@ async fn register_relay_handler(
 
     let decoded = match base64::engine::general_purpose::STANDARD.decode(&auth_header[6..]) {
         Ok(decoded) => decoded,
-        Err(_) => return HttpResponse::Unauthorized().body("failed to decode base64 auth")
+        Err(_) => return HttpResponse::Unauthorized().body("failed to decode base64 auth"),
     };
 
     let auth_str = String::from_utf8_lossy(&decoded);
@@ -309,10 +309,21 @@ async fn register_relay_handler(
 
     let response_ip = match public_ipv4.clone().or_else(|| public_ipv6.clone()) {
         Some(ip) => ip,
-        None => return HttpResponse::BadRequest().body("relay registration requires at least one public IP address")
+        None => return HttpResponse::BadRequest().body("relay registration requires at least one public IP address"),
     };
 
-    state.turn_manager.register_relay(public_ipv4, public_ipv6, body.stun_port, body.relay_port, body.turn_port, body.turn_username.clone(), body.turn_password.clone()).await;
+    state
+        .turn_manager
+        .register_relay(
+            public_ipv4,
+            public_ipv6,
+            body.stun_port,
+            body.relay_port,
+            body.turn_port,
+            body.turn_username.clone(),
+            body.turn_password.clone(),
+        )
+        .await;
 
     HttpResponse::Ok().json(RegisterRelayResponse { ip_address: response_ip })
 }
@@ -321,7 +332,7 @@ fn encode_binary_response<T: ProstMessage>(message: &T) -> HttpResponse {
     let mut buffer = Vec::new();
     match message.encode(&mut buffer) {
         Ok(()) => HttpResponse::Ok().content_type("application/octet-stream").body(buffer),
-        Err(error) => HttpResponse::InternalServerError().body(format!("failed to encode response: {error}"))
+        Err(error) => HttpResponse::InternalServerError().body(format!("failed to encode response: {error}")),
     }
 }
 
@@ -344,7 +355,7 @@ mod tests {
     fn server_state(turn_manager: Arc<TurnManager>) -> web::Data<ServerState> {
         web::Data::new(ServerState {
             client_manager: ClientManager::new(),
-            turn_manager
+            turn_manager,
         })
     }
 
@@ -356,11 +367,13 @@ mod tests {
             .insert_header((header::AUTHORIZATION, basic_auth("supersecret")))
             .to_http_request();
         let body = web::Json(RegisterRelayRequest {
-            stun_port: 3478,
-            relay_port: 9101,
+            stun_port: 19101,
+            relay_port: 19101,
             public_ipv4: Some("198.51.100.7".to_string()),
             public_ipv6: Some("2001:db8::7".to_string()),
-            turn_port: 19101
+            turn_port: 19101,
+            turn_username: Some("relay".to_string()),
+            turn_password: Some("relay-secret".to_string()),
         });
 
         let response = register_relay_handler(req, body, state).await;
@@ -373,10 +386,14 @@ mod tests {
         assert_eq!(
             relay.urls,
             vec![
-                "stun:198.51.100.7:3478".to_string(),
-                "stun:[2001:db8::7]:3478".to_string()
+                "stun:198.51.100.7:19101".to_string(),
+                "stun:[2001:db8::7]:19101".to_string(),
+                "turn:198.51.100.7:19101".to_string(),
+                "turn:[2001:db8::7]:19101".to_string()
             ]
         );
+        assert_eq!(relay.username.as_deref(), Some("relay"));
+        assert_eq!(relay.credential.as_deref(), Some("relay-secret"));
         let assigned = turn_manager.get_assigned_relay("client-1").await.unwrap();
         assert_eq!(assigned.relay_host, "198.51.100.7");
     }
@@ -389,18 +406,28 @@ mod tests {
             .insert_header((header::AUTHORIZATION, basic_auth("supersecret")))
             .to_http_request();
         let body = web::Json(RegisterRelayRequest {
-            stun_port: 3478,
-            relay_port: 9101,
+            stun_port: 19101,
+            relay_port: 19101,
             public_ipv4: None,
             public_ipv6: Some("2001:db8::8".to_string()),
-            turn_port: 19101
+            turn_port: 19101,
+            turn_username: Some("relay".to_string()),
+            turn_password: Some("relay-secret".to_string()),
         });
 
         let response = register_relay_handler(req, body, state).await;
 
         assert_eq!(response.status(), StatusCode::OK);
         let relay = turn_manager.get_relay_config("client-1").await.unwrap();
-        assert_eq!(relay.urls, vec!["stun:[2001:db8::8]:3478".to_string()]);
+        assert_eq!(
+            relay.urls,
+            vec![
+                "stun:[2001:db8::8]:19101".to_string(),
+                "turn:[2001:db8::8]:19101".to_string()
+            ]
+        );
+        assert_eq!(relay.username.as_deref(), Some("relay"));
+        assert_eq!(relay.credential.as_deref(), Some("relay-secret"));
         let assigned = turn_manager.get_assigned_relay("client-1").await.unwrap();
         assert_eq!(assigned.relay_host, "2001:db8::8");
     }
@@ -412,11 +439,13 @@ mod tests {
             .insert_header((header::AUTHORIZATION, basic_auth("supersecret")))
             .to_http_request();
         let body = web::Json(RegisterRelayRequest {
-            stun_port: 3478,
-            relay_port: 9101,
+            stun_port: 19101,
+            relay_port: 19101,
             public_ipv4: None,
             public_ipv6: None,
-            turn_port: 19101
+            turn_port: 19101,
+            turn_username: None,
+            turn_password: None,
         });
 
         let response = register_relay_handler(req, body, state).await;

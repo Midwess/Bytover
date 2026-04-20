@@ -21,14 +21,14 @@ pub enum P2PTransferErrors {
     #[error("Alias not found for this device")]
     AliasNotFound,
     #[error("Alias generation failed after retries")]
-    AliasGenerationFailed
+    AliasGenerationFailed,
 }
 
 pub struct P2PTransferService {
     pub p2p_repository: Arc<dyn P2PSessionRepository>,
     pub device_alias_repository: Arc<dyn DeviceAliasRepository>,
     pub app_service: Box<dyn AppInfoService>,
-    pub markov_generator: Box<dyn Markov>
+    pub markov_generator: Box<dyn Markov>,
 }
 
 impl P2PTransferService {
@@ -39,7 +39,7 @@ impl P2PTransferService {
         device_name: String,
         alias: String,
         signalling_key: String,
-        signalling_route: String
+        signalling_route: String,
     ) -> Result<P2PSession, P2PTransferErrors> {
         let existing_session = self.p2p_repository.find_by_alias(alias.clone()).await?;
 
@@ -51,7 +51,7 @@ impl P2PTransferService {
                 session.alias().to_string(),
                 Some(device_name),
                 signalling_key,
-                signalling_route
+                signalling_route,
             );
 
             let updated_session = self.p2p_repository.update_session(updated_session).await?;

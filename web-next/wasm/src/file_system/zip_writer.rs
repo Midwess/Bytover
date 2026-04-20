@@ -8,11 +8,11 @@ use web_sys::FileSystemSyncAccessHandle;
 enum WriterState {
     Writer(ZipFileWriter<SyncAccessHandleWriter>),
     Entry(EntryStreamWriter<SyncAccessHandleWriter>),
-    Closed
+    Closed,
 }
 
 pub struct OpfsZipWriter {
-    state: WriterState
+    state: WriterState,
 }
 
 impl OpfsZipWriter {
@@ -20,7 +20,7 @@ impl OpfsZipWriter {
         let writer = SyncAccessHandleWriter::new(handle);
         let zip_writer = ZipFileWriter::new(writer);
         Self {
-            state: WriterState::Writer(zip_writer)
+            state: WriterState::Writer(zip_writer),
         }
     }
 
@@ -30,7 +30,7 @@ impl OpfsZipWriter {
         let zip_writer = match state {
             WriterState::Writer(w) => w,
             WriterState::Entry(e) => e.close().await?,
-            WriterState::Closed => return Err(anyhow::anyhow!("Writer is closed"))
+            WriterState::Closed => return Err(anyhow::anyhow!("Writer is closed")),
         };
 
         let entry = ZipEntryBuilder::new(name.into(), Compression::Stored)
@@ -49,7 +49,7 @@ impl OpfsZipWriter {
                 entry.write_all(bytes).await?;
                 Ok(())
             }
-            _ => Err(anyhow::anyhow!("No entry open. Call new_entry first."))
+            _ => Err(anyhow::anyhow!("No entry open. Call new_entry first.")),
         }
     }
 
@@ -59,7 +59,7 @@ impl OpfsZipWriter {
         let zip_writer = match state {
             WriterState::Writer(w) => w,
             WriterState::Entry(e) => e.close().await?,
-            WriterState::Closed => return Err(anyhow::anyhow!("Writer is closed"))
+            WriterState::Closed => return Err(anyhow::anyhow!("Writer is closed")),
         };
 
         let mut inner = zip_writer.close().await?;

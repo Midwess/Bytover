@@ -4,16 +4,13 @@ use core_services::db::repository::abstraction::errors::RepositoryError;
 use core_services::db::repository::abstraction::repository::Repository;
 use migration::model::p2p_session as p2p_session_model;
 use p2p_session_model::{
-    ActiveModel as P2PSessionActiveModel,
-    Column as P2PSessionColumn,
-    Entity as P2PSessionEntity,
-    Model as P2PSessionModel
+    ActiveModel as P2PSessionActiveModel, Column as P2PSessionColumn, Entity as P2PSessionEntity, Model as P2PSessionModel,
 };
 use sea_orm::ActiveValue::Set;
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
 pub struct P2PSessionPostgresRepository {
-    pub db: DatabaseConnection
+    pub db: DatabaseConnection,
 }
 
 impl TryFrom<P2PSessionModel> for P2PSession {
@@ -27,7 +24,7 @@ impl TryFrom<P2PSessionModel> for P2PSession {
             model.alias,
             model.description,
             model.signalling_key,
-            model.signalling_route
+            model.signalling_route,
         ))
     }
 }
@@ -43,7 +40,7 @@ impl TryFrom<&P2PSession> for P2PSessionActiveModel {
             alias: Set(entity.alias().to_string()),
             description: Set(entity.description().map(|s| s.to_string())),
             signalling_key: Set(entity.signalling_key().to_string()),
-            signalling_route: Set(entity.signalling_route().to_string())
+            signalling_route: Set(entity.signalling_route().to_string()),
         })
     }
 }
@@ -62,7 +59,7 @@ impl Repository<P2PSession, P2PSessionId> for P2PSessionPostgresRepository {
         &self,
         _from_id: Option<&P2PSessionId>,
         _to_id: Option<&P2PSessionId>,
-        _count: Option<usize>
+        _count: Option<usize>,
     ) -> Result<Vec<P2PSession>, RepositoryError> {
         unimplemented!("Not supported for P2PSession")
     }

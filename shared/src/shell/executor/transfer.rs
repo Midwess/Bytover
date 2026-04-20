@@ -42,7 +42,7 @@ where
     T::Error: Into<tonic::codegen::StdError>,
     T::ResponseBody: http_body::Body<Data = bytes::Bytes> + Send + 'static,
     <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send,
-    T::Future: MaybeSend
+    T::Future: MaybeSend,
 {
     fn web_rtc(&self) -> &Arc<WebRtc>;
 
@@ -94,7 +94,7 @@ where
                             from_peer: None,
                             connection_state: crate::entities::target::P2PConnectionState::NotConnected,
                             signalling_key: Some(p2p_session.signalling_key.clone()),
-                            signalling_route: Some(p2p_session.signalling_route.clone())
+                            signalling_route: Some(p2p_session.signalling_route.clone()),
                         },
                         access_url: p2p_session.access_url.clone(),
                         alias: alias.clone(),
@@ -103,7 +103,7 @@ where
                         password: None,
                         is_required_password: false,
                         connection_error: None,
-                        cancellation_token: CancellationToken::new()
+                        cancellation_token: CancellationToken::new(),
                     };
 
                     return Ok(Some(transfer_session).into());
@@ -130,7 +130,7 @@ where
                     user,
                     access_url.clone(),
                     response.alias.clone(),
-                    is_required_password
+                    is_required_password,
                 );
 
                 Ok(Some(transfer_session).into())
@@ -138,7 +138,7 @@ where
             TransferOperation::SubscribeToPublicSessionTransferProgress {
                 password,
                 session_owner_user_id,
-                session_order_id
+                session_order_id,
             } => {
                 self.cloud_service()
                     .fetch_public_session(request, session_order_id, session_owner_user_id, password)

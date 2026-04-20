@@ -1,10 +1,6 @@
 use crate::app::operations::persistent::{
-    DeviceAliasPersistentOperation,
-    LocalResourcePersistentOperation,
-    PersistentOperation,
-    SessionPersistentOperation,
-    ShelfPersistentOperation,
-    TransferSessionPersistentOperation
+    DeviceAliasPersistentOperation, LocalResourcePersistentOperation, PersistentOperation, SessionPersistentOperation,
+    ShelfPersistentOperation, TransferSessionPersistentOperation,
 };
 use crate::app::operations::CoreOperationOutput;
 use crate::entities::session::{Session, SessionType};
@@ -34,7 +30,7 @@ pub trait NativePersistent: Send + Sync {
                 let _ = self
                     .auth_session_repository()
                     .delete_one(&AuthSessionId {
-                        r#type: SessionType::Access
+                        r#type: SessionType::Access,
                     })
                     .await;
 
@@ -42,7 +38,7 @@ pub trait NativePersistent: Send + Sync {
                     .create(Session {
                         r#type: SessionType::Access,
                         token,
-                        user: None
+                        user: None,
                     })
                     .await?;
 
@@ -51,7 +47,7 @@ pub trait NativePersistent: Send + Sync {
             PersistentOperation::Session(SessionPersistentOperation::Remove) => {
                 self.auth_session_repository()
                     .delete_one(&AuthSessionId {
-                        r#type: SessionType::Access
+                        r#type: SessionType::Access,
                     })
                     .await?;
                 Ok(CoreOperationOutput::None)
@@ -60,20 +56,20 @@ pub trait NativePersistent: Send + Sync {
                 let session = self
                     .auth_session_repository()
                     .find_one(&AuthSessionId {
-                        r#type: SessionType::Access
+                        r#type: SessionType::Access,
                     })
                     .await
                     .unwrap_or(None);
                 Ok(match session {
                     Some(session) => CoreOperationOutput::AuthSession(session),
-                    None => CoreOperationOutput::None
+                    None => CoreOperationOutput::None,
                 })
             }
             PersistentOperation::Session(SessionPersistentOperation::WriteUser(user)) => {
                 let session = self
                     .auth_session_repository()
                     .find_one(&AuthSessionId {
-                        r#type: SessionType::Access
+                        r#type: SessionType::Access,
                     })
                     .await?;
 
@@ -109,7 +105,7 @@ pub trait NativePersistent: Send + Sync {
                 let result = self.local_resource_repository().load(path).await?;
                 Ok(match result {
                     Some(resource) => CoreOperationOutput::LocalResource(resource),
-                    None => CoreOperationOutput::None
+                    None => CoreOperationOutput::None,
                 })
             }
             PersistentOperation::LocalResource(LocalResourcePersistentOperation::AddThumbnail { png_bytes, resource_id }) => {
@@ -122,21 +118,21 @@ pub trait NativePersistent: Send + Sync {
             }
             PersistentOperation::TransferSession(TransferSessionPersistentOperation::GenerateResourcePath {
                 session_id,
-                resource_names
+                resource_names,
             }) => {
                 let result = self.transfer_session_repository().generate_resource_saved_paths(session_id, resource_names).await?;
                 Ok(CoreOperationOutput::ResourcePathMap(result))
             }
             PersistentOperation::TransferSession(TransferSessionPersistentOperation::GenerateThumbnailPath {
                 session_id,
-                resource_ids
+                resource_ids,
             }) => {
                 let result = self.local_resource_repository().generate_thumbnail_paths(session_id, resource_ids).await?;
                 Ok(CoreOperationOutput::ResourcePathMap(result))
             }
             PersistentOperation::TransferSession(TransferSessionPersistentOperation::GenerateZipDownloadPaths {
                 session_order_id,
-                resource_names
+                resource_names,
             }) => {
                 let result = self
                     .transfer_session_repository()
