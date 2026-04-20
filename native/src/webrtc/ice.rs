@@ -259,9 +259,10 @@ async fn connect_relay(
         // Send any pending transmits
         let now = stun_now(stun_base);
         while let Some(transmit) = pending.poll_transmit(now) {
-            log::debug!("[ice] TURN transmit to={} data_len={}", transmit.to, transmit.data.as_ref().len());
-            if let Err(e) = socket.send_to(&transmit.data, transmit.to).await {
-                log::warn!("[ice] TURN transmit send error: {} (to={})", e, transmit.to);
+            let send_addr = to_v6_mapped(transmit.to);
+            log::debug!("[ice] TURN transmit to={} data_len={}", send_addr, transmit.data.as_ref().len());
+            if let Err(e) = socket.send_to(&transmit.data, send_addr).await {
+                log::warn!("[ice] TURN transmit send error: {} (to={})", e, send_addr);
             }
         }
     }
