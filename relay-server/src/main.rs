@@ -48,6 +48,9 @@ async fn async_main() -> Result<(), MainErrors> {
         requested_turn_port
     ).parse().map_err(|e| MainErrors::ExecutionError(format!("invalid turn external address: {e}")))?;
 
+    let turn_username = env::var("TURN_USERNAME").unwrap_or_else(|_| "relay".to_string());
+    let turn_password = env::var("TURN_PASSWORD").unwrap_or_else(|_| "relay-secret".to_string());
+
     let turn_config = Config {
         server: TurnServerConfig {
             interfaces: vec![Interface::Udp {
@@ -61,8 +64,8 @@ async fn async_main() -> Result<(), MainErrors> {
         auth: Auth {
             static_credentials: {
                 let mut creds = HashMap::new();
-                let user = env::var("TURN_USERNAME").unwrap_or_else(|_| "relay".to_string());
-                let pass = env::var("TURN_PASSWORD").unwrap_or_else(|_| "relay-secret".to_string());
+                let user = turn_username.clone();
+                let pass = turn_password.clone();
                 creds.insert(user, pass);
                 creds
             },
@@ -76,7 +79,7 @@ async fn async_main() -> Result<(), MainErrors> {
     let registration_url = resolve_registration_url(&grpc_gateway).await.map_err(MainErrors::ExecutionError)?;
 
     let turn_port = requested_turn_port;
-    register_relay_once(&registration_url, 3478, turn_port, turn_port, &public_addresses)
+    register_relay_once(&registration_url, 3478, turn_port, turn_port, &turn_username, &turn_password, &public_addresses)
         .await
         .map_err(MainErrors::ExecutionError)?;
 
@@ -91,7 +94,7 @@ async fn async_main() -> Result<(), MainErrors> {
             3478,
             turn_port,
             turn_port,
-            RegistrationState::new(registration_url, public_addresses)
+            RegistrationState::new(registration_url, public_addresses, turn_username, turn_password)
         )
         .await;
     });
@@ -122,17 +125,21 @@ struct RegisterRelayRequest {
     turn_port: u16,
     public_ipv4: Option<String>,
     public_ipv6: Option<String>,
+    turn_username: String,
+    turn_password: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct RegistrationState {
     registration_url: String,
-    public_addresses: PublicAddresses
+    public_addresses: PublicAddresses,
+    turn_username: String,
+    turn_password: String
 }
 
 impl RegistrationState {
-    fn new(registration_url: String, public_addresses: PublicAddresses) -> Self {
-        Self { registration_url, public_addresses }
+    fn new(registration_url: String, public_addresses: PublicAddresses, turn_username: String, turn_password: String) -> Self {
+        Self { registration_url, public_addresses, turn_username, turn_password }
     }
 
     fn update_registration_url(&mut self, next_url: String) -> Option<(String, String)> {
@@ -151,7 +158,7 @@ fn relay_auth_header() -> String {
     format!("Basic {}", b64_auth)
 }
 
-async fn register_relay_once(url: &str, stun_port: u16, relay_port: u16, turn_port: u16, public_addresses: &PublicAddresses) -> Result<(), String> {
+async fn register_relay_once(url: &str, stun_port: u16, relay_port: u16, turn_port: u16, turn_username: &str, turn_password: &str, public_addresses: &PublicAddresses) -> Result<(), String> {
     let client = reqwest::Client::builder()
         .no_proxy()
         .build()
@@ -163,6 +170,8 @@ async fn register_relay_once(url: &str, stun_port: u16, relay_port: u16, turn_po
         turn_port,
         public_ipv4: public_addresses.ipv4.map(|ip| ip.to_string()),
         public_ipv6: public_addresses.ipv6.map(|ip| ip.to_string()),
+        turn_username: turn_username.to_string(),
+        turn_password: turn_password.to_string(),
     };
 
     let response = client
@@ -200,7 +209,7 @@ async fn start_registration_loop(stun_port: u16, relay_port: u16, turn_port: u16
             }
         };
 
-        match register_relay_once(&url, stun_port, relay_port, turn_port, &state.public_addresses).await {
+        match register_relay_once(&url, stun_port, relay_port, turn_port, &state.turn_username, &state.turn_password, &state.public_addresses).await {
             Ok(()) => {}
             Err(error) => {
                 log::error!("Failed to register relay heartbeat: {}", error);
@@ -235,7 +244,9 @@ mod tests {
             PublicAddresses {
                 ipv4: Some(Ipv4Addr::new(203, 0, 113, 10)),
                 ipv6: Some(Ipv6Addr::LOCALHOST)
-            }
+            },
+            "user".to_string(),
+            "pass".to_string()
         );
 
         let changed = state.update_registration_url("https://gateway.example/rpc-signalling-europe/register-relay".to_string());
@@ -256,7 +267,9 @@ mod tests {
             PublicAddresses {
                 ipv4: Some(Ipv4Addr::new(203, 0, 113, 10)),
                 ipv6: Some(Ipv6Addr::LOCALHOST)
-            }
+            },
+            "user".to_string(),
+            "pass".to_string()
         );
 
         assert_eq!(
