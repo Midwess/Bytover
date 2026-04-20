@@ -89,7 +89,6 @@ impl WebRtcClient {
         signalling: SignallingSender,
         request_id: String,
         resource_repo: Arc<dyn LocalResourceRepository>,
-        cached: Option<CachedPreConnection>,
     ) -> Result<Self, WebRtcClientError> {
         let Some(signalling_id) = me.signalling_id.clone() else {
             return Err(WebRtcClientError::Signalling("No signalling ID".to_string()));
@@ -107,7 +106,6 @@ impl WebRtcClient {
             me_proto,
             signalling,
             &request_id,
-            cached,
         ).await?;
 
         let (ordered_msg_tx, ordered_msg_rx) = futures_mpsc::channel::<Vec<u8>>(64);
