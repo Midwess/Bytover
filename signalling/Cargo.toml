@@ -12,7 +12,6 @@ tokio = { workspace = true, features = ["rt-multi-thread", "time", "sync"] }
 tokio-tungstenite = { workspace = true }
 futures-util = { workspace = true }
 prost = { workspace = true }
-tonic = { workspace = true }
 thiserror = { workspace = true }
 base64 = "0.22.1"
 log = "0.4.27"

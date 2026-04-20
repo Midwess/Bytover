@@ -50,7 +50,6 @@ impl SignallingServer {
                 .route("/server/{key}", web::get().to(ws_handler))
                 .route("/offer/{key}", web::post().to(offer_handler))
                 .route("/relay/{key}", web::get().to(relay_handler))
-                .route("/relay/{key}", web::post().to(relay_proxy_handler))
                 .route("/register-relay", web::post().to(register_relay_handler))
         })
         .listen(std_listener)?
@@ -201,7 +200,6 @@ async fn offer_handler(key: web::Path<String>, body: Bytes, state: web::Data<Ser
 }
 
 async fn relay_handler(key: web::Path<String>, state: web::Data<ServerState>) -> HttpResponse {
-    log::info!("Received requests");
     let key = key.into_inner();
     let _ = state.client_manager.get(&key).await;
 
@@ -210,66 +208,7 @@ async fn relay_handler(key: web::Path<String>, state: web::Data<ServerState>) ->
         None => return HttpResponse::ServiceUnavailable().body("client not connected")
     };
 
-    log::info!("Resolved request");
     encode_binary_response(&relay_config)
-}
-
-async fn relay_proxy_handler(key: web::Path<String>, body: Bytes, state: web::Data<ServerState>) -> HttpResponse {
-    use schema::devlog::bitbridge::relay_service_client::RelayServiceClient;
-    use tonic::metadata::MetadataValue;
-
-    let key = key.into_inner();
-
-    if state.client_manager.get(&key).await.is_none() {
-        return HttpResponse::ServiceUnavailable().body("client not connected");
-    }
-
-    let connect_req = match schema::devlog::bitbridge::ConnectRequest::decode(&body[..]) {
-        Ok(message) => message,
-        Err(error) => {
-            return HttpResponse::BadRequest().body(format!("failed to decode ConnectRequest: {error}"));
-        }
-    };
-
-    let relay = match state.turn_manager.get_assigned_relay(&key).await {
-        Some(relay) => relay,
-        None => return HttpResponse::ServiceUnavailable().body("no relay config assigned to client")
-    };
-    let relay_host = if relay.relay_host.contains(':') {
-        format!("[{}]", relay.relay_host)
-    } else {
-        relay.relay_host
-    };
-    let url = format!("http://{relay_host}:{}", relay.relay_port);
-    log::info!("Proxying relay request for client {} to {}", key, url);
-
-    let channel = match tonic::transport::Channel::from_shared(url) {
-        Ok(endpoint) => match endpoint.connect().await {
-            Ok(channel) => channel,
-            Err(error) => {
-                return HttpResponse::InternalServerError().body(format!("failed to connect to relay server channel: {error:?}"));
-            }
-        },
-        Err(error) => return HttpResponse::InternalServerError().body(format!("invalid relay server url: {error}"))
-    };
-
-    let mut client = RelayServiceClient::new(channel);
-
-    let secret = std::env::var("RELAY_SERVER_SECRET").unwrap_or_else(|_| "supersecret".to_string());
-    let header_value = format!(
-        "Basic {}",
-        base64::engine::general_purpose::STANDARD.encode(format!("user:{secret}"))
-    );
-
-    let mut request = tonic::Request::new(connect_req);
-    if let Ok(meta_value) = MetadataValue::try_from(header_value) {
-        request.metadata_mut().insert("authorization", meta_value);
-    }
-
-    match client.connect(request).await {
-        Ok(response) => encode_binary_response(&response.into_inner()),
-        Err(status) => HttpResponse::InternalServerError().body(format!("relay server gRPC error: {status}"))
-    }
 }
 
 fn parse_submitted_ipv4(value: &str) -> Option<std::net::Ipv4Addr> {

@@ -76,45 +76,6 @@ impl SignallingSender {
         IceConfig::decode(&bytes[..]).map_err(SignallingError::from)
     }
 
-    pub async fn relay_connect(
-        &self,
-        key: &str,
-        session_id: &str,
-        sdp: &str,
-        channels: Vec<schema::devlog::bitbridge::DataChannel>
-    ) -> Result<schema::devlog::bitbridge::ConnectResponse, SignallingError> {
-        use prost::Message;
-
-        let url = format!("{}/relay/{}", self.http_url, key);
-        let request = schema::devlog::bitbridge::ConnectRequest {
-            sdp: sdp.to_string(),
-            session_id: session_id.to_string(),
-            channels
-        };
-
-        let mut buf = Vec::new();
-        request.encode(&mut buf).map_err(|e| SignallingError::ProtocolError(e.to_string()))?;
-
-        let client = reqwest::Client::new();
-        let response = client
-            .post(&url)
-            .body(buf)
-            .header(reqwest::header::CONTENT_TYPE, "application/octet-stream")
-            .send()
-            .await
-            .map_err(|e| SignallingError::HttpFailed(format!("{e:?}")))?;
-
-        if !response.status().is_success() {
-            return Err(SignallingError::HttpFailed(format!(
-                "relay endpoint returned {}",
-                response.status()
-            )));
-        }
-
-        let bytes = response.bytes().await.map_err(|e| SignallingError::HttpFailed(format!("{e}")))?;
-        schema::devlog::bitbridge::ConnectResponse::decode(&bytes[..]).map_err(SignallingError::from)
-    }
-
     pub async fn send_answer(
         &self,
         sdp: String,

@@ -267,13 +267,12 @@ impl WebRtcServer {
                         let sig_sender = signalling.get_sender().expect("Signalling sender must be available");
                         let rid = request_id.clone();
                         let off = offer.clone();
-                        let sess = msg.session_id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+                        let _sess = msg.session_id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
                         connect_futs.push(async move {
                             let result = WebRtcClient::connect(
                                 user.clone(),
                                 off,
-                                sess,
                                 sig_sender,
                                 rid,
                                 repo,
