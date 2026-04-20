@@ -65,7 +65,6 @@ async fn async_main() -> Result<(), MainErrors> {
         ..Default::default()
     };
 
-    let _listener = find_grpc_listener(Some(9101)).await.map_err(|e| MainErrors::ExecutionError(e.to_string()))?;
     let grpc_gateway = GatewayChannel::new(config::get_gateway_grpc_url(), config::get_gateway_grpc_host());
     let registration_url = resolve_registration_url(&grpc_gateway).await.map_err(MainErrors::ExecutionError)?;
 
