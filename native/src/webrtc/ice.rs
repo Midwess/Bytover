@@ -882,29 +882,74 @@ async fn send_outbound_packets(socket: &tokio::net::UdpSocket, packets: Vec<Outb
 pub struct IceAgent;
 
 impl IceAgent {
-    pub fn resolve_remote_candidates(sdp: &str) -> String {
+    pub async fn resolve_remote_candidates(sdp: &str) -> String {
+        use std::collections::HashMap;
+
+        let lines: Vec<&str> = sdp.lines().collect();
+
+        let needs_resolution: Vec<(usize, String, String)> = lines
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, line)| {
+                if line.contains("candidate:") {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    if parts.len() > 5 {
+                        let hostname = parts[4];
+                        if hostname.parse::<std::net::IpAddr>().is_err() {
+                            return Some((idx, hostname.to_string(), parts[5].to_string()));
+                        }
+                    }
+                }
+                None
+            })
+            .collect();
+
+        let handles: Vec<_> = needs_resolution
+            .iter()
+            .map(|(idx, hostname, port)| {
+                let hostname = hostname.clone();
+                let port = port.clone();
+                let idx = *idx;
+                tokio::task::spawn_blocking(move || {
+                    let lookup = format!("{}:{}", hostname, port);
+                    (lookup.to_socket_addrs(), hostname, idx)
+                })
+            })
+            .collect();
+
+        let mut resolved: HashMap<(usize, String), String> = HashMap::new();
+        for h in handles {
+            match h.await {
+                Ok((result, hostname, idx)) => {
+                    match result {
+                        Ok(mut addrs) => {
+                            if let Some(resolved_addr) = addrs.next() {
+                                resolved.insert((idx, hostname), resolved_addr.ip().to_string());
+                            }
+                        }
+                        Err(e) => {
+                            log::warn!("[ice] Failed to resolve remote candidate {}: {}", hostname, e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    log::error!("[ice] spawn_blocking join error: {}", e);
+                }
+            }
+        }
+
         let mut resolved_lines = Vec::new();
-        for line in sdp.lines() {
+        for (idx, line) in lines.iter().enumerate() {
             if line.contains("candidate:") {
                 let parts: Vec<&str> = line.split_whitespace().collect();
                 if parts.len() > 5 {
                     let hostname = parts[4];
                     if hostname.parse::<std::net::IpAddr>().is_err() {
-                        let port = parts[5];
-                        let lookup = format!("{}:{}", hostname, port);
-                        match lookup.to_socket_addrs() {
-                            Ok(mut addrs) => {
-                                if let Some(resolved) = addrs.next() {
-                                    let mut new_parts = parts;
-                                    let ip_str = resolved.ip().to_string();
-                                    new_parts[4] = &ip_str;
-                                    resolved_lines.push(new_parts.join(" "));
-                                    continue;
-                                }
-                            }
-                            Err(e) => {
-                                log::warn!("[ice] Failed to resolve remote candidate {}: {}", hostname, e);
-                            }
+                        if let Some(ip) = resolved.get(&(idx, hostname.to_string())) {
+                            let mut new_parts = parts;
+                            new_parts[4] = ip;
+                            resolved_lines.push(new_parts.join(" "));
+                            continue;
                         }
                     }
                 }

@@ -5,19 +5,11 @@ use std::time::{Duration, Instant};
 use str0m::channel::{ChannelConfig, ChannelId};
 use str0m::net::{Protocol, Receive};
 use str0m::{Event, IceConnectionState, Input, Output, Rtc, RtcConfig};
-use stun_proto::agent::Transmit;
-use stun_proto::types::TransportType as StunTransportType;
-use turn_client_proto::api::TurnClientApi;
-use turn_client_proto::api::{CreatePermissionError, SendError};
-use turn_client_proto::udp::{TurnEvent, TurnPollRet, TurnRecvRet};
-use turn_types::TransportType;
-
 use schema::devlog::rpc_signalling::server::OfferMessage;
 
 use crate::webrtc::client::{WebRtcClientError, MAX_BUFFER_SIZE};
 use crate::webrtc::ice::IceAgent;
 use crate::webrtc::signalling::SignallingSender;
-use crate::webrtc::turn::{stun_now, TurnRelayInfo};
 
 pub const RELIABLE_STREAM_ID: u16 = 1;
 pub const UNORDERED_MSG_STREAM_ID: u16 = 2;
@@ -33,6 +25,8 @@ pub struct ChannelIds {
 /// How long ICE can stay in `Disconnected` before we treat it as a real disconnect.
 /// str0m never emits Failed/Closed ICE states, so we need this timeout.
 const ICE_DISCONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Maximum number of consecutive `MorePending` cycles
 const MAX_PENDING_SPINS_PER_STEP: usize = 8;
@@ -136,10 +130,6 @@ struct RtcClient {
     /// Events received during the connect/handshake phase that need to be
     /// replayed once the run loop starts (e.g. early ChannelData).
     early_events: Vec<Event>,
-    /// TURN relay info if TURN allocation succeeded during ICE gathering.
-    turn: Option<TurnRelayInfo>,
-    /// Duration until next TURN poll is needed (computed by drive_turn).
-    turn_wait: Option<Duration>,
 }
 
 impl RtcClient {
@@ -174,7 +164,7 @@ impl RtcClient {
 
         let local_addr = socket.local_addr()?;
 
-        let (candidates, relay_info) = IceAgent::gather_candidates(&socket, &config)
+        let (candidates, ..) = IceAgent::gather_candidates(&socket, &config)
             .await
             .map_err(|e| WebRtcClientError::Signalling(e.to_string()))?;
 
@@ -194,7 +184,7 @@ impl RtcClient {
             rtc.add_local_candidate(candidate);
         }
 
-        let offer_sdp = IceAgent::resolve_remote_candidates(&offer_message.sdp);
+        let offer_sdp = IceAgent::resolve_remote_candidates(&offer_message.sdp).await;
         log::info!("Received offer sdp: {offer_sdp}");
 
         let offer = str0m::change::SdpOffer::from_sdp_string(&offer_sdp).map_err(|e| WebRtcClientError::Sdp(e.to_string()))?;
@@ -241,8 +231,6 @@ impl RtcClient {
             channel_ids,
             pending_transmits: VecDeque::new(),
             early_events: Vec::new(),
-            turn: relay_info,
-            turn_wait: None,
         };
 
         let connected = false;
@@ -406,6 +394,7 @@ impl RtcClient {
     }
 
     async fn wait_for_connected(mut self, mut connected: bool) -> Result<Self, WebRtcClientError> {
+        let connect_deadline = Instant::now() + CONNECT_TIMEOUT;
         loop {
             if let RtcOutcome::Event(event) = self.poll_event().await? {
                 match event {
@@ -452,7 +441,11 @@ impl RtcClient {
                 return Err(WebRtcClientError::Connection("RTC connection closed".into()));
             }
 
-            let timeout = self.timeout_duration();
+            if Instant::now() >= connect_deadline {
+                return Err(WebRtcClientError::Connection("Connection timeout during handshake".into()));
+            }
+
+            let timeout = self.timeout_duration().min(connect_deadline - Instant::now());
             self.wait_for_input(timeout).await?;
         }
     }
@@ -466,54 +459,6 @@ impl RtcClient {
             Output::Transmit(t) => {
                 let peer_addr = from_v6_mapped(t.destination);
                 let socket_dest = to_v6_mapped(peer_addr);
-
-                if let Some(turn) = self.turn.as_mut() {
-                    if from_v6_mapped(t.source) == turn.relay_addr {
-                        if !turn.client.have_permission(TransportType::Udp, peer_addr.ip()) {
-                            match turn.client.create_permission(TransportType::Udp, peer_addr.ip(), stun_now(turn.stun_base)) {
-                                Ok(()) | Err(CreatePermissionError::AlreadyExists) => {
-                                    self.drive_turn().await;
-                                    return Ok(RtcOutcome::MorePending);
-                                }
-                                Err(e) => {
-                                    log::warn!("[rtc-client] Failed to create TURN permission for {}: {}", peer_addr, e);
-                                    return Ok(RtcOutcome::MorePending);
-                                }
-                            }
-                        }
-
-                        let tx_result = turn.client.send_to(TransportType::Udp, peer_addr, &*t.contents, stun_now(turn.stun_base));
-                        let transmit = match tx_result {
-                            Ok(Some(transmit)) => transmit,
-                            Ok(None) => return Ok(RtcOutcome::MorePending),
-                            Err(SendError::NoPermission) => {
-                                log::debug!("[rtc-client] TURN permission still pending for peer {}", peer_addr);
-                                return Ok(RtcOutcome::MorePending);
-                            }
-                            Err(e) => {
-                                log::warn!("[rtc-client] TURN send skipped for peer {}: {}", peer_addr, e);
-                                return Ok(RtcOutcome::MorePending);
-                            }
-                        };
-
-                        let out = transmit.build();
-                        let turn_server_dest = to_v6_mapped(out.to);
-                        if let Err(e) = self.socket.send_to(&out.data, turn_server_dest).await {
-                            log::warn!("[rtc-client] Failed to send TURN relay packet: {}", e);
-                            return Err(WebRtcClientError::Connection(format!("Failed to send packet: {e}")));
-                        }
-
-                        return Ok(RtcOutcome::MorePending);
-                    }
-
-                    // Regular peer packet - route directly
-                    if let Err(e) = self.socket.send_to(&t.contents, socket_dest).await {
-                        log::warn!("[rtc-client] Failed to send to {}: {}", socket_dest, e);
-                        return Err(WebRtcClientError::Connection(format!("Failed to send packet: {e}")));
-                    }
-
-                    return Ok(RtcOutcome::MorePending);
-                }
 
                 if let Err(e) = self.socket.send_to(&t.contents, socket_dest).await {
                     log::warn!("[rtc-client] Failed to send to {}: {}", socket_dest, e);
@@ -529,69 +474,8 @@ impl RtcClient {
         }
     }
 
-    /// Drive the TURN state machine forward, processing events and transmitting as needed.
-    /// Returns the Duration until the next poll, or None if TURN is not active.
-    async fn drive_turn(&mut self) -> Option<Duration> {
-        let turn = self.turn.as_mut()?;
-
-        let now = stun_now(turn.stun_base);
-
-        // Advance the TURN client state
-        let wait_deadline = match turn.client.poll(now) {
-            TurnPollRet::WaitUntil(deadline) => deadline,
-            TurnPollRet::Closed => {
-                log::warn!("[rtc-client] TURN client closed");
-                self.turn = None;
-                return None;
-            }
-            TurnPollRet::TcpClose { .. } | TurnPollRet::AllocateTcpSocket { .. } => {
-                // UDP client won't get these - shouldn't happen
-                return None;
-            }
-        };
-
-        // Process any TURN events
-        while let Some(event) = turn.client.poll_event() {
-            match event {
-                TurnEvent::AllocationCreated(_, relayed) => {
-                    log::info!("[rtc-client] TURN allocation confirmed, relay: {}", relayed);
-                }
-                TurnEvent::AllocationCreateFailed(family) => {
-                    log::warn!("[rtc-client] TURN allocation failed for family: {:?}", family);
-                }
-                TurnEvent::PermissionCreated(transport, peer) => {
-                    log::info!("[rtc-client] TURN permission created for {:?} peer {}", transport, peer);
-                }
-                TurnEvent::PermissionCreateFailed(transport, peer) => {
-                    log::warn!("[rtc-client] TURN permission create failed for {:?} peer {}", transport, peer);
-                }
-                TurnEvent::ChannelCreated(_, _) => {}
-                TurnEvent::ChannelCreateFailed(_, _) => {}
-                TurnEvent::TcpConnected(_) => {}
-                TurnEvent::TcpConnectFailed(_) => {}
-            }
-        }
-
-        // Send any pending TURN transmits
-        let now = stun_now(turn.stun_base);
-        while let Some(transmit) = turn.client.poll_transmit(now) {
-            let dest = to_v6_mapped(transmit.to);
-            if let Err(e) = self.socket.send_to(&transmit.data, dest).await {
-                log::warn!("[rtc-client] TURN transmit failed: {}", e);
-            }
-        }
-
-        // Calculate duration until next poll and store for timeout_duration()
-        let wait = if wait_deadline > now { wait_deadline - now } else { Duration::ZERO };
-        self.turn_wait = Some(wait);
-
-        Some(wait)
-    }
-
     fn timeout_duration(&self) -> Duration {
-        let rtc_timeout = self.cached_timeout.saturating_duration_since(Instant::now());
-        let turn_timeout = self.turn_wait.unwrap_or(Duration::MAX);
-        rtc_timeout.min(turn_timeout)
+        self.cached_timeout.saturating_duration_since(Instant::now())
     }
 
     async fn wait_for_input(&mut self, timeout: Duration) -> Result<(), WebRtcClientError> {
@@ -606,76 +490,13 @@ impl RtcClient {
             Ok(Ok((n, source))) => {
                 let source = from_v6_mapped(source);
                 let packet_data = self.buf[..n].to_vec();
-
-                // Check if this is a TURN server packet (demux by source address)
-                if let Some(turn) = self.turn.as_mut() {
-                    if source == turn.server_addr {
-                        // Route to TURN client
-                        let now = stun_now(turn.stun_base);
-                        let local = self.local_addr;
-                        let transmit = Transmit::new(&packet_data, StunTransportType::Udp, source, local);
-                        match turn.client.recv(transmit, now) {
-                            TurnRecvRet::PeerData(peer_data) => {
-                                // Peer data through TURN relay - rebuild Receive for str0m
-                                let peer_source = peer_data.peer;
-                                let local_for_peer = if peer_source.is_ipv4() {
-                                    self.local_v4_addr.unwrap_or(self.local_addr)
-                                } else {
-                                    self.local_v6_addr.unwrap_or(self.local_addr)
-                                };
-                                match Receive::new(Protocol::Udp, peer_source, local_for_peer, peer_data.data()) {
-                                    Ok(receive) => {
-                                        if let Err(e) = self.rtc.handle_input(Input::Receive(Instant::now(), receive)) {
-                                            log::warn!("[rtc-client] TURN peer data input drop: {}", e);
-                                        }
-                                    }
-                                    Err(e) => {
-                                        log::warn!("[rtc-client] Failed to parse TURN peer Receive: {}", e);
-                                    }
-                                }
-                            }
-                            TurnRecvRet::Handled => {
-                                // TURN control message handled internally
-                            }
-                            TurnRecvRet::Ignored(_) => {
-                                // Not a TURN message - fall through to str0m
-                                self.handle_str0m_receive(source, &packet_data)?;
-                            }
-                            TurnRecvRet::PeerIcmp {
-                                peer,
-                                transport,
-                                icmp_type,
-                                icmp_code,
-                                icmp_data,
-                            } => {
-                                log::warn!(
-                                    "[rtc-client] TURN ICMP from {:?} via {:?}: type={}, code={}, data={:?}",
-                                    peer,
-                                    transport,
-                                    icmp_type,
-                                    icmp_code,
-                                    icmp_data
-                                );
-                            }
-                        }
-
-                        self.drive_turn().await;
-                    } else {
-                        // Regular peer packet - route to str0m
-                        self.handle_str0m_receive(source, &packet_data)?;
-                    }
-                } else {
-                    // No TURN - route directly to str0m
-                    self.handle_str0m_receive(source, &packet_data)?;
-                }
+                self.handle_str0m_receive(source, &packet_data)?;
             }
             Ok(Err(e)) => return Err(e.into()),
             Err(_) => {
                 self.rtc
                     .handle_input(Input::Timeout(Instant::now()))
                     .map_err(|e| WebRtcClientError::Rtc(e.to_string()))?;
-                // Advance TURN state machine when timeout fires, so refreshes aren't missed
-                self.drive_turn().await;
             }
         }
 
