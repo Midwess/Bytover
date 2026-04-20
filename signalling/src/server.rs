@@ -263,7 +263,11 @@ struct RegisterRelayRequest {
     public_ipv4: Option<String>,
     public_ipv6: Option<String>,
     #[serde(default)]
-    turn_port: u16
+    turn_port: u16,
+    #[serde(default)]
+    turn_username: Option<String>,
+    #[serde(default)]
+    turn_password: Option<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -308,7 +312,7 @@ async fn register_relay_handler(
         None => return HttpResponse::BadRequest().body("relay registration requires at least one public IP address")
     };
 
-    state.turn_manager.register_relay(public_ipv4, public_ipv6, body.stun_port, body.relay_port, body.turn_port).await;
+    state.turn_manager.register_relay(public_ipv4, public_ipv6, body.stun_port, body.relay_port, body.turn_port, body.turn_username.clone(), body.turn_password.clone()).await;
 
     HttpResponse::Ok().json(RegisterRelayResponse { ip_address: response_ip })
 }

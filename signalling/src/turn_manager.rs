@@ -15,6 +15,8 @@ pub struct RegisteredRelay {
     pub stun_port: u16,
     pub relay_port: u16,
     pub turn_port: u16,
+    pub turn_username: Option<String>,
+    pub turn_password: Option<String>,
     pub last_ping: Instant,
     pub counter: Arc<AtomicUsize>
 }
@@ -70,7 +72,7 @@ impl TurnManager {
         manager
     }
 
-    pub async fn register_relay(&self, public_ipv4: Option<String>, public_ipv6: Option<String>, stun_port: u16, relay_port: u16, turn_port: u16) {
+    pub async fn register_relay(&self, public_ipv4: Option<String>, public_ipv6: Option<String>, stun_port: u16, relay_port: u16, turn_port: u16, turn_username: Option<String>, turn_password: Option<String>) {
         let mut relays = self.relays.lock().await;
         let relay_host = public_ipv4
             .clone()
@@ -115,6 +117,8 @@ impl TurnManager {
                     stun_port,
                     relay_port,
                     turn_port,
+                    turn_username,
+                    turn_password,
                     last_ping: Instant::now(),
                     counter: Arc::new(AtomicUsize::new(0))
                 }
@@ -182,8 +186,8 @@ impl TurnManager {
 
         Some(IceConfig {
             urls,
-            username: Some("relay".to_string()),
-            credential: Some("relay-secret".to_string())
+            username: final_relay.turn_username.clone(),
+            credential: final_relay.turn_password.clone()
         })
     }
 }

@@ -4,6 +4,7 @@ mod public_ip;
 
 use base64::Engine;
 use serde::Serialize;
+use std::collections::HashMap;
 use std::time::Duration;
 
 use devlog_sdk::tcp::listener::find_grpc_listener;
@@ -58,7 +59,13 @@ async fn async_main() -> Result<(), MainErrors> {
             ..Default::default()
         },
         auth: Auth {
-            static_credentials: Default::default(),
+            static_credentials: {
+                let mut creds = HashMap::new();
+                let user = env::var("TURN_USERNAME").unwrap_or_else(|_| "relay".to_string());
+                let pass = env::var("TURN_PASSWORD").unwrap_or_else(|_| "relay-secret".to_string());
+                creds.insert(user, pass);
+                creds
+            },
             static_auth_secret: Some(env::var("TURN_AUTH_SECRET").unwrap_or_else(|_| "relay-secret".to_string())),
             enable_hooks_auth: false,
         },
