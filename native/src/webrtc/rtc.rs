@@ -14,7 +14,7 @@ use turn_types::TransportType;
 
 use schema::devlog::rpc_signalling::server::OfferMessage;
 
-use crate::webrtc::client::{CachedPreConnection, WebRtcClientError, MAX_BUFFER_SIZE};
+use crate::webrtc::client::{WebRtcClientError, MAX_BUFFER_SIZE};
 use crate::webrtc::ice::IceAgent;
 use crate::webrtc::signalling::SignallingSender;
 use crate::webrtc::turn::{stun_now, TurnRelayInfo};
@@ -77,10 +77,7 @@ impl RtcHandle {
         me: schema::devlog::bitbridge::PeerMessage,
         signalling: SignallingSender,
         request_id: &str,
-        _cached: Option<CachedPreConnection>,
     ) -> Result<Self, WebRtcClientError> {
-        // Note: cached connections are not yet supported with TURN integration
-        // Always use fresh connection for now
         RtcClient::connect(
             signalling_id,
             offer_message,
@@ -258,89 +255,6 @@ impl RtcClient {
         let connected = false;
         let client = client.wait_for_connected(connected).await?;
         log::info!("Connected to p2p");
-        Ok(client.spawn_thread())
-    }
-
-    /// Connect using a pre-established cached socket and pre-gathered candidates.
-    /// This skips socket creation and all candidate gathering for fastest possible connection.
-    pub async fn connect_with_cached(
-        _signalling_id: &str,
-        offer_message: OfferMessage,
-        me: schema::devlog::bitbridge::PeerMessage,
-        signalling: SignallingSender,
-        request_id: &str,
-        cached: CachedPreConnection,
-    ) -> Result<RtcHandle, WebRtcClientError> {
-        let socket = cached.socket;
-        let local_addr = cached.local_addr;
-        let local_v4_addr = cached.local_v4_addr;
-        let local_v6_addr = cached.local_v6_addr;
-
-        let config = RtcConfig::default().set_sctp_max_message_size(256 * 1024).set_sctp_buffer_size(5 * 1024 * 1024);
-
-        let mut rtc = config.build(Instant::now());
-
-        // Add all cached candidates (host, srflx, relayed)
-        log::info!("[rtc-client] Adding {} cached candidates to RTC engine", cached.candidates.len());
-        for candidate in &cached.candidates {
-            log::debug!("[rtc-client] Adding candidate: {}", candidate);
-            rtc.add_local_candidate(candidate.clone());
-        }
-
-        let offer_sdp = IceAgent::resolve_remote_candidates(&offer_message.sdp);
-        log::info!("Received offer sdp: {offer_sdp}");
-
-        let offer = str0m::change::SdpOffer::from_sdp_string(&offer_sdp).map_err(|e| WebRtcClientError::Sdp(e.to_string()))?;
-
-        let reliable_id = rtc.direct_api().create_data_channel(ChannelConfig {
-            label: "reliable".to_string(),
-            ordered: false,
-            negotiated: Some(RELIABLE_STREAM_ID),
-            ..Default::default()
-        });
-        let unordered_msg_id = rtc.direct_api().create_data_channel(ChannelConfig {
-            label: "unordered_msg".to_string(),
-            ordered: false,
-            negotiated: Some(UNORDERED_MSG_STREAM_ID),
-            ..Default::default()
-        });
-        let ordered_msg_id = rtc.direct_api().create_data_channel(ChannelConfig {
-            label: "ordered_msg".to_string(),
-            ordered: true,
-            negotiated: Some(ORDERED_MSG_STREAM_ID),
-            ..Default::default()
-        });
-        let channel_ids = ChannelIds {
-            reliable: reliable_id,
-            unordered_msg: unordered_msg_id,
-            ordered_msg: ordered_msg_id
-        };
-
-        let answer = rtc.sdp_api().accept_offer(offer).map_err(|e| WebRtcClientError::Rtc(e.to_string()))?;
-
-        signalling
-            .send_answer(answer.to_sdp_string(), me, request_id)
-            .await
-            .map_err(|e| WebRtcClientError::Signalling(e.to_string()))?;
-
-        let client = Self {
-            rtc,
-            socket,
-            local_addr,
-            local_v4_addr,
-            local_v6_addr,
-            buf: vec![0u8; 2000],
-            cached_timeout: Instant::now(),
-            channel_ids,
-            pending_transmits: VecDeque::new(),
-            early_events: Vec::new(),
-            turn: None,
-            turn_wait: None,
-        };
-
-        let connected = false;
-        let client = client.wait_for_connected(connected).await?;
-        log::info!("Connected to p2p via cached connection");
         Ok(client.spawn_thread())
     }
 

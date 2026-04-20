@@ -1,5 +1,4 @@
 use std::collections::VecDeque;
-use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -32,7 +31,6 @@ use shared::utils::compression::is_compressible;
 use crate::webrtc::rtc::{RtcEvent, RtcHandle};
 use crate::webrtc::signalling::SignallingSender;
 use str0m::channel::ChannelId;
-use str0m::Candidate;
 
 pub static CHUNK_SIZE: usize = 16 * 1024;
 pub static MAX_BUFFER_SIZE: usize = 1024 * 1024 * 5;
@@ -41,17 +39,6 @@ const RELIABLE_DATA_QUEUE_CAPACITY: usize = MAX_BUFFER_SIZE / CHUNK_SIZE + 1;
 const OUTBOUND_RETRY_DELAY: Duration = Duration::from_millis(3);
 
 pub type WebRtcClientError = WebRtcErrors;
-
-/// Pre-warmed WebRTC connection data ready for fast handoff to a client.
-/// Contains socket and gathered candidates without active RTC state.
-#[derive(Debug)]
-pub struct CachedPreConnection {
-    pub socket: tokio::net::UdpSocket,
-    pub candidates: Vec<Candidate>,
-    pub local_addr: SocketAddr,
-    pub local_v4_addr: Option<SocketAddr>,
-    pub local_v6_addr: Option<SocketAddr>,
-}
 
 pub struct WebRtcClient {
     msg_channel: OnceCell<DirectMessageChannel>,

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex as StdMutex, Weak};
-use std::time::{Duration, Instant};
+use std::sync::{Arc, Weak};
+use std::time::Duration;
 
 use futures_util::stream::FuturesUnordered;
 use futures_util::StreamExt;
@@ -17,61 +17,8 @@ use shared::repository::local_resource::LocalResourceRepository;
 use shared::shell::api::CoreRequest;
 
 use crate::config::{get_signalling_server_http_url_for_route, get_signalling_server_ws_url_for_route};
-use crate::webrtc::client::{CachedPreConnection, WebRtcClient, WebRtcClientError};
+use crate::webrtc::client::{WebRtcClient, WebRtcClientError};
 use crate::webrtc::signalling::SignalingClient;
-
-/// Cache refresh interval - candidates are refreshed every 15 seconds
-const CACHE_REFRESH_INTERVAL: Duration = Duration::from_secs(15);
-
-/// Manages a single cached pre-connection for fast client handoff.
-#[derive(Debug)]
-pub struct ConnectionCache {
-    cache: Mutex<Option<CachedPreConnection>>,
-    last_refresh: StdMutex<Instant>,
-}
-
-impl ConnectionCache {
-    pub fn new() -> Self {
-        Self {
-            cache: Mutex::new(None),
-            last_refresh: StdMutex::new(Instant::now()),
-        }
-    }
-
-    /// Try to atomically claim the cached connection.
-    /// Returns Some(CachedPreConnection) if cache is present, None otherwise.
-    pub async fn try_take(&self) -> Option<CachedPreConnection> {
-        let mut cache = self.cache.lock().await;
-        cache.take()
-    }
-
-    /// Store a new cached connection (replaces existing).
-    pub async fn store(&self, connection: CachedPreConnection) {
-        let mut cache = self.cache.lock().await;
-        let mut last_refresh = self.last_refresh.lock().unwrap();
-        *cache = Some(connection);
-        *last_refresh = Instant::now();
-    }
-
-    /// Check if cache needs refresh (empty or older than CACHE_REFRESH_INTERVAL).
-    pub fn needs_refresh(&self) -> bool {
-        let cache = self.cache.try_lock().ok();
-        let last_refresh = self.last_refresh.lock().ok();
-
-        match (cache, last_refresh) {
-            (Some(cache), Some(last_refresh)) => {
-                cache.is_none() || last_refresh.elapsed() >= CACHE_REFRESH_INTERVAL
-            }
-            _ => true,
-        }
-    }
-}
-
-impl Default for ConnectionCache {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 #[derive(Debug, Error)]
 pub enum WebRtcServerError {
@@ -115,7 +62,6 @@ pub struct WebRtcServer {
     current_user: OnceCell<PeerEntity>,
     core_request: OnceCell<CoreRequest>,
     running: AtomicBool,
-    connection_cache: ConnectionCache,
 }
 
 impl WebRtcServer {
@@ -126,7 +72,6 @@ impl WebRtcServer {
             current_user: Default::default(),
             core_request: Default::default(),
             running: AtomicBool::new(false),
-            connection_cache: ConnectionCache::new(),
         })
     }
 
@@ -295,17 +240,6 @@ impl WebRtcServer {
         let mut run_handles: FuturesUnordered<_> = FuturesUnordered::new();
         let resource_repo = self.resource_repo.clone();
         let current_user = current_user.clone();
-        let mut cache_refresh_interval = tokio::time::interval(CACHE_REFRESH_INTERVAL);
-        cache_refresh_interval.tick().await; // Skip the first tick immediately
-
-        // Spawn initial cache generation
-        let server = self.clone();
-        tokio::spawn(async move {
-            log::info!("[webrtc-server] Generating initial cached connection");
-            if let Err(e) = generate_cached_connection(&server).await {
-                log::warn!("[webrtc-server] Initial cache generation failed: {:?}", e);
-            }
-        });
 
         loop {
             if !self.is_running() {
@@ -313,18 +247,6 @@ impl WebRtcServer {
             }
 
             tokio::select! {
-                _ = cache_refresh_interval.tick() => {
-                    if self.connection_cache.needs_refresh() {
-                        let server = self.clone();
-                        log::info!("[webrtc-server] Cache refresh triggered");
-                        tokio::spawn(async move {
-                            if let Err(e) = generate_cached_connection(&server).await {
-                                log::warn!("[webrtc-server] Cache refresh failed: {:?}", e);
-                            }
-                        });
-                    }
-                }
-
                 msg = signalling.next() => {
                     let msg = match msg {
                         Ok(m) => m,
@@ -346,7 +268,6 @@ impl WebRtcServer {
                         let rid = request_id.clone();
                         let off = offer.clone();
                         let _sess = msg.session_id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-                        let cached = self.connection_cache.try_take().await;
 
                         connect_futs.push(async move {
                             let result = WebRtcClient::connect(
@@ -355,7 +276,6 @@ impl WebRtcServer {
                                 sig_sender,
                                 rid,
                                 repo,
-                                cached,
                             )
                             .await;
 
@@ -421,71 +341,4 @@ impl WebRtcServer {
             }
         }
     }
-}
-
-/// Generate a cached pre-connection by creating a socket and gathering ICE candidates.
-/// This is called periodically to keep the cache fresh.
-async fn generate_cached_connection(server: &Arc<WebRtcServer>) -> Result<(), WebRtcServerError> {
-    use socket2::{Domain, Socket, Type};
-    use std::net::SocketAddr;
-
-    use crate::config::get_relay_server_override;
-    use crate::webrtc::ice::IceAgent;
-
-    // Create socket
-    let socket = Socket::new(Domain::IPV6, Type::DGRAM, Some(socket2::Protocol::UDP))?;
-    socket.set_only_v6(false)?;
-    socket.set_nonblocking(true)?;
-    socket.bind(&"[::]:0".parse::<SocketAddr>().unwrap().into())?;
-    let socket: std::net::UdpSocket = socket.into();
-    let socket = tokio::net::UdpSocket::from_std(socket)?;
-
-    let local_addr = socket.local_addr()?;
-
-    // Build IceConfig from relay server override
-    let config = if let Some(relay_server) = get_relay_server_override() {
-        schema::devlog::rpc_signalling::server::IceConfig {
-            urls: vec![
-                format!("stun:{}", relay_server),
-                format!("turn:{}?transport=udp", relay_server),
-                format!("turn:{}?transport=tcp", relay_server),
-            ],
-            username: Some("guest".to_string()),
-            credential: Some("guest".to_string()),
-        }
-    } else {
-        schema::devlog::rpc_signalling::server::IceConfig::default()
-    };
-
-    // Gather candidates
-    let (candidates, _turn_info) = IceAgent::gather_candidates(&socket, &config)
-        .await
-        .map_err(|e| WebRtcServerError::Signalling(e.to_string()))?;
-
-    let mut local_v4_addr = None;
-    let mut local_v6_addr = None;
-    for candidate in &candidates {
-        if candidate.addr().is_ipv4() && local_v4_addr.is_none() {
-            local_v4_addr = Some(candidate.addr());
-        } else if candidate.addr().is_ipv6() && local_v6_addr.is_none() {
-            local_v6_addr = Some(candidate.addr());
-        }
-    }
-
-    let cached = CachedPreConnection {
-        socket,
-        candidates,
-        local_addr,
-        local_v4_addr,
-        local_v6_addr,
-    };
-
-    log::info!(
-        "[webrtc-server] Cache generated: {} candidates, local_addr={}",
-        cached.candidates.len(),
-        cached.local_addr
-    );
-
-    server.connection_cache.store(cached).await;
-    Ok(())
 }
