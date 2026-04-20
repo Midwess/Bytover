@@ -63,3 +63,19 @@ pub fn is_relay_only() -> bool {
 pub fn get_relay_server_override() -> Option<String> {
     std::env::var("BYTOVER_RELAY_SERVER").ok().filter(|s| !s.is_empty())
 }
+
+fn env_var(key: &str) -> Option<String> {
+    std::env::var(key).ok().map(|value| value.trim().to_string()).filter(|value| !value.is_empty())
+}
+
+pub fn get_relay_turn_username() -> String {
+    env_var("BYTOVER_RELAY_TURN_USERNAME")
+        .or_else(|| env_var("TURN_USERNAME"))
+        .unwrap_or_else(|| "relay".to_string())
+}
+
+pub fn get_relay_turn_password() -> String {
+    env_var("BYTOVER_RELAY_TURN_PASSWORD")
+        .or_else(|| env_var("TURN_PASSWORD"))
+        .unwrap_or_else(|| "relay-secret".to_string())
+}

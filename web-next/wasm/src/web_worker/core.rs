@@ -25,7 +25,7 @@ pub struct CoreWorker {}
 pub enum CoreWorkerOperation {
     Update(#[serde(with = "serde_wasm_bindgen::preserve")] Uint8Array),
     HandleResponse(u32, #[serde(with = "serde_wasm_bindgen::preserve")] Uint8Array),
-    View
+    View,
 }
 
 unsafe impl Send for CoreWorkerOperation {}
@@ -57,21 +57,21 @@ impl Worker for CoreWorker {
                 let data = CORE.process_event(event_data.to_vec().as_slice()).unwrap_or_default();
                 scope.respond(
                     id,
-                    WorkerMessage::response(msg_id, CoreWorkerOperationOutput(data.into_uint_array()))
+                    WorkerMessage::response(msg_id, CoreWorkerOperationOutput(data.into_uint_array())),
                 );
             }
             CoreWorkerOperation::HandleResponse(request_id, response_data) => {
                 let data = CORE.handle_response(request_id, response_data.to_vec().as_slice()).unwrap_or_default();
                 scope.respond(
                     id,
-                    WorkerMessage::response(msg_id, CoreWorkerOperationOutput(data.into_uint_array()))
+                    WorkerMessage::response(msg_id, CoreWorkerOperationOutput(data.into_uint_array())),
                 );
             }
             CoreWorkerOperation::View => {
                 let data = CORE.view().unwrap_or_default();
                 scope.respond(
                     id,
-                    WorkerMessage::response(msg_id, CoreWorkerOperationOutput(data.into_uint_array()))
+                    WorkerMessage::response(msg_id, CoreWorkerOperationOutput(data.into_uint_array())),
                 );
             }
         }

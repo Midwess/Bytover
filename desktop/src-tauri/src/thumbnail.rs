@@ -1,13 +1,13 @@
-use std::path::PathBuf;
-use std::time::Duration;
+use core_services::utils::cancellation::{CancellationToken, FutureExtension, TaskErrors};
 use file_icon_provider::get_file_icon;
 use image::{DynamicImage, ImageFormat, RgbaImage};
+use shared::entities::local_resource::ResourceType;
+use std::path::PathBuf;
+use std::time::Duration;
 use tauri::async_runtime::spawn_blocking;
+use thiserror::Error;
 #[cfg(target_os = "macos")]
 use tokio::process::Command;
-use thiserror::Error;
-use core_services::utils::cancellation::{CancellationToken, FutureExtension, TaskErrors};
-use shared::entities::local_resource::ResourceType;
 
 #[derive(Error, Debug)]
 pub enum ThumbnailError {
@@ -24,7 +24,7 @@ pub enum ThumbnailError {
     InvalidPath,
 
     #[error("Cancelled")]
-    Cancelled(#[from] TaskErrors)
+    Cancelled(#[from] TaskErrors),
 }
 
 /// Generate a thumbnail using OS-specific APIs with fallback to image crate
@@ -39,7 +39,7 @@ pub enum ThumbnailError {
 pub async fn generate_thumbnail(
     file_path: PathBuf,
     png_output_path: PathBuf,
-    resource_type: &ResourceType
+    resource_type: &ResourceType,
 ) -> Result<(), ThumbnailError> {
     // Validate input paths
     if !file_path.exists() {
@@ -60,7 +60,10 @@ pub async fn generate_thumbnail(
                     icon.save_with_format(png_output_path.clone(), ImageFormat::Png).ok()?;
                     Some(png_output_path)
                 }
-            }).await.ok().flatten();
+            })
+            .await
+            .ok()
+            .flatten();
 
             if saved_path.is_some() {
                 return Ok(());
@@ -69,10 +72,8 @@ pub async fn generate_thumbnail(
     }
 
     let cancellation = match resource_type {
-        ResourceType::Video => {
-            CancellationToken::timeout(Duration::from_secs(6))
-        },
-        _ => CancellationToken::timeout(Duration::from_secs(2))
+        ResourceType::Video => CancellationToken::timeout(Duration::from_secs(6)),
+        _ => CancellationToken::timeout(Duration::from_secs(2)),
     };
 
     // Try OS-specific thumbnail generation first
@@ -92,14 +93,9 @@ pub async fn generate_thumbnail(
 // ============================================================================
 
 #[cfg(target_os = "macos")]
-async fn generate_os_thumbnail(
-    file_path: &PathBuf,
-    png_output_path: &PathBuf,
-) -> Result<(), ThumbnailError> {
+async fn generate_os_thumbnail(file_path: &PathBuf, png_output_path: &PathBuf) -> Result<(), ThumbnailError> {
     // Get output directory for qlmanage
-    let output_dir = png_output_path
-        .parent()
-        .ok_or(ThumbnailError::InvalidPath)?;
+    let output_dir = png_output_path.parent().ok_or(ThumbnailError::InvalidPath)?;
 
     let output = Command::new("qlmanage")
         .arg("-t")           // Generate thumbnail
@@ -114,17 +110,12 @@ async fn generate_os_thumbnail(
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(ThumbnailError::OsApiError(format!(
-            "qlmanage failed: {}",
-            stderr
-        )));
+        return Err(ThumbnailError::OsApiError(format!("qlmanage failed: {}", stderr)));
     }
 
     // qlmanage creates a file with .png extension
     // The output filename is: <original_filename>.png
-    let filename = file_path
-        .file_name()
-        .ok_or(ThumbnailError::InvalidPath)?;
+    let filename = file_path.file_name().ok_or(ThumbnailError::InvalidPath)?;
     let qlmanage_output = output_dir.join(format!("{}.png", filename.to_string_lossy()));
 
     if qlmanage_output.exists() {
@@ -142,15 +133,12 @@ async fn generate_os_thumbnail(
 // ============================================================================
 
 #[cfg(target_os = "windows")]
-async fn generate_os_thumbnail(
-    file_path: &PathBuf,
-    png_output_path: &PathBuf,
-) -> Result<(), ThumbnailError> {
-    use windows::Win32::UI::Shell::{IShellItemImageFactory, SHCreateItemFromParsingName, SIIGBF_BIGGERSIZEOK};
-    use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED};
-    use windows::core::{PCWSTR, Interface};
-    use windows::Win32::Foundation::SIZE;
+async fn generate_os_thumbnail(file_path: &PathBuf, png_output_path: &PathBuf) -> Result<(), ThumbnailError> {
     use std::os::windows::ffi::OsStrExt;
+    use windows::core::{Interface, PCWSTR};
+    use windows::Win32::Foundation::SIZE;
+    use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED};
+    use windows::Win32::UI::Shell::{IShellItemImageFactory, SHCreateItemFromParsingName, SIIGBF_BIGGERSIZEOK};
 
     // Windows COM operations must be run in a blocking context
     let file_path = file_path.clone();
@@ -166,20 +154,13 @@ async fn generate_os_thumbnail(
 
             let result = (|| -> Result<(), ThumbnailError> {
                 // Convert path to wide string
-                let wide_path: Vec<u16> = file_path
-                    .as_os_str()
-                    .encode_wide()
-                    .chain(std::iter::once(0))
-                    .collect();
+                let wide_path: Vec<u16> = file_path.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
 
                 // Create IShellItem from path
                 use windows::Win32::UI::Shell::IShellItem;
 
-                let shell_item: IShellItem = SHCreateItemFromParsingName(
-                    PCWSTR(wide_path.as_ptr()),
-                    None,
-                )
-                .map_err(|e| ThumbnailError::OsApiError(format!("SHCreateItemFromParsingName failed: {}", e)))?;
+                let shell_item: IShellItem = SHCreateItemFromParsingName(PCWSTR(wide_path.as_ptr()), None)
+                    .map_err(|e| ThumbnailError::OsApiError(format!("SHCreateItemFromParsingName failed: {}", e)))?;
 
                 // Get IShellItemImageFactory interface
                 let image_factory: IShellItemImageFactory = shell_item
@@ -212,8 +193,8 @@ async fn generate_os_thumbnail(
 #[cfg(target_os = "windows")]
 fn save_hbitmap_as_png(hbitmap: windows::Win32::Graphics::Gdi::HBITMAP, output_path: &PathBuf) -> Result<(), ThumbnailError> {
     use windows::Win32::Graphics::Gdi::{
-        GetDIBits, GetObjectW, DeleteObject, DeleteDC, CreateCompatibleDC,
-        BITMAP, BITMAPINFO, BITMAPINFOHEADER, DIB_RGB_COLORS, BI_RGB, HDC,
+        CreateCompatibleDC, DeleteDC, DeleteObject, GetDIBits, GetObjectW, BITMAP, BITMAPINFO, BITMAPINFOHEADER, BI_RGB,
+        DIB_RGB_COLORS, HDC,
     };
 
     unsafe {
@@ -286,12 +267,10 @@ fn save_hbitmap_as_png(hbitmap: windows::Win32::Graphics::Gdi::HBITMAP, output_p
         }
 
         // Create image from raw buffer
-        let img = image::RgbaImage::from_raw(width, height, buffer)
-            .ok_or(ThumbnailError::ImageError(
-                image::ImageError::Parameter(image::error::ParameterError::from_kind(
-                    image::error::ParameterErrorKind::DimensionMismatch
-                ))
-            ))?;
+        let img =
+            image::RgbaImage::from_raw(width, height, buffer).ok_or(ThumbnailError::ImageError(image::ImageError::Parameter(
+                image::error::ParameterError::from_kind(image::error::ParameterErrorKind::DimensionMismatch),
+            )))?;
 
         // Ensure output directory exists
         if let Some(parent) = output_path.parent() {
@@ -299,8 +278,7 @@ fn save_hbitmap_as_png(hbitmap: windows::Win32::Graphics::Gdi::HBITMAP, output_p
         }
 
         // Save as PNG
-        img.save(output_path)
-            .map_err(|e| ThumbnailError::ImageError(e))?;
+        img.save(output_path).map_err(|e| ThumbnailError::ImageError(e))?;
 
         DeleteObject(hbitmap.into());
         Ok(())
@@ -312,10 +290,7 @@ fn save_hbitmap_as_png(hbitmap: windows::Win32::Graphics::Gdi::HBITMAP, output_p
 // ============================================================================
 
 #[cfg(target_os = "linux")]
-async fn generate_os_thumbnail(
-    file_path: &PathBuf,
-    png_output_path: &PathBuf,
-) -> Result<(), ThumbnailError> {
+async fn generate_os_thumbnail(file_path: &PathBuf, png_output_path: &PathBuf) -> Result<(), ThumbnailError> {
     use md5;
 
     // Follow FreeDesktop thumbnail specification
@@ -325,9 +300,7 @@ async fn generate_os_thumbnail(
     let hash = format!("{:x}", digest);
 
     // Check standard FreeDesktop cache locations
-    let cache_dir = dirs::cache_dir()
-        .ok_or(ThumbnailError::InvalidPath)?
-        .join("thumbnails");
+    let cache_dir = dirs::cache_dir().ok_or(ThumbnailError::InvalidPath)?.join("thumbnails");
 
     // Try different sizes: large (180x180) first, then normal (180x180)
     for size_dir in &["large", "normal"] {
@@ -339,10 +312,7 @@ async fn generate_os_thumbnail(
                 .await?
                 .modified()?
                 .duration_since(std::time::UNIX_EPOCH)
-                .map_err(|e| ThumbnailError::IoError(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    e,
-                )))?
+                .map_err(|e| ThumbnailError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e)))?
                 .as_secs();
 
             // For simplicity, copy cached thumbnail if it exists
@@ -360,9 +330,7 @@ async fn generate_os_thumbnail(
         .output()
         .await?;
 
-    let thumbnailer = String::from_utf8_lossy(&thumbnailer_check.stdout)
-        .trim()
-        .to_string();
+    let thumbnailer = String::from_utf8_lossy(&thumbnailer_check.stdout).trim().to_string();
 
     if thumbnailer != "none" && !thumbnailer.is_empty() && thumbnailer != "" {
         // Create output directory
@@ -388,19 +356,14 @@ async fn generate_os_thumbnail(
     }
 
     // Fallback to image crate (will be called by parent function)
-    Err(ThumbnailError::OsApiError(
-        "No system thumbnailer available".to_string(),
-    ))
+    Err(ThumbnailError::OsApiError("No system thumbnailer available".to_string()))
 }
 
 // ============================================================================
 // Fallback Implementation using image crate
 // ============================================================================
 
-async fn generate_image_thumbnail(
-    file_path: PathBuf,
-    png_output_path: PathBuf,
-) -> Result<(), ThumbnailError> {
+async fn generate_image_thumbnail(file_path: PathBuf, png_output_path: PathBuf) -> Result<(), ThumbnailError> {
     tokio::task::spawn_blocking(move || {
         // Open and decode image
         let img = image::open(&file_path)?;

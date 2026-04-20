@@ -6,7 +6,7 @@ pub static NON_COMPRESSIBLE_EXTENSIONS: &[&str] = &[
     "docx", "enc", "exe", "exr", "fbx", "flac", "flv", "gif", "glb", "gltf", "gpg", "gz", "heic", "ico", "img", "iso", "jpeg", "jpg",
     "jar", "m4a", "m4v", "mkv", "mov", "msi", "o", "obj", "ods", "odt", "ogg", "ogv", "opus", "pdf", "pgp", "png", "pptx", "psd",
     "rar", "rpm", "so", "sqlite", "sqlite3", "tar", "tar.bz2", "tar.gz", "tar.xz", "tif", "tiff", "webm", "webp", "wmv", "wma",
-    "xlsx", "xz", "zip", "lz", "lzma", "zst", "zstd", "wasm", "ipa"
+    "xlsx", "xz", "zip", "lz", "lzma", "zst", "zstd", "wasm", "ipa",
 ];
 
 pub fn is_compressible(file_name: &str) -> bool {
@@ -23,7 +23,7 @@ pub struct CompressStats {
 
     should_compress: bool,
     failed_bytes: usize,
-    is_compression_support: bool
+    is_compression_support: bool,
 }
 
 impl CompressStats {
@@ -36,7 +36,7 @@ impl CompressStats {
             read_time_micro: 0,
             failed_bytes: 0,
             should_compress: false,
-            is_compression_support
+            is_compression_support,
         }
     }
 
@@ -49,7 +49,7 @@ impl CompressStats {
         raw_size: usize,
         compression_time_micro: u64,
         compressed_size: usize,
-        read_time_micro: u64
+        read_time_micro: u64,
     ) -> bool {
         self.chunk_size += raw_size;
         self.compression_time_micro += compression_time_micro;

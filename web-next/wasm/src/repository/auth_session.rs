@@ -15,7 +15,7 @@ use wasm_bindgen::JsValue;
 use crate::repository::id::IdbIdWrapper;
 
 pub struct AuthSessionRepositoryImpl {
-    pub db: PoolRequest<NeverSend<Database>>
+    pub db: PoolRequest<NeverSend<Database>>,
 }
 
 impl IdbId for IdbIdWrapper<AuthSessionId> {
@@ -25,21 +25,21 @@ impl IdbId for IdbIdWrapper<AuthSessionId> {
         if !json.is_array() {
             return Err(RepositoryError::Conflict(
                 table_name.to_owned(),
-                "The id must be an array of primitive types".to_owned()
+                "The id must be an array of primitive types".to_owned(),
             ));
         }
 
         let Some(json_array) = json.as_array_mut() else {
             return Err(RepositoryError::Conflict(
                 table_name.to_owned(),
-                "The id must be an array of primitive types".to_owned()
+                "The id must be an array of primitive types".to_owned(),
             ));
         };
 
         let Some(r#type) = json_array.first().and_then(|it| serde_json::from_value(it.clone()).ok()) else {
             return Err(RepositoryError::Conflict(
                 table_name.to_owned(),
-                "Missing type in id".to_owned()
+                "Missing type in id".to_owned(),
             ));
         };
 
@@ -70,7 +70,7 @@ impl IdbRepository<Session, IdbIdWrapper<AuthSessionId>> for AuthSessionReposito
 impl Repository<Session, AuthSessionId> for AuthSessionRepositoryImpl {
     async fn create(&self, data: Session) -> Resolve<Session>
     where
-        Session: 'async_trait
+        Session: 'async_trait,
     {
         IdbRepository::<Session, IdbIdWrapper<AuthSessionId>>::create(self, data).await
     }
@@ -83,14 +83,14 @@ impl Repository<Session, AuthSessionId> for AuthSessionRepositoryImpl {
         &self,
         from_id: Option<&AuthSessionId>,
         to_id: Option<&AuthSessionId>,
-        count: Option<usize>
+        count: Option<usize>,
     ) -> Resolve<Vec<Session>> {
         let to_id = to_id.map(|it| IdbIdWrapper(it.clone()));
         IdbRepository::<Session, IdbIdWrapper<AuthSessionId>>::find_all(
             self,
             from_id.map(|it| IdbIdWrapper(it.clone())).as_ref(),
             to_id.as_ref(),
-            count
+            count,
         )
         .await
     }

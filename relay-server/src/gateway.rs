@@ -10,7 +10,7 @@ use tonic::transport::{Channel, ClientTlsConfig};
 pub struct GatewayChannel {
     channel: Arc<Mutex<Option<Channel>>>,
     endpoint: String,
-    domain: String
+    domain: String,
 }
 
 impl GatewayChannel {
@@ -18,7 +18,7 @@ impl GatewayChannel {
         Self {
             channel: Arc::new(Mutex::new(None)),
             endpoint,
-            domain
+            domain,
         }
     }
 

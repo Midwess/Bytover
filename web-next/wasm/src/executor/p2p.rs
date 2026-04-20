@@ -22,7 +22,7 @@ pub struct P2PNativeExecutorImpl {
     pub web_rtc: OnceCell<Arc<WebRtc>>,
     pub client: Arc<Mutex<Option<Arc<WebRtcClient>>>>,
     pub signalling: OnceCell<SignalingClient>,
-    pub current_user: OnceCell<PeerEntity>
+    pub current_user: OnceCell<PeerEntity>,
 }
 
 /// Errors that can occur in P2P operations
@@ -44,7 +44,7 @@ pub enum P2PError {
     Transfer(String),
 
     #[error("Operation not supported on WASM: {0}")]
-    NotSupported(String)
+    NotSupported(String),
 }
 
 impl Default for P2PNativeExecutorImpl {
@@ -59,7 +59,7 @@ impl P2PNativeExecutorImpl {
             web_rtc: OnceCell::new(),
             client: Arc::new(Mutex::new(None)),
             signalling: OnceCell::new(),
-            current_user: OnceCell::new()
+            current_user: OnceCell::new(),
         }
     }
 
@@ -108,7 +108,7 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
             P2POperation::ConnectPeer {
                 signalling_key,
                 signalling_route,
-                current_user
+                current_user,
             } => {
                 log::info!("ConnectPeer called for WASM with key {}", signalling_key);
 
@@ -127,7 +127,7 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                     IceAgent::new(),
                     &signalling_key,
                     resource_repo,
-                    transfer_repo
+                    transfer_repo,
                 )
                 .await
                 .map_err(|e| P2PError::WebRtc(e.to_string()))?;
@@ -197,7 +197,7 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
             P2POperation::ViewSessionDetail {
                 peer_id,
                 order_id,
-                password
+                password,
             } => {
                 log::info!("ViewSessionDetail called for peer {}, order {}", peer_id, order_id);
 
@@ -215,7 +215,7 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 peer_id,
                 session_id,
                 resource,
-                progress
+                progress,
             } => {
                 log::info!(
                     "DownloadResource called for peer {}, session {}, resource {}",
@@ -237,7 +237,7 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
                 session_id,
                 session_path,
                 resources,
-                aggregate_progress: _
+                aggregate_progress: _,
             } => {
                 log::info!(
                     "DownloadAllResources called for peer {}, session {}, {} resources",
@@ -257,7 +257,7 @@ impl P2PNativeExecutor for P2PNativeExecutorImpl {
             P2POperation::CancelResource {
                 peer_id: _,
                 session_id,
-                resource_id
+                resource_id,
             } => {
                 log::info!("CancelResource called for session {}, resource {}", session_id, resource_id);
 

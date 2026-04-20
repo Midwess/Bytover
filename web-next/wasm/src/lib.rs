@@ -123,7 +123,7 @@ extern "C" {
 pub async fn process_event(data: Uint8Array) -> Uint8Array {
     let msg = WorkerMessage::new(CoreWorkerOperation::Update(data));
     let Some(response) = CORE_WORKER.send(msg).await else {
-        return Uint8Array::default()
+        return Uint8Array::default();
     };
 
     response.message.0
@@ -133,7 +133,7 @@ pub async fn process_event(data: Uint8Array) -> Uint8Array {
 #[must_use]
 pub async fn handle_response(id: u32, data: Uint8Array) -> Uint8Array {
     let Some(response) = CORE_WORKER.send(WorkerMessage::new(CoreWorkerOperation::HandleResponse(id, data))).await else {
-        return Uint8Array::default()
+        return Uint8Array::default();
     };
 
     response.message.0
@@ -143,7 +143,7 @@ pub async fn handle_response(id: u32, data: Uint8Array) -> Uint8Array {
 #[must_use]
 pub async fn view() -> Uint8Array {
     let Some(response) = CORE_WORKER.send(WorkerMessage::new(CoreWorkerOperation::View)).await else {
-        return Uint8Array::default()
+        return Uint8Array::default();
     };
 
     response.message.0
@@ -154,29 +154,29 @@ pub async fn is_compatible() -> bool {
     log::info!("Checking is compatible");
     let Some(with_browser) = window() else {
         log::info!("No window");
-        return false
+        return false;
     };
 
     if with_browser.is_null() || with_browser.is_undefined() {
         log::info!("Window is null");
-        return false
+        return false;
     }
 
     let Ok(with_cache) = with_browser.caches() else {
         log::info!("No caches");
-        return false
+        return false;
     };
 
     if with_cache.is_null() || with_cache.is_undefined() {
         log::info!("Caches is null");
-        return false
+        return false;
     }
 
     let storage = with_browser.navigator().storage();
 
     if storage.is_null() || storage.is_undefined() {
         log::info!("Storage is null");
-        return false
+        return false;
     }
 
     true
@@ -198,8 +198,8 @@ pub async fn init() {
     let init_msg = WorkerMessage::new(OpfsOperation {
         file_path: "/".to_owned(),
         operation: FileOperation::Init {
-            storage_session_id: session_id.clone()
-        }
+            storage_session_id: session_id.clone(),
+        },
     });
     OPFS_WORKER.send(init_msg).await;
 
@@ -223,7 +223,7 @@ pub async fn init() {
             log::info!("Cleaning {} stale paths in background", stale_paths.len());
             let cleanup_msg = WorkerMessage::new(OpfsOperation {
                 file_path: "/".to_owned(),
-                operation: FileOperation::CleanUp { paths: stale_paths }
+                operation: FileOperation::CleanUp { paths: stale_paths },
             });
             OPFS_WORKER.send(cleanup_msg).await;
         }
@@ -241,7 +241,7 @@ pub async fn add_device_files(files: &Array) -> Uint8Array {
         let resp = OPFS_WORKER
             .send(WorkerMessage::new(OpfsOperation {
                 file_path: file.local_resource().path.opfs_path().unwrap(),
-                operation: FileOperation::AddFile(file)
+                operation: FileOperation::AddFile(file),
             }))
             .await;
 
@@ -252,7 +252,7 @@ pub async fn add_device_files(files: &Array) -> Uint8Array {
         let resource_instance: LocalResource = deserialize(&resource_instance);
         paths.push(ResourceSelection {
             path: resource_instance.path,
-            r#type: Some(resource_instance.r#type)
+            r#type: Some(resource_instance.r#type),
         });
     }
 
@@ -267,13 +267,13 @@ pub async fn add_device_folder(path: String, files: Vec<File>) -> Uint8Array {
             file_path: folder_path.opfs_path().unwrap(),
             operation: FileOperation::AddFolder {
                 path,
-                files: files.into_iter().map(wasm_file).collect()
-            }
+                files: files.into_iter().map(wasm_file).collect(),
+            },
         }))
         .await;
 
     let OpfsOperationOutput::LocalResourceInstance(resource_instance) = resp.unwrap().message else {
-        return Uint8Array::default()
+        return Uint8Array::default();
     };
 
     let resource_instance: LocalResource = deserialize(&resource_instance);
@@ -287,7 +287,7 @@ pub async fn get_device_file(path: Uint8Array) -> Option<File> {
     let resp = OPFS_WORKER
         .send(WorkerMessage::new(OpfsOperation {
             file_path: path.opfs_path().unwrap(),
-            operation: FileOperation::GetFile
+            operation: FileOperation::GetFile,
         }))
         .await
         .unwrap()
@@ -295,7 +295,7 @@ pub async fn get_device_file(path: Uint8Array) -> Option<File> {
 
     let OpfsOperationOutput::File(file) = resp else {
         log::info!("No file at {:?}", path);
-        return None
+        return None;
     };
 
     Some(file)
@@ -307,33 +307,33 @@ pub async fn get_download_url(path: Uint8Array) -> Option<String> {
     let opfs_path = match path {
         LocalResourcePath::AbsolutePath(path) => return Some(path),
         LocalResourcePath::PlatformIdentifier(_) => path.opfs_path()?,
-        _ => return None
+        _ => return None,
     };
 
     let _ = OPFS_WORKER
         .send(WorkerMessage::new(OpfsOperation {
             file_path: opfs_path.clone(),
-            operation: FileOperation::Open
+            operation: FileOperation::Open,
         }))
         .await;
 
     let response = OPFS_WORKER
         .send(WorkerMessage::new(OpfsOperation {
             file_path: opfs_path,
-            operation: FileOperation::GenerateSource
+            operation: FileOperation::GenerateSource,
         }))
         .await?;
 
     match response.message {
         OpfsOperationOutput::DownloadUrl(url) => Some(url),
-        _ => None
+        _ => None,
     }
 }
 
 pub fn is_browser_support_duplex() -> bool {
     let Some(_) = window() else {
         log::info!("No window");
-        return false
+        return false;
     };
 
     HttpClient::is_support_duplex_stream()
@@ -356,7 +356,7 @@ pub async fn create_file(file_path: Uint8Array, data: Uint8Array) {
     let _ = OPFS_WORKER
         .send(WorkerMessage::new(OpfsOperation {
             file_path: path.opfs_path().unwrap(),
-            operation: FileOperation::WriteNew { data }
+            operation: FileOperation::WriteNew { data },
         }))
         .await;
 }
@@ -375,7 +375,7 @@ pub async fn execute(request_id: u32, effect: Uint8Array) -> Uint8Array {
 
 pub fn deserialize<E: Serialize>(data: &Uint8Array) -> E
 where
-    E: for<'de> Deserialize<'de>
+    E: for<'de> Deserialize<'de>,
 {
     let vec = data.to_vec();
     let options = bincode_options();

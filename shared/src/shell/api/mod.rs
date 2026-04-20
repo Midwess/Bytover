@@ -18,7 +18,7 @@ use std::sync::Arc;
 #[derive(Debug, thiserror::Error)]
 pub enum IOWriterError {
     #[error("IOWriter Error: {0}")]
-    Error(String)
+    Error(String),
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
@@ -60,7 +60,7 @@ pub trait DIOWriter: IOWriter {
 
 pub enum CruxRequest {
     Id(u32),
-    RequestHandle(RequestHandle<CoreOperationOutput>)
+    RequestHandle(RequestHandle<CoreOperationOutput>),
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
@@ -76,14 +76,14 @@ pub trait CoreBridge: Send + Sync {
 
 pub struct CoreRequest {
     crux_request: Arc<Mutex<CruxRequest>>,
-    bridge: &'static dyn CoreBridge
+    bridge: &'static dyn CoreBridge,
 }
 
 impl Clone for CoreRequest {
     fn clone(&self) -> Self {
         Self {
             crux_request: self.crux_request.clone(),
-            bridge: self.bridge
+            bridge: self.bridge,
         }
     }
 }
@@ -92,7 +92,7 @@ impl CoreRequest {
     pub fn new(crux_request: CruxRequest, bridge: &'static dyn CoreBridge) -> Self {
         Self {
             crux_request: Arc::new(Mutex::new(crux_request)),
-            bridge
+            bridge,
         }
     }
 
@@ -111,7 +111,7 @@ impl CoreRequest {
 pub enum NetStreamEvent {
     Progress { uploaded_bytes: u64 },
     Completed(Option<MultiPartUploadComplete>),
-    Error(anyhow::Error)
+    Error(anyhow::Error),
 }
 
 // Abstraction open stream to http server
@@ -145,7 +145,7 @@ impl<T: Send + Sync> TimeoutReceiver<T> for UnboundedReceiver<T> {
         let mut pinned = Pin::new(self);
         match pinned.as_mut().poll_next(&mut cx) {
             Poll::Ready(Some(item)) => Some(item),
-            _ => None
+            _ => None,
         }
     }
 }

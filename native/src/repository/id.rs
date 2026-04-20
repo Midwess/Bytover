@@ -9,7 +9,7 @@ pub struct RedbIdWrapper<T: Sized>(pub T);
 impl<T> DbId for RedbIdWrapper<T>
 where
     T: DbId + Debug,
-    <T as DbId>::Table: Table<RedbIdWrapper<T>>
+    <T as DbId>::Table: Table<RedbIdWrapper<T>>,
 {
     type Table = <T as DbId>::Table;
 

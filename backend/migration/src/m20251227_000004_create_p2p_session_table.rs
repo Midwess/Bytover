@@ -12,33 +12,11 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(P2PSession::Table)
                     .if_not_exists()
-                    .col(
-                        ColumnDef::new(P2PSession::SessionId)
-                            .big_integer()
-                            .not_null()
-                            .primary_key(),
-                    )
-                    .col(
-                        ColumnDef::new(P2PSession::DeviceId)
-                            .big_integer()
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(P2PSession::UserId)
-                            .big_integer()
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(P2PSession::Alias)
-                            .text()
-                            .not_null(),
-                    )
-                    .col(
-                        ColumnDef::new(P2PSession::PasswordProtected)
-                            .boolean()
-                            .not_null()
-                            .default(false),
-                    )
+                    .col(ColumnDef::new(P2PSession::SessionId).big_integer().not_null().primary_key())
+                    .col(ColumnDef::new(P2PSession::DeviceId).big_integer().not_null())
+                    .col(ColumnDef::new(P2PSession::UserId).big_integer().not_null())
+                    .col(ColumnDef::new(P2PSession::Alias).text().not_null())
+                    .col(ColumnDef::new(P2PSession::PasswordProtected).boolean().not_null().default(false))
                     .to_owned(),
             )
             .await?;
@@ -94,44 +72,22 @@ impl MigrationTrait for Migration {
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         // Drop indexes first, then table
         manager
-            .drop_index(
-                Index::drop()
-                    .name("idx_p2p_session_user_id_device_id")
-                    .table(P2PSession::Table)
-                    .to_owned(),
-            )
+            .drop_index(Index::drop().name("idx_p2p_session_user_id_device_id").table(P2PSession::Table).to_owned())
             .await?;
 
         manager
-            .drop_index(
-                Index::drop()
-                    .name("idx_p2p_session_user_id")
-                    .table(P2PSession::Table)
-                    .to_owned(),
-            )
+            .drop_index(Index::drop().name("idx_p2p_session_user_id").table(P2PSession::Table).to_owned())
             .await?;
 
         manager
-            .drop_index(
-                Index::drop()
-                    .name("idx_p2p_session_alias")
-                    .table(P2PSession::Table)
-                    .to_owned(),
-            )
+            .drop_index(Index::drop().name("idx_p2p_session_alias").table(P2PSession::Table).to_owned())
             .await?;
 
         manager
-            .drop_index(
-                Index::drop()
-                    .name("idx_p2p_session_device_id")
-                    .table(P2PSession::Table)
-                    .to_owned(),
-            )
+            .drop_index(Index::drop().name("idx_p2p_session_device_id").table(P2PSession::Table).to_owned())
             .await?;
 
-        manager
-            .drop_table(Table::drop().table(P2PSession::Table).to_owned())
-            .await
+        manager.drop_table(Table::drop().table(P2PSession::Table).to_owned()).await
     }
 }
 

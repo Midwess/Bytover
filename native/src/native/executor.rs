@@ -11,7 +11,7 @@ pub struct NativeExecutor {
     pub rpc: Box<dyn NativeRpc<Channel>>,
     pub persistent: Box<dyn NativePersistent>,
     pub transfer: Box<dyn TransferNative<Channel>>,
-    pub p2p: Box<dyn P2PNativeExecutor>
+    pub p2p: Box<dyn P2PNativeExecutor>,
 }
 
 impl NativeExecutor {
@@ -28,7 +28,7 @@ impl NativeExecutor {
                 sleep(duration).await;
                 CoreOperationOutput::None
             }
-            _ => panic!("Native executor doesn't support this effect {effect:?}")
+            _ => panic!("Native executor doesn't support this effect {effect:?}"),
         }
     }
 }

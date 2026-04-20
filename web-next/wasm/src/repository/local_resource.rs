@@ -23,7 +23,7 @@ use std::collections::HashMap;
 use wasm_bindgen::JsValue;
 
 pub struct LocalResourceRepositoryImpl {
-    pub db: PoolRequest<NeverSend<Database>>
+    pub db: PoolRequest<NeverSend<Database>>,
 }
 
 impl IdbId for IdbIdWrapper<LocalResourceId> {
@@ -33,21 +33,21 @@ impl IdbId for IdbIdWrapper<LocalResourceId> {
         if !json.is_array() {
             return Err(RepositoryError::Conflict(
                 table_name.to_owned(),
-                "The id must be an array of primitive types".to_owned()
+                "The id must be an array of primitive types".to_owned(),
             ));
         }
 
         let Some(json_array) = json.as_array_mut() else {
             return Err(RepositoryError::Conflict(
                 table_name.to_owned(),
-                "The id must be an array of primitive types".to_owned()
+                "The id must be an array of primitive types".to_owned(),
             ));
         };
 
         Ok(IdbIdWrapper(LocalResourceId {
             path: json_array.first().and_then(|it| serde_json::from_value(it.clone()).ok()),
             order_id: json_array.get(2).and_then(|it| it.as_str().and_then(|it| it.parse().ok())),
-            shelf_id: None
+            shelf_id: None,
         }))
     }
 }
@@ -75,7 +75,7 @@ impl IdbRepository<LocalResource, IdbIdWrapper<LocalResourceId>> for LocalResour
 impl Repository<LocalResource, LocalResourceId> for LocalResourceRepositoryImpl {
     async fn create(&self, data: LocalResource) -> Resolve<LocalResource>
     where
-        LocalResource: 'async_trait
+        LocalResource: 'async_trait,
     {
         // On web, we don't save any local resource
         // because the path will not be correct after reload
@@ -90,14 +90,14 @@ impl Repository<LocalResource, LocalResourceId> for LocalResourceRepositoryImpl 
         &self,
         from_id: Option<&LocalResourceId>,
         to_id: Option<&LocalResourceId>,
-        count: Option<usize>
+        count: Option<usize>,
     ) -> Resolve<Vec<LocalResource>> {
         let to_id = to_id.map(|it| IdbIdWrapper(it.clone()));
         IdbRepository::<LocalResource, IdbIdWrapper<LocalResourceId>>::find_all(
             self,
             from_id.map(|it| IdbIdWrapper(it.clone())).as_ref(),
             to_id.as_ref(),
-            count
+            count,
         )
         .await
     }
@@ -121,7 +121,7 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         let resp = OPFS_WORKER
             .send(WorkerMessage::new(OpfsOperation {
                 file_path: path,
-                operation: FileOperation::LocalResourceInstance
+                operation: FileOperation::LocalResourceInstance,
             }))
             .await
             .unwrap()
@@ -142,8 +142,8 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
             .send(WorkerMessage::new(OpfsOperation {
                 file_path: path,
                 operation: FileOperation::WriteNew {
-                    data: png_bytes.into_uint_array_leak()
-                }
+                    data: png_bytes.into_uint_array_leak(),
+                },
             }))
             .await;
         Ok(save_path)
@@ -165,11 +165,11 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         &self,
         path: LocalResourcePath,
         buffer_size: usize,
-        compressed: bool
+        compressed: bool,
     ) -> Result<Box<dyn CIOCursor>, PersistenceError> {
         if let Some(path) = path.opfs_path() {
             let reader = IOReaderOpfsImpl::new(path.into(), buffer_size, compressed).await?;
-            return Ok(Box::new(reader))
+            return Ok(Box::new(reader));
         }
 
         Err(PersistenceError::NotFound(format!("{:?}", path)))
@@ -187,7 +187,7 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
     async fn generate_thumbnail_paths(
         &self,
         session_id: Option<u64>,
-        resource_ids: Vec<u64>
+        resource_ids: Vec<u64>,
     ) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError> {
         let mut result = HashMap::new();
         for resource_id in resource_ids.iter() {
@@ -207,7 +207,7 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
         let from_id = LocalResourceId {
             path: Some(path),
             order_id: None,
-            shelf_id: Some(shelf_id)
+            shelf_id: Some(shelf_id),
         };
 
         let items =

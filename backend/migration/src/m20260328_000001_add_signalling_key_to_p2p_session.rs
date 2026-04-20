@@ -10,12 +10,7 @@ impl MigrationTrait for Migration {
             .alter_table(
                 Table::alter()
                     .table(P2PSession::Table)
-                    .add_column(
-                        ColumnDef::new(P2PSession::SignallingKey)
-                            .text()
-                            .not_null()
-                            .default(""),
-                    )
+                    .add_column(ColumnDef::new(P2PSession::SignallingKey).text().not_null().default(""))
                     .to_owned(),
             )
             .await?;
@@ -25,12 +20,7 @@ impl MigrationTrait for Migration {
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
-            .alter_table(
-                Table::alter()
-                    .table(P2PSession::Table)
-                    .drop_column(P2PSession::SignallingKey)
-                    .to_owned(),
-            )
+            .alter_table(Table::alter().table(P2PSession::Table).drop_column(P2PSession::SignallingKey).to_owned())
             .await?;
 
         Ok(())

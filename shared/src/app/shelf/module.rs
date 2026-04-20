@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Default)]
 pub struct ShelfModel {
     pub shelves: Vec<Shelf>,
-    pub is_loading: bool
+    pub is_loading: bool,
 }
 
 impl ShelfModel {
@@ -37,7 +37,7 @@ pub struct ShelfItemViewModel {
     pub description: String,
     pub is_online: bool,
     pub is_resource_remove_allowed: bool,
-    pub resources: Vec<SelectedResourceViewModel>
+    pub resources: Vec<SelectedResourceViewModel>,
 }
 
 impl ShelfItemViewModel {
@@ -52,7 +52,7 @@ impl ShelfItemViewModel {
             description,
             is_online,
             is_resource_remove_allowed: true,
-            resources: shelf.resources.iter().map(SelectedResourceViewModel::from).collect()
+            resources: shelf.resources.iter().map(SelectedResourceViewModel::from).collect(),
         }
     }
 }
@@ -66,7 +66,7 @@ impl From<&Shelf> for ShelfItemViewModel {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ShelfViewModel {
     pub shelves: Vec<ShelfItemViewModel>,
-    pub is_loading: bool
+    pub is_loading: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -77,25 +77,25 @@ pub enum ShelfEvent {
     ValidateLoadedResources(Vec<LocalResource>),
     OpenResource {
         shelf_id: u64,
-        resource_id: u64
+        resource_id: u64,
     },
     AddResources {
         shelf_id: u64,
-        selections: Vec<ResourceSelection>
+        selections: Vec<ResourceSelection>,
     },
     RemoveResource {
         shelf_id: u64,
-        resource_id: u64
+        resource_id: u64,
     },
     Clear {
-        shelf_id: u64
+        shelf_id: u64,
     },
     DeleteShelf(u64),
     GetOrCreateShelf {
-        shelf_id: u64
+        shelf_id: u64,
     },
     CreateAndPasteFromClipboard {
-        shelf_id: u64
+        shelf_id: u64,
     },
 
     #[serde(skip)]
@@ -107,7 +107,7 @@ pub enum ShelfEvent {
     #[serde(skip)]
     ShelfDeleted(u64),
     #[serde(skip)]
-    ModelEvent(LocalResourceEvent)
+    ModelEvent(LocalResourceEvent),
 }
 
 pub struct ShelfModule;
@@ -120,7 +120,7 @@ impl AppModule<BitBridge> for ShelfModule {
         &self,
         event: Self::Event,
         model: &mut AppModel,
-        _caps: &<BitBridge as App>::Capabilities
+        _caps: &<BitBridge as App>::Capabilities,
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
             Self::Event::Launch => Command::handle_result(|it| async move { it.app().load_shelves().await }),
@@ -145,7 +145,7 @@ impl AppModule<BitBridge> for ShelfModule {
                 for selection in selections {
                     if shelf.is_exists(&selection.path) {
                         commands.push(Command::operate(DialogOperation::Toast(
-                            "Resource was already added before.".to_owned()
+                            "Resource was already added before.".to_owned(),
                         )))
                     } else {
                         filtered_selections.push(selection);
@@ -166,7 +166,7 @@ impl AppModule<BitBridge> for ShelfModule {
             Self::Event::RemoveResource { shelf_id, resource_id } => {
                 if model.transfer.has_active_send_session(shelf_id) {
                     return Command::operate(DialogOperation::Toast(
-                        "Cannot remove resource during active transfer.".to_owned()
+                        "Cannot remove resource during active transfer.".to_owned(),
                     ));
                 }
 
@@ -267,7 +267,7 @@ impl AppModule<BitBridge> for ShelfModule {
                     .filter(|s| !s.is_completed() && s.target.is_peer())
                     .map(|s| match s.transfer_type {
                         TransferType::Send { from_shelf_id } => (s.order_id, Some(from_shelf_id)),
-                        _ => (s.order_id, None)
+                        _ => (s.order_id, None),
                     })
                     .collect();
 
@@ -286,7 +286,7 @@ impl AppModule<BitBridge> for ShelfModule {
                     .filter(|s| !s.is_completed() && s.target.is_peer())
                     .map(|s| match s.transfer_type {
                         TransferType::Send { from_shelf_id } => (s.order_id, Some(from_shelf_id)),
-                        _ => (s.order_id, None)
+                        _ => (s.order_id, None),
                     })
                     .collect();
 
@@ -364,7 +364,7 @@ impl AppModule<BitBridge> for ShelfModule {
 
         ShelfViewModel {
             shelves,
-            is_loading: model.shelf.is_loading
+            is_loading: model.shelf.is_loading,
         }
     }
 }
@@ -373,5 +373,5 @@ impl AppModule<BitBridge> for ShelfModule {
 pub struct ResourceSelection {
     pub path: LocalResourcePath,
     // This is optional, if it is None, we will detect by Rust code to see if it should be a Folder or a File
-    pub r#type: Option<ResourceType>
+    pub r#type: Option<ResourceType>,
 }

@@ -37,7 +37,7 @@ pub enum DiContainerError {
     #[error("Grpc gateway channel error")]
     GrpcGatewayChannelError(#[from] tonic::transport::Error),
     #[error("Cron error {0}")]
-    CronError(String)
+    CronError(String),
 }
 
 static DI_CONTAINER: OnceCell<DiContainer> = OnceCell::const_new();
@@ -46,7 +46,7 @@ pub struct DiContainer {
     pub grpc_gateway_channel: GrpcGatewayChannel,
     pub devlog_sdk: DevlogSdk,
     db_connection: DatabaseConnection,
-    pub pg_pool: PgPool
+    pub pg_pool: PgPool,
 }
 
 impl DiContainer {
@@ -92,7 +92,7 @@ impl DiContainer {
             grpc_gateway_channel: GrpcGatewayChannel::new(),
             devlog_sdk,
             db_connection,
-            pg_pool
+            pg_pool,
         }
     }
 
@@ -108,7 +108,7 @@ impl DiContainer {
 
     pub fn markov_generator(&self) -> impl Markov {
         AppGatewayImpl {
-            channel: self.grpc_gateway_channel.clone()
+            channel: self.grpc_gateway_channel.clone(),
         }
     }
 
@@ -140,7 +140,7 @@ impl DiContainer {
             cloud_storage: Box::new(self.get_cloud_storage()),
             markov_generator: Box::new(self.markov_generator()),
             email_service: Box::new(self.get_email_service(token).await.unwrap()),
-            app_service: Box::new(self.get_app_service().await)
+            app_service: Box::new(self.get_app_service().await),
         }
     }
 
@@ -148,20 +148,20 @@ impl DiContainer {
         CloudGrpcService {
             cloud_storage: Arc::new(self.get_cloud_storage()),
             session_repository: Arc::new(self.get_transfer_session_repository().await),
-            app_service: Box::new(self.get_app_service().await)
+            app_service: Box::new(self.get_app_service().await),
         }
     }
 
     pub async fn get_grpc_p2p_service(&'static self) -> P2PGrpcService {
         P2PGrpcService {
             p2p_repository: Arc::new(self.get_p2p_session_repository().await),
-            app_service: Box::new(self.get_app_service().await)
+            app_service: Box::new(self.get_app_service().await),
         }
     }
 
     pub async fn get_app_service(&'static self) -> impl AppInfoService {
         AppGatewayImpl {
-            channel: self.grpc_gateway_channel.clone()
+            channel: self.grpc_gateway_channel.clone(),
         }
     }
 
@@ -172,25 +172,25 @@ impl DiContainer {
     pub fn get_cloud_storage(&'static self) -> impl CloudStorage {
         S3CloudStorageImpl {
             s3_client: self.devlog_sdk.s3_client(),
-            cached_sign: Arc::new(Default::default())
+            cached_sign: Arc::new(Default::default()),
         }
     }
 
     pub async fn get_transfer_session_repository(&'static self) -> impl TransferSessionRepository {
         TransferSessionPostgresRepository {
-            db: self.get_db_connection()
+            db: self.get_db_connection(),
         }
     }
 
     pub async fn get_p2p_session_repository(&'static self) -> impl P2PSessionRepository {
         P2PSessionPostgresRepository {
-            db: self.get_db_connection()
+            db: self.get_db_connection(),
         }
     }
 
     pub async fn get_device_alias_repository(&'static self) -> impl DeviceAliasRepository {
         DeviceAliasPostgresRepository {
-            db: self.get_db_connection()
+            db: self.get_db_connection(),
         }
     }
 
@@ -199,7 +199,7 @@ impl DiContainer {
             p2p_repository: std::sync::Arc::new(self.get_p2p_session_repository().await),
             device_alias_repository: std::sync::Arc::new(self.get_device_alias_repository().await),
             app_service: Box::new(self.get_app_service().await),
-            markov_generator: Box::new(self.markov_generator())
+            markov_generator: Box::new(self.markov_generator()),
         }
     }
 

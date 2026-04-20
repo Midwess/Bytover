@@ -5,5 +5,5 @@ pub struct User {
     pub id: u64,
     pub email: String,
     pub name: String,
-    pub avatar: String
+    pub avatar: String,
 }

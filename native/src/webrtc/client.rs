@@ -73,7 +73,7 @@ pub struct WebRtcClient {
     reliable_data_tx: YieldContainer<mpsc::Sender<Vec<u8>>>,
     bytes_sent_counter: Arc<AtomicUsize>,
     disconnect_requested: AtomicBool,
-    disconnect_notify: Notify
+    disconnect_notify: Notify,
 }
 
 impl std::fmt::Debug for WebRtcClient {
@@ -89,7 +89,6 @@ impl WebRtcClient {
         signalling: SignallingSender,
         request_id: String,
         resource_repo: Arc<dyn LocalResourceRepository>,
-        cached: Option<CachedPreConnection>,
     ) -> Result<Self, WebRtcClientError> {
         let Some(signalling_id) = me.signalling_id.clone() else {
             return Err(WebRtcClientError::Signalling("No signalling ID".to_string()));
@@ -101,14 +100,7 @@ impl WebRtcClient {
 
         let peer_from_offer = offer_message.peer.clone();
 
-        let rtc_client = RtcHandle::connect(
-            &signalling_id,
-            offer_message,
-            me_proto,
-            signalling,
-            &request_id,
-            cached,
-        ).await?;
+        let rtc_client = RtcHandle::connect(&signalling_id, offer_message, me_proto, signalling, &request_id).await?;
 
         let (ordered_msg_tx, ordered_msg_rx) = futures_mpsc::channel::<Vec<u8>>(64);
         let (_unordered_msg_tx, unordered_msg_rx) = futures_mpsc::channel::<Vec<u8>>(64);
@@ -144,7 +136,7 @@ impl WebRtcClient {
             reliable_data_tx: YieldContainer::new(reliable_data_tx),
             bytes_sent_counter: Arc::new(AtomicUsize::new(0)),
             disconnect_requested: AtomicBool::new(false),
-            disconnect_notify: Notify::new()
+            disconnect_notify: Notify::new(),
         };
 
         log::info!("[webrtc-client] connection established, peer info exchanged via signaling.");
@@ -191,8 +183,7 @@ impl WebRtcClient {
 
         let mut retry_timer = Box::pin(tokio::time::sleep(OUTBOUND_RETRY_DELAY));
 
-        while rtc.as_ref().is_some_and(|r| r.is_alive())
-        {
+        while rtc.as_ref().is_some_and(|r| r.is_alive()) {
             if sending_handle.is_finished() || msg_handle.is_finished() {
                 break;
             }
@@ -294,7 +285,7 @@ impl WebRtcClient {
         &self,
         pending_data: &mut VecDeque<(Vec<u8>, ChannelId)>,
         rtc: Option<&RtcHandle>,
-        cids: &crate::webrtc::rtc::ChannelIds
+        cids: &crate::webrtc::rtc::ChannelIds,
     ) {
         loop {
             let Some((data, channel_id)) = pending_data.pop_front() else {
@@ -317,7 +308,7 @@ impl WebRtcClient {
         self: &Arc<Self>,
         event: RtcEvent,
         cids: &crate::webrtc::rtc::ChannelIds,
-        msg_tx: &tokio::sync::mpsc::UnboundedSender<(String, Request)>
+        msg_tx: &tokio::sync::mpsc::UnboundedSender<(String, Request)>,
     ) -> bool {
         match event {
             RtcEvent::Str0mEvent(event) => match event {
@@ -401,7 +392,7 @@ impl WebRtcClient {
         &self,
         session_id: u64,
         transfer_id: u16,
-        resource: LocalResource
+        resource: LocalResource,
     ) -> Result<(), WebRtcClientError> {
         let resource_id = resource.order_id;
         let prefix = transfer_id;
@@ -409,7 +400,7 @@ impl WebRtcClient {
 
         let resource_name = match resource.r#type {
             ResourceType::Folder => format!("{}.zip", &resource.name),
-            _ => resource.name.clone()
+            _ => resource.name.clone(),
         };
 
         log::info!("[webrtc-client] Streaming resource {resource_id} for transfer id {transfer_id}");
@@ -448,7 +439,7 @@ impl WebRtcClient {
 
                     current_offset += raw_size as u64;
                 }
-                None => break
+                None => break,
             }
         }
 
@@ -471,7 +462,7 @@ impl WebRtcClient {
         };
 
         if *mine_session_id != session_order_id {
-            return Ok(())
+            return Ok(());
         }
 
         let mut resource_proto = resource.to_proto();
@@ -486,7 +477,7 @@ impl WebRtcClient {
 
         let notification = ResourceNotificationRequest {
             session_order_id,
-            resource: Some(resource_proto)
+            resource: Some(resource_proto),
         };
 
         self.msg_channel().notify(Request::ResourceNotification(notification)).await?;
@@ -499,18 +490,18 @@ impl WebRtcClient {
         request_id: String,
         session_message: Option<P2pTransferSessionMessage>,
         resources: Option<Vec<LocalResource>>,
-        error: Option<CoreError>
+        error: Option<CoreError>,
     ) -> Result<(), WebRtcClientError> {
         if let Some(error_msg) = error {
             log::error!("[webrtc-client] Session detail error: {error_msg:?}");
             let err_result = match error_msg {
                 CoreError::PeerRequestError(e) => SessionDetailResult::Error(e.into()),
-                _ => SessionDetailResult::Error(PeerErrorsMessage::InvalidRequest.into())
+                _ => SessionDetailResult::Error(PeerErrorsMessage::InvalidRequest.into()),
             };
             self.msg_channel()
                 .send_response(
                     request_id,
-                    Response::ViewSessionResponse(ViewSessionDetailResponse { result: Some(err_result) })
+                    Response::ViewSessionResponse(ViewSessionDetailResponse { result: Some(err_result) }),
                 )
                 .await?;
             return Ok(());
@@ -527,7 +518,7 @@ impl WebRtcClient {
         );
 
         let response = ViewSessionDetailResponse {
-            result: Some(SessionDetailResult::Session(proto_session.clone()))
+            result: Some(SessionDetailResult::Session(proto_session.clone())),
         };
         self.msg_channel().send_response(request_id, Response::ViewSessionResponse(response)).await?;
 
@@ -549,7 +540,7 @@ impl WebRtcClient {
         self.transfers_context.cancel_transfer(session_id).await;
         let cancel_msg = P2pCancelSessionRequest {
             session_id,
-            resource_id: None
+            resource_id: None,
         };
         log::info!("[webrtc-client] Cancelling transfer session {session_id}");
         let _ = self.msg_channel().notify(Request::CancelRequest(cancel_msg)).await;
@@ -559,7 +550,7 @@ impl WebRtcClient {
         self.transfers_context.cancel_resource(session_id, resource_id).await;
         let cancel_msg = P2pCancelSessionRequest {
             session_id,
-            resource_id: Some(resource_id)
+            resource_id: Some(resource_id),
         };
         log::info!("[webrtc-client] Cancelling resource {resource_id} in session {session_id}");
         let _ = self.msg_channel().notify(Request::CancelRequest(cancel_msg)).await;
@@ -594,7 +585,7 @@ impl WebRtcClient {
                                 peer_id: self.peer.get().unwrap().id.clone(),
                                 request_id,
                                 password: msg.password,
-                                order_id: msg.order_id
+                                order_id: msg.order_id,
                             }))
                             .await;
                         }
@@ -603,7 +594,7 @@ impl WebRtcClient {
                                 peer_id: self.peer.get().unwrap().id.clone(),
                                 session_order_id: req.session_order_id,
                                 resource_order_id: req.resource_order_id,
-                                transfer_id: req.transfer_id as u16
+                                transfer_id: req.transfer_id as u16,
                             }))
                             .await;
                         }
@@ -615,16 +606,16 @@ impl WebRtcClient {
                                     size: res.size as u64,
                                     path: LocalResourcePath::RelativePath {
                                         path: format!("received/session_{}/resource_{}", msg.session_order_id, res.order_id),
-                                        is_private: false
+                                        is_private: false,
                                     },
                                     thumbnail_path: None,
                                     r#type: ResourceTypeMessage::try_from(res.r#type).unwrap_or_default().into(),
-                                    shelf_id: 0
+                                    shelf_id: 0,
                                 };
                                 core.response(CoreOperationOutput::P2P(P2POperationOutput::ReceivedResourceNotification {
                                     peer_id: self.peer.get().unwrap().id.clone(),
                                     session_order_id: msg.session_order_id,
-                                    resource
+                                    resource,
                                 }))
                                 .await;
                             }
@@ -641,12 +632,12 @@ impl WebRtcClient {
     async fn sending_loop(
         self: Arc<Self>,
         reliable_tx: mpsc::Sender<Vec<u8>>,
-        mut outbound_rx: futures_mpsc::Receiver<(u16, u64, Vec<u8>, bool)>
+        mut outbound_rx: futures_mpsc::Receiver<(u16, u64, Vec<u8>, bool)>,
     ) {
         loop {
             let (prefix, offset, packet, _reliable) = match outbound_rx.next().await {
                 Some(it) => it,
-                None => break
+                None => break,
             };
 
             let data = WebRtcPacket::serialize(prefix, offset, &packet);

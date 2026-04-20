@@ -11,12 +11,12 @@ use serde::{Deserialize, Serialize};
 pub struct P2PModel {
     pub device: Option<DeviceInfo>,
     pub me: Option<Peer>,
-    pub launched: bool
+    pub launched: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct P2PViewModel {
-    pub me: Option<PeerViewModel>
+    pub me: Option<PeerViewModel>,
 }
 
 pub struct P2PModule;
@@ -26,7 +26,7 @@ pub enum P2PEvent {
     Launch,
     SetLaunched(bool),
     UpdateMe { new_peer: Peer },
-    PeerDisconnected { peer_id: String }
+    PeerDisconnected { peer_id: String },
 }
 
 impl AppModule<BitBridge> for P2PModule {
@@ -37,7 +37,7 @@ impl AppModule<BitBridge> for P2PModule {
         &self,
         event: Self::Event,
         model: &mut AppModel,
-        _caps: &<BitBridge as App>::Capabilities
+        _caps: &<BitBridge as App>::Capabilities,
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
             P2PEvent::Launch => {
@@ -56,13 +56,13 @@ impl AppModule<BitBridge> for P2PModule {
                 model.p2p.me = Some(new_peer);
                 Command::render()
             }
-            P2PEvent::PeerDisconnected { .. } => Command::render()
+            P2PEvent::PeerDisconnected { .. } => Command::render(),
         }
     }
 
     fn view(&self, model: &AppModel) -> Self::ViewModel {
         Self::ViewModel {
-            me: model.p2p.me.as_ref().map(PeerViewModel::from)
+            me: model.p2p.me.as_ref().map(PeerViewModel::from),
         }
     }
 }

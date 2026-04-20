@@ -7,7 +7,7 @@ pub enum P2PConnectionState {
     NotConnected,
     Connecting,
     Connected,
-    Failed(String)
+    Failed(String),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -18,21 +18,21 @@ pub enum TransferTarget {
         #[serde(default)]
         signalling_key: Option<String>,
         #[serde(default)]
-        signalling_route: Option<String>
+        signalling_route: Option<String>,
     },
     Internet {
-        to_emails: Vec<String>
-    }
+        to_emails: Vec<String>,
+    },
 }
 
 impl TransferTarget {
     pub fn is_connection_failed(&self) -> bool {
         let TransferTarget::P2P { connection_state, .. } = self else {
-            return false
+            return false;
         };
 
         if matches!(connection_state, P2PConnectionState::Failed(_)) {
-            return true
+            return true;
         }
 
         false
@@ -51,7 +51,7 @@ impl TransferTarget {
             TransferTarget::P2P { connection_state, .. } => {
                 matches!(connection_state, P2PConnectionState::Connected)
             }
-            TransferTarget::Internet { .. } => false
+            TransferTarget::Internet { .. } => false,
         }
     }
 
@@ -60,7 +60,7 @@ impl TransferTarget {
             TransferTarget::P2P { connection_state, .. } => {
                 matches!(connection_state, P2PConnectionState::Connecting)
             }
-            TransferTarget::Internet { .. } => false
+            TransferTarget::Internet { .. } => false,
         }
     }
 
@@ -69,14 +69,14 @@ impl TransferTarget {
             TransferTarget::P2P { connection_state, .. } => {
                 matches!(connection_state, P2PConnectionState::Failed(_))
             }
-            TransferTarget::Internet { .. } => false
+            TransferTarget::Internet { .. } => false,
         }
     }
 
     pub fn connection_state(&self) -> Option<&P2PConnectionState> {
         match self {
             TransferTarget::P2P { connection_state, .. } => Some(connection_state),
-            TransferTarget::Internet { .. } => None
+            TransferTarget::Internet { .. } => None,
         }
     }
 
@@ -91,7 +91,7 @@ impl TransferTarget {
     pub fn id(&self) -> String {
         match self {
             TransferTarget::P2P { from_peer, .. } => from_peer.as_ref().map(|p| p.id.clone()).unwrap_or_else(|| "unknown".to_string()),
-            TransferTarget::Internet { .. } => "public".to_string()
+            TransferTarget::Internet { .. } => "public".to_string(),
         }
     }
 }

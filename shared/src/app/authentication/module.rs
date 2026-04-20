@@ -16,13 +16,13 @@ pub struct AuthenticationModule;
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct AuthenticationModel {
     pub user: Option<User>,
-    pub is_already_feedback: bool
+    pub is_already_feedback: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct AuthenticationViewModel {
     pub user: Option<User>,
-    pub is_already_feedback: bool
+    pub is_already_feedback: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -33,7 +33,7 @@ pub enum AuthenticationEvent {
     Authorized { user: User },
     // User not signed in
     UnAuthorized,
-    Feedback { message: Option<String>, email: String }
+    Feedback { message: Option<String>, email: String },
 }
 
 impl AppModule<BitBridge> for AuthenticationModule {
@@ -44,7 +44,7 @@ impl AppModule<BitBridge> for AuthenticationModule {
         &self,
         event: Self::Event,
         model: &mut AppModel,
-        _caps: &<BitBridge as App>::Capabilities
+        _caps: &<BitBridge as App>::Capabilities,
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
             AuthenticationEvent::Authenticate => Command::handle_result(|ctx| async move {
@@ -85,7 +85,7 @@ impl AppModule<BitBridge> for AuthenticationModule {
                     if message.len() > 4024 {
                         return Command::new(|it| async move {
                             it.app().run(DialogOperation::toast("Message is too long".to_string())).await;
-                        })
+                        });
                     }
                 }
 
@@ -107,7 +107,7 @@ impl AppModule<BitBridge> for AuthenticationModule {
     fn view(&self, model: &AppModel) -> Self::ViewModel {
         AuthenticationViewModel {
             user: model.authentication.user.clone(),
-            is_already_feedback: model.authentication.is_already_feedback
+            is_already_feedback: model.authentication.is_already_feedback,
         }
     }
 }

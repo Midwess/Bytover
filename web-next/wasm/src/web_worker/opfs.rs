@@ -23,12 +23,7 @@ use std::sync::Arc;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
-    Blob,
-    File,
-    FileSystemDirectoryHandle,
-    FileSystemReadWriteOptions,
-    FileSystemRemoveOptions,
-    FileSystemSyncAccessHandle
+    Blob, File, FileSystemDirectoryHandle, FileSystemReadWriteOptions, FileSystemRemoveOptions, FileSystemSyncAccessHandle,
 };
 
 /// Web worker that support file system on browser
@@ -39,22 +34,22 @@ use web_sys::{
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct OpfsOperation {
     pub file_path: String,
-    pub operation: FileOperation
+    pub operation: FileOperation,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum FileOperation {
     AddFolder {
         path: String,
-        files: Vec<WebFile>
+        files: Vec<WebFile>,
     },
     Cursor {
-        buffer_size: usize
+        buffer_size: usize,
     },
     CursorNext {
         instance_id: u32,
         max: Option<u64>,
-        compressed: bool
+        compressed: bool,
     },
     CursorEnd(u32),
     AddFile(DeviceFile),
@@ -62,13 +57,13 @@ pub enum FileOperation {
     Open,
     WriteNew {
         #[serde(with = "serde_wasm_bindgen::preserve")]
-        data: Uint8Array
+        data: Uint8Array,
     },
     Write {
         #[serde(with = "serde_wasm_bindgen::preserve")]
         data: Uint8Array,
         position: usize,
-        decompress: bool
+        decompress: bool,
     },
     Flush,
     FileEntry,
@@ -76,17 +71,17 @@ pub enum FileOperation {
     GenerateSource,
     Blob,
     Init {
-        storage_session_id: String
+        storage_session_id: String,
     },
     CleanUp {
-        paths: Vec<String>
+        paths: Vec<String>,
     },
     CreateZipWriter {
-        zip_filename: String
+        zip_filename: String,
     },
     FinalizeZip {
-        zip_filename: String
-    }
+        zip_filename: String,
+    },
 }
 
 unsafe impl Send for OpfsOperation {}
@@ -103,7 +98,7 @@ pub enum OpfsOperationOutput {
         raw_size: usize,
         is_compressed_failed: bool,
         compression_time_in_micros: u64,
-        read_time_in_micros: u64
+        read_time_in_micros: u64,
     },
     Written(usize),
     File(#[serde(with = "serde_wasm_bindgen::preserve")] File),
@@ -111,7 +106,7 @@ pub enum OpfsOperationOutput {
     LocalResourceInstance(#[serde(with = "serde_wasm_bindgen::preserve")] Uint8Array),
     DownloadUrl(String),
     Blob(#[serde(with = "serde_wasm_bindgen::preserve")] Blob),
-    Cursor(u32)
+    Cursor(u32),
 }
 
 unsafe impl Send for OpfsOperationOutput {}
@@ -128,7 +123,7 @@ pub struct OpfsWorker {
     cursors: AMutex<HashMap<u32, AMutex<Box<dyn IOCursor>>>>,
     device_folders: AMutex<HashMap<String, AMutex<DeviceFolder>>>,
     zip_writers: AMutex<HashMap<String, AMutex<OpfsZipWriter>>>,
-    id_gen: Arc<AtomicU32>
+    id_gen: Arc<AtomicU32>,
 }
 
 impl OpfsWorker {
@@ -229,7 +224,7 @@ impl OpfsWorker {
                 .await
                 {
                     Ok(_) => OpfsOperationOutput::Void,
-                    Err(e) => OpfsOperationOutput::Error(e)
+                    Err(e) => OpfsOperationOutput::Error(e),
                 }
             }
             FileOperation::Init { .. } | FileOperation::CleanUp { .. } => {
@@ -265,17 +260,17 @@ impl OpfsWorker {
                     let guard = device_file.lock().await;
                     match IOReaderBlobImpl::from_file(&guard.file, buffer_size).await {
                         Ok(reader) => Box::new(reader) as Box<dyn IOCursor>,
-                        Err(e) => return OpfsOperationOutput::Error(JsValue::from(e.to_string()))
+                        Err(e) => return OpfsOperationOutput::Error(JsValue::from(e.to_string())),
                     }
                 } else if let Some(device_folder) = self.device_folders.lock().await.get(&file_path) {
                     match device_folder.lock().await.cursor(buffer_size).await {
                         Ok(cursor) => cursor,
-                        Err(e) => return OpfsOperationOutput::Error(JsValue::from(e.to_string()))
+                        Err(e) => return OpfsOperationOutput::Error(JsValue::from(e.to_string())),
                     }
                 } else {
                     match root.cursor(&file_path, buffer_size).await {
                         Ok(cursor) => cursor,
-                        Err(e) => return OpfsOperationOutput::Error(e)
+                        Err(e) => return OpfsOperationOutput::Error(e),
                     }
                 };
 
@@ -286,7 +281,7 @@ impl OpfsWorker {
             FileOperation::CursorNext {
                 instance_id,
                 max,
-                compressed
+                compressed,
             } => {
                 let disk_tick = Instant::now();
                 let Some(cursor) = self.cursors.lock().await.get(&instance_id).cloned() else {
@@ -300,7 +295,7 @@ impl OpfsWorker {
                         raw_size: 0,
                         is_compressed_failed: false,
                         read_time_in_micros: 0,
-                        compression_time_in_micros: 0
+                        compression_time_in_micros: 0,
                     };
                 };
 
@@ -311,7 +306,7 @@ impl OpfsWorker {
                         raw_size: 0,
                         is_compressed_failed: false,
                         read_time_in_micros: 0,
-                        compression_time_in_micros: 0
+                        compression_time_in_micros: 0,
                     };
                 }
 
@@ -323,13 +318,13 @@ impl OpfsWorker {
                         let is_failed = buf.len() > raw_size;
                         let out = match is_failed {
                             true => Uint8Array::new_from_slice(data),
-                            false => Uint8Array::new_from_slice(&buf)
+                            false => Uint8Array::new_from_slice(&buf),
                         };
 
                         let elapsed = instant.elapsed();
                         (out, elapsed.as_micros() as u64, is_failed)
                     }
-                    false => (Uint8Array::new_from_slice(data), 0, false)
+                    false => (Uint8Array::new_from_slice(data), 0, false),
                 };
 
                 OpfsOperationOutput::Binary {
@@ -337,7 +332,7 @@ impl OpfsWorker {
                     raw_size,
                     compression_time_in_micros: elapsed,
                     read_time_in_micros: disk_elapsed.as_micros() as u64,
-                    is_compressed_failed: failed
+                    is_compressed_failed: failed,
                 }
             }
             FileOperation::CursorEnd(instance_id) => {
@@ -367,7 +362,7 @@ impl OpfsWorker {
                 .await
                 {
                     Ok(r) => OpfsOperationOutput::LocalResourceInstance(r),
-                    Err(e) => OpfsOperationOutput::Error(e)
+                    Err(e) => OpfsOperationOutput::Error(e),
                 }
             }
             FileOperation::GetFile => {
@@ -380,7 +375,7 @@ impl OpfsWorker {
             FileOperation::Write {
                 data,
                 position,
-                decompress
+                decompress,
             } => {
                 if file_path.contains("zip_entry://") {
                     if let Some(path_after_prefix) = file_path.split("zip_entry://").nth(1) {
@@ -400,13 +395,13 @@ impl OpfsWorker {
                                             return OpfsOperationOutput::Error(JsValue::from(format!("Failed to decompress: {}", e)))
                                         }
                                     },
-                                    false => data.to_vec()
+                                    false => data.to_vec(),
                                 };
 
                                 return match guard.write(&data_vec).await {
                                     Ok(_) => OpfsOperationOutput::Written(data_vec.len()),
-                                    Err(e) => OpfsOperationOutput::Error(JsValue::from(format!("Failed to write to zip: {}", e)))
-                                }
+                                    Err(e) => OpfsOperationOutput::Error(JsValue::from(format!("Failed to write to zip: {}", e))),
+                                };
                             } else {
                                 return OpfsOperationOutput::Error(JsValue::from(format!(
                                     "Zip writer not found for: {}",
@@ -430,12 +425,12 @@ impl OpfsWorker {
                         let out = decompress_size_prepended(data.to_vec().as_slice()).unwrap();
                         Uint8Array::new_from_slice(&out)
                     }
-                    false => data
+                    false => data,
                 };
 
                 match file_guard.write_with_js_u8_array_and_options(&data, &options) {
                     Ok(written) => OpfsOperationOutput::Written(written as usize),
-                    Err(e) => OpfsOperationOutput::Error(e)
+                    Err(e) => OpfsOperationOutput::Error(e),
                 }
             }
             FileOperation::FileEntry => {
@@ -445,13 +440,13 @@ impl OpfsWorker {
                         path: file_path.into(),
                         size: file_guard.get_size().unwrap_or_default() as u64,
                         modified_at: Utc::now().into(),
-                        is_dir: false
+                        is_dir: false,
                     };
 
                     return match file_guard.get_size() {
                         Ok(_size) => OpfsOperationOutput::FileEntry(entry),
-                        Err(e) => OpfsOperationOutput::Error(e)
-                    }
+                        Err(e) => OpfsOperationOutput::Error(e),
+                    };
                 }
 
                 if let Some(device_folder) = self.device_folders.lock().await.get(&file_path).cloned() {
@@ -460,7 +455,7 @@ impl OpfsWorker {
                         path: guard.base_path.clone().into(),
                         size: guard.resource_instance.size,
                         is_dir: false,
-                        modified_at: Utc::now().into()
+                        modified_at: Utc::now().into(),
                     };
 
                     return OpfsOperationOutput::FileEntry(entry);
@@ -471,7 +466,7 @@ impl OpfsWorker {
                         path: file_path.into(),
                         size: device_file.lock().await.file.size() as u64,
                         modified_at: Utc::now().into(),
-                        is_dir: false
+                        is_dir: false,
                     };
 
                     return OpfsOperationOutput::FileEntry(entry);
@@ -487,7 +482,7 @@ impl OpfsWorker {
 
                 if let Some(device_folder) = self.device_folders.lock().await.get(&file_path).cloned() {
                     let guard = device_folder.lock().await;
-                    return OpfsOperationOutput::LocalResourceInstance(serialize(&guard.resource_instance))
+                    return OpfsOperationOutput::LocalResourceInstance(serialize(&guard.resource_instance));
                 }
 
                 OpfsOperationOutput::Error("No file selected".into())
@@ -512,7 +507,7 @@ impl OpfsWorker {
                 .await
                 {
                     Ok(url) => OpfsOperationOutput::DownloadUrl(url),
-                    Err(e) => OpfsOperationOutput::Error(e)
+                    Err(e) => OpfsOperationOutput::Error(e),
                 }
             }
             FileOperation::Blob => {
@@ -531,7 +526,7 @@ impl OpfsWorker {
                 .await
                 {
                     Ok(blob) => OpfsOperationOutput::Blob(blob),
-                    Err(e) => OpfsOperationOutput::Error(e)
+                    Err(e) => OpfsOperationOutput::Error(e),
                 }
             }
             FileOperation::AddFolder { files, path } => {
@@ -573,7 +568,7 @@ impl OpfsWorker {
                 .await
                 {
                     Ok(_) => OpfsOperationOutput::Void,
-                    Err(e) => OpfsOperationOutput::Error(e)
+                    Err(e) => OpfsOperationOutput::Error(e),
                 }
             }
             FileOperation::FinalizeZip { zip_filename } => {
@@ -595,7 +590,7 @@ impl OpfsWorker {
                 .await
                 {
                     Ok(_) => OpfsOperationOutput::Void,
-                    Err(e) => OpfsOperationOutput::Error(e)
+                    Err(e) => OpfsOperationOutput::Error(e),
                 }
             }
         }
@@ -619,7 +614,7 @@ impl Worker for OpfsWorker {
             cursors: Default::default(),
             id_gen: Arc::new(AtomicU32::new(0)),
             device_folders: Default::default(),
-            zip_writers: Default::default()
+            zip_writers: Default::default(),
         }
     }
 

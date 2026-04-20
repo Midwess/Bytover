@@ -3,17 +3,14 @@ use crate::repositories::device_alias::{DeviceAliasId, DeviceAliasRepository};
 use core_services::db::repository::abstraction::errors::RepositoryError;
 use core_services::db::repository::abstraction::repository::Repository;
 use device_alias_model::{
-    ActiveModel as DeviceAliasActiveModel,
-    Column as DeviceAliasColumn,
-    Entity as DeviceAliasEntity,
-    Model as DeviceAliasModel
+    ActiveModel as DeviceAliasActiveModel, Column as DeviceAliasColumn, Entity as DeviceAliasEntity, Model as DeviceAliasModel,
 };
 use migration::model::device_alias as device_alias_model;
 use sea_orm::ActiveValue::Set;
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter};
 
 pub struct DeviceAliasPostgresRepository {
-    pub db: DatabaseConnection
+    pub db: DatabaseConnection,
 }
 
 impl TryFrom<DeviceAliasModel> for DeviceAlias {
@@ -31,7 +28,7 @@ impl TryFrom<&DeviceAlias> for DeviceAliasActiveModel {
         Ok(DeviceAliasActiveModel {
             alias: Set(entity.alias().to_string()),
             user_id: Set(entity.user_id() as i64),
-            device_id: Set(entity.device_id() as i64)
+            device_id: Set(entity.device_id() as i64),
         })
     }
 }
@@ -50,7 +47,7 @@ impl Repository<DeviceAlias, DeviceAliasId> for DeviceAliasPostgresRepository {
         &self,
         _from_id: Option<&DeviceAliasId>,
         _to_id: Option<&DeviceAliasId>,
-        _count: Option<usize>
+        _count: Option<usize>,
     ) -> Result<Vec<DeviceAlias>, RepositoryError> {
         unimplemented!("Use find_by_user_and_device instead")
     }

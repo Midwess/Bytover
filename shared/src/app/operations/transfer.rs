@@ -15,13 +15,13 @@ pub enum TransferOperation {
     SendSession(TransferSession),
     CancelSession(Option<String>, u64),
     FindSession {
-        alias: String
+        alias: String,
     },
     SubscribeToPublicSessionTransferProgress {
         session_owner_user_id: u64,
         session_order_id: u64,
-        password: Option<String>
-    }
+        password: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -35,8 +35,8 @@ pub enum TransferOperationOutput {
     ResourceSentToPeer {
         session_id: u64,
         resource_order_id: u64,
-        peer_id: String
-    }
+        peer_id: String,
+    },
 }
 
 impl Operation for TransferOperation {
@@ -53,13 +53,13 @@ impl TransferOperation {
     }
 
     pub fn create_cloud_session(
-        session: TransferSession
+        session: TransferSession,
     ) -> AppRequestBuilder<impl Future<Output = Result<TransferSession, CoreError>>> {
         AppCommand::request_from_shell(TransferOperation::CreateCloudSession(session)).map(|it| it.result())
     }
 
     pub fn find_transfer_session(
-        alias: String
+        alias: String,
     ) -> AppRequestBuilder<impl Future<Output = Result<Option<TransferSession>, CoreError>>> {
         AppCommand::request_from_shell(TransferOperation::FindSession { alias }).map(|it| it.result_option())
     }

@@ -1,14 +1,14 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use std::thread;
-use std::thread::sleep;
-use std::time::{Duration, Instant};
+use crate::extensions::AppHandleExt;
 #[cfg(target_os = "macos")]
 use rdev::{set_is_main_thread, Button, EventType, Key};
 #[cfg(not(target_os = "macos"))]
 use rdev::{Button, EventType, Key};
+use std::thread;
+use std::thread::sleep;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager, PhysicalPosition};
-use crate::extensions::AppHandleExt;
 
 /// Check if the app has accessibility permission on macOS.
 /// If `prompt` is true, it will show the system dialog asking user to grant permission.
@@ -123,10 +123,6 @@ pub fn check_input_monitoring_permission(_prompt: bool) -> bool {
     true // No input monitoring permission needed on other platforms
 }
 
-
-
-
-
 static USER_DID_DROP: AtomicBool = AtomicBool::new(false);
 
 #[cfg(target_os = "macos")]
@@ -161,9 +157,9 @@ pub fn detect_drag(_start: &PhysicalPosition<f64>, _current: &PhysicalPosition<f
         // On Windows, distinguishing between "mouse down move" (selection)
         // and "actual item drag" is done by checking for the ghost drag image window.
         // This window class is standard for File Explorer and OLE drags.
-        use windows::Win32::UI::WindowsAndMessaging::FindWindowW;
         use windows::core::w;
-        
+        use windows::Win32::UI::WindowsAndMessaging::FindWindowW;
+
         let is_dragging = unsafe {
             let h1 = FindWindowW(w!("SysDragImage"), None);
             let h2 = FindWindowW(w!("DragImage"), None);
@@ -219,10 +215,11 @@ pub fn start_macos_drag_pasteboard_monitor() {
                 });
             }
 
-            let is_dragging = is_active && queue.exec_sync(move || {
-                let pb = Pasteboard::named(PasteboardName::Drag);
-                pb.get_file_urls().map(|it| !it.is_empty()).unwrap_or_default()
-            });
+            let is_dragging = is_active
+                && queue.exec_sync(move || {
+                    let pb = Pasteboard::named(PasteboardName::Drag);
+                    pb.get_file_urls().map(|it| !it.is_empty()).unwrap_or_default()
+                });
 
             if is_dragging != current_dragging {
                 current_dragging = is_dragging;
@@ -230,7 +227,7 @@ pub fn start_macos_drag_pasteboard_monitor() {
             }
 
             sleep(Duration::from_millis(250));
-        };
+        }
     });
 }
 
@@ -251,12 +248,10 @@ impl Default for MouseMonitorConfig {
         Self {
             required_shakes: 2,
             min_changed,
-            shake_timeout: Duration::from_millis(2000)
+            shake_timeout: Duration::from_millis(2000),
         }
     }
 }
-
-
 
 pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
     let mut last_sampling = Instant::now();
@@ -281,7 +276,7 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
                 match event.event_type {
                     EventType::ButtonPress(Button::Left) => {
                         USER_DID_DROP.store(false, Ordering::SeqCst);
-                        
+
                         is_handled_shown = false;
                         opened_shelf_label = None;
                         start_mouse_position = current_mouse_position.clone();
@@ -320,12 +315,7 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
 
                         #[cfg(target_os = "macos")]
                         {
-                            let scale_factor = app_handle
-                                .primary_monitor()
-                                .ok()
-                                .flatten()
-                                .map(|m| m.scale_factor())
-                                .unwrap_or(1.0);
+                            let scale_factor = app_handle.primary_monitor().ok().flatten().map(|m| m.scale_factor()).unwrap_or(1.0);
 
                             current_mouse_position.x = x * scale_factor;
                             current_mouse_position.y = y * scale_factor;

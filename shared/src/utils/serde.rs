@@ -4,7 +4,7 @@ pub mod as_string {
     pub fn serialize<S, T>(x: &T, s: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
-        T: ToString
+        T: ToString,
     {
         s.serialize_str(&x.to_string())
     }
@@ -13,7 +13,7 @@ pub mod as_string {
     where
         D: Deserializer<'de>,
         T: std::str::FromStr + Default,
-        <T as std::str::FromStr>::Err: std::fmt::Display
+        <T as std::str::FromStr>::Err: std::fmt::Display,
     {
         let s = String::deserialize(d)?;
         match s.parse::<T>() {

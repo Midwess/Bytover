@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserId {
-    pub email: String
+    pub email: String,
 }
 
 pub trait UserRepository: Repository<User, UserId> {}

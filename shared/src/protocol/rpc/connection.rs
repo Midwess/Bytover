@@ -12,7 +12,7 @@ where
     T::Future: MaybeSend,
     T::Error: Into<tonic::codegen::StdError>,
     T::ResponseBody: http_body::Body<Data = bytes::Bytes> + 'static + MaybeSend,
-    <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + MaybeSend
+    <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + MaybeSend,
 {
     async fn connect(&self) -> Result<T, RpcErrors>;
 }

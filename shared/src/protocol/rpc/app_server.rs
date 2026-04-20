@@ -23,10 +23,10 @@ where
     T::Future: MaybeSend,
     T::Error: Into<tonic::codegen::StdError>,
     T::ResponseBody: http_body::Body<Data = bytes::Bytes> + Send + 'static,
-    <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send
+    <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send,
 {
     rpc_module: Box<dyn RpcNetworkModule<T>>,
-    auth_provider: AuthProvider
+    auth_provider: AuthProvider,
 }
 
 impl<T> AppServer<T>
@@ -37,12 +37,12 @@ where
     T: tonic::client::GrpcService<tonic::body::Body>,
     T::Error: Into<tonic::codegen::StdError>,
     T::ResponseBody: http_body::Body<Data = bytes::Bytes> + Send + 'static,
-    <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send
+    <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send,
 {
     pub fn new(auth_provider: AuthProvider, network: Box<dyn RpcNetworkModule<T>>) -> Self {
         Self {
             auth_provider,
-            rpc_module: network
+            rpc_module: network,
         }
     }
 
@@ -56,8 +56,8 @@ where
                 device_unique_key: device.unique_id,
                 platform: device.platform.into(),
                 device_type: device.device_type.into(),
-                url: format!("{}/oauth", device.url)
-            }
+                url: format!("{}/oauth", device.url),
+            },
         };
 
         let auth_client = AuthServiceClient::new(channel);
@@ -66,7 +66,7 @@ where
         Ok(response
             .action
             .map(|it| match it {
-                Action::OpenUrl(url) => url
+                Action::OpenUrl(url) => url,
             })
             .clone()
             .unwrap_or_default())
@@ -87,13 +87,13 @@ where
             id: response.user.order_id,
             email: response.user.email.clone(),
             name: response.user.display_name.clone(),
-            avatar: response.user.avatar_url.clone().unwrap_or_default()
+            avatar: response.user.avatar_url.clone().unwrap_or_default(),
         })
     }
 
     pub async fn find_user(&self, user_order_id: u64) -> Result<Option<User>, RpcErrors> {
         let req = FindUserRequest {
-            order_id: Some(user_order_id)
+            order_id: Some(user_order_id),
         };
 
         let request = Request::new(req);
@@ -109,7 +109,7 @@ where
             id: public_user.order_id.unwrap_or_default(),
             email: public_user.user_name.unwrap_or_default(),
             name: public_user.display_name.unwrap_or_default(),
-            avatar: public_user.avatar_url.unwrap_or_default()
+            avatar: public_user.avatar_url.unwrap_or_default(),
         };
 
         Ok(Some(user))
@@ -126,7 +126,7 @@ where
             app_name: "BitBridge".to_string(),
             user_email: Some(email),
             title: None,
-            message
+            message,
         };
 
         let channel = self.rpc_module.connect().await?;
@@ -139,13 +139,13 @@ where
         &self,
         alias: String,
         signalling_key: String,
-        signalling_route: String
+        signalling_route: String,
     ) -> Result<schema::devlog::bitbridge::P2pSession, RpcErrors> {
         let channel = self.rpc_module.connect().await?;
         let req = CreateDeviceSessionRequest {
             alias,
             signalling_key,
-            signalling_route
+            signalling_route,
         };
         let mut request = Request::new(req);
 
@@ -171,7 +171,7 @@ where
     pub async fn find_p2p_session_by_alias(&self, alias: String) -> Result<Option<schema::devlog::bitbridge::P2pSession>, RpcErrors> {
         let channel = self.rpc_module.connect().await?;
         let req = FindP2pSessionRequest {
-            key: Some(schema::devlog::bitbridge::find_p2p_session_request::Key::Alias(alias))
+            key: Some(schema::devlog::bitbridge::find_p2p_session_request::Key::Alias(alias)),
         };
         let request = Request::new(req);
 
@@ -188,8 +188,8 @@ where
                 device_name: device.name.clone(),
                 device_unique_key: device.unique_id.clone(),
                 device_type: device.device_type as i32,
-                url: device.url.clone()
-            }
+                url: device.url.clone(),
+            },
         };
         let mut request = Request::new(req);
 

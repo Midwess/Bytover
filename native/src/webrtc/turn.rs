@@ -27,12 +27,7 @@ pub struct TurnRelayInfo {
 
 impl TurnRelayInfo {
     /// Create a new `TurnRelayInfo`.
-    pub fn new(
-        client: TurnClientUdp,
-        server_addr: SocketAddr,
-        relay_addr: SocketAddr,
-        stun_base: Instant,
-    ) -> Self {
+    pub fn new(client: TurnClientUdp, server_addr: SocketAddr, relay_addr: SocketAddr, stun_base: Instant) -> Self {
         Self {
             client,
             server_addr,

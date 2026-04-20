@@ -8,7 +8,7 @@ use core_services::db::repository::abstraction::table::Table;
 #[derive(Clone, Default)]
 pub struct TransferSessionId {
     pub user_order_id: Option<u64>,
-    pub order_id: Option<u64>
+    pub order_id: Option<u64>,
 }
 
 impl Table<TransferSessionId> for TransferSession {
@@ -19,7 +19,7 @@ impl Table<TransferSessionId> for TransferSession {
     fn id(&self) -> TransferSessionId {
         TransferSessionId {
             user_order_id: Some(self.user_order_id()),
-            order_id: Some(self.order_id())
+            order_id: Some(self.order_id()),
         }
     }
 }

@@ -5,12 +5,12 @@ use super::user::User;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum SessionType {
-    Access
+    Access,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Session {
     pub user: Option<User>,
     pub token: Token,
-    pub r#type: SessionType
+    pub r#type: SessionType,
 }

@@ -15,20 +15,22 @@ pub struct RegisteredRelay {
     pub stun_port: u16,
     pub relay_port: u16,
     pub turn_port: u16,
+    pub turn_username: Option<String>,
+    pub turn_password: Option<String>,
     pub last_ping: Instant,
-    pub counter: Arc<AtomicUsize>
+    pub counter: Arc<AtomicUsize>,
 }
 
 pub struct TurnManager {
     relays: Arc<Mutex<HashMap<String, RegisteredRelay>>>, // relay_id -> RegisteredRelay
-    client_relay_assignments: Arc<Mutex<HashMap<String, String>>>  // client_id -> relay_id
+    client_relay_assignments: Arc<Mutex<HashMap<String, String>>>, // client_id -> relay_id
 }
 
 impl TurnManager {
     pub async fn new() -> Self {
         let manager = Self {
             relays: Arc::new(Mutex::new(HashMap::new())),
-            client_relay_assignments: Arc::new(Mutex::new(HashMap::new()))
+            client_relay_assignments: Arc::new(Mutex::new(HashMap::new())),
         };
 
         // Start background task to prune expired relays
@@ -70,7 +72,16 @@ impl TurnManager {
         manager
     }
 
-    pub async fn register_relay(&self, public_ipv4: Option<String>, public_ipv6: Option<String>, stun_port: u16, relay_port: u16, turn_port: u16) {
+    pub async fn register_relay(
+        &self,
+        public_ipv4: Option<String>,
+        public_ipv6: Option<String>,
+        stun_port: u16,
+        relay_port: u16,
+        turn_port: u16,
+        turn_username: Option<String>,
+        turn_password: Option<String>,
+    ) {
         let mut relays = self.relays.lock().await;
         let relay_host = public_ipv4
             .clone()
@@ -80,12 +91,12 @@ impl TurnManager {
         let existing_id = relays
             .values()
             .find(|r| {
-                r.public_ipv4 == public_ipv4 &&
-                    r.public_ipv6 == public_ipv6 &&
-                    r.relay_host == relay_host &&
-                    r.stun_port == stun_port &&
-                    r.relay_port == relay_port &&
-                    r.turn_port == turn_port
+                r.public_ipv4 == public_ipv4
+                    && r.public_ipv6 == public_ipv6
+                    && r.relay_host == relay_host
+                    && r.stun_port == stun_port
+                    && r.relay_port == relay_port
+                    && r.turn_port == turn_port
             })
             .map(|r| r.id.clone());
 
@@ -115,9 +126,11 @@ impl TurnManager {
                     stun_port,
                     relay_port,
                     turn_port,
+                    turn_username,
+                    turn_password,
                     last_ping: Instant::now(),
-                    counter: Arc::new(AtomicUsize::new(0))
-                }
+                    counter: Arc::new(AtomicUsize::new(0)),
+                },
             );
         }
     }
@@ -182,8 +195,8 @@ impl TurnManager {
 
         Some(IceConfig {
             urls,
-            username: None,
-            credential: None
+            username: final_relay.turn_username.clone(),
+            credential: final_relay.turn_password.clone(),
         })
     }
 }
@@ -196,7 +209,15 @@ mod tests {
     async fn assigned_relay_keeps_registered_relay_port() {
         let manager = TurnManager::new().await;
         manager
-            .register_relay(Some("198.51.100.10".to_string()), Some("2001:db8::10".to_string()), 3478, 19101, 19101)
+            .register_relay(
+                Some("198.51.100.10".to_string()),
+                Some("2001:db8::10".to_string()),
+                19101,
+                19101,
+                19101,
+                Some("relay".to_string()),
+                Some("relay-secret".to_string()),
+            )
             .await;
 
         let relay = manager.get_assigned_relay("client-1").await.unwrap();
@@ -204,7 +225,7 @@ mod tests {
         assert_eq!(relay.public_ipv4.as_deref(), Some("198.51.100.10"));
         assert_eq!(relay.public_ipv6.as_deref(), Some("2001:db8::10"));
         assert_eq!(relay.relay_host, "198.51.100.10");
-        assert_eq!(relay.stun_port, 3478);
+        assert_eq!(relay.stun_port, 19101);
         assert_eq!(relay.relay_port, 19101);
     }
 
@@ -212,7 +233,15 @@ mod tests {
     async fn relay_config_publishes_dual_stack_urls() {
         let manager = TurnManager::new().await;
         manager
-            .register_relay(Some("198.51.100.10".to_string()), Some("2001:db8::10".to_string()), 3478, 19101, 19101)
+            .register_relay(
+                Some("198.51.100.10".to_string()),
+                Some("2001:db8::10".to_string()),
+                19101,
+                19101,
+                19101,
+                Some("relay".to_string()),
+                Some("relay-secret".to_string()),
+            )
             .await;
 
         let relay = manager.get_relay_config("client-1").await.unwrap();
@@ -220,9 +249,13 @@ mod tests {
         assert_eq!(
             relay.urls,
             vec![
-                "stun:198.51.100.10:3478".to_string(),
-                "stun:[2001:db8::10]:3478".to_string()
+                "stun:198.51.100.10:19101".to_string(),
+                "stun:[2001:db8::10]:19101".to_string(),
+                "turn:198.51.100.10:19101".to_string(),
+                "turn:[2001:db8::10]:19101".to_string()
             ]
         );
+        assert_eq!(relay.username.as_deref(), Some("relay"));
+        assert_eq!(relay.credential.as_deref(), Some("relay-secret"));
     }
 }

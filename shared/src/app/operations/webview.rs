@@ -7,7 +7,7 @@ use crate::app::AppRequestBuilder;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum WebViewOperation {
-    OpenUrl(String)
+    OpenUrl(String),
 }
 
 impl WebViewOperation {

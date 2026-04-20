@@ -5,21 +5,10 @@ use core_services::utils::maybe::MaybeSend;
 use schema::devlog::bitbridge::bit_bridge_cloud_service_client::BitBridgeCloudServiceClient;
 use schema::devlog::bitbridge::update_transfer_progress_request::Status;
 use schema::devlog::bitbridge::{
-    AddResourcesRequest,
-    AddResourcesResponse,
-    CancelSessionRequest,
-    ClientUploadRequest,
-    CloudResourceMessage,
-    CompleteUploadPartRequest,
-    CreatePublicTransferSessionRequest,
-    FindSessionRequest,
-    FindSessionResponse,
-    MultiPartUpload,
-    PublicSessionId,
-    PublicTransferSessionMessage,
-    SubscribeSessionInfoRequest,
-    SubscribeSessionInfoResponse,
-    UpdateTransferProgressRequest
+    AddResourcesRequest, AddResourcesResponse, CancelSessionRequest, ClientUploadRequest, CloudResourceMessage,
+    CompleteUploadPartRequest, CreatePublicTransferSessionRequest, FindSessionRequest, FindSessionResponse, MultiPartUpload,
+    PublicSessionId, PublicTransferSessionMessage, SubscribeSessionInfoRequest, SubscribeSessionInfoResponse,
+    UpdateTransferProgressRequest,
 };
 use tonic::{Request, Streaming};
 
@@ -31,10 +20,10 @@ where
     T::Future: MaybeSend,
     T::Error: Into<tonic::codegen::StdError>,
     T::ResponseBody: http_body::Body<Data = bytes::Bytes> + 'static,
-    <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + MaybeSend
+    <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + MaybeSend,
 {
     rpc_module: Box<dyn RpcNetworkModule<T>>,
-    auth_provider: AuthProvider
+    auth_provider: AuthProvider,
 }
 
 impl<T> CloudServer<T>
@@ -45,7 +34,7 @@ where
     T: tonic::client::GrpcService<tonic::body::Body>,
     T::Error: Into<tonic::codegen::StdError>,
     T::ResponseBody: http_body::Body<Data = bytes::Bytes> + Send + 'static,
-    <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send
+    <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send,
 {
     pub fn new(rpc_module: Box<dyn RpcNetworkModule<T>>, auth_provider: AuthProvider) -> Self {
         Self { rpc_module, auth_provider }
@@ -54,7 +43,7 @@ where
     pub async fn create_public_transfer_session(
         &self,
         password: Option<String>,
-        to_emails: Vec<String>
+        to_emails: Vec<String>,
     ) -> Result<PublicTransferSessionMessage, RpcErrors> {
         let request_body = CreatePublicTransferSessionRequest { password, to_emails };
         let channel = self.rpc_module.connect().await?;
@@ -72,12 +61,12 @@ where
     pub async fn add_resources(
         &self,
         session_order_id: u64,
-        resources: Vec<CloudResourceMessage>
+        resources: Vec<CloudResourceMessage>,
     ) -> Result<AddResourcesResponse, RpcErrors> {
         let channel = self.rpc_module.connect().await?;
         let request_body = AddResourcesRequest {
             session_order_id,
-            resources
+            resources,
         };
 
         let mut request = Request::new(request_body);
@@ -106,13 +95,13 @@ where
         &self,
         session_order_id: u64,
         resource_order_id: u64,
-        status: Status
+        status: Status,
     ) -> Result<Option<ClientUploadRequest>, RpcErrors> {
         let channel = self.rpc_module.connect().await?;
         let request_body = UpdateTransferProgressRequest {
             session_order_id,
             resource_id: resource_order_id,
-            status: Some(status)
+            status: Some(status),
         };
 
         let mut request = Request::new(request_body);
@@ -142,16 +131,16 @@ where
         &self,
         user_id: u64,
         session_order_id: u64,
-        password: Option<String>
+        password: Option<String>,
     ) -> Result<Streaming<SubscribeSessionInfoResponse>, RpcErrors> {
         let channel = self.rpc_module.connect().await?;
         let mut client = BitBridgeCloudServiceClient::new(channel);
         let request = Request::new(SubscribeSessionInfoRequest {
             id: PublicSessionId {
                 user_id,
-                order_id: session_order_id
+                order_id: session_order_id,
             },
-            password
+            password,
         });
 
         let response = client.subscribe_session_info(request).await?;
@@ -164,7 +153,7 @@ where
         let channel = self.rpc_module.connect().await?;
         let mut client = BitBridgeCloudServiceClient::new(channel);
         let mut request = Request::new(CompleteUploadPartRequest {
-            context_token: context_token.to_string()
+            context_token: context_token.to_string(),
         });
 
         self.auth_provider.with_auth(&mut request).await?;

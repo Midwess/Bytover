@@ -7,7 +7,7 @@ use crate::entities::session::{Session, SessionType};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AuthSessionId {
-    pub r#type: SessionType
+    pub r#type: SessionType,
 }
 
 pub trait AuthSessionRepository: Repository<Session, AuthSessionId> {}
@@ -19,7 +19,7 @@ impl Table<AuthSessionId> for Session {
 
     fn id(&self) -> AuthSessionId {
         AuthSessionId {
-            r#type: self.r#type.clone()
+            r#type: self.r#type.clone(),
         }
     }
 }

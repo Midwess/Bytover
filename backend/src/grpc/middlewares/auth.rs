@@ -48,7 +48,7 @@ impl RequestInterceptor for AuthInterceptor {
                 req.extensions_mut().insert(Token(token_str));
                 Ok(req)
             }
-            None => Ok(req)
+            None => Ok(req),
         }
     }
 }

@@ -6,7 +6,7 @@ use core_services::db::repository::abstraction::table::Table;
 
 #[derive(Clone, Default)]
 pub struct P2PSessionId {
-    pub session_id: Option<u64>
+    pub session_id: Option<u64>,
 }
 
 impl Table<P2PSessionId> for P2PSession {
@@ -16,7 +16,7 @@ impl Table<P2PSessionId> for P2PSession {
 
     fn id(&self) -> P2PSessionId {
         P2PSessionId {
-            session_id: Some(self.session_id())
+            session_id: Some(self.session_id()),
         }
     }
 }

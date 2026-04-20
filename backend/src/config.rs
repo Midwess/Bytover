@@ -1,7 +1,7 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PublicEndpointConfig {
     pub host: String,
-    pub port: u16
+    pub port: u16,
 }
 
 pub fn resolve_public_grpc_endpoint(default_host: &str, default_port: u16) -> PublicEndpointConfig {

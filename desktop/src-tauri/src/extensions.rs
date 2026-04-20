@@ -1,9 +1,9 @@
-use tauri::{Emitter, Manager, Runtime, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
-use tauri::webview::Color;
-use tauri::window::{Effect, EffectState, EffectsBuilder};
-use tauri_plugin_positioner::{Position, WindowExt};
 use std::collections::{HashMap, VecDeque};
 use std::sync::{LazyLock, Mutex};
+use tauri::webview::Color;
+use tauri::window::{Effect, EffectState, EffectsBuilder};
+use tauri::{Emitter, Manager, Runtime, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri_plugin_positioner::{Position, WindowExt};
 
 // ── Shelf slot registry ───────────────────────────────────────────────────────
 //
@@ -45,17 +45,17 @@ fn monitor_hash(monitor: &tauri::Monitor) -> u64 {
 // Grid layout in logical pixels ───────────────────────────────────────────────
 const WIN_WIDTH: f64 = 245.0;
 const WIN_HEIGHT: f64 = 270.0;
-const CELL_W: f64 = WIN_WIDTH * 1.1;   // 10 % horizontal padding
-const CELL_H: f64 = WIN_HEIGHT * 1.1;  // 10 % vertical padding
-const MARGIN: f64 = 50.0;              // uniform margin on every edge (logical px)
+const CELL_W: f64 = WIN_WIDTH * 1.1; // 10 % horizontal padding
+const CELL_H: f64 = WIN_HEIGHT * 1.1; // 10 % vertical padding
+const MARGIN: f64 = 50.0; // uniform margin on every edge (logical px)
 
 /// How many columns and rows fit inside `monitor`, covering the full screen.
 /// Uses the same `MARGIN` on all four sides so the grid is always fully visible.
 fn grid_dimensions(monitor: &tauri::Monitor) -> (usize, usize) {
     let scale = monitor.scale_factor();
-    let size  = monitor.size();
+    let size = monitor.size();
     let p_margin = MARGIN * scale;
-    let cols = ((size.width  as f64 - 2.0 * p_margin) / (CELL_W * scale)).floor() as usize;
+    let cols = ((size.width as f64 - 2.0 * p_margin) / (CELL_W * scale)).floor() as usize;
     let rows = ((size.height as f64 - 2.0 * p_margin) / (CELL_H * scale)).floor() as usize;
     (cols.max(1), rows.max(1))
 }
@@ -65,13 +65,13 @@ fn grid_dimensions(monitor: &tauri::Monitor) -> (usize, usize) {
 /// `col 0` is the rightmost column, `row 0` is the top row.
 /// The grid fills the screen; use `grid_dimensions()` to get valid col/row ranges.
 fn slot_physics(monitor: &tauri::Monitor, col: usize, row: usize) -> (f64, f64, f64, f64) {
-    let scale    = monitor.scale_factor();
-    let pos      = monitor.position();
-    let size     = monitor.size();
+    let scale = monitor.scale_factor();
+    let pos = monitor.position();
+    let size = monitor.size();
     let p_cell_w = CELL_W * scale;
     let p_cell_h = CELL_H * scale;
-    let p_win_w  = WIN_WIDTH  * scale;
-    let p_win_h  = WIN_HEIGHT * scale;
+    let p_win_w = WIN_WIDTH * scale;
+    let p_win_h = WIN_HEIGHT * scale;
     let p_margin = MARGIN * scale;
 
     let sx = pos.x as f64;
@@ -80,7 +80,7 @@ fn slot_physics(monitor: &tauri::Monitor, col: usize, row: usize) -> (f64, f64, 
 
     // Top-left of the cell
     let cell_x = sx + sw - p_margin - ((col as f64 + 1.0) * p_cell_w);
-    let cell_y = sy + p_margin       +  (row as f64        * p_cell_h);
+    let cell_y = sy + p_margin + (row as f64 * p_cell_h);
 
     let cx = cell_x + p_cell_w / 2.0;
     let cy = cell_y + p_cell_h / 2.0;
@@ -97,7 +97,6 @@ fn release_registry_slot(label: &str) {
 }
 
 // ── Monitor helper ────────────────────────────────────────────────────────────
-
 
 // ── Trait definition ──────────────────────────────────────────────────────────
 
@@ -145,24 +144,18 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
 
         let window = match self.get_webview_window("auth") {
             Some(window) => window,
-            None => {
-                WebviewWindowBuilder::new(
-                    self,
-                    "auth",
-                    WebviewUrl::App("auth.html".into())
-                )
-                    .title("Bytover")
-                    .inner_size(600.0, 600.0)
-                    .decorations(true)
-                    .transparent(true)
-                    .focused(true)
-                    .skip_taskbar(false)
-                    .resizable(false)
-                    .shadow(true)
-                    .devtools(true)
-                    .build()
-                    .expect("failed to create auth window")
-            }
+            None => WebviewWindowBuilder::new(self, "auth", WebviewUrl::App("auth.html".into()))
+                .title("Bytover")
+                .inner_size(600.0, 600.0)
+                .decorations(true)
+                .transparent(true)
+                .focused(true)
+                .skip_taskbar(false)
+                .resizable(false)
+                .shadow(true)
+                .devtools(true)
+                .build()
+                .expect("failed to create auth window"),
         };
 
         let _ = window.show();
@@ -173,11 +166,7 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
         let window = match self.get_webview_window("receive") {
             Some(window) => window,
             None => {
-                let window = WebviewWindowBuilder::new(
-                    self,
-                    "receive",
-                    WebviewUrl::App("receive.html".into())
-                )
+                let window = WebviewWindowBuilder::new(self, "receive", WebviewUrl::App("receive.html".into()))
                     .title("receive")
                     .inner_size(490.0, 300.0)
                     .decorations(false)
@@ -197,13 +186,12 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
                         .state(EffectState::Active)
                         .radius(25.0)
                         .color(Color(0, 0, 0, 0))
-                        .build()
+                        .build(),
                 );
 
                 window
             }
         };
-
 
         window
     }
@@ -213,12 +201,10 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
             if !window.is_visible().unwrap_or_default() {
                 let _ = window.show();
                 let _ = window.move_window(Position::TrayBottomCenter);
-            }
-            else {
+            } else {
                 let _ = window.hide();
             }
-        }
-        else {
+        } else {
             let window = self.create_receive();
             let _ = window.show();
             let _ = window.move_window(Position::TrayBottomCenter);
@@ -229,25 +215,19 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
         self.close_all_windows(vec!["send"]);
         let window = match self.get_webview_window("send") {
             Some(window) => window,
-            None => {
-                WebviewWindowBuilder::new(
-                    self,
-                    "send",
-                    WebviewUrl::App("send.html".into())
-                )
-                    .title("send")
-                    .inner_size(245.0, 270.0)
-                    .resizable(false)
-                    .decorations(false)
-                    .transparent(true)
-                    .visible_on_all_workspaces(true)
-                    .always_on_top(true)
-                    .skip_taskbar(true)
-                    .shadow(false)
-                    .devtools(true)
-                    .build()
-                    .expect("failed to create send window")
-            }
+            None => WebviewWindowBuilder::new(self, "send", WebviewUrl::App("send.html".into()))
+                .title("send")
+                .inner_size(245.0, 270.0)
+                .resizable(false)
+                .decorations(false)
+                .transparent(true)
+                .visible_on_all_workspaces(true)
+                .always_on_top(true)
+                .skip_taskbar(true)
+                .shadow(false)
+                .devtools(true)
+                .build()
+                .expect("failed to create send window"),
         };
 
         animate_window(window.clone());
@@ -262,23 +242,19 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
         let window = match self.get_webview_window(&label) {
             Some(w) => w,
             None => {
-                let w = WebviewWindowBuilder::new(
-                    self,
-                    &label,
-                    WebviewUrl::App("send.html".into()),
-                )
-                .title(&label)
-                .inner_size(WIN_WIDTH, WIN_HEIGHT)
-                .resizable(false)
-                .decorations(false)
-                .transparent(true)
-                .visible_on_all_workspaces(true)
-                .always_on_top(true)
-                .skip_taskbar(true)
-                .shadow(false)
-                .devtools(true)
-                .build()
-                .expect("failed to create shelf window");
+                let w = WebviewWindowBuilder::new(self, &label, WebviewUrl::App("send.html".into()))
+                    .title(&label)
+                    .inner_size(WIN_WIDTH, WIN_HEIGHT)
+                    .resizable(false)
+                    .decorations(false)
+                    .transparent(true)
+                    .visible_on_all_workspaces(true)
+                    .always_on_top(true)
+                    .skip_taskbar(true)
+                    .shadow(false)
+                    .devtools(true)
+                    .build()
+                    .expect("failed to create shelf window");
 
                 let label_clone = label.clone();
                 w.on_window_event(move |event| {
@@ -308,9 +284,9 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
         // window in physical pixels — used to test whether the mouse falls inside.
         let mut candidates: Vec<(u64, usize, usize, f64, f64, f64, f64, f64, f64)> = Vec::new();
         for monitor in &monitors {
-            let mh    = monitor_hash(monitor);
+            let mh = monitor_hash(monitor);
             let scale = monitor.scale_factor();
-            let win_w = WIN_WIDTH  * scale;
+            let win_w = WIN_WIDTH * scale;
             let win_h = WIN_HEIGHT * scale;
             let (num_cols, num_rows) = grid_dimensions(monitor);
             for col in 0..num_cols {
@@ -362,14 +338,14 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
             let chosen = if let Some(pos) = mouse_pos {
                 // Mouse-triggered: find the closest FREE slot whose window would
                 // NOT overlap the current mouse cursor position.
-                candidates.iter()
+                candidates
+                    .iter()
                     .filter(|c| {
                         // Slot must be unoccupied …
                         let free = !reg.slots.contains_key(&(c.0, c.1, c.2));
                         // … and the window rectangle must not contain the mouse.
                         // c.5=wx  c.6=wy  c.7=win_right  c.8=win_bottom
-                        let under_mouse = pos.x >= c.5 && pos.x < c.7
-                                       && pos.y >= c.6 && pos.y < c.8;
+                        let under_mouse = pos.x >= c.5 && pos.x < c.7 && pos.y >= c.6 && pos.y < c.8;
                         free && !under_mouse
                     })
                     .min_by(|a, b| {
@@ -388,11 +364,9 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
                     let b_primary = primary_hash.map_or(false, |ph| ph == b.0);
                     b_primary.cmp(&a_primary)  // primary first
                         .then(a.1.cmp(&b.1))   // col ascending (0 = rightmost)
-                        .then(a.2.cmp(&b.2))   // row ascending (0 = top)
+                        .then(a.2.cmp(&b.2)) // row ascending (0 = top)
                 });
-                sorted.iter()
-                    .find(|c| !reg.slots.contains_key(&(c.0, c.1, c.2)))
-                    .map(|c| (c.0, c.1, c.2, c.5, c.6))
+                sorted.iter().find(|c| !reg.slots.contains_key(&(c.0, c.1, c.2))).map(|c| (c.0, c.1, c.2, c.5, c.6))
             };
 
             if let Some((mh, col, row, wx, wy)) = chosen {
@@ -424,11 +398,7 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
         let window = match self.get_webview_window("settings") {
             Some(window) => window,
             None => {
-                let window = WebviewWindowBuilder::new(
-                    self,
-                    "settings",
-                    WebviewUrl::App(format!("settings.html?tab={}", tab).into())
-                )
+                let window = WebviewWindowBuilder::new(self, "settings", WebviewUrl::App(format!("settings.html?tab={}", tab).into()))
                     .title("Settings")
                     .inner_size(560.0, 373.0)
                     .decorations(true)
@@ -445,7 +415,7 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
                         .state(EffectState::Active)
                         .radius(10.0)
                         .color(Color(30, 30, 30, 220))
-                        .build()
+                        .build(),
                 );
 
                 window
@@ -461,11 +431,7 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
         let window = match self.get_webview_window("settings") {
             Some(window) => window,
             None => {
-                let window = WebviewWindowBuilder::new(
-                    self,
-                    "settings",
-                    WebviewUrl::App("settings.html".into())
-                )
+                let window = WebviewWindowBuilder::new(self, "settings", WebviewUrl::App("settings.html".into()))
                     .title("Settings")
                     .inner_size(560.0, 373.0)
                     .decorations(true)
@@ -482,7 +448,7 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
                         .state(EffectState::Active)
                         .radius(10.0)
                         .color(Color(30, 30, 30, 220))
-                        .build()
+                        .build(),
                 );
 
                 window
@@ -508,11 +474,7 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
                 window
             }
             None => {
-                let window = WebviewWindowBuilder::new(
-                    self,
-                    "intro",
-                    WebviewUrl::App("intro.html".into())
-                )
+                let window = WebviewWindowBuilder::new(self, "intro", WebviewUrl::App("intro.html".into()))
                     .title("Welcome to Bytover")
                     .inner_size(690.0, 690.0)
                     .decorations(true)
@@ -538,23 +500,21 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
     }
 
     fn is_shelf_window_open(&self, id: u64) -> bool {
-        self.get_webview_window(&format!("send-{id}")).map(|it| it.is_visible().unwrap_or_default()).unwrap_or_default()
+        self.get_webview_window(&format!("send-{id}"))
+            .map(|it| it.is_visible().unwrap_or_default())
+            .unwrap_or_default()
     }
 
     fn is_any_shelf_window_open(&self) -> bool {
         self.webview_windows()
             .iter()
-            .any(|(label, window)| {
-                label.starts_with("send-") && window.is_visible().unwrap_or_default()
-            })
+            .any(|(label, window)| label.starts_with("send-") && window.is_visible().unwrap_or_default())
     }
 
     fn get_visible_shelf_windows(&self) -> Vec<WebviewWindow<R>> {
         self.webview_windows()
             .into_iter()
-            .filter(|(label, window)| {
-                label.starts_with("send-") && window.is_visible().unwrap_or_default()
-            })
+            .filter(|(label, window)| label.starts_with("send-") && window.is_visible().unwrap_or_default())
             .map(|(_, window)| window)
             .collect()
     }
@@ -577,11 +537,7 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
         let window = match self.get_webview_window("toast") {
             Some(window) => window,
             None => {
-                let window = WebviewWindowBuilder::new(
-                    self,
-                    "toast",
-                    WebviewUrl::App("toast.html".into())
-                )
+                let window = WebviewWindowBuilder::new(self, "toast", WebviewUrl::App("toast.html".into()))
                     .title("toast")
                     .inner_size(300.0, 44.0)
                     .decorations(false)
@@ -601,7 +557,7 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
                         .state(EffectState::Active)
                         .radius(22.0)
                         .color(Color(0, 0, 0, 0))
-                        .build()
+                        .build(),
                 );
 
                 window
@@ -624,7 +580,7 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
 
             let _ = window.set_position(tauri::PhysicalPosition::new(
                 screen_position.x + x as i32,
-                screen_position.y + y as i32
+                screen_position.y + y as i32,
             ));
         }
 

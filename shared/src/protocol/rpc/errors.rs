@@ -7,7 +7,7 @@ pub enum RpcErrors {
     #[error("{0}")]
     BadRequest(String),
     #[error("Internal server error {0}")]
-    InternalServerError(String)
+    InternalServerError(String),
 }
 impl From<tonic::Status> for RpcErrors {
     fn from(status: tonic::Status) -> Self {
@@ -20,7 +20,7 @@ impl From<tonic::Status> for RpcErrors {
 
             tonic::Code::Unauthenticated => RpcErrors::AuthError(anyhow!("{status}")),
             tonic::Code::PermissionDenied => RpcErrors::AuthError(anyhow!("{status}")),
-            _ => RpcErrors::InternalServerError(status.message().to_string())
+            _ => RpcErrors::InternalServerError(status.message().to_string()),
         }
     }
 }

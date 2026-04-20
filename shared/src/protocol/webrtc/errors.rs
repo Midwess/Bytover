@@ -77,7 +77,10 @@ pub enum WebRtcErrors {
     Timeout,
 
     #[error("Invalid response: {0}")]
-    InvalidResponse(String)
+    InvalidResponse(String),
+
+    #[error("Turn send error")]
+    TurnSendError(anyhow::Error),
 }
 
 impl From<WebRtcErrors> for CoreError {

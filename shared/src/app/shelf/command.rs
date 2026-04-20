@@ -58,7 +58,7 @@ impl AppCommand {
             let resource_id = LocalResourceId {
                 order_id: Some(current_resource.order_id),
                 path: Some(current_resource.path.clone()),
-                shelf_id: Some(current_resource.shelf_id)
+                shelf_id: Some(current_resource.shelf_id),
             };
 
             let loaded_resource = match self.run(LocalResourcePersistentOperation::load_from_disk(current_resource.path.clone())).await
@@ -100,7 +100,7 @@ impl AppCommand {
 
             self.update_model(LocalResourceEvent::Update(
                 resource_id.clone(),
-                LocalResourceUpdateEvent::Update(updated_resource.clone())
+                LocalResourceUpdateEvent::Update(updated_resource.clone()),
             ));
             synced_resources.push(updated_resource);
         }
@@ -176,7 +176,7 @@ impl AppCommand {
                 let id = LocalResourceId {
                     order_id: Some(resource.order_id),
                     path: Some(resource.path.clone()),
-                    shelf_id: Some(shelf_id)
+                    shelf_id: Some(shelf_id),
                 };
                 let _ = self.remove_resource(id).await;
             }
@@ -198,14 +198,14 @@ impl AppCommand {
             local_resource.shelf_id = target_shelf_id;
             local_resource.r#type = match selection.r#type.clone() {
                 Some(r#type) => r#type,
-                None => self.run(LocalResourcePersistentOperation::get_resource_type(selection.path.clone())).await?
+                None => self.run(LocalResourcePersistentOperation::get_resource_type(selection.path.clone())).await?,
             };
 
             let (thumbnail_png_opt, thumbnail_path_opt) = self
                 .run(DeviceOperation::load_thumbnail_png(
                     local_resource.order_id,
                     selection.path.clone(),
-                    local_resource.r#type.clone()
+                    local_resource.r#type.clone(),
                 ))
                 .await;
 
@@ -213,7 +213,7 @@ impl AppCommand {
                 match self
                     .run(LocalResourcePersistentOperation::add_thumbnail(
                         thumbnail_png,
-                        local_resource.order_id
+                        local_resource.order_id,
                     ))
                     .await
                 {
@@ -235,12 +235,12 @@ impl AppCommand {
 
             self.update_model(LocalResourceEvent::Add {
                 shelf_id: target_shelf_id,
-                resource: new_resource.clone()
+                resource: new_resource.clone(),
             });
 
             self.notify_event(TransferEvent::NewTransferResource {
                 shelf_id: target_shelf_id,
-                resource: new_resource
+                resource: new_resource,
             });
         }
 

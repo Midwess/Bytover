@@ -49,9 +49,9 @@ impl PathResolver for PathResolverImpl {
             LocalResourcePath::AbsolutePath(str) => str,
             LocalResourcePath::RelativePath { path, is_private } => match is_private {
                 true => self.private_dir_path.join(path).to_str().unwrap().to_string(),
-                false => self.user_dir_path.join(path).to_str().unwrap().to_string()
+                false => self.user_dir_path.join(path).to_str().unwrap().to_string(),
             },
-            LocalResourcePath::PlatformIdentifier(str) => str
+            LocalResourcePath::PlatformIdentifier(str) => str,
         }
     }
 

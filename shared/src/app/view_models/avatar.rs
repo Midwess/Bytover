@@ -5,7 +5,7 @@ pub struct AvatarViewModel {
     pub url: String,
     pub dominant_color_r: Option<u32>,
     pub dominant_color_g: Option<u32>,
-    pub dominant_color_b: Option<u32>
+    pub dominant_color_b: Option<u32>,
 }
 
 impl AvatarViewModel {
@@ -14,7 +14,7 @@ impl AvatarViewModel {
             url: url.clone(),
             dominant_color_r: None,
             dominant_color_g: None,
-            dominant_color_b: None
+            dominant_color_b: None,
         };
 
         if let Some(query_start) = url.find('?') {

@@ -4,7 +4,7 @@ use super::AppModel;
 
 pub trait AppModule<T>
 where
-    T: App
+    T: App,
 {
     type ViewModel;
     type Event;

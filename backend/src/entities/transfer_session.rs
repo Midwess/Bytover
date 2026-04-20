@@ -17,7 +17,7 @@ pub enum TransferSessionErrors {
     #[error("Transfer error {0}")]
     TransferProgressError(#[from] TransferProgressErrors),
     #[error("Max resources exceed {0}")]
-    MaxResourceExceed(usize)
+    MaxResourceExceed(usize),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -28,7 +28,7 @@ pub struct TransferSession {
     password: Option<String>,
     to_emails: Vec<String>,
     resources: Vec<TransferResource>,
-    progress: Vec<TransferProgress>
+    progress: Vec<TransferProgress>,
 }
 
 impl TransferSession {
@@ -40,7 +40,7 @@ impl TransferSession {
             resources: Default::default(),
             progress: Default::default(),
             alias,
-            to_emails
+            to_emails,
         }
     }
 
@@ -53,15 +53,15 @@ impl TransferSession {
         order_id: Option<u64>,
         name: impl Into<String>,
         size: u64,
-        r#type: TransferResourceType
+        r#type: TransferResourceType,
     ) -> Result<(), TransferSessionErrors> {
         if self.resources.len() > 2048 {
-            return Err(TransferSessionErrors::MaxResourceExceed(2048))
+            return Err(TransferSessionErrors::MaxResourceExceed(2048));
         }
 
         let resource = TransferResource::new(order_id, self.order_id(), name, size, r#type).await;
         if self.resources.iter().any(|it| it.order_id() == resource.order_id()) {
-            return Err(TransferSessionErrors::DuplicatedResource(resource.order_id()))
+            return Err(TransferSessionErrors::DuplicatedResource(resource.order_id()));
         }
 
         self.progress.push(TransferProgress::new(&resource));
@@ -127,10 +127,10 @@ impl TransferSession {
     pub fn commit_resource(
         &mut self,
         resource_id: u64,
-        transfer_status: TransferProgressStatus
+        transfer_status: TransferProgressStatus,
     ) -> Result<Option<&TransferResource>, TransferSessionErrors> {
         let Some(progress) = self.progress.iter_mut().find(|it| it.resource_id() == resource_id) else {
-            return Err(TransferSessionErrors::ResourceNotFound)
+            return Err(TransferSessionErrors::ResourceNotFound);
         };
 
         progress.commit(transfer_status)?;

@@ -2,6 +2,7 @@ use socket2::{Domain, Socket, Type};
 use std::collections::VecDeque;
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
+use anyhow::anyhow;
 use str0m::channel::{ChannelConfig, ChannelId};
 use str0m::net::{Protocol, Receive};
 use str0m::{Event, IceConnectionState, Input, Output, Rtc, RtcConfig};
@@ -558,52 +559,45 @@ impl RtcClient {
             Output::Transmit(t) => {
                 let dest = to_v6_mapped(t.destination);
 
-                // Check if this transmit should go through TURN relay
                 if let Some(turn) = self.turn.as_mut() {
-                    // Route to TURN if source matches relay address
                     if t.source == turn.relay_addr {
-                        match turn.client.send_to(
+                        let tx_result = turn.client.send_to(
                             TransportType::Udp,
                             dest,
                             &*t.contents,
                             stun_now(turn.stun_base),
-                        ) {
-                            Ok(Some(transmit)) => {
-                                // TURN returned a transmit to send
-                                let out = transmit.build();
-                                let dest = to_v6_mapped(out.to);
-                                if let Err(e) = self.socket.send_to(&out.data, dest).await {
-                                    log::warn!("[rtc-client] Failed to send TURN relay packet: {}", e);
-                                    return Err(WebRtcClientError::Connection(format!("Failed to send packet: {e}")));
-                                }
-                            }
-                            Ok(None) => {
-                                // TURN not ready to send yet - this is fine
-                            }
-                            Err(e) => {
-                                log::warn!("[rtc-client] TURN send_to error: {:?}", e);
-                            }
-                        }
-                        // Drive TURN after transmit to handle resulting control messages
-                        self.drive_turn().await;
-                        Ok(RtcOutcome::MorePending)
-                    } else {
-                        // Regular peer packet - route directly
-                        if let Err(e) = self.socket.send_to(&t.contents, dest).await {
-                            log::warn!("[rtc-client] Failed to send to {}: {}", dest, e);
+                        );
+                        let transmit = match tx_result {
+                            Ok(Some(transmit)) => transmit,
+                            Ok(None) => return Ok(RtcOutcome::MorePending),
+                            Err(e) => return Err(WebRtcClientError::TurnSendError(anyhow!("Turn send error: {e}"))),
+                        };
+
+                        let out = transmit.build();
+                        let dest = to_v6_mapped(out.to);
+                        if let Err(e) = self.socket.send_to(&out.data, dest).await {
+                            log::warn!("[rtc-client] Failed to send TURN relay packet: {}", e);
                             return Err(WebRtcClientError::Connection(format!("Failed to send packet: {e}")));
                         }
-                        self.drive_turn().await;
-                        Ok(RtcOutcome::MorePending)
+
+                        return Ok(RtcOutcome::MorePending)
                     }
-                } else {
-                    // No TURN - route directly
+
+                    // Regular peer packet - route directly
                     if let Err(e) = self.socket.send_to(&t.contents, dest).await {
                         log::warn!("[rtc-client] Failed to send to {}: {}", dest, e);
                         return Err(WebRtcClientError::Connection(format!("Failed to send packet: {e}")));
                     }
-                    Ok(RtcOutcome::MorePending)
+
+                    return Ok(RtcOutcome::MorePending)
                 }
+
+                if let Err(e) = self.socket.send_to(&t.contents, dest).await {
+                    log::warn!("[rtc-client] Failed to send to {}: {}", dest, e);
+                    return Err(WebRtcClientError::Connection(format!("Failed to send packet: {e}")));
+                }
+
+                Ok(RtcOutcome::MorePending)
             }
             Output::Event(e) => {
                 log::info!("[rtc-client] str0m Event: {:?}", e);
@@ -743,7 +737,7 @@ impl RtcClient {
                                     peer, transport, icmp_type, icmp_code, icmp_data);
                             }
                         }
-                        // Drive TURN after recv to handle resulting control messages
+
                         self.drive_turn().await;
                     } else {
                         // Regular peer packet - route to str0m
@@ -759,11 +753,10 @@ impl RtcClient {
                 self.rtc
                     .handle_input(Input::Timeout(Instant::now()))
                     .map_err(|e| WebRtcClientError::Rtc(e.to_string()))?;
+                // Advance TURN state machine when timeout fires, so refreshes aren't missed
+                self.drive_turn().await;
             }
         }
-
-        // Drive TURN state machine after receiving/input
-        self.drive_turn().await;
 
         Ok(())
     }

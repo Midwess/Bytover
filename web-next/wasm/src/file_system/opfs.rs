@@ -13,19 +13,15 @@ use std::pin::Pin;
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
-    File,
-    FileSystemDirectoryHandle,
-    FileSystemFileHandle,
-    FileSystemGetDirectoryOptions,
-    FileSystemGetFileOptions,
-    FileSystemSyncAccessHandle
+    File, FileSystemDirectoryHandle, FileSystemFileHandle, FileSystemGetDirectoryOptions, FileSystemGetFileOptions,
+    FileSystemSyncAccessHandle,
 };
 
 pub type FileStream = Pin<Box<dyn Stream<Item = Result<WebFile, anyhow::Error>>>>;
 
 pub enum HandleType {
     File,
-    Folder
+    Folder,
 }
 
 impl HandleType {
@@ -39,7 +35,7 @@ impl HandleType {
         match kind.as_str() {
             "file" => Some(HandleType::File),
             "directory" => Some(HandleType::Folder),
-            _ => None
+            _ => None,
         }
     }
 }
@@ -95,14 +91,14 @@ impl FileSystemDirectoryHandleExt for FileSystemDirectoryHandle {
         dir_options.set_create(false);
         if let Ok(dir_handle_result) = JsFuture::from(current_dir.get_directory_handle_with_options(entry_name, &dir_options)).await {
             let dir_handle: FileSystemDirectoryHandle = dir_handle_result.into();
-            return Ok(dir_handle.into())
+            return Ok(dir_handle.into());
         }
 
         let file_options = FileSystemGetFileOptions::new();
         file_options.set_create(false);
         if let Ok(file_handle_js) = JsFuture::from(current_dir.get_file_handle_with_options(entry_name, &file_options)).await {
             let file_handle: FileSystemFileHandle = file_handle_js.into();
-            return Ok(file_handle.into())
+            return Ok(file_handle.into());
         };
 
         if !auto_create || kind.is_none() {
@@ -187,7 +183,7 @@ impl FileSystemDirectoryHandleExt for FileSystemDirectoryHandle {
                 Ok(Box::new(
                     IOReaderBlobImpl::from_file_handle(file_handle, buffer_size)
                         .await
-                        .map_err(|it| JsValue::from(it.to_string()))?
+                        .map_err(|it| JsValue::from(it.to_string()))?,
                 ))
             }
             HandleType::Folder => {
@@ -198,7 +194,7 @@ impl FileSystemDirectoryHandleExt for FileSystemDirectoryHandle {
                     is_dir: false,
                     path: path.into(),
                     modified_at: Utc::now().into(),
-                    size
+                    size,
                 };
 
                 let cursor_stream = stream! {
@@ -211,13 +207,13 @@ impl FileSystemDirectoryHandleExt for FileSystemDirectoryHandle {
                 let stream = unsafe {
                     std::mem::transmute::<
                         Pin<Box<dyn Stream<Item = Result<Box<dyn IOCursor>, anyhow::Error>>>>,
-                        Pin<Box<dyn Stream<Item = Result<Box<dyn IOCursor>, anyhow::Error>> + Send + Sync>>
+                        Pin<Box<dyn Stream<Item = Result<Box<dyn IOCursor>, anyhow::Error>> + Send + Sync>>,
                     >(Box::pin(cursor_stream))
                 };
                 Ok(Box::new(
                     ZipStream::new_from_stream(stream, entry, buffer_size)
                         .await
-                        .map_err(|it| JsValue::from(it.to_string()))?
+                        .map_err(|it| JsValue::from(it.to_string()))?,
                 ))
             }
         }

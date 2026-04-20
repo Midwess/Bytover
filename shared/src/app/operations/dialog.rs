@@ -10,7 +10,7 @@ use crate::app::AppRequestBuilder;
 pub struct AlertDialog {
     pub message: String,
     pub affirmative: String,
-    pub negative: Option<String>
+    pub negative: Option<String>,
 }
 
 impl AlertDialog {
@@ -18,7 +18,7 @@ impl AlertDialog {
         Self {
             message,
             affirmative,
-            negative
+            negative,
         }
     }
 
@@ -26,7 +26,7 @@ impl AlertDialog {
         Self {
             message,
             affirmative: "OK".to_string(),
-            negative: None
+            negative: None,
         }
     }
 }
@@ -35,14 +35,14 @@ impl AlertDialog {
 pub enum MessageReason {
     FailedToFindPublicSession,
     FailedToLoadSession(u64),
-    PublicSessionUnauthenticated(u64)
+    PublicSessionUnauthenticated(u64),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum DialogOperation {
     Toast(String),
     Alert(AlertDialog),
-    Message(String, MessageReason)
+    Message(String, MessageReason),
 }
 
 impl DialogOperation {
@@ -53,7 +53,7 @@ impl DialogOperation {
     pub fn alert(dialog: AlertDialog) -> AppRequestBuilder<impl Future<Output = bool>> {
         AppCommand::request_from_shell(DialogOperation::Alert(dialog)).map(|it| match it {
             CoreOperationOutput::Bool(is_confirmed) => is_confirmed,
-            _ => false
+            _ => false,
         })
     }
 

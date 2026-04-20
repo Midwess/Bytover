@@ -42,7 +42,7 @@ pub struct DiContainer {
     native_executor: OnceCell<NativeExecutor>,
     cloud_server: OnceCell<CloudServer<Channel>>,
 
-    rpc_connection: RpcNetworkModuleImpl
+    rpc_connection: RpcNetworkModuleImpl,
 }
 
 impl DiContainer {
@@ -54,7 +54,7 @@ impl DiContainer {
                 native_executor: OnceCell::new(),
                 db: OnceCell::new(),
                 rpc_connection: RpcNetworkModuleImpl::new(get_gateway_grpc_url(), GATEWAY_HOST.unwrap_or("localhost").to_string()),
-                cloud_server: OnceCell::new()
+                cloud_server: OnceCell::new(),
             };
 
             let _ = DI_SINGLETON.set(instance);
@@ -69,7 +69,7 @@ impl DiContainer {
     pub fn get_net_stream(&'static self, repository: Arc<dyn LocalResourceRepository>) -> impl NetStream {
         NetStreamImpl {
             repository,
-            server: self.get_cloud_server()
+            server: self.get_cloud_server(),
         }
     }
 
@@ -98,7 +98,7 @@ impl DiContainer {
 
     pub fn get_auth_provider(&self) -> AuthProvider {
         AuthProvider {
-            session_repository: Box::new(self.get_auth_session_repository())
+            session_repository: Box::new(self.get_auth_session_repository()),
         }
     }
 
@@ -107,7 +107,7 @@ impl DiContainer {
             db: PoolRequestBuilder::new()
                 .retrieving_timeout(Duration::from_secs(30))
                 .pool(self.db.get().unwrap().clone())
-                .build()
+                .build(),
         }
     }
 
@@ -117,7 +117,7 @@ impl DiContainer {
             db: PoolRequestBuilder::new()
                 .retrieving_timeout(Duration::from_secs(30))
                 .pool(self.db.get().unwrap().clone())
-                .build()
+                .build(),
         }
     }
 
@@ -127,7 +127,7 @@ impl DiContainer {
             db: PoolRequestBuilder::new()
                 .retrieving_timeout(Duration::from_secs(30))
                 .pool(self.db.get().unwrap().clone())
-                .build()
+                .build(),
         }
     }
 
@@ -136,7 +136,7 @@ impl DiContainer {
             db: PoolRequestBuilder::new()
                 .retrieving_timeout(Duration::from_secs(30))
                 .pool(self.db.get().unwrap().clone())
-                .build()
+                .build(),
         }
     }
 
@@ -145,13 +145,13 @@ impl DiContainer {
             db: PoolRequestBuilder::new()
                 .retrieving_timeout(Duration::from_secs(30))
                 .pool(self.db.get().unwrap().clone())
-                .build()
+                .build(),
         }
     }
 
     pub fn get_cloud_server(&'static self) -> &'static CloudServer<Channel> {
         if let Some(server) = self.cloud_server.get() {
-            return server
+            return server;
         };
 
         let server = CloudServer::new(Box::new(self.rpc_connection.clone()), self.get_auth_provider());
@@ -165,7 +165,7 @@ impl DiContainer {
 
     pub fn get_native_executor(&'static self) -> &'static NativeExecutor {
         if let Some(executor) = self.native_executor.get() {
-            return executor
+            return executor;
         }
 
         let local_resource_repo = Arc::new(self.get_local_resource_repository());
@@ -178,25 +178,25 @@ impl DiContainer {
             server: self.get_cloud_server(),
             active_session: Default::default(),
             repository: local_resource_repo.clone(),
-            net_stream: Box::new(self.get_net_stream(local_resource_repo.clone()))
+            net_stream: Box::new(self.get_net_stream(local_resource_repo.clone())),
         };
 
         let executor = NativeExecutor {
             rpc: Box::new(NativeRpcImpl {
-                auth_server: self.get_authentication_server()
+                auth_server: self.get_authentication_server(),
             }),
             persistent: Box::new(NativePersistentImpl {
                 auth_session_repository: Box::new(self.get_auth_session_repository()),
                 local_resource_repository: Box::new(self.get_local_resource_repository()),
                 transfer_session_repository: Box::new(self.get_transfer_session_repository()),
                 shelf_repository: Box::new(self.get_shelf_repository()),
-                device_alias_repository: Box::new(self.get_device_alias_repository())
+                device_alias_repository: Box::new(self.get_device_alias_repository()),
             }),
             transfer: Box::new(TransferNativeImpl {
                 web_rtc: web_rtc_stub.clone(),
-                cloud_service
+                cloud_service,
             }),
-            p2p: Box::new(P2PNativeExecutorImpl { web_rtc: web_rtc_server })
+            p2p: Box::new(P2PNativeExecutorImpl { web_rtc: web_rtc_server }),
         };
 
         let _ = self.native_executor.set(executor);

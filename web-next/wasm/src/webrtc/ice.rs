@@ -14,7 +14,7 @@ struct IceCandidateTracker {
     host_candidates: usize,
     srflx_candidates: usize,
     relay_candidates: usize,
-    prflx_candidates: usize
+    prflx_candidates: usize,
 }
 
 impl IceCandidateTracker {
@@ -38,7 +38,7 @@ impl IceCandidateTracker {
 pub struct IceAgent {
     timeout_ms: u64,
     early_check_ms: u64,
-    cap_ms: u64
+    cap_ms: u64,
 }
 
 impl Default for IceAgent {
@@ -46,7 +46,7 @@ impl Default for IceAgent {
         Self {
             timeout_ms: 30_000,
             early_check_ms: 1_000,
-            cap_ms: 5_500
+            cap_ms: 5_500,
         }
     }
 }
@@ -123,5 +123,5 @@ impl IceAgent {
 #[derive(Debug, thiserror::Error)]
 pub enum IceError {
     #[error("Timeout")]
-    Timeout
+    Timeout,
 }

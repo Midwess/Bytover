@@ -1,6 +1,6 @@
 use gloo_worker::Registrable;
-use wasm_bindgen::prelude::*;
 use wasm::web_worker::codec::WorkerMessageCodec;
+use wasm_bindgen::prelude::*;
 
 #[cfg(feature = "core")]
 use wasm::web_worker::core::CoreWorker;
@@ -12,7 +12,7 @@ use wasm::web_worker::opfs::OpfsWorker;
 pub async fn start_worker() {
     #[cfg(feature = "core")]
     CoreWorker::registrar().encoding::<WorkerMessageCodec>().register();
-    
+
     #[cfg(feature = "opfs")]
     OpfsWorker::registrar().encoding::<WorkerMessageCodec>().register();
 }

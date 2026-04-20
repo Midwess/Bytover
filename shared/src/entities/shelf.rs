@@ -10,7 +10,7 @@ pub struct Shelf {
     pub id: u64,
     pub name: String,
     #[serde(skip)]
-    pub resources: Vec<LocalResource>
+    pub resources: Vec<LocalResource>,
 }
 
 impl Shelf {
@@ -18,7 +18,7 @@ impl Shelf {
         Self {
             id: gen_id_sync(),
             resources: Vec::new(),
-            name: name.into()
+            name: name.into(),
         }
     }
 
@@ -26,7 +26,7 @@ impl Shelf {
         Self {
             id,
             resources: Vec::new(),
-            name: name.into()
+            name: name.into(),
         }
     }
 

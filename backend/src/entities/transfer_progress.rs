@@ -4,14 +4,14 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, thiserror::Error)]
 pub enum TransferProgressErrors {
     #[error("This resource already completed")]
-    AlreadyCommitted
+    AlreadyCommitted,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum TransferProgressStatus {
     InProgress(f32),
     Success,
-    Failed(String)
+    Failed(String),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -19,7 +19,7 @@ pub struct TransferProgress {
     resource_id: u64,
     resource_size: u64,
     transfered_amount: u64,
-    status: TransferProgressStatus
+    status: TransferProgressStatus,
 }
 
 impl PartialEq for TransferProgress {
@@ -34,7 +34,7 @@ impl TransferProgress {
             resource_id: resource.order_id(),
             status: TransferProgressStatus::InProgress(0f32),
             transfered_amount: 0,
-            resource_size: resource.size_in_bytes()
+            resource_size: resource.size_in_bytes(),
         }
     }
 
@@ -50,14 +50,14 @@ impl TransferProgress {
         match &self.status {
             TransferProgressStatus::InProgress(progress) => *progress,
             TransferProgressStatus::Success => 1f32,
-            TransferProgressStatus::Failed(_) => 1f32
+            TransferProgressStatus::Failed(_) => 1f32,
         }
     }
 
     pub fn error_message(&self) -> Option<&str> {
         match &self.status {
             TransferProgressStatus::Failed(message) => Some(message),
-            _ => None
+            _ => None,
         }
     }
 
@@ -77,7 +77,7 @@ impl TransferProgress {
 
     pub fn update_transferred_bytes(&mut self, new_amount: u64) -> Result<(), TransferProgressErrors> {
         if !matches!(self.status, TransferProgressStatus::InProgress(_)) {
-            return Err(TransferProgressErrors::AlreadyCommitted)
+            return Err(TransferProgressErrors::AlreadyCommitted);
         }
 
         self.transfered_amount = new_amount.min(self.resource_size);
@@ -90,11 +90,11 @@ impl TransferProgress {
         if matches!(status, TransferProgressStatus::InProgress(_)) {
             // Doing nothing
             log::warn!("Cannot commit an in-progress status");
-            return Ok(())
+            return Ok(());
         }
 
         if !matches!(self.status, TransferProgressStatus::InProgress(_)) {
-            return Err(TransferProgressErrors::AlreadyCommitted)
+            return Err(TransferProgressErrors::AlreadyCommitted);
         }
 
         self.status = status;

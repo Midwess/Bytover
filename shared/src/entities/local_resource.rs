@@ -9,7 +9,7 @@ pub struct LocalResource {
     pub thumbnail_path: Option<LocalResourcePath>,
     pub r#type: ResourceType,
     #[serde(default)]
-    pub shelf_id: u64
+    pub shelf_id: u64,
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone, Hash)]
@@ -19,14 +19,14 @@ pub enum LocalResourcePath {
     // Only the platform know how to get the absolute path
     PlatformIdentifier(String),
     // Absolute path on the device
-    AbsolutePath(String)
+    AbsolutePath(String),
 }
 
 impl LocalResourcePath {
     pub fn disk_path(&self) -> Option<String> {
         match self {
             LocalResourcePath::AbsolutePath(path) => Some(path.clone()),
-            _ => None
+            _ => None,
         }
     }
 
@@ -42,7 +42,7 @@ impl LocalResourcePath {
         match self {
             LocalResourcePath::RelativePath { path, .. } => path.clone(),
             LocalResourcePath::PlatformIdentifier(identifier) => identifier.clone(),
-            LocalResourcePath::AbsolutePath(path) => path.clone()
+            LocalResourcePath::AbsolutePath(path) => path.clone(),
         }
     }
 }
@@ -52,5 +52,5 @@ pub enum ResourceType {
     Image,
     Video,
     File,
-    Folder
+    Folder,
 }

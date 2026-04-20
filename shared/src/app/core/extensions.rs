@@ -62,7 +62,7 @@ impl CoreCommandUtils for AppCommand {
     fn handle_result<F, Fut>(create_task: F) -> Self
     where
         F: FnOnce(AppCommandContext) -> Fut + Send + 'static,
-        Fut: Future<Output = Result<(), CoreError>> + Send + 'static
+        Fut: Future<Output = Result<(), CoreError>> + Send + 'static,
     {
         Self::new(async move |ctx| {
             let result = create_task(ctx.clone()).await;
@@ -95,7 +95,7 @@ impl CoreCommandUtils for AppCommand {
 
     fn request_from_shell<O>(operation: O) -> AppRequestBuilder<impl Future<Output = CoreOperationOutput>>
     where
-        O: Into<CoreOperation> + 'static
+        O: Into<CoreOperation> + 'static,
     {
         let core_operation: CoreOperation = operation.into();
         Command::request_from_shell(core_operation)
@@ -103,7 +103,7 @@ impl CoreCommandUtils for AppCommand {
 
     fn operate<O>(operation: O) -> AppCommand
     where
-        O: Into<CoreOperation> + 'static
+        O: Into<CoreOperation> + 'static,
     {
         let core_operation: CoreOperation = operation.into();
         AppCommand::new(move |it| async move { it.notify_shell(core_operation) })

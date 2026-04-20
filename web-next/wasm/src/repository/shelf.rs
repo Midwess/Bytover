@@ -15,7 +15,7 @@ use shared::repository::shelf::{ShelfId, ShelfRepository};
 use wasm_bindgen::JsValue;
 
 pub struct ShelfRepositoryImpl {
-    pub db: PoolRequest<NeverSend<Database>>
+    pub db: PoolRequest<NeverSend<Database>>,
 }
 
 impl IdbId for IdbIdWrapper<ShelfId> {
@@ -25,19 +25,19 @@ impl IdbId for IdbIdWrapper<ShelfId> {
         if !json.is_array() {
             return Err(RepositoryError::Conflict(
                 table_name.to_owned(),
-                "The id must be an array of primitive types".to_owned()
+                "The id must be an array of primitive types".to_owned(),
             ));
         }
 
         let Some(json_array) = json.as_array_mut() else {
             return Err(RepositoryError::Conflict(
                 table_name.to_owned(),
-                "The id must be an array of primitive types".to_owned()
+                "The id must be an array of primitive types".to_owned(),
             ));
         };
 
         Ok(IdbIdWrapper(ShelfId {
-            id: json_array.first().and_then(|it| it.as_str().and_then(|it| it.parse().ok()))
+            id: json_array.first().and_then(|it| it.as_str().and_then(|it| it.parse().ok())),
         }))
     }
 }
@@ -65,7 +65,7 @@ impl IdbRepository<Shelf, IdbIdWrapper<ShelfId>> for ShelfRepositoryImpl {
 impl Repository<Shelf, ShelfId> for ShelfRepositoryImpl {
     async fn create(&self, data: Shelf) -> Resolve<Shelf>
     where
-        Shelf: 'async_trait
+        Shelf: 'async_trait,
     {
         IdbRepository::<Shelf, IdbIdWrapper<ShelfId>>::create(self, data).await
     }
@@ -80,7 +80,7 @@ impl Repository<Shelf, ShelfId> for ShelfRepositoryImpl {
             self,
             from_id.map(|it| IdbIdWrapper(it.clone())).as_ref(),
             to_id.as_ref(),
-            count
+            count,
         )
         .await
     }

@@ -47,7 +47,7 @@ pub enum CoreOperation {
     Notified(AppEvent),
     Dialog(DialogOperation),
     Delay(Duration),
-    LaunchNearbyServer
+    LaunchNearbyServer,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, From, TryFrom, TryInto)]
@@ -82,7 +82,7 @@ pub enum CoreOperationOutput {
 
     Error(CoreError),
 
-    None
+    None,
 }
 
 impl Operation for CoreOperation {
@@ -94,7 +94,7 @@ impl CoreOperationOutput {
     pub fn option<T>(self) -> Option<T>
     where
         T: TryFrom<Self> + Debug,
-        <T as TryFrom<CoreOperationOutput>>::Error: Debug
+        <T as TryFrom<CoreOperationOutput>>::Error: Debug,
     {
         T::try_from(self).ok()
     }
@@ -105,25 +105,25 @@ impl CoreOperationOutput {
     pub fn result<T>(self) -> Result<T, CoreError>
     where
         T: TryFrom<Self> + Debug,
-        <T as TryFrom<CoreOperationOutput>>::Error: Debug
+        <T as TryFrom<CoreOperationOutput>>::Error: Debug,
     {
         match self {
             CoreOperationOutput::Error(e) => Err(e),
-            _ => Ok(T::try_from(self).map_err(|e| CoreError::ParsingError(format!("{:?}", e)))?)
+            _ => Ok(T::try_from(self).map_err(|e| CoreError::ParsingError(format!("{:?}", e)))?),
         }
     }
 
     pub fn result_option<T>(self) -> Result<Option<T>, CoreError>
     where
         T: TryFrom<Self> + Debug,
-        <T as TryFrom<CoreOperationOutput>>::Error: Debug
+        <T as TryFrom<CoreOperationOutput>>::Error: Debug,
     {
         match self {
             CoreOperationOutput::Error(e) => Err(e),
             CoreOperationOutput::None => Ok(None),
             _ => Ok(Some(
-                T::try_from(self).map_err(|e| CoreError::ParsingError(format!("{:?}", e)))?
-            ))
+                T::try_from(self).map_err(|e| CoreError::ParsingError(format!("{:?}", e)))?,
+            )),
         }
     }
 
@@ -132,7 +132,7 @@ impl CoreOperationOutput {
 
 impl<T> From<Option<T>> for CoreOperationOutput
 where
-    T: Into<CoreOperationOutput>
+    T: Into<CoreOperationOutput>,
 {
     fn from(option: Option<T>) -> Self {
         option.map(Into::into).unwrap_or(CoreOperationOutput::None)
@@ -141,12 +141,12 @@ where
 
 impl<T> From<Result<T, CoreError>> for CoreOperationOutput
 where
-    T: Into<CoreOperationOutput>
+    T: Into<CoreOperationOutput>,
 {
     fn from(result: Result<T, CoreError>) -> Self {
         match result {
             Ok(output) => output.into(),
-            Err(error) => error.into()
+            Err(error) => error.into(),
         }
     }
 }

@@ -11,20 +11,20 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TransferTargetId {
     Internet,
-    P2P
+    P2P,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct TransferSessionId {
     pub transfer_type: Option<TransferType>,
-    pub order_id: Option<String>
+    pub order_id: Option<String>,
 }
 
 impl From<&TransferTarget> for TransferTargetId {
     fn from(value: &TransferTarget) -> Self {
         match value {
             TransferTarget::Internet { .. } => TransferTargetId::Internet,
-            TransferTarget::P2P { .. } => TransferTargetId::P2P
+            TransferTarget::P2P { .. } => TransferTargetId::P2P,
         }
     }
 }
@@ -32,7 +32,7 @@ impl From<&TransferTarget> for TransferTargetId {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ZipDownloadPaths {
     pub resource_paths: HashMap<u64, LocalResourcePath>,
-    pub session_path: LocalResourcePath
+    pub session_path: LocalResourcePath,
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
@@ -41,13 +41,13 @@ pub trait TransferSessionRepository: Repository<TransferSession, TransferSession
     async fn generate_resource_saved_paths(
         &self,
         session_order_id: u64,
-        resource_names: HashMap<u64, (String, ResourceType)>
+        resource_names: HashMap<u64, (String, ResourceType)>,
     ) -> Result<HashMap<u64, LocalResourcePath>, PersistenceError>;
 
     async fn generate_zip_download_paths(
         &self,
         session_order_id: u64,
-        resource_names: HashMap<u64, String>
+        resource_names: HashMap<u64, String>,
     ) -> Result<ZipDownloadPaths, PersistenceError>;
 
     async fn start_download_session(&self, zip_path: LocalResourcePath) -> Result<(), PersistenceError>;
@@ -63,7 +63,7 @@ impl Table<TransferSessionId> for TransferSession {
     fn id(&self) -> TransferSessionId {
         TransferSessionId {
             transfer_type: Some(self.transfer_type.clone()),
-            order_id: Some(self.order_id.to_string())
+            order_id: Some(self.order_id.to_string()),
         }
     }
 }

@@ -22,13 +22,13 @@ pub enum ClientError {
     Timeout(u64),
 
     #[error("internal error: {0}")]
-    Internal(String)
+    Internal(String),
 }
 
 pub struct Client {
     pub key: String,
     ws_session: Mutex<Session>,
-    pending_requests: Mutex<HashMap<String, oneshot::Sender<schema::devlog::rpc_signalling::server::Message>>>
+    pending_requests: Mutex<HashMap<String, oneshot::Sender<schema::devlog::rpc_signalling::server::Message>>>,
 }
 
 impl Client {
@@ -36,7 +36,7 @@ impl Client {
         Arc::new(Self {
             key,
             ws_session: Mutex::new(session),
-            pending_requests: Mutex::new(HashMap::new())
+            pending_requests: Mutex::new(HashMap::new()),
         })
     }
 
@@ -52,7 +52,7 @@ impl Client {
 
     pub async fn request(
         self: &Arc<Self>,
-        mut message: schema::devlog::rpc_signalling::server::Message
+        mut message: schema::devlog::rpc_signalling::server::Message,
     ) -> Result<schema::devlog::rpc_signalling::server::Message, ClientError> {
         let request_id = Uuid::new_v4().to_string();
         message.request_id = Some(request_id.clone());

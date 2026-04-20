@@ -94,7 +94,7 @@ pub enum WebRtcServerError {
     PeerNotFound(String),
 
     #[error("Client error: {0}")]
-    Client(String)
+    Client(String),
 }
 
 impl From<WebRtcClientError> for WebRtcServerError {
@@ -220,7 +220,7 @@ impl WebRtcServer {
         request_id: String,
         session_message: Option<schema::devlog::bitbridge::P2pTransferSessionMessage>,
         resources: Option<Vec<LocalResource>>,
-        error: Option<CoreError>
+        error: Option<CoreError>,
     ) -> Result<(), WebRtcServerError> {
         let client = self.get_client(&peer_id).await?;
         client.send_session_detail_response(request_id, session_message, resources, error).await?;
@@ -232,7 +232,7 @@ impl WebRtcServer {
         peer_id: String,
         session_id: u64,
         transfer_id: u16,
-        resource: LocalResource
+        resource: LocalResource,
     ) -> Result<(), WebRtcServerError> {
         let client = self.get_client(&peer_id).await?;
         client.stream_resource(session_id, transfer_id, resource).await?;
@@ -274,7 +274,7 @@ impl WebRtcServer {
             return Err(WebRtcServerError::Signalling(format!(
                 "No signalling id for peer {}",
                 current_user.id
-            )))
+            )));
         };
 
         let Some(signalling_route) = current_user.signalling_route.clone() else {
@@ -286,7 +286,7 @@ impl WebRtcServer {
 
         let mut signalling = SignalingClient::new(
             get_signalling_server_ws_url_for_route(&signalling_route),
-            get_signalling_server_http_url_for_route(&signalling_route)
+            get_signalling_server_http_url_for_route(&signalling_route),
         );
         signalling.start(key.clone()).await;
         log::info!("[webrtc-server] Signalling background task started");

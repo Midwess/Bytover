@@ -4,10 +4,7 @@ use crate::app::core::extensions::CoreCommandContextUtils;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::dialog::DialogOperation;
 use crate::app::operations::persistent::{
-    DeviceAliasPersistentOperation,
-    SessionPersistentOperation,
-    ShelfPersistentOperation,
-    TransferSessionPersistentOperation
+    DeviceAliasPersistentOperation, SessionPersistentOperation, ShelfPersistentOperation, TransferSessionPersistentOperation,
 };
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::operations::webview::WebViewOperation;
@@ -24,7 +21,7 @@ impl AppCommand {
     pub async fn authenticate(&self) {
         let Some(device_info) = self.run(DeviceOperation::get_device_info()).await else {
             self.run(DialogOperation::toast("Device not found".to_string())).await;
-            return
+            return;
         };
 
         let url = match RpcOperation::get_authenticate_url(device_info).into_future(self.ctx()).await {
@@ -52,7 +49,7 @@ impl AppCommand {
     pub async fn re_authorize(&self) -> Result<(), CoreError> {
         let Ok(user) = RpcOperation::get_me().into_future(self.ctx()).await else {
             self.notify_event(AuthenticationEvent::UnAuthorized);
-            return Ok(())
+            return Ok(());
         };
 
         SessionPersistentOperation::save_user(user.clone()).into_future(self.ctx()).await?;
@@ -82,7 +79,7 @@ impl AppCommand {
 
         let token = Token {
             order_id: gen_id().await,
-            value: token
+            value: token,
         };
 
         if token.value.is_empty() {
@@ -140,7 +137,7 @@ impl AppCommand {
                 log::info!("Updated shelf {} with alias {}", shelf.id, shelf.name);
                 match ShelfPersistentOperation::update(shelf.clone()).into_future(self.ctx()).await {
                     Ok(_) => self.update_model(ShelfEvent::ShelfUpdated(shelf.clone())),
-                    Err(e) => log::error!(target: "auth", "Failed to update shelf alias: {e:?}")
+                    Err(e) => log::error!(target: "auth", "Failed to update shelf alias: {e:?}"),
                 }
             }
         }

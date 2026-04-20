@@ -23,6 +23,6 @@ async fn main() {
 
     match signalling_server.run().await {
         Ok(_) => log::info!("Signalling server stopped successfully"),
-        Err(e) => log::error!("Signalling server stopped with error: {:?}", e)
+        Err(e) => log::error!("Signalling server stopped with error: {:?}", e),
     }
 }

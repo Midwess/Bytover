@@ -21,7 +21,7 @@ pub struct ConnectionRecovered;
 pub enum ModelEvent<D, I, U> {
     Update(I, U),
     Add(D),
-    Remove(I)
+    Remove(I),
 }
 
 #[delegatable_trait]
@@ -32,7 +32,7 @@ pub trait UpdateAction<Data> {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PeerReceivedEvent {
     pub resource_order_id: u64,
-    pub peer: ResourceReceivedPeer
+    pub peer: ResourceReceivedPeer,
 }
 
 impl UpdateAction<TransferSession> for PeerReceivedEvent {
@@ -53,19 +53,19 @@ pub enum TransferSessionUpdateEvent {
     SessionDetailUpdated(schema::devlog::bitbridge::P2pTransferSessionMessage),
     SessionLoadError(SessionLoadError),
     ConnectionRecovered(ConnectionRecovered),
-    PeerReceived(PeerReceivedEvent)
+    PeerReceived(PeerReceivedEvent),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, From)]
 pub enum LocalResourceUpdateEvent {
-    Update(LocalResource)
+    Update(LocalResource),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum LocalResourceEvent {
     Add { shelf_id: u64, resource: LocalResource },
     Remove(LocalResourceId),
-    Update(LocalResourceId, LocalResourceUpdateEvent)
+    Update(LocalResourceId, LocalResourceUpdateEvent),
 }
 
 pub type TransferSessionModelEvent = ModelEvent<TransferSession, TransferSessionId, TransferSessionUpdateEvent>;
