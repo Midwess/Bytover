@@ -2,6 +2,7 @@ use socket2::{Domain, Socket, Type};
 use std::collections::VecDeque;
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
+use anyhow::anyhow;
 use str0m::channel::{ChannelConfig, ChannelId};
 use str0m::net::{Protocol, Receive};
 use str0m::{Event, IceConnectionState, Input, Output, Rtc, RtcConfig};
@@ -736,7 +737,7 @@ impl RtcClient {
                                     peer, transport, icmp_type, icmp_code, icmp_data);
                             }
                         }
-                        // Drive TURN after recv to handle resulting control messages
+
                         self.drive_turn().await;
                     } else {
                         // Regular peer packet - route to str0m
