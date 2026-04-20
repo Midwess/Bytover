@@ -3,17 +3,23 @@ use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
 use std::time::{Duration, Instant};
 
 use str0m::Candidate;
-use stun_proto::agent::{StunAgent, StunAgentPollRet};
+use stun_proto::agent::{StunAgent, StunAgentPollRet, Transmit};
 use stun_proto::types::attribute::{AttributeType, MappedSocketAddr, XorMappedAddress};
 use stun_proto::types::message::{Message, MessageWriteVec, BINDING};
 use stun_proto::types::prelude::*;
-use stun_proto::types::TransportType;
+use stun_proto::types::TransportType as StunTransportType;
 use stun_proto::Instant as StunInstant;
 use thiserror::Error;
+use turn_client_proto::api::{TurnClientApi, TurnConfig};
+use turn_client_proto::types::TurnCredentials;
+use turn_client_proto::udp::{TurnClientUdp, TurnEvent, TurnPollRet, TurnRecvRet};
 
 use schema::devlog::rpc_signalling::server::IceConfig;
 
+use super::turn::{stun_now, TurnRelayInfo};
+
 const STUN_TIMEOUT: Duration = Duration::from_millis(3000);
+const TURN_TIMEOUT: Duration = Duration::from_millis(5000);
 const STUN_MAX_PACKET: usize = 512;
 
 #[derive(Debug, Error)]
@@ -85,6 +91,10 @@ fn parse_stun_urls(config: &IceConfig) -> Vec<String> {
     config.urls.iter().filter(|u| u.starts_with("stun:")).cloned().collect()
 }
 
+fn parse_turn_urls(config: &IceConfig) -> Vec<String> {
+    config.urls.iter().filter(|u| u.starts_with("turn:")).cloned().collect()
+}
+
 pub(crate) fn stun_url_to_host_port(url: &str) -> Option<String> {
     let stripped = url.strip_prefix("stun:")?.trim();
     if stripped.is_empty() {
@@ -110,6 +120,43 @@ pub(crate) fn stun_url_to_host_port(url: &str) -> Option<String> {
     Some(format!("{}:3478", stripped))
 }
 
+pub(crate) fn turn_url_to_host_port(url: &str) -> Option<String> {
+    let stripped = url.strip_prefix("turn:")?.trim();
+    if stripped.is_empty() {
+        return None;
+    }
+
+    // Handle transport parameter: "turn:host?transport=udp" or "turn:host?transport=tcp"
+    let stripped = stripped.split('?').next()?.trim();
+
+    if stripped.starts_with('[') {
+        return if stripped.contains("]:") {
+            Some(stripped.to_string())
+        } else {
+            // bare IPv6 without port - shouldn't happen for TURN but handle it
+            Some(format!("{}:3478", stripped))
+        };
+    }
+
+    if stripped.parse::<std::net::Ipv6Addr>().is_ok() {
+        return Some(format!("[{}]:3478", stripped));
+    }
+
+    // Check if host:port format
+    if stripped.rsplit_once(':').and_then(|(_, port)| port.parse::<u16>().ok()).is_some() {
+        return Some(stripped.to_string());
+    }
+
+    // Just hostname, default to 3478
+    Some(format!("{}:3478", stripped))
+}
+
+fn turn_credentials_from_config(config: &IceConfig) -> Option<TurnCredentials> {
+    let username = config.username.as_ref()?;
+    let credential = config.credential.as_ref()?;
+    Some(TurnCredentials::new(username, credential))
+}
+
 fn extract_mapped_addr(msg: &Message<'_>) -> Option<SocketAddr> {
     if let Ok(xma) = msg.attribute::<XorMappedAddress>() {
         return Some(xma.addr(msg.transaction_id()));
@@ -117,6 +164,114 @@ fn extract_mapped_addr(msg: &Message<'_>) -> Option<SocketAddr> {
     msg.raw_attribute(AttributeType::new(0x0001))
         .and_then(|raw| MappedSocketAddr::from_raw(&raw).ok())
         .map(|m| m.addr())
+}
+
+async fn connect_relay(
+    socket: &tokio::net::UdpSocket,
+    server_addr: SocketAddr,
+    local_addr: SocketAddr,
+    credentials: TurnCredentials,
+) -> Result<TurnRelayInfo, IceError> {
+    let config = TurnConfig::new(credentials);
+    let client = TurnClientUdp::allocate(local_addr, server_addr, config);
+    let stun_base = Instant::now();
+
+    let mut pending = client;
+    let mut buf = [0u8; STUN_MAX_PACKET];
+
+    let start = Instant::now();
+    let mut allocation_succeeded = false;
+    let mut relay_addr = None;
+    let mut is_closed = false;
+
+    while !is_closed && start.elapsed() < TURN_TIMEOUT {
+        let remaining = TURN_TIMEOUT.saturating_sub(start.elapsed());
+        if remaining.is_zero() {
+            break;
+        }
+
+        // Try to recv from socket with timeout
+        match tokio::time::timeout(remaining, socket.recv_from(&mut buf)).await {
+            Ok(Ok((n, src))) => {
+                let now = stun_now(stun_base);
+                let transmit = Transmit::new(
+                    &buf[..n],
+                    StunTransportType::Udp,
+                    src,
+                    local_addr,
+                );
+                match pending.recv(transmit, now) {
+                    TurnRecvRet::Ignored(_) => {
+                        // Not a TURN packet, might be STUN or something else - pass to str0m
+                    }
+                    TurnRecvRet::Handled => {
+                        // TURN control message handled internally
+                    }
+                    TurnRecvRet::PeerData(_peer_data) => {
+                        // This shouldn't happen during allocation - peer data comes after allocation
+                        log::warn!("[ice] Unexpected peer data during TURN allocation from {}", src);
+                    }
+                    TurnRecvRet::PeerIcmp { .. } => {
+                        // ICMP error - ignore
+                    }
+                }
+            }
+            Ok(Err(e)) => {
+                log::warn!("[ice] Socket recv error during TURN allocation: {}", e);
+            }
+            Err(_) => {
+                // Timeout on recv - continue to poll
+            }
+        }
+
+        let now = stun_now(stun_base);
+        match pending.poll(now) {
+            TurnPollRet::WaitUntil(_) => {}
+            TurnPollRet::Closed => {
+                log::warn!("[ice] TURN client closed during allocation");
+                is_closed = true;
+            }
+            TurnPollRet::TcpClose { .. } | TurnPollRet::AllocateTcpSocket { .. } => {
+                // UDP client won't get these
+            }
+        }
+
+        // Process any events
+        while let Some(event) = pending.poll_event() {
+            match event {
+                TurnEvent::AllocationCreated(_, relayed) => {
+                    relay_addr = Some(relayed);
+                    allocation_succeeded = true;
+                    log::info!("[ice] TURN allocation succeeded, relay addr: {}", relayed);
+                }
+                TurnEvent::AllocationCreateFailed(family) => {
+                    log::warn!("[ice] TURN allocation failed for address family: {:?}", family);
+                }
+                TurnEvent::PermissionCreated(_, _) => {}
+                TurnEvent::PermissionCreateFailed(_, _) => {}
+                TurnEvent::ChannelCreated(_, _) => {}
+                TurnEvent::ChannelCreateFailed(_, _) => {}
+                TurnEvent::TcpConnected(_) => {}
+                TurnEvent::TcpConnectFailed(_) => {}
+            }
+        }
+
+        // Send any pending transmits
+        let now = stun_now(stun_base);
+        while let Some(transmit) = pending.poll_transmit(now) {
+            if let Err(e) = socket.send_to(&transmit.data, transmit.to).await {
+                log::warn!("[ice] TURN transmit send error: {}", e);
+            }
+        }
+    }
+
+    if !allocation_succeeded {
+        return Err(IceError::Timeout);
+    }
+
+    let relay_addr = relay_addr.ok_or(IceError::Timeout)?;
+
+    Ok(TurnRelayInfo::new(pending, server_addr, relay_addr, stun_base))
 }
 
 pub struct IceAgent;
@@ -154,7 +309,7 @@ impl IceAgent {
         resolved_lines.join("\r\n")
     }
 
-    pub async fn gather_candidates(socket: &tokio::net::UdpSocket, config: &IceConfig) -> Result<Vec<Candidate>, IceError> {
+    pub async fn gather_candidates(socket: &tokio::net::UdpSocket, config: &IceConfig) -> Result<(Vec<Candidate>, Option<TurnRelayInfo>), IceError> {
         log::info!("[ice] Gathering candidates using config {config:?}");
 
         let mut candidates: HashSet<Candidate> = HashSet::new();
@@ -192,7 +347,7 @@ impl IceAgent {
                     if let Ok(addrs) = host_port.to_socket_addrs() {
                         for stun_addr in addrs {
                             let send_addr = to_v6_mapped(stun_addr);
-                            let mut agent = StunAgent::builder(TransportType::Udp, local_addr).remote_addr(send_addr).build();
+                            let mut agent = StunAgent::builder(StunTransportType::Udp, local_addr).remote_addr(send_addr).build();
                             let msg = Message::builder_request(BINDING, MessageWriteVec::new()).finish();
                             match agent.send_request(msg, send_addr, stun_now()) {
                                 Ok(transmit) => {
@@ -274,9 +429,69 @@ impl IceAgent {
             }
         }
 
+        // TURN relay gathering
+        let turn_urls = parse_turn_urls(config);
+        let turn_info = if !turn_urls.is_empty() {
+            let credentials = turn_credentials_from_config(config);
+
+            if let Some(credentials) = credentials {
+                let local_addr = socket.local_addr().unwrap_or_else(|_| {
+                    SocketAddr::new(std::net::Ipv4Addr::UNSPECIFIED.into(), 0)
+                });
+
+                if let Some(first_turn_url) = turn_urls.first() {
+                    if let Some(host_port) = turn_url_to_host_port(first_turn_url) {
+                        match host_port.to_socket_addrs() {
+                            Ok(mut addrs) => {
+                                if let Some(turn_server_addr) = addrs.next() {
+                                    log::info!("[ice] Attempting TURN allocation to {}", turn_server_addr);
+                                    match connect_relay(socket, turn_server_addr, local_addr, credentials).await {
+                                        Ok(turn_info) => {
+                                            // Add relayed candidate
+                                            let relay_addr = turn_info.relay_addr;
+                                            match Candidate::relayed(relay_addr, relay_addr, "udp") {
+                                                Ok(c) => {
+                                                    log::debug!("[ice] Relayed candidate: {}", c);
+                                                    candidates.insert(c);
+                                                }
+                                                Err(e) => {
+                                                    log::warn!("[ice] Failed to create relayed candidate for {}: {:?}", relay_addr, e);
+                                                }
+                                            }
+                                            Some(turn_info)
+                                        }
+                                        Err(e) => {
+                                            log::warn!("[ice] TURN allocation failed: {}", e);
+                                            None
+                                        }
+                                    }
+                                } else {
+                                    log::warn!("[ice] No addresses found for TURN server");
+                                    None
+                                }
+                            }
+                            Err(e) => {
+                                log::warn!("[ice] Failed to resolve TURN server address: {}", e);
+                                None
+                            }
+                        }
+                    } else {
+                        log::warn!("[ice] Failed to parse TURN URL: {}", first_turn_url);
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         let result: Vec<Candidate> = candidates.into_iter().collect();
         log::info!("[ice] Gathered {:?} candidates", result);
-        Ok(result)
+        Ok((result, turn_info))
     }
 }
 

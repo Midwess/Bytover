@@ -5,12 +5,15 @@ use std::time::{Duration, Instant};
 use str0m::channel::{ChannelConfig, ChannelId};
 use str0m::net::{Protocol, Receive};
 use str0m::{Event, IceConnectionState, Input, Output, Rtc, RtcConfig};
+use turn_client_proto::api::TurnClientApi;
+use turn_client_proto::udp::{TurnEvent, TurnPollRet};
 
 use schema::devlog::rpc_signalling::server::OfferMessage;
 
 use crate::webrtc::client::{WebRtcClientError, MAX_BUFFER_SIZE};
 use crate::webrtc::ice::IceAgent;
 use crate::webrtc::signalling::SignallingSender;
+use crate::webrtc::turn::{stun_now, TurnRelayInfo};
 
 pub const RELIABLE_STREAM_ID: u16 = 1;
 pub const UNORDERED_MSG_STREAM_ID: u16 = 2;
@@ -128,21 +131,33 @@ struct RtcClient {
     pending_transmits: VecDeque<(Vec<u8>, str0m::channel::ChannelId)>,
     /// Events received during the connect/handshake phase that need to be
     /// replayed once the run loop starts (e.g. early ChannelData).
-    early_events: Vec<Event>
+    early_events: Vec<Event>,
+    /// TURN relay info if TURN allocation succeeded during ICE gathering.
+    turn: Option<TurnRelayInfo>,
+    /// Duration until next TURN poll is needed (computed by drive_turn).
+    turn_wait: Option<Duration>,
 }
 
 impl RtcClient {
     pub async fn connect(
-        _signalling_id: &str,
+        signalling_id: &str,
         offer_message: OfferMessage,
         me: schema::devlog::bitbridge::PeerMessage,
         signalling: SignallingSender,
         request_id: &str
     ) -> Result<RtcHandle, WebRtcClientError> {
-        // Use default ICE config - TURN servers would normally be fetched via
-        // fetch_relay_config but that method doesn't exist on SignallingSender.
-        // The P2P connection will work without TURN if NAT traversal succeeds.
-        let config = schema::devlog::rpc_signalling::server::IceConfig::default();
+        // Fetch relay config (TURN servers) from signalling server.
+        // Falls back to P2P-only if unavailable.
+        let config = match signalling.fetch_relay_config(_signalling_id).await {
+            Ok(cfg) => {
+                log::info!("[rtc-client] Using relay config with {} URLs", cfg.urls.len());
+                cfg
+            }
+            Err(e) => {
+                log::warn!("[rtc-client] Failed to fetch relay config, using P2P only: {}", e);
+                schema::devlog::rpc_signalling::server::IceConfig::default()
+            }
+        };
 
         let socket = Socket::new(Domain::IPV6, Type::DGRAM, Some(socket2::Protocol::UDP))?;
         socket.set_only_v6(false)?;
@@ -221,12 +236,119 @@ impl RtcClient {
             cached_timeout: Instant::now(),
             channel_ids,
             pending_transmits: VecDeque::new(),
-            early_events: Vec::new()
+            early_events: Vec::new(),
+            turn: relay_info,
+            turn_wait: None,
         };
 
         let connected = false;
         let client = client.wait_for_connected(connected).await?;
         log::info!("Connected to p2p");
+        Ok(client.spawn_thread())
+    }
+
+    /// Connect using a pre-established cached socket and pre-gathered host candidates.
+    /// This skips socket creation and host candidate enumeration, but still gathers
+    /// server reflexive (STUN) and relayed (TURN) candidates fresh since those are ephemeral.
+    pub async fn connect_with_cached(
+        signalling_id: &str,
+        offer_message: OfferMessage,
+        me: schema::devlog::bitbridge::PeerMessage,
+        signalling: SignallingSender,
+        request_id: &str,
+        cached: CachedPreConnection,
+    ) -> Result<RtcHandle, WebRtcClientError> {
+        let config = match signalling.fetch_relay_config(signalling_id).await {
+            Ok(cfg) => {
+                log::info!("[rtc-client] Using relay config with {} URLs", cfg.urls.len());
+                cfg
+            }
+            Err(e) => {
+                log::warn!("[rtc-client] Failed to fetch relay config, using P2P only: {}", e);
+                schema::devlog::rpc_signalling::server::IceConfig::default()
+            }
+        };
+
+        let socket = cached.socket;
+        let local_addr = cached.local_addr;
+        let local_v4_addr = cached.local_v4_addr;
+        let local_v6_addr = cached.local_v6_addr;
+
+        let (candidates, relay_info) = IceAgent::gather_candidates(&socket, &config)
+            .await
+            .map_err(|e| WebRtcClientError::Signalling(e.to_string()))?;
+
+        let config = RtcConfig::default().set_sctp_max_message_size(256 * 1024).set_sctp_buffer_size(5 * 1024 * 1024);
+
+        let mut rtc = config.build(Instant::now());
+
+        // Add cached host candidates first (they're already known)
+        for candidate in &cached.candidates {
+            log::debug!("[rtc-client] Adding cached candidate: {}", candidate);
+            rtc.add_local_candidate(candidate.clone());
+        }
+
+        // Add fresh STUN/TURN candidates
+        log::info!("[rtc-client] Adding {} fresh candidates to RTC engine", candidates.len());
+        for candidate in candidates {
+            log::debug!("[rtc-client] Adding candidate: {}", candidate);
+            rtc.add_local_candidate(candidate);
+        }
+
+        let offer_sdp = IceAgent::resolve_remote_candidates(&offer_message.sdp);
+        log::info!("Received offer sdp: {offer_sdp}");
+
+        let offer = str0m::change::SdpOffer::from_sdp_string(&offer_sdp).map_err(|e| WebRtcClientError::Sdp(e.to_string()))?;
+
+        let reliable_id = rtc.direct_api().create_data_channel(ChannelConfig {
+            label: "reliable".to_string(),
+            ordered: false,
+            negotiated: Some(RELIABLE_STREAM_ID),
+            ..Default::default()
+        });
+        let unordered_msg_id = rtc.direct_api().create_data_channel(ChannelConfig {
+            label: "unordered_msg".to_string(),
+            ordered: false,
+            negotiated: Some(UNORDERED_MSG_STREAM_ID),
+            ..Default::default()
+        });
+        let ordered_msg_id = rtc.direct_api().create_data_channel(ChannelConfig {
+            label: "ordered_msg".to_string(),
+            ordered: true,
+            negotiated: Some(ORDERED_MSG_STREAM_ID),
+            ..Default::default()
+        });
+        let channel_ids = ChannelIds {
+            reliable: reliable_id,
+            unordered_msg: unordered_msg_id,
+            ordered_msg: ordered_msg_id
+        };
+
+        let answer = rtc.sdp_api().accept_offer(offer).map_err(|e| WebRtcClientError::Rtc(e.to_string()))?;
+
+        signalling
+            .send_answer(answer.to_sdp_string(), me, request_id)
+            .await
+            .map_err(|e| WebRtcClientError::Signalling(e.to_string()))?;
+
+        let client = Self {
+            rtc,
+            socket,
+            local_addr,
+            local_v4_addr,
+            local_v6_addr,
+            buf: vec![0u8; 2000],
+            cached_timeout: Instant::now(),
+            channel_ids,
+            pending_transmits: VecDeque::new(),
+            early_events: Vec::new(),
+            turn: relay_info,
+            turn_wait: None,
+        };
+
+        let connected = false;
+        let client = client.wait_for_connected(connected).await?;
+        log::info!("Connected to p2p via cached connection");
         Ok(client.spawn_thread())
     }
 
@@ -448,6 +570,8 @@ impl RtcClient {
                     log::warn!("[rtc-client] Failed to send to {}: {}", dest, e);
                     return Err(WebRtcClientError::Connection(format!("Failed to send packet: {e}")));
                 }
+                // Drive TURN after transmit to handle resulting control messages
+                self.drive_turn().await;
                 Ok(RtcOutcome::MorePending)
             }
             Output::Event(e) => {
@@ -457,8 +581,73 @@ impl RtcClient {
         }
     }
 
+    /// Drive the TURN state machine forward, processing events and transmitting as needed.
+    /// Returns the Duration until the next poll, or None if TURN is not active.
+    async fn drive_turn(&mut self) -> Option<Duration> {
+        let turn = self.turn.as_mut()?;
+
+        let now = stun_now(turn.stun_base);
+
+        // Advance the TURN client state
+        let wait_deadline = match turn.client.poll(now) {
+            TurnPollRet::WaitUntil(deadline) => deadline,
+            TurnPollRet::Closed => {
+                log::warn!("[rtc-client] TURN client closed");
+                self.turn = None;
+                return None;
+            }
+            TurnPollRet::TcpClose { .. } | TurnPollRet::AllocateTcpSocket { .. } => {
+                // UDP client won't get these - shouldn't happen
+                return None;
+            }
+        };
+
+        // Process any TURN events
+        while let Some(event) = turn.client.poll_event() {
+            match event {
+                TurnEvent::AllocationCreated(_, relayed) => {
+                    log::info!("[rtc-client] TURN allocation confirmed, relay: {}", relayed);
+                }
+                TurnEvent::AllocationCreateFailed(family) => {
+                    log::warn!("[rtc-client] TURN allocation failed for family: {:?}", family);
+                }
+                TurnEvent::PermissionCreated(transport, peer) => {
+                    log::info!("[rtc-client] TURN permission created for {:?} peer {}", transport, peer);
+                }
+                TurnEvent::PermissionCreateFailed(transport, peer) => {
+                    log::warn!("[rtc-client] TURN permission create failed for {:?} peer {}", transport, peer);
+                }
+                TurnEvent::ChannelCreated(_, _) => {}
+                TurnEvent::ChannelCreateFailed(_, _) => {}
+                TurnEvent::TcpConnected(_) => {}
+                TurnEvent::TcpConnectFailed(_) => {}
+            }
+        }
+
+        // Send any pending TURN transmits
+        let now = stun_now(turn.stun_base);
+        while let Some(transmit) = turn.client.poll_transmit(now) {
+            let dest = to_v6_mapped(transmit.to);
+            if let Err(e) = self.socket.send_to(&transmit.data, dest).await {
+                log::warn!("[rtc-client] TURN transmit failed: {}", e);
+            }
+        }
+
+        // Calculate duration until next poll and store for timeout_duration()
+        let wait = if wait_deadline > now {
+            wait_deadline - now
+        } else {
+            Duration::ZERO
+        };
+        self.turn_wait = Some(wait);
+
+        Some(wait)
+    }
+
     fn timeout_duration(&self) -> Duration {
-        self.cached_timeout.saturating_duration_since(Instant::now())
+        let rtc_timeout = self.cached_timeout.saturating_duration_since(Instant::now());
+        let turn_timeout = self.turn_wait.unwrap_or(Duration::MAX);
+        rtc_timeout.min(turn_timeout)
     }
 
     async fn wait_for_input(&mut self, timeout: Duration) -> Result<(), WebRtcClientError> {
@@ -495,6 +684,10 @@ impl RtcClient {
                     .map_err(|e| WebRtcClientError::Rtc(e.to_string()))?;
             }
         }
+
+        // Drive TURN state machine after receiving/input
+        self.drive_turn().await;
+
         Ok(())
     }
 
