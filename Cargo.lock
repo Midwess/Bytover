@@ -7897,7 +7897,6 @@ checksum = "7a2d987857b319362043e95f5353c0535c1f58eec5336fdfcf626430af7def58"
 name = "relay-server"
 version = "0.1.0"
 dependencies = [
- "async-trait",
  "base64 0.22.1",
  "core-services",
  "devlog-sdk",
@@ -7911,7 +7910,6 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tonic 0.13.1",
- "tonic-middleware 0.3.0",
  "turn-server",
 ]
 
@@ -9048,7 +9046,6 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-tungstenite",
- "tonic 0.13.1",
  "uuid",
 ]
 

@@ -1,8 +1,5 @@
 mod config;
-mod di;
 mod gateway;
-mod grpc_middleware;
-mod grpc_service;
 mod public_ip;
 
 use base64::Engine;
@@ -11,24 +8,15 @@ use std::time::Duration;
 
 use devlog_sdk::tcp::listener::find_grpc_listener;
 use schema::devlog::bitbridge::p2p_orchestration_service_client::P2pOrchestrationServiceClient;
-use schema::devlog::bitbridge::relay_service_server::RelayServiceServer;
 use std::env;
-use tonic::transport::Server;
 use tonic::Request;
-use tonic_middleware::InterceptorFor;
 
-use crate::di::DiContainer;
 use crate::gateway::GatewayChannel;
-use crate::grpc_service::RelayServiceImpl;
 use crate::public_ip::{discover_public_addresses, PublicAddresses};
 use turn_server::config::{Auth, Config, Interface, Server as TurnServerConfig};
 
 #[derive(thiserror::Error, Debug)]
 enum MainErrors {
-    #[error("Transport error {0}")]
-    TransportError(#[from] tonic::transport::Error),
-    #[error("DI container error {0}")]
-    DiContainerError(String),
     #[error("Execution error {0}")]
     ExecutionError(String)
 }
@@ -57,7 +45,7 @@ async fn async_main() -> Result<(), MainErrors> {
         "{}:{}",
         public_addresses.ipv4.map(|ip| ip.to_string()).unwrap_or_else(|| "0.0.0.0".to_string()),
         requested_turn_port
-    ).parse().map_err(|e| MainErrors::DiContainerError(format!("invalid turn external address: {e}")))?;
+    ).parse().map_err(|e| MainErrors::ExecutionError(format!("invalid turn external address: {e}")))?;
 
     let turn_config = Config {
         server: TurnServerConfig {
@@ -77,7 +65,7 @@ async fn async_main() -> Result<(), MainErrors> {
         ..Default::default()
     };
 
-    let connection = find_grpc_listener(Some(9101)).await.map_err(|e| MainErrors::DiContainerError(e.to_string()))?;
+    let _listener = find_grpc_listener(Some(9101)).await.map_err(|e| MainErrors::ExecutionError(e.to_string()))?;
     let grpc_gateway = GatewayChannel::new(config::get_gateway_grpc_url(), config::get_gateway_grpc_host());
     let registration_url = resolve_registration_url(&grpc_gateway).await.map_err(MainErrors::ExecutionError)?;
 
@@ -101,15 +89,6 @@ async fn async_main() -> Result<(), MainErrors> {
         .await;
     });
 
-    let di = DiContainer::init().await;
-
-    let grpc_server = Server::builder()
-        .add_service(InterceptorFor::new(
-            RelayServiceServer::new(RelayServiceImpl::new()),
-            di.get_auth_middleware()
-        ))
-        .serve_with_incoming(connection.listener);
-
     let turn_handle = tokio::spawn(async move {
         if let Err(e) = turn_server::start_server(turn_config).await {
             log::error!("TURN server exited with error: {:?}", e);
@@ -117,13 +96,6 @@ async fn async_main() -> Result<(), MainErrors> {
     });
 
     tokio::select! {
-        res = grpc_server => {
-            if let Err(e) = res {
-                log::error!("gRPC server exited with error: {:?}", e);
-                return Err(MainErrors::TransportError(e));
-            }
-            log::info!("gRPC server stopped");
-        },
         res = turn_handle => {
             if let Err(e) = res {
                 log::error!("TURN server task panicked: {:?}", e);
