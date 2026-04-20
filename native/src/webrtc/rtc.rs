@@ -752,6 +752,8 @@ impl RtcClient {
                 self.rtc
                     .handle_input(Input::Timeout(Instant::now()))
                     .map_err(|e| WebRtcClientError::Rtc(e.to_string()))?;
+                // Advance TURN state machine when timeout fires, so refreshes aren't missed
+                self.drive_turn().await;
             }
         }
 
