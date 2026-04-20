@@ -396,7 +396,7 @@ impl IceAgent {
                                     }
                                     match Candidate::server_reflexive(mapped, base, "udp") {
                                         Ok(c) => {
-                                            log::debug!("[ice] Srflx candidate: {} (base: {})", c, base);
+                                            log::info!("[ice] STUN binding succeeded with {}, candidate: {}", src, c);
                                             candidates.insert(c);
                                         }
                                         Err(e) => log::warn!("[ice] Srflx for {mapped}: {e:?}")
@@ -449,6 +449,7 @@ impl IceAgent {
                                         Ok(turn_info) => {
                                             // Add relayed candidate
                                             let relay_addr = turn_info.relay_addr;
+                                            log::info!("[ice] TURN allocation succeeded with server {}, relay: {}", turn_server_addr, relay_addr);
                                             match Candidate::relayed(relay_addr, relay_addr, "udp") {
                                                 Ok(c) => {
                                                     log::debug!("[ice] Relayed candidate: {}", c);
