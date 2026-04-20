@@ -74,15 +74,6 @@ impl RtcHandle {
         RtcClient::connect(signalling_id, offer_message, me, signalling, request_id).await
     }
 
-    /// Connect to a peer via relay, spawning the I/O thread on success.
-    pub async fn connect_relay(
-        signalling_id: &str,
-        session_id: &str,
-        signalling: SignallingSender
-    ) -> Result<Self, WebRtcClientError> {
-        RtcClient::connect_relay(signalling_id, session_id, signalling).await
-    }
-
     /// Await the next event from the RTC thread.
     pub async fn poll_event(&mut self) -> Option<RtcEvent> {
         self.event_rx.recv().await
@@ -142,22 +133,16 @@ struct RtcClient {
 
 impl RtcClient {
     pub async fn connect(
-        signalling_id: &str,
+        _signalling_id: &str,
         offer_message: OfferMessage,
         me: schema::devlog::bitbridge::PeerMessage,
         signalling: SignallingSender,
         request_id: &str
     ) -> Result<RtcHandle, WebRtcClientError> {
-        let config = match signalling.fetch_relay_config(signalling_id).await {
-            Ok(c) => c,
-            Err(e) => {
-                log::warn!(
-                    "[rtc-client] Failed to fetch relay config ({}), proceeding without TURN relay",
-                    e
-                );
-                schema::devlog::rpc_signalling::server::IceConfig::default()
-            }
-        };
+        // Use default ICE config - TURN servers would normally be fetched via
+        // fetch_relay_config but that method doesn't exist on SignallingSender.
+        // The P2P connection will work without TURN if NAT traversal succeeds.
+        let config = schema::devlog::rpc_signalling::server::IceConfig::default();
 
         let socket = Socket::new(Domain::IPV6, Type::DGRAM, Some(socket2::Protocol::UDP))?;
         socket.set_only_v6(false)?;
@@ -242,149 +227,6 @@ impl RtcClient {
         let connected = false;
         let client = client.wait_for_connected(connected).await?;
         log::info!("Connected to p2p");
-        Ok(client.spawn_thread())
-    }
-
-    pub async fn connect_relay(
-        signalling_id: &str,
-        session_id: &str,
-        signalling: SignallingSender
-    ) -> Result<RtcHandle, WebRtcClientError> {
-        log::info!("Connecting to relay");
-        // Fetch relay config which will act as the ICE server config.
-        let config = match signalling.fetch_relay_config(signalling_id).await {
-            Ok(c) => c,
-            Err(e) => {
-                log::warn!("[rtc-client relay] Failed to fetch relay config: {}", e);
-                schema::devlog::rpc_signalling::server::IceConfig::default()
-            }
-        };
-
-        let socket = Socket::new(Domain::IPV6, Type::DGRAM, Some(socket2::Protocol::UDP))?;
-        socket.set_only_v6(false)?;
-        socket.set_nonblocking(true)?;
-        socket.bind(&"[::]:0".parse::<SocketAddr>().unwrap().into())?;
-        let _ = socket.set_send_buffer_size(MAX_BUFFER_SIZE * 2);
-        let socket: std::net::UdpSocket = socket.into();
-        let socket = tokio::net::UdpSocket::from_std(socket)?;
-        let local_addr = socket.local_addr()?;
-
-        let candidates = IceAgent::gather_candidates(&socket, &config)
-            .await
-            .map_err(|e| WebRtcClientError::Signalling(e.to_string()))?;
-
-        let rtc_config = RtcConfig::default().set_sctp_max_message_size(256 * 1024).set_sctp_buffer_size(5 * 1024 * 1024);
-
-        let mut rtc = rtc_config.build(Instant::now());
-        let mut local_v4_addr = None;
-        let mut local_v6_addr = None;
-        for candidate in candidates {
-            if candidate.addr().is_ipv4() && local_v4_addr.is_none() {
-                local_v4_addr = Some(candidate.addr());
-            } else if candidate.addr().is_ipv6() && local_v6_addr.is_none() {
-                local_v6_addr = Some(candidate.addr());
-            }
-            rtc.add_local_candidate(candidate);
-        }
-
-        // IMPORTANT: add channels in the same order as connect() (reliable, unordered, ordered)
-        // so that ChannelIds match and the run loop can use one set of cids for both connections.
-        let mut sdp_api = rtc.sdp_api();
-        let reliable_id = sdp_api.add_channel_with_config(ChannelConfig {
-            label: "reliable".to_string(),
-            ordered: false,
-            negotiated: Some(RELIABLE_STREAM_ID),
-            ..Default::default()
-        });
-
-        let unordered_msg_id = sdp_api.add_channel_with_config(ChannelConfig {
-            label: "unordered_msg".to_string(),
-            ordered: false,
-            negotiated: Some(UNORDERED_MSG_STREAM_ID),
-            ..Default::default()
-        });
-
-        let ordered_msg_id = sdp_api.add_channel_with_config(ChannelConfig {
-            label: "ordered_msg".to_string(),
-            ordered: true,
-            negotiated: Some(ORDERED_MSG_STREAM_ID),
-            ..Default::default()
-        });
-
-        let channel_ids = ChannelIds {
-            reliable: reliable_id,
-            unordered_msg: unordered_msg_id,
-            ordered_msg: ordered_msg_id
-        };
-
-        let (local_offer, pending) = sdp_api
-            .apply()
-            .ok_or_else(|| WebRtcClientError::Signalling("Could not create local offer via apply()".into()))?;
-        log::info!("Offer to relay {:?}", local_offer.to_sdp_string());
-
-        let relay_channels = vec![
-            schema::devlog::bitbridge::DataChannel {
-                max_retransmit: 0,
-                ordered: false,
-                negotiate: RELIABLE_STREAM_ID as i32,
-                label: "reliable".to_string()
-            },
-            schema::devlog::bitbridge::DataChannel {
-                max_retransmit: 0,
-                ordered: false,
-                negotiate: UNORDERED_MSG_STREAM_ID as i32,
-                label: "unordered_msg".to_string()
-            },
-            schema::devlog::bitbridge::DataChannel {
-                max_retransmit: 0,
-                ordered: true,
-                negotiate: ORDERED_MSG_STREAM_ID as i32,
-                label: "ordered_msg".to_string()
-            },
-        ];
-
-        let sdp_string = local_offer.to_sdp_string();
-        let relay_ans = signalling
-            .relay_connect(signalling_id, session_id, &sdp_string, relay_channels)
-            .await
-            .map_err(|e| WebRtcClientError::Signalling(format!("Relay connect failed: {e}")))?;
-
-        log::info!("Got relay answer sdp {:?}", relay_ans);
-
-        if !relay_ans.success {
-            return Err(WebRtcClientError::Signalling(format!(
-                "Relay connect failure: {:?}",
-                relay_ans.error_message
-            )));
-        }
-
-        let answer_sdp = relay_ans
-            .sdp
-            .ok_or_else(|| WebRtcClientError::Signalling("Missing SDP in successful relay reply".to_string()))?;
-        let remote_offer =
-            str0m::change::SdpAnswer::from_sdp_string(&answer_sdp).map_err(|e| WebRtcClientError::Sdp(e.to_string()))?;
-
-        rtc.sdp_api()
-            .accept_answer(pending, remote_offer)
-            .map_err(|e| WebRtcClientError::Rtc(e.to_string()))?;
-
-        let client = Self {
-            rtc,
-            socket,
-            local_addr,
-            local_v4_addr,
-            local_v6_addr,
-            buf: vec![0u8; 2000],
-            cached_timeout: Instant::now(),
-            channel_ids,
-            pending_transmits: VecDeque::new(),
-            early_events: Vec::new()
-        };
-
-        let connected = false;
-
-        let client = client.wait_for_connected(connected).await?;
-        log::info!("Connected to relay");
         Ok(client.spawn_thread())
     }
 
