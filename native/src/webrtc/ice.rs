@@ -207,7 +207,7 @@ async fn connect_relay(
                     TurnRecvRet::Handled => {
                         // TURN control message handled internally
                     }
-                    TurnRecvRet::PeerData(peer_data) => {
+                    TurnRecvRet::PeerData(_peer_data) => {
                         // This shouldn't happen during allocation - peer data comes after allocation
                         log::warn!("[ice] Unexpected peer data during TURN allocation from {}", src);
                     }

@@ -133,12 +133,14 @@ struct RtcClient {
     /// replayed once the run loop starts (e.g. early ChannelData).
     early_events: Vec<Event>,
     /// TURN relay info if TURN allocation succeeded during ICE gathering.
-    turn: Option<TurnRelayInfo>
+    turn: Option<TurnRelayInfo>,
+    /// Duration until next TURN poll is needed (computed by drive_turn).
+    turn_wait: Option<Duration>,
 }
 
 impl RtcClient {
     pub async fn connect(
-        _signalling_id: &str,
+        signalling_id: &str,
         offer_message: OfferMessage,
         me: schema::devlog::bitbridge::PeerMessage,
         signalling: SignallingSender,
@@ -235,12 +237,118 @@ impl RtcClient {
             channel_ids,
             pending_transmits: VecDeque::new(),
             early_events: Vec::new(),
-            turn: relay_info
+            turn: relay_info,
+            turn_wait: None,
         };
 
         let connected = false;
         let client = client.wait_for_connected(connected).await?;
         log::info!("Connected to p2p");
+        Ok(client.spawn_thread())
+    }
+
+    /// Connect using a pre-established cached socket and pre-gathered host candidates.
+    /// This skips socket creation and host candidate enumeration, but still gathers
+    /// server reflexive (STUN) and relayed (TURN) candidates fresh since those are ephemeral.
+    pub async fn connect_with_cached(
+        signalling_id: &str,
+        offer_message: OfferMessage,
+        me: schema::devlog::bitbridge::PeerMessage,
+        signalling: SignallingSender,
+        request_id: &str,
+        cached: CachedPreConnection,
+    ) -> Result<RtcHandle, WebRtcClientError> {
+        let config = match signalling.fetch_relay_config(signalling_id).await {
+            Ok(cfg) => {
+                log::info!("[rtc-client] Using relay config with {} URLs", cfg.urls.len());
+                cfg
+            }
+            Err(e) => {
+                log::warn!("[rtc-client] Failed to fetch relay config, using P2P only: {}", e);
+                schema::devlog::rpc_signalling::server::IceConfig::default()
+            }
+        };
+
+        let socket = cached.socket;
+        let local_addr = cached.local_addr;
+        let local_v4_addr = cached.local_v4_addr;
+        let local_v6_addr = cached.local_v6_addr;
+
+        let (candidates, relay_info) = IceAgent::gather_candidates(&socket, &config)
+            .await
+            .map_err(|e| WebRtcClientError::Signalling(e.to_string()))?;
+
+        let config = RtcConfig::default().set_sctp_max_message_size(256 * 1024).set_sctp_buffer_size(5 * 1024 * 1024);
+
+        let mut rtc = config.build(Instant::now());
+
+        // Add cached host candidates first (they're already known)
+        for candidate in &cached.candidates {
+            log::debug!("[rtc-client] Adding cached candidate: {}", candidate);
+            rtc.add_local_candidate(candidate.clone());
+        }
+
+        // Add fresh STUN/TURN candidates
+        log::info!("[rtc-client] Adding {} fresh candidates to RTC engine", candidates.len());
+        for candidate in candidates {
+            log::debug!("[rtc-client] Adding candidate: {}", candidate);
+            rtc.add_local_candidate(candidate);
+        }
+
+        let offer_sdp = IceAgent::resolve_remote_candidates(&offer_message.sdp);
+        log::info!("Received offer sdp: {offer_sdp}");
+
+        let offer = str0m::change::SdpOffer::from_sdp_string(&offer_sdp).map_err(|e| WebRtcClientError::Sdp(e.to_string()))?;
+
+        let reliable_id = rtc.direct_api().create_data_channel(ChannelConfig {
+            label: "reliable".to_string(),
+            ordered: false,
+            negotiated: Some(RELIABLE_STREAM_ID),
+            ..Default::default()
+        });
+        let unordered_msg_id = rtc.direct_api().create_data_channel(ChannelConfig {
+            label: "unordered_msg".to_string(),
+            ordered: false,
+            negotiated: Some(UNORDERED_MSG_STREAM_ID),
+            ..Default::default()
+        });
+        let ordered_msg_id = rtc.direct_api().create_data_channel(ChannelConfig {
+            label: "ordered_msg".to_string(),
+            ordered: true,
+            negotiated: Some(ORDERED_MSG_STREAM_ID),
+            ..Default::default()
+        });
+        let channel_ids = ChannelIds {
+            reliable: reliable_id,
+            unordered_msg: unordered_msg_id,
+            ordered_msg: ordered_msg_id
+        };
+
+        let answer = rtc.sdp_api().accept_offer(offer).map_err(|e| WebRtcClientError::Rtc(e.to_string()))?;
+
+        signalling
+            .send_answer(answer.to_sdp_string(), me, request_id)
+            .await
+            .map_err(|e| WebRtcClientError::Signalling(e.to_string()))?;
+
+        let client = Self {
+            rtc,
+            socket,
+            local_addr,
+            local_v4_addr,
+            local_v6_addr,
+            buf: vec![0u8; 2000],
+            cached_timeout: Instant::now(),
+            channel_ids,
+            pending_transmits: VecDeque::new(),
+            early_events: Vec::new(),
+            turn: relay_info,
+            turn_wait: None,
+        };
+
+        let connected = false;
+        let client = client.wait_for_connected(connected).await?;
+        log::info!("Connected to p2p via cached connection");
         Ok(client.spawn_thread())
     }
 
@@ -525,18 +633,21 @@ impl RtcClient {
             }
         }
 
-        // Calculate duration until next poll
+        // Calculate duration until next poll and store for timeout_duration()
         let wait = if wait_deadline > now {
             wait_deadline - now
         } else {
             Duration::ZERO
         };
+        self.turn_wait = Some(wait);
 
         Some(wait)
     }
 
     fn timeout_duration(&self) -> Duration {
-        self.cached_timeout.saturating_duration_since(Instant::now())
+        let rtc_timeout = self.cached_timeout.saturating_duration_since(Instant::now());
+        let turn_timeout = self.turn_wait.unwrap_or(Duration::MAX);
+        rtc_timeout.min(turn_timeout)
     }
 
     async fn wait_for_input(&mut self, timeout: Duration) -> Result<(), WebRtcClientError> {
