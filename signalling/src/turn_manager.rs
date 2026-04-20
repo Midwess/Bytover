@@ -182,8 +182,8 @@ impl TurnManager {
 
         Some(IceConfig {
             urls,
-            username: None,
-            credential: None
+            username: Some("relay".to_string()),
+            credential: Some("relay-secret".to_string())
         })
     }
 }
