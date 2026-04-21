@@ -1,14 +1,16 @@
 use socket2::{Domain, Socket, Type};
 use std::collections::VecDeque;
 use std::net::SocketAddr;
+use std::sync::{Arc, Mutex as StdMutex};
 use std::time::{Duration, Instant};
 use str0m::channel::{ChannelConfig, ChannelId};
 use str0m::net::{Protocol, Receive};
 use str0m::{Event, IceConnectionState, Input, Output, Rtc, RtcConfig};
+use futures_util::StreamExt;
 use schema::devlog::rpc_signalling::server::OfferMessage;
 
 use crate::webrtc::client::{WebRtcClientError, MAX_BUFFER_SIZE};
-use crate::webrtc::ice::IceAgent;
+use crate::webrtc::ice::{strip_candidates_from_sdp, IceAgent};
 use crate::webrtc::signalling::SignallingSender;
 
 pub const RELIABLE_STREAM_ID: u16 = 1;
@@ -118,7 +120,7 @@ impl Drop for RtcHandle {
 }
 
 struct RtcClient {
-    rtc: Rtc,
+    rtc: Arc<StdMutex<Rtc>>,
     socket: tokio::net::UdpSocket,
     local_addr: SocketAddr,
     local_v4_addr: Option<SocketAddr>,
@@ -184,10 +186,11 @@ impl RtcClient {
             rtc.add_local_candidate(candidate);
         }
 
-        let offer_sdp = IceAgent::resolve_remote_candidates(&offer_message.sdp).await;
-        log::info!("Received offer sdp: {offer_sdp}");
+        // Strip candidates from SDP to allow early answer without waiting for DNS resolution
+        let stripped_offer_sdp = strip_candidates_from_sdp(&offer_message.sdp);
+        log::info!("Stripped offer SDP (candidates removed for early answer)");
 
-        let offer = str0m::change::SdpOffer::from_sdp_string(&offer_sdp).map_err(|e| WebRtcClientError::Sdp(e.to_string()))?;
+        let offer = str0m::change::SdpOffer::from_sdp_string(&stripped_offer_sdp).map_err(|e| WebRtcClientError::Sdp(e.to_string()))?;
 
         let reliable_id = rtc.direct_api().create_data_channel(ChannelConfig {
             label: "reliable".to_string(),
@@ -213,13 +216,38 @@ impl RtcClient {
             ordered_msg: ordered_msg_id,
         };
 
+        // Accept offer - candidates stripped so none to add, early answer enabled
         let answer = rtc.sdp_api().accept_offer(offer).map_err(|e| WebRtcClientError::Rtc(e.to_string()))?;
 
-        signalling
-            .send_answer(answer.to_sdp_string(), me, request_id)
-            .await
-            .map_err(|e| WebRtcClientError::Signalling(e.to_string()))?;
+        // Wrap rtc in Arc<Mutex> so spawned task can add candidates
+        let rtc = Arc::new(StdMutex::new(rtc));
+        let rtc_for_spawn = rtc.clone();
 
+        // Send answer immediately while resolving candidates in background
+        let answer_sdp = answer.to_sdp_string();
+        let me_clone = me.clone();
+        let request_id_owned = request_id.to_string();
+        let original_sdp = offer_message.sdp.clone();
+
+        // Spawn candidate resolution to run concurrently with signaling
+        tokio::spawn(async move {
+            let stream = IceAgent::resolve_remote_candidates_stream(&original_sdp);
+            futures_util::pin_mut!(stream);
+            while let Some(candidate) = stream.next().await {
+                log::debug!("[rtc-client] Resolved remote candidate: {}", candidate);
+                rtc_for_spawn.lock().unwrap().add_remote_candidate(candidate);
+            }
+            log::info!("[rtc-client] Remote candidate resolution complete");
+        });
+
+        // Send answer without waiting for candidate resolution
+        if let Err(e) = signalling.send_answer(answer_sdp, me_clone, &request_id_owned).await {
+            log::warn!("[rtc-client] Failed to send answer: {}", e);
+        }
+        log::info!("[rtc-client] Answer sent, candidate resolution continuing in background");
+
+        // rtc is Arc<StdMutex<Rtc>> with rtc_for_spawn held by spawned task
+        // Store Arc in struct - spawned task will add candidates as they're resolved
         let client = Self {
             rtc,
             socket,
@@ -288,11 +316,11 @@ impl RtcClient {
         let mut ice_disconnected_since: Option<Instant> = None;
 
         let mut pending_spins = 0usize;
-        while self.rtc.is_alive() {
+        while self.rtc_mut().is_alive() {
             if let Some(since) = ice_disconnected_since {
                 if since.elapsed() >= ICE_DISCONNECT_TIMEOUT {
                     log::info!("[rtc-client] ICE disconnected for {:?}, tearing down", ICE_DISCONNECT_TIMEOUT);
-                    self.rtc.disconnect();
+                    self.rtc_mut().disconnect();
                     break;
                 }
             }
@@ -376,7 +404,7 @@ impl RtcClient {
                         }
                         None => {
                             log::info!("[rtc-client] RTC I/O thread shutdown: data channel closed");
-                            self.rtc.disconnect();
+                            self.rtc_mut().disconnect();
                             break;
                         }
                     }
@@ -384,7 +412,7 @@ impl RtcClient {
             }
         }
 
-        self.rtc.disconnect();
+        self.rtc_mut().disconnect();
         log::info!("[rtc-client] RTC connection no longer alive, stopping I/O thread");
     }
 
@@ -428,7 +456,7 @@ impl RtcClient {
                     self.channel_ids.ordered_msg,
                 ]
                 .iter()
-                .all(|&cid| self.rtc.channel(cid).is_some());
+                .all(|&cid| self.rtc_mut().channel(cid).is_some());
 
                 if ready {
                     self.configure_channel_watermarks();
@@ -437,7 +465,7 @@ impl RtcClient {
                 }
             }
 
-            if !self.rtc.is_alive() {
+            if !self.rtc_mut().is_alive() {
                 return Err(WebRtcClientError::Connection("RTC connection closed".into()));
             }
 
@@ -451,7 +479,8 @@ impl RtcClient {
     }
 
     async fn poll_event(&mut self) -> Result<RtcOutcome, WebRtcClientError> {
-        match self.rtc.poll_output().map_err(|e| WebRtcClientError::Rtc(e.to_string()))? {
+        let output = self.rtc_mut().poll_output().map_err(|e| WebRtcClientError::Rtc(e.to_string()))?;
+        match output {
             Output::Timeout(t) => {
                 self.cached_timeout = t;
                 Ok(RtcOutcome::Idle(t))
@@ -480,7 +509,7 @@ impl RtcClient {
 
     async fn wait_for_input(&mut self, timeout: Duration) -> Result<(), WebRtcClientError> {
         if timeout.is_zero() {
-            self.rtc
+            self.rtc_mut()
                 .handle_input(Input::Timeout(Instant::now()))
                 .map_err(|e| WebRtcClientError::Rtc(e.to_string()))?;
             return Ok(());
@@ -494,7 +523,7 @@ impl RtcClient {
             }
             Ok(Err(e)) => return Err(e.into()),
             Err(_) => {
-                self.rtc
+                self.rtc_mut()
                     .handle_input(Input::Timeout(Instant::now()))
                     .map_err(|e| WebRtcClientError::Rtc(e.to_string()))?;
             }
@@ -512,7 +541,7 @@ impl RtcClient {
         };
         match Receive::new(Protocol::Udp, source, local, data) {
             Ok(receive) => {
-                if let Err(e) = self.rtc.handle_input(Input::Receive(Instant::now(), receive)) {
+                if let Err(e) = self.rtc_mut().handle_input(Input::Receive(Instant::now(), receive)) {
                     log::warn!("[rtc-client] Input handle packet drop: {}", e);
                 }
             }
@@ -524,7 +553,7 @@ impl RtcClient {
     }
 
     fn send(&mut self, data: &[u8], channel_id: ChannelId) -> bool {
-        if let Some(mut ch) = self.rtc.channel(channel_id) {
+        if let Some(mut ch) = self.rtc_mut().channel(channel_id) {
             match ch.write(true, data) {
                 Ok(true) => true,
                 Ok(false) => false,
@@ -539,13 +568,14 @@ impl RtcClient {
     }
 
     fn configure_channel_watermarks(&mut self) {
-        if let Some(mut channel) = self.rtc.channel(self.channel_ids.reliable) {
+        let channel_id = self.channel_ids.reliable;
+        if let Some(mut channel) = self.rtc_mut().channel(channel_id) {
             channel.set_buffered_amount_low_threshold(RELIABLE_BUFFERED_AMOUNT_LOW_THRESHOLD);
         }
     }
 
     fn channel_buffered_amount(&mut self, channel_id: ChannelId) -> Option<usize> {
-        self.rtc.channel(channel_id).map(|mut ch| ch.buffered_amount())
+        self.rtc_mut().channel(channel_id).map(|mut ch| ch.buffered_amount())
     }
 
     fn should_pause_transmit(&mut self, channel_id: ChannelId) -> bool {
@@ -577,6 +607,10 @@ impl RtcClient {
         while let Ok(cmd) = data_rx.try_recv() {
             self.enqueue_command(cmd);
         }
+    }
+
+    fn rtc_mut(&mut self) -> std::sync::MutexGuard<'_, Rtc> {
+        self.rtc.lock().unwrap()
     }
 }
 
