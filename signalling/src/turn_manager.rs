@@ -147,10 +147,6 @@ impl TurnManager {
         }
     }
 
-    pub async fn get_assigned_relay(&self, client_id: &str) -> Option<RegisteredRelay> {
-        self.get_assigned_relays(client_id, 1).await.into_iter().next()
-    }
-
     pub async fn get_assigned_relays(&self, client_id: &str, n: usize) -> Vec<RegisteredRelay> {
         let n = n.max(1);
         let mut assignments = self.client_relay_assignments.lock().await;
@@ -196,10 +192,6 @@ impl TurnManager {
 
         assignments.insert(client_id.to_string(), picked.iter().map(|r| r.id.clone()).collect());
         picked
-    }
-
-    pub async fn get_relay_config(&self, client_id: &str) -> Option<IceConfig> {
-        self.get_relay_configs(client_id, 1).await.into_iter().next()
     }
 
     pub async fn get_relay_configs(&self, client_id: &str, n: usize) -> Vec<IceConfig> {
@@ -272,7 +264,7 @@ mod tests {
             )
             .await;
 
-        let relay = manager.get_assigned_relay("client-1").await.unwrap();
+        let relay = manager.get_assigned_relays("client-1", 1).await.into_iter().next().unwrap();
 
         assert_eq!(relay.public_ipv4.as_deref(), Some("198.51.100.10"));
         assert_eq!(relay.public_ipv6.as_deref(), Some("2001:db8::10"));
@@ -296,7 +288,7 @@ mod tests {
             )
             .await;
 
-        let relay = manager.get_relay_config("client-1").await.unwrap();
+        let relay = manager.get_relay_configs("client-1", 1).await.into_iter().next().unwrap();
 
         assert_eq!(
             relay.urls,

@@ -73,7 +73,7 @@ sea-orm = { version = "1.1.17", features = ["macros", "runtime-tokio-rustls", "s
 image = "0.25.8"
 tempfile = "3.23.0"
 tokio-cron-scheduler = { version = "0.15.1", default-features = false }
-str0m = { path = "third_party/str0m" }
+str0m = { git = "https://github.com/Midwess/str0m.git" }
 tokio-tungstenite = "0.29.0"
 socket2 = "0.6.3"
 base64 = "0.22.1"

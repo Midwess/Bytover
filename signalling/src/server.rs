@@ -405,7 +405,7 @@ mod tests {
         let bytes = to_bytes(response.into_body()).await.unwrap();
         assert_eq!(std::str::from_utf8(&bytes).unwrap(), "{\"ip_address\":\"198.51.100.7\"}");
 
-        let relay = turn_manager.get_relay_config("client-1").await.unwrap();
+        let relay = turn_manager.get_relay_configs("client-1", 1).await.into_iter().next().unwrap();
         assert_eq!(
             relay.urls,
             vec![
@@ -417,7 +417,7 @@ mod tests {
         );
         assert_eq!(relay.username.as_deref(), Some("relay"));
         assert_eq!(relay.credential.as_deref(), Some("relay-secret"));
-        let assigned = turn_manager.get_assigned_relay("client-1").await.unwrap();
+        let assigned = turn_manager.get_assigned_relays("client-1", 1).await.into_iter().next().unwrap();
         assert_eq!(assigned.relay_host, "198.51.100.7");
     }
 
@@ -441,7 +441,7 @@ mod tests {
         let response = register_relay_handler(req, body, state).await;
 
         assert_eq!(response.status(), StatusCode::OK);
-        let relay = turn_manager.get_relay_config("client-1").await.unwrap();
+        let relay = turn_manager.get_relay_configs("client-1", 1).await.into_iter().next().unwrap();
         assert_eq!(
             relay.urls,
             vec![
@@ -451,7 +451,7 @@ mod tests {
         );
         assert_eq!(relay.username.as_deref(), Some("relay"));
         assert_eq!(relay.credential.as_deref(), Some("relay-secret"));
-        let assigned = turn_manager.get_assigned_relay("client-1").await.unwrap();
+        let assigned = turn_manager.get_assigned_relays("client-1", 1).await.into_iter().next().unwrap();
         assert_eq!(assigned.relay_host, "2001:db8::8");
     }
 

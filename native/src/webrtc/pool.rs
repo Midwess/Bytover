@@ -128,24 +128,14 @@ impl ConnectionPool {
 
     pub async fn try_send_reliable(&self, data: &[u8]) -> bool {
         let slots = self.slots.lock().await;
-        let mut best: Option<(usize, usize)> = None;
-        for slot in slots.iter() {
-            if !slot.is_ready() {
-                continue;
-            }
-            let handle = match slot.handle.as_ref() {
-                Some(h) => h,
-                None => continue,
-            };
-            let buffered = handle.buffered_amount();
-            match best {
-                None => best = Some((slot.index, buffered)),
-                Some((_, best_buf)) if buffered < best_buf => best = Some((slot.index, buffered)),
-                _ => {}
-            }
-        }
+        let candidates = slots
+            .iter()
+            .filter(|s| s.is_ready())
+            .filter_map(|s| s.handle.as_ref().map(|h| (s.index, h.buffered_amount())));
 
-        let Some((idx, _)) = best else { return false };
+        let Some(idx) = pick_least_buffered(candidates) else {
+            return false;
+        };
         match slots.get(idx).and_then(|s| s.handle.as_ref()) {
             Some(handle) => handle.send(data, self.channel_ids.reliable),
             None => false,
@@ -185,9 +175,24 @@ impl ConnectionPool {
     }
 }
 
+fn pick_least_buffered<I>(candidates: I) -> Option<usize>
+where
+    I: IntoIterator<Item = (usize, usize)>,
+{
+    let mut best: Option<(usize, usize)> = None;
+    for (idx, buffered) in candidates {
+        match best {
+            None => best = Some((idx, buffered)),
+            Some((_, best_buf)) if buffered < best_buf => best = Some((idx, buffered)),
+            _ => {}
+        }
+    }
+    best.map(|(idx, _)| idx)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{Slot, SlotState};
+    use super::{pick_least_buffered, Slot, SlotState};
 
     #[test]
     fn slot_without_handle_is_not_ready() {
@@ -204,5 +209,35 @@ mod tests {
         assert_ne!(SlotState::Pending, SlotState::Ready);
         assert_ne!(SlotState::Ready, SlotState::Failed);
         assert_ne!(SlotState::Ready, SlotState::Dead);
+    }
+
+    #[test]
+    fn pick_least_buffered_returns_none_when_empty() {
+        let chosen = pick_least_buffered(std::iter::empty());
+        assert!(chosen.is_none());
+    }
+
+    #[test]
+    fn pick_least_buffered_returns_only_candidate() {
+        let chosen = pick_least_buffered([(7usize, 1024usize)]);
+        assert_eq!(chosen, Some(7));
+    }
+
+    #[test]
+    fn pick_least_buffered_picks_smallest_buffer() {
+        let chosen = pick_least_buffered([(0, 4096usize), (1, 512), (2, 2048)]);
+        assert_eq!(chosen, Some(1));
+    }
+
+    #[test]
+    fn pick_least_buffered_tie_prefers_first_seen() {
+        let chosen = pick_least_buffered([(0, 1024usize), (1, 1024), (2, 1024)]);
+        assert_eq!(chosen, Some(0));
+    }
+
+    #[test]
+    fn pick_least_buffered_zero_buffer_wins() {
+        let chosen = pick_least_buffered([(0, 500usize), (1, 0), (2, 250)]);
+        assert_eq!(chosen, Some(1));
     }
 }
