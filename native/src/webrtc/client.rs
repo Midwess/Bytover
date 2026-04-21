@@ -78,6 +78,7 @@ impl WebRtcClient {
         signalling: SignallingSender,
         request_id: String,
         resource_repo: Arc<dyn LocalResourceRepository>,
+        total_slots: usize,
     ) -> Result<Self, WebRtcClientError> {
         let Some(signalling_id) = me.signalling_id.clone() else {
             return Err(WebRtcClientError::Signalling("No signalling ID".to_string()));
@@ -85,7 +86,7 @@ impl WebRtcClient {
 
         let me_proto = schema::devlog::bitbridge::PeerMessage::from(me.clone());
 
-        log::info!("[webrtc-client] Connecting via P2P...");
+        log::info!("[webrtc-client] Connecting via P2P (total_slots={total_slots})");
 
         let peer_from_offer = offer_message.peer.clone();
 
@@ -93,12 +94,11 @@ impl WebRtcClient {
 
         let (ordered_msg_tx, ordered_msg_rx) = futures_mpsc::channel::<Vec<u8>>(64);
         let (_unordered_msg_tx, unordered_msg_rx) = futures_mpsc::channel::<Vec<u8>>(64);
-        // Keep roughly one SCTP buffer worth of reliable packets queued by bytes, not by packet count.
         let (reliable_data_tx, reliable_data_rx) = mpsc::channel::<Vec<u8>>(RELIABLE_DATA_QUEUE_CAPACITY);
         let (outbound_tx, outbound_rx) = futures_mpsc::channel::<(u16, u64, Vec<u8>, bool)>(32);
         let (pool_event_tx, pool_event_rx) = mpsc::channel::<(usize, RtcEvent)>(32);
 
-        let pool = ConnectionPool::new_with_primary(rtc_client, 1, pool_event_tx);
+        let pool = ConnectionPool::new_with_primary(rtc_client, total_slots.max(1), pool_event_tx);
 
         let msg_channel = DirectMessageChannel::new(ordered_msg_tx);
         let peer: OnceCell<Peer> = OnceCell::new();
@@ -138,6 +138,42 @@ impl WebRtcClient {
         log::info!("[webrtc-client] connection established, peer info exchanged via signaling.");
 
         Ok(client)
+    }
+
+    pub fn install_slot(
+        self: &Arc<Self>,
+        slot_idx: usize,
+        offer_message: OfferMessage,
+        me: Peer,
+        signalling: SignallingSender,
+        request_id: String,
+        ice_config: Option<schema::devlog::rpc_signalling::server::IceConfig>,
+    ) -> Result<(), WebRtcClientError> {
+        let Some(pool) = self.pool.get().cloned() else {
+            return Err(WebRtcClientError::Connection(
+                "Connection pool not initialized; cannot install slot".into(),
+            ));
+        };
+
+        let Some(signalling_id) = me.signalling_id.clone() else {
+            return Err(WebRtcClientError::Signalling("No signalling ID for slot install".to_string()));
+        };
+
+        let me_proto = schema::devlog::bitbridge::PeerMessage::from(me);
+
+        log::info!("[webrtc-client] Installing slot {slot_idx} for peer {:?}", self.peer_id());
+
+        let connect_fut = async move {
+            match ice_config {
+                Some(cfg) => {
+                    RtcHandle::connect_with_config(&signalling_id, offer_message, me_proto, signalling, &request_id, cfg).await
+                }
+                None => RtcHandle::connect(&signalling_id, offer_message, me_proto, signalling, &request_id).await,
+            }
+        };
+
+        pool.spawn_lazy_slot(slot_idx, connect_fut);
+        Ok(())
     }
 
     pub async fn run(self: Arc<Self>) -> Result<(), WebRtcClientError> {
