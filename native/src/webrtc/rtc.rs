@@ -856,19 +856,10 @@ fn to_v6_mapped(addr: SocketAddr) -> SocketAddr {
 
 fn from_v6_mapped(addr: SocketAddr) -> SocketAddr {
     match addr {
-        SocketAddr::V6(v6) => {
-            let octets = v6.ip().octets();
-            if octets[0..12]
-                == [
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff,
-                ]
-            {
-                let v4 = std::net::Ipv4Addr::new(octets[12], octets[13], octets[14], octets[15]);
-                SocketAddr::new(v4.into(), v6.port())
-            } else {
-                addr
-            }
-        }
+        SocketAddr::V6(v6) => match v6.ip().to_ipv4_mapped() {
+            Some(v4) => SocketAddr::new(v4.into(), v6.port()),
+            None => addr,
+        },
         _ => addr,
     }
 }
