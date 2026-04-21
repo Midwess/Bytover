@@ -397,3 +397,43 @@ impl WebRtcServer {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::parse_slot_request_id;
+
+    #[test]
+    fn parse_request_id_without_slot_suffix_is_slot_zero() {
+        let (base, idx) = parse_slot_request_id("abc-123");
+        assert_eq!(base, "abc-123");
+        assert_eq!(idx, 0);
+    }
+
+    #[test]
+    fn parse_request_id_with_slot_suffix_extracts_base_and_index() {
+        let (base, idx) = parse_slot_request_id("abc-123-slot-2");
+        assert_eq!(base, "abc-123");
+        assert_eq!(idx, 2);
+    }
+
+    #[test]
+    fn parse_request_id_with_slot_zero_suffix_returns_zero() {
+        let (base, idx) = parse_slot_request_id("session-42-slot-0");
+        assert_eq!(base, "session-42");
+        assert_eq!(idx, 0);
+    }
+
+    #[test]
+    fn parse_request_id_non_numeric_slot_part_falls_back_to_raw() {
+        let (base, idx) = parse_slot_request_id("abc-slot-notanumber");
+        assert_eq!(base, "abc-slot-notanumber");
+        assert_eq!(idx, 0);
+    }
+
+    #[test]
+    fn parse_request_id_base_may_contain_dashes() {
+        let (base, idx) = parse_slot_request_id("a-b-c-slot-5");
+        assert_eq!(base, "a-b-c");
+        assert_eq!(idx, 5);
+    }
+}

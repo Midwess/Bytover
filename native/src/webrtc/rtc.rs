@@ -314,6 +314,7 @@ impl RtcClient {
             pending_remote_candidates: VecDeque::with_capacity(8),
             candidate_rx,
             turn: turn_info,
+            reliable_buffered_amount: Arc::new(AtomicUsize::new(0)),
         };
 
         for candidate in ip_candidates {
@@ -334,6 +335,7 @@ impl RtcClient {
 
     fn spawn_thread(self) -> RtcHandle {
         let channel_ids = self.channel_ids;
+        let reliable_buffered_amount = Arc::clone(&self.reliable_buffered_amount);
         let (event_tx, event_rx) = tokio::sync::mpsc::channel::<RtcEvent>(5);
         let (data_tx, data_rx) = tokio::sync::mpsc::channel::<(Vec<u8>, ChannelId)>(16);
         let thread_handle = std::thread::Builder::new()

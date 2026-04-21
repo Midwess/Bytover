@@ -36,7 +36,7 @@ fn main() -> Result<(), MainErrors> {
 async fn async_main() -> Result<(), MainErrors> {
     log::info!("Starting relay server...");
 
-    let turn_port = 19101;
+    let turn_port = env::var("TURN_PORT").unwrap_or_else(|_| "19101".to_string()).parse().unwrap();
     let public_addresses = discover_public_addresses().await.map_err(MainErrors::ExecutionError)?.retain_families(true, true);
 
     let turn_external_addr = turn_external_addr(&public_addresses, turn_port).map_err(MainErrors::ExecutionError)?;
