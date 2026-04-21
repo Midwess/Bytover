@@ -1,7 +1,7 @@
-use std::sync::Arc;
+use std::future::Future;
 
 use str0m::channel::ChannelId;
-use tokio::sync::Mutex;
+use tokio::sync::mpsc;
 
 use crate::webrtc::client::WebRtcClientError;
 use crate::webrtc::rtc::{ChannelIds, RtcEvent, RtcHandle};
@@ -26,18 +26,67 @@ impl Slot {
     }
 }
 
-pub struct ConnectionPool {
-    slots: Mutex<Vec<Slot>>,
+pub enum PoolCommand {
+    InstallHandle {
+        idx: usize,
+        handle: RtcHandle,
+        event_rx: Option<mpsc::Receiver<RtcEvent>>,
+    },
+    MarkFailed {
+        idx: usize,
+    },
+    MarkDead {
+        idx: usize,
+    },
+}
+
+#[derive(Clone)]
+pub struct PoolHandle {
+    cmd_tx: mpsc::Sender<PoolCommand>,
     channel_ids: ChannelIds,
-    event_tx: tokio::sync::mpsc::Sender<(usize, RtcEvent)>,
+}
+
+impl PoolHandle {
+    pub fn channel_ids(&self) -> ChannelIds {
+        self.channel_ids
+    }
+
+    pub fn spawn_lazy_slot<F>(&self, idx: usize, connect_fut: F)
+    where
+        F: Future<Output = Result<RtcHandle, WebRtcClientError>> + Send + 'static,
+    {
+        let cmd_tx = self.cmd_tx.clone();
+        tokio::spawn(async move {
+            match connect_fut.await {
+                Ok(mut handle) => {
+                    let event_rx = handle.take_event_rx();
+                    let _ = cmd_tx
+                        .send(PoolCommand::InstallHandle { idx, handle, event_rx })
+                        .await;
+                }
+                Err(e) => {
+                    log::warn!("[pool] slot {} failed to connect: {:?}", idx, e);
+                    let _ = cmd_tx.send(PoolCommand::MarkFailed { idx }).await;
+                }
+            }
+        });
+    }
+}
+
+pub struct ConnectionPool {
+    slots: Vec<Slot>,
+    channel_ids: ChannelIds,
+    event_tx: mpsc::Sender<(usize, RtcEvent)>,
+    cmd_tx: mpsc::Sender<PoolCommand>,
+    cmd_rx: mpsc::Receiver<PoolCommand>,
 }
 
 impl ConnectionPool {
     pub fn new_with_primary(
         mut primary: RtcHandle,
         total_slots: usize,
-        event_tx: tokio::sync::mpsc::Sender<(usize, RtcEvent)>,
-    ) -> Arc<Self> {
+        event_tx: mpsc::Sender<(usize, RtcEvent)>,
+    ) -> Self {
         let channel_ids = *primary.channel_ids();
         let primary_event_rx = primary.take_event_rx();
 
@@ -55,80 +104,80 @@ impl ConnectionPool {
             });
         }
 
-        let pool = Arc::new(Self {
-            slots: Mutex::new(slots),
-            channel_ids,
-            event_tx: event_tx.clone(),
-        });
+        let (cmd_tx, cmd_rx) = mpsc::channel(16);
 
         if let Some(rx) = primary_event_rx {
-            Self::spawn_slot_event_forwarder(Arc::clone(&pool), 0, rx);
+            Self::spawn_slot_event_forwarder(0, rx, event_tx.clone(), cmd_tx.clone());
         }
 
-        pool
+        Self {
+            slots,
+            channel_ids,
+            event_tx,
+            cmd_tx,
+            cmd_rx,
+        }
+    }
+
+    pub fn handle(&self) -> PoolHandle {
+        PoolHandle {
+            cmd_tx: self.cmd_tx.clone(),
+            channel_ids: self.channel_ids,
+        }
     }
 
     pub fn channel_ids(&self) -> ChannelIds {
         self.channel_ids
     }
 
-    pub fn spawn_lazy_slot<F>(self: &Arc<Self>, idx: usize, connect_fut: F)
-    where
-        F: std::future::Future<Output = Result<RtcHandle, WebRtcClientError>> + Send + 'static,
-    {
-        let pool = Arc::clone(self);
-        tokio::spawn(async move {
-            match connect_fut.await {
-                Ok(mut handle) => {
-                    let event_rx = handle.take_event_rx();
-                    let installed = {
-                        let mut slots = pool.slots.lock().await;
-                        if let Some(slot) = slots.get_mut(idx) {
-                            slot.handle = Some(handle);
-                            slot.state = SlotState::Ready;
-                            true
-                        } else {
-                            false
-                        }
-                    };
-                    if installed {
-                        log::info!("[pool] slot {} connected and ready", idx);
-                        if let Some(rx) = event_rx {
-                            Self::spawn_slot_event_forwarder(Arc::clone(&pool), idx, rx);
-                        }
-                    }
-                }
-                Err(e) => {
-                    log::warn!("[pool] slot {} failed to connect: {:?}", idx, e);
-                    let mut slots = pool.slots.lock().await;
-                    if let Some(slot) = slots.get_mut(idx) {
-                        slot.state = SlotState::Failed;
-                    }
-                }
-            }
-        });
+    pub async fn recv_command(&mut self) -> Option<PoolCommand> {
+        self.cmd_rx.recv().await
     }
 
-    fn spawn_slot_event_forwarder(pool: Arc<Self>, idx: usize, mut event_rx: tokio::sync::mpsc::Receiver<RtcEvent>) {
-        let event_tx = pool.event_tx.clone();
+    pub fn apply(&mut self, cmd: PoolCommand) {
+        match cmd {
+            PoolCommand::InstallHandle { idx, handle, event_rx } => {
+                let Some(slot) = self.slots.get_mut(idx) else { return };
+                slot.handle = Some(handle);
+                slot.state = SlotState::Ready;
+                log::info!("[pool] slot {idx} connected and ready");
+                if let Some(rx) = event_rx {
+                    Self::spawn_slot_event_forwarder(idx, rx, self.event_tx.clone(), self.cmd_tx.clone());
+                }
+            }
+            PoolCommand::MarkFailed { idx } => {
+                if let Some(slot) = self.slots.get_mut(idx) {
+                    slot.state = SlotState::Failed;
+                }
+            }
+            PoolCommand::MarkDead { idx } => {
+                if let Some(slot) = self.slots.get_mut(idx) {
+                    slot.state = SlotState::Dead;
+                    slot.handle = None;
+                }
+            }
+        }
+    }
+
+    fn spawn_slot_event_forwarder(
+        idx: usize,
+        mut event_rx: mpsc::Receiver<RtcEvent>,
+        event_tx: mpsc::Sender<(usize, RtcEvent)>,
+        cmd_tx: mpsc::Sender<PoolCommand>,
+    ) {
         tokio::spawn(async move {
             while let Some(event) = event_rx.recv().await {
                 if event_tx.send((idx, event)).await.is_err() {
                     return;
                 }
             }
-
-            let mut slots = pool.slots.lock().await;
-            if let Some(slot) = slots.get_mut(idx) {
-                slot.state = SlotState::Dead;
-                slot.handle = None;
-            }
+            let _ = cmd_tx.send(PoolCommand::MarkDead { idx }).await;
         });
     }
 
-    pub async fn try_send_reliable(&self, data: &[u8]) -> bool {
-        let slots = self.slots.lock().await;
-        let candidates = slots
+    pub fn try_send_reliable(&self, data: &[u8]) -> bool {
+        let candidates = self
+            .slots
             .iter()
             .filter(|s| s.is_ready())
             .filter_map(|s| s.handle.as_ref().map(|h| (s.index, h.buffered_amount())));
@@ -136,15 +185,14 @@ impl ConnectionPool {
         let Some(idx) = pick_least_buffered(candidates) else {
             return false;
         };
-        match slots.get(idx).and_then(|s| s.handle.as_ref()) {
+        match self.slots.get(idx).and_then(|s| s.handle.as_ref()) {
             Some(handle) => handle.send(data, self.channel_ids.reliable),
             None => false,
         }
     }
 
-    pub async fn try_send_control(&self, data: &[u8], channel_id: ChannelId) -> bool {
-        let slots = self.slots.lock().await;
-        let Some(slot) = slots.first() else { return false };
+    pub fn try_send_control(&self, data: &[u8], channel_id: ChannelId) -> bool {
+        let Some(slot) = self.slots.first() else { return false };
         if !slot.is_ready() {
             return false;
         }
@@ -154,19 +202,16 @@ impl ConnectionPool {
         }
     }
 
-    pub async fn slot0_alive(&self) -> bool {
-        let slots = self.slots.lock().await;
-        slots.first().map(|s| s.is_ready()).unwrap_or(false)
+    pub fn slot0_alive(&self) -> bool {
+        self.slots.first().map(|s| s.is_ready()).unwrap_or(false)
     }
 
-    pub async fn alive_count(&self) -> usize {
-        let slots = self.slots.lock().await;
-        slots.iter().filter(|s| s.is_ready()).count()
+    pub fn alive_count(&self) -> usize {
+        self.slots.iter().filter(|s| s.is_ready()).count()
     }
 
-    pub async fn shutdown_all(&self) {
-        let mut slots = self.slots.lock().await;
-        for slot in slots.iter_mut() {
+    pub fn shutdown_all(&mut self) {
+        for slot in self.slots.iter_mut() {
             if let Some(mut handle) = slot.handle.take() {
                 handle.shutdown();
             }

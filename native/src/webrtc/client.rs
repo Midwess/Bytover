@@ -28,7 +28,7 @@ use shared::repository::local_resource::LocalResourceRepository;
 use shared::shell::api::CoreRequest;
 use shared::utils::compression::is_compressible;
 
-use crate::webrtc::pool::ConnectionPool;
+use crate::webrtc::pool::{ConnectionPool, PoolHandle};
 use crate::webrtc::rtc::{RtcEvent, RtcHandle};
 use crate::webrtc::signalling::SignallingSender;
 use str0m::channel::ChannelId;
@@ -44,7 +44,8 @@ pub type WebRtcClientError = WebRtcErrors;
 pub struct WebRtcClient {
     msg_channel: OnceCell<DirectMessageChannel>,
 
-    pool: OnceCell<Arc<ConnectionPool>>,
+    pool: YieldContainer<ConnectionPool>,
+    pool_handle: OnceCell<PoolHandle>,
     pool_event_rx: YieldContainer<mpsc::Receiver<(usize, RtcEvent)>>,
 
     peer: OnceCell<Peer>,
@@ -99,6 +100,7 @@ impl WebRtcClient {
         let (pool_event_tx, pool_event_rx) = mpsc::channel::<(usize, RtcEvent)>(32);
 
         let pool = ConnectionPool::new_with_primary(rtc_client, total_slots.max(1), pool_event_tx);
+        let pool_handle = pool.handle();
 
         let msg_channel = DirectMessageChannel::new(ordered_msg_tx);
         let peer: OnceCell<Peer> = OnceCell::new();
@@ -112,11 +114,12 @@ impl WebRtcClient {
         let outbound_packet_sender_cell = OnceCell::new();
         let _ = outbound_packet_sender_cell.set(outbound_tx);
 
-        let pool_cell: OnceCell<Arc<ConnectionPool>> = OnceCell::new();
-        let _ = pool_cell.set(pool);
+        let pool_handle_cell: OnceCell<PoolHandle> = OnceCell::new();
+        let _ = pool_handle_cell.set(pool_handle);
 
         let client = Self {
-            pool: pool_cell,
+            pool: YieldContainer::new(pool),
+            pool_handle: pool_handle_cell,
             pool_event_rx: YieldContainer::new(pool_event_rx),
             msg_channel: msg_channel_cell,
             peer,
@@ -149,7 +152,7 @@ impl WebRtcClient {
         request_id: String,
         ice_config: Option<schema::devlog::rpc_signalling::server::IceConfig>,
     ) -> Result<(), WebRtcClientError> {
-        let Some(pool) = self.pool.get().cloned() else {
+        let Some(pool_handle) = self.pool_handle.get() else {
             return Err(WebRtcClientError::Connection(
                 "Connection pool not initialized; cannot install slot".into(),
             ));
@@ -172,7 +175,7 @@ impl WebRtcClient {
             }
         };
 
-        pool.spawn_lazy_slot(slot_idx, connect_fut);
+        pool_handle.spawn_lazy_slot(slot_idx, connect_fut);
         Ok(())
     }
 
@@ -181,11 +184,11 @@ impl WebRtcClient {
             let _ = core_req.response(CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(p.clone()))).await;
         }
 
-        let pool = self
-            .pool
-            .get()
-            .ok_or_else(|| WebRtcClientError::Connection("Connection pool not initialized".to_string()))?
-            .clone();
+        let mut pool_guard = self.pool.retrieve().await?;
+        let mut pool = pool_guard
+            .value
+            .take()
+            .ok_or_else(|| WebRtcClientError::Connection("Connection pool already consumed".to_string()))?;
         let cids = pool.channel_ids();
 
         let mut pool_event_rx_guard = self.pool_event_rx.retrieve().await?;
@@ -215,14 +218,14 @@ impl WebRtcClient {
 
         let mut retry_timer = Box::pin(tokio::time::sleep(OUTBOUND_RETRY_DELAY));
 
-        while pool.slot0_alive().await {
+        while pool.slot0_alive() {
             if sending_handle.is_finished() || msg_handle.is_finished() {
                 break;
             }
 
             if self.disconnect_requested.load(Ordering::SeqCst) {
                 log::info!("[webrtc-client] Disconnect requested, stopping run loop");
-                pool.shutdown_all().await;
+                pool.shutdown_all();
                 break;
             }
 
@@ -234,8 +237,12 @@ impl WebRtcClient {
 
                 _ = self.disconnect_notify.notified() => {
                     log::info!("[webrtc-client] Disconnect notification received");
-                    pool.shutdown_all().await;
+                    pool.shutdown_all();
                     break;
+                }
+
+                Some(cmd) = pool.recv_command() => {
+                    pool.apply(cmd);
                 }
 
                 () = &mut retry_timer, if !pending_data.is_empty() => {
@@ -271,7 +278,7 @@ impl WebRtcClient {
             }
 
             if flush_pending {
-                self.flush_pending_outbound(&mut pending_data, &pool, &cids).await;
+                self.flush_pending_outbound(&mut pending_data, &pool, &cids);
                 if !pending_data.is_empty() {
                     retry_timer.as_mut().reset(tokio::time::Instant::now() + OUTBOUND_RETRY_DELAY);
                 }
@@ -285,10 +292,10 @@ impl WebRtcClient {
         Ok(())
     }
 
-    async fn flush_pending_outbound(
+    fn flush_pending_outbound(
         &self,
         pending_data: &mut VecDeque<(Vec<u8>, ChannelId)>,
-        pool: &Arc<ConnectionPool>,
+        pool: &ConnectionPool,
         cids: &crate::webrtc::rtc::ChannelIds,
     ) {
         loop {
@@ -297,9 +304,9 @@ impl WebRtcClient {
             };
 
             let sent = if channel_id == cids.reliable {
-                pool.try_send_reliable(&data).await
+                pool.try_send_reliable(&data)
             } else {
-                pool.try_send_control(&data, channel_id).await
+                pool.try_send_control(&data, channel_id)
             };
 
             if sent {
