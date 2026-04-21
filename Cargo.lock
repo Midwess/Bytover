@@ -11129,6 +11129,7 @@ dependencies = [
 [[package]]
 name = "turn-server"
 version = "4.0.1"
+source = "git+https://github.com/Midwess/turn-rs.git#01c0b7c1a247e78fe621a649b25badb7fa4a4789"
 dependencies = [
  "ahash 0.8.12",
  "anyhow",
@@ -11161,6 +11162,7 @@ dependencies = [
 [[package]]
 name = "turn-server-protos"
 version = "0.1.0"
+source = "git+https://github.com/Midwess/turn-rs.git#01c0b7c1a247e78fe621a649b25badb7fa4a4789"
 dependencies = [
  "prost 0.14.1",
  "prost-types 0.14.1",

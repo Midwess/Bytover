@@ -83,7 +83,7 @@ mdns-sd = "0.18.2"
 hmac = "0.12.1"
 actix-web = "4.11.0"
 jsonwebtoken = "9.3"
-turn-server = { path = ".dev/turn-rs" }
+turn-server = { git = "https://github.com/Midwess/turn-rs.git" }
 turn-client-proto = { version = "0.7.1", default-features = false }
 turn-types = { version = "0.7.1", default-features = false }
 byteorder = { version = "1", default-features = false }
