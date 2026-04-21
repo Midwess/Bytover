@@ -23,6 +23,9 @@ pub struct TurnRelayInfo {
     /// The wall-clock reference point established at allocation time.
     /// All `stun_proto::Instant` values are derived from this.
     pub stun_base: Instant,
+    /// Cached next deadline for the TURN client, as a `std::time::Instant`.
+    /// Updated by `drive_turn()` in the RTC event loop.
+    pub cached_timeout: Instant,
 }
 
 impl TurnRelayInfo {
@@ -33,6 +36,7 @@ impl TurnRelayInfo {
             server_addr,
             relay_addr,
             stun_base,
+            cached_timeout: Instant::now(),
         }
     }
 }
