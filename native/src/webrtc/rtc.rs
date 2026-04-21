@@ -279,9 +279,9 @@ impl RtcClient {
             buf: vec![0u8; 2000],
             cached_timeout: Instant::now(),
             channel_ids,
-            pending_transmits: VecDeque::new(),
-            early_events: Vec::new(),
-            pending_remote_candidates: VecDeque::new(),
+            pending_transmits: VecDeque::with_capacity(16),
+            early_events: Vec::with_capacity(8),
+            pending_remote_candidates: VecDeque::with_capacity(8),
             candidate_rx,
             turn: turn_info,
         };
@@ -587,7 +587,7 @@ impl RtcClient {
                 Ok(RtcOutcome::MorePending)
             }
             Output::Event(e) => {
-                log::info!("[rtc-client] str0m Event: {:?}", e);
+                log::debug!("[rtc-client] str0m Event: {:?}", e);
                 Ok(RtcOutcome::Event(e))
             }
         }
@@ -613,21 +613,20 @@ impl RtcClient {
         match tokio::time::timeout(timeout, self.socket.recv_from(&mut self.buf[..])).await {
             Ok(Ok((n, source))) => {
                 let source = from_v6_mapped(source);
-                let packet_data = self.buf[..n].to_vec();
 
                 if let Some(ref mut turn) = self.turn {
                     if source == turn.server_addr {
                         let now = stun_now(turn.stun_base);
                         let local_addr = turn.client.local_addr();
-                        let transmit = Transmit::new(&packet_data[..], StunTransportType::Udp, source, local_addr);
+                        let transmit = Transmit::new(&self.buf[..n], StunTransportType::Udp, source, local_addr);
                         match turn.client.recv(transmit, now) {
                             TurnRecvRet::PeerData(peer_data) => {
                                 let peer_addr = peer_data.peer;
                                 let relay_addr = turn.relay_addr;
-                                let data = peer_data.data().to_vec();
-                                match Receive::new(Protocol::Udp, peer_addr, relay_addr, &data) {
+                                let data = peer_data.data();
+                                match Receive::new(Protocol::Udp, peer_addr, relay_addr, data) {
                                     Ok(receive) => {
-                                        if let Err(e) = self.rtc_mut().handle_input(Input::Receive(Instant::now(), receive)) {
+                                        if let Err(e) = self.rtc.borrow_mut().handle_input(Input::Receive(Instant::now(), receive)) {
                                             log::warn!("[rtc-client] str0m handle relayed input: {}", e);
                                         }
                                     }
@@ -657,7 +656,7 @@ impl RtcClient {
                     }
                 }
 
-                self.handle_str0m_receive(source, &packet_data)?;
+                self.handle_str0m_receive(source, n)?;
             }
             Ok(Err(e)) => return Err(e.into()),
             Err(_) => {
@@ -672,15 +671,15 @@ impl RtcClient {
     }
 
     /// Handle a received packet destined for str0m.
-    fn handle_str0m_receive(&mut self, source: SocketAddr, data: &[u8]) -> Result<(), WebRtcClientError> {
+    fn handle_str0m_receive(&mut self, source: SocketAddr, buf_len: usize) -> Result<(), WebRtcClientError> {
         let local = if source.is_ipv4() {
             self.local_v4_addr.unwrap_or(self.local_addr)
         } else {
             self.local_v6_addr.unwrap_or(self.local_addr)
         };
-        match Receive::new(Protocol::Udp, source, local, data) {
+        match Receive::new(Protocol::Udp, source, local, &self.buf[..buf_len]) {
             Ok(receive) => {
-                if let Err(e) = self.rtc_mut().handle_input(Input::Receive(Instant::now(), receive)) {
+                if let Err(e) = self.rtc.borrow_mut().handle_input(Input::Receive(Instant::now(), receive)) {
                     log::warn!("[rtc-client] Input handle packet drop: {}", e);
                 }
             }
@@ -836,24 +835,9 @@ impl RtcClient {
         Ok(())
     }
 
-    /// Drive the TURN state machine: poll for timeouts, flush transmits, process events.
     async fn drive_turn(&mut self) -> Result<(), WebRtcClientError> {
-        let Some(ref mut turn) = self.turn else {
+        if self.turn.is_none() {
             return Ok(());
-        };
-
-        let now = stun_now(turn.stun_base);
-        match turn.client.poll(now) {
-            TurnPollRet::WaitUntil(deadline) => {
-                let wait = deadline.checked_duration_since(now).unwrap_or(Duration::ZERO);
-                turn.cached_timeout = Instant::now() + wait;
-            }
-            TurnPollRet::Closed => {
-                log::warn!("[rtc-client] TURN client closed");
-                self.turn = None;
-                return Ok(());
-            }
-            TurnPollRet::TcpClose { .. } | TurnPollRet::AllocateTcpSocket { .. } => {}
         }
         self.flush_turn_transmits().await
     }
@@ -912,7 +896,7 @@ fn should_wait_for_turn_channel(turn: &TurnRelayInfo, candidate: &str0m::Candida
 
 #[cfg(test)]
 mod tests {
-    use super::remote_candidate_permission_addr;
+    use super::{from_v6_mapped, remote_candidate_permission_addr};
     use str0m::{Candidate, CandidateKind};
 
     #[test]
@@ -953,5 +937,24 @@ mod tests {
             remote_candidate_permission_addr(&candidate),
             "127.0.0.1:54336".parse::<std::net::SocketAddr>().unwrap()
         );
+    }
+
+    #[test]
+    fn from_v6_mapped_passes_through_plain_ipv4() {
+        let addr: std::net::SocketAddr = "192.0.2.1:8080".parse().unwrap();
+        assert_eq!(from_v6_mapped(addr), addr);
+    }
+
+    #[test]
+    fn from_v6_mapped_passes_through_non_mapped_v6() {
+        let addr: std::net::SocketAddr = "[2001:db8::1]:443".parse().unwrap();
+        assert_eq!(from_v6_mapped(addr), addr);
+    }
+
+    #[test]
+    fn from_v6_mapped_unwraps_v4_mapped_v6() {
+        let v6: std::net::SocketAddr = "[::ffff:192.0.2.1]:9000".parse().unwrap();
+        let expected: std::net::SocketAddr = "192.0.2.1:9000".parse().unwrap();
+        assert_eq!(from_v6_mapped(v6), expected);
     }
 }
