@@ -37,6 +37,7 @@ bytes = { workspace = true }
 anyhow = { workspace = true }
 mime_guess = { workspace = true }
 tokio-util = {workspace = true}
+tokio-stream = { workspace = true }
 redb = { workspace = true }
 futures = { workspace = true }
 serde_json = { workspace = true }

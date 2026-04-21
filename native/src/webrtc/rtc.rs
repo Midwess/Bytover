@@ -1,4 +1,7 @@
+use futures_util::StreamExt;
+use schema::devlog::rpc_signalling::server::OfferMessage;
 use socket2::{Domain, Socket, Type};
+use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
@@ -7,15 +10,12 @@ use str0m::net::{Protocol, Receive};
 use str0m::{Event, IceConnectionState, Input, Output, Rtc, RtcConfig};
 use stun_proto::agent::Transmit;
 use stun_proto::types::TransportType as StunTransportType;
-use turn_client_proto::api::TurnClientApi;
-use turn_client_proto::api::{CreatePermissionError, SendError};
+use turn_client_proto::api::{BindChannelError, TurnClientApi};
 use turn_client_proto::udp::{TurnEvent, TurnPollRet, TurnRecvRet};
-use turn_types::TransportType;
 
-use schema::devlog::rpc_signalling::server::OfferMessage;
-
+use crate::config::is_relay_only;
 use crate::webrtc::client::{WebRtcClientError, MAX_BUFFER_SIZE};
-use crate::webrtc::ice::IceAgent;
+use crate::webrtc::ice::{strip_candidates_from_sdp, IceAgent};
 use crate::webrtc::signalling::SignallingSender;
 use crate::webrtc::turn::{stun_now, TurnRelayInfo};
 
@@ -34,7 +34,9 @@ pub struct ChannelIds {
 /// str0m never emits Failed/Closed ICE states, so we need this timeout.
 const ICE_DISCONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Maximum number of consecutive `MorePending` cycles
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Maximum number of consecutive `MorePending` cycles.
 const MAX_PENDING_SPINS_PER_STEP: usize = 8;
 
 /// Reliable channel low watermark that triggers a refill event from str0m.
@@ -49,16 +51,13 @@ pub enum RtcEvent {
     Error(WebRtcClientError),
 }
 
-/// Outcome of a single poll operation
+/// Outcome of a single poll operation.
 #[derive(Debug)]
 pub enum RtcOutcome {
     Event(Event),
     Idle(Instant),
     MorePending,
 }
-
-/// Commands sent from outside into the RTC thread.
-// RtcCommand enum removed, replaced with (Vec<u8>, ChannelId) tuple for simplicity
 
 /// Async-friendly handle returned from connect(). Communicates with the
 /// dedicated OS thread that drives the RTC networking loop.
@@ -93,11 +92,9 @@ impl RtcHandle {
 
     /// Send data on a channel. Returns true if the command was queued.
     pub fn send(&self, data: &[u8], channel_id: ChannelId) -> bool {
-        if let Some(ref tx) = self.data_tx {
-            tx.try_send((data.to_vec(), channel_id)).is_ok()
-        } else {
-            false
-        }
+        self.data_tx
+            .as_ref()
+            .is_some_and(|tx| tx.try_send((data.to_vec(), channel_id)).is_ok())
     }
 
     pub fn channel_ids(&self) -> &ChannelIds {
@@ -124,7 +121,7 @@ impl Drop for RtcHandle {
 }
 
 struct RtcClient {
-    rtc: Rtc,
+    rtc: RefCell<Rtc>,
     socket: tokio::net::UdpSocket,
     local_addr: SocketAddr,
     local_v4_addr: Option<SocketAddr>,
@@ -133,13 +130,11 @@ struct RtcClient {
     cached_timeout: Instant,
     channel_ids: ChannelIds,
     pending_transmits: VecDeque<(Vec<u8>, str0m::channel::ChannelId)>,
-    /// Events received during the connect/handshake phase that need to be
-    /// replayed once the run loop starts (e.g. early ChannelData).
     early_events: Vec<Event>,
-    /// TURN relay info if TURN allocation succeeded during ICE gathering.
+    pending_remote_candidates: VecDeque<str0m::Candidate>,
+    candidate_rx: tokio::sync::mpsc::Receiver<str0m::Candidate>,
+    /// TURN relay state machine for relayed traffic. `None` when operating P2P-only.
     turn: Option<TurnRelayInfo>,
-    /// Duration until next TURN poll is needed (computed by drive_turn).
-    turn_wait: Option<Duration>,
 }
 
 impl RtcClient {
@@ -150,8 +145,6 @@ impl RtcClient {
         signalling: SignallingSender,
         request_id: &str,
     ) -> Result<RtcHandle, WebRtcClientError> {
-        // Fetch relay config (TURN servers) from signalling server.
-        // Falls back to P2P-only if unavailable.
         let config = match signalling.fetch_relay_config(signalling_id).await {
             Ok(cfg) => {
                 log::info!("[rtc-client] Using relay config with {} URLs", cfg.urls.len());
@@ -174,11 +167,21 @@ impl RtcClient {
 
         let local_addr = socket.local_addr()?;
 
-        let (candidates, relay_info) = IceAgent::gather_candidates(&socket, &config)
+        let (candidates, turn_info) = IceAgent::gather_candidates(&socket, &config)
             .await
             .map_err(|e| WebRtcClientError::Signalling(e.to_string()))?;
+        match &turn_info {
+            Some(info) => log::info!(
+                "[rtc-client] TURN relay available, relay addr: {}",
+                info.relay_addr
+            ),
+            None => log::info!("[rtc-client] No TURN relay, operating P2P-only"),
+        }
 
-        let config = RtcConfig::default().set_sctp_max_message_size(256 * 1024).set_sctp_buffer_size(5 * 1024 * 1024);
+        let config = RtcConfig::default()
+            .set_sctp_max_message_size(256 * 1024)
+            .set_sctp_buffer_size(5 * 1024 * 1024)
+            .set_stats_interval(Some(std::time::Duration::from_secs(10)));
 
         let mut rtc = config.build(Instant::now());
         let mut local_v4_addr = None;
@@ -194,10 +197,11 @@ impl RtcClient {
             rtc.add_local_candidate(candidate);
         }
 
-        let offer_sdp = IceAgent::resolve_remote_candidates(&offer_message.sdp);
-        log::info!("Received offer sdp: {offer_sdp}");
+        let stripped_offer_sdp = strip_candidates_from_sdp(&offer_message.sdp);
+        log::info!("Stripped offer SDP (candidates removed for early answer)");
 
-        let offer = str0m::change::SdpOffer::from_sdp_string(&offer_sdp).map_err(|e| WebRtcClientError::Sdp(e.to_string()))?;
+        let offer = str0m::change::SdpOffer::from_sdp_string(&stripped_offer_sdp)
+            .map_err(|e| WebRtcClientError::Sdp(e.to_string()))?;
 
         let reliable_id = rtc.direct_api().create_data_channel(ChannelConfig {
             label: "reliable".to_string(),
@@ -223,15 +227,51 @@ impl RtcClient {
             ordered_msg: ordered_msg_id,
         };
 
-        let answer = rtc.sdp_api().accept_offer(offer).map_err(|e| WebRtcClientError::Rtc(e.to_string()))?;
+        let answer = rtc
+            .sdp_api()
+            .accept_offer(offer)
+            .map_err(|e| WebRtcClientError::Rtc(e.to_string()))?;
 
-        signalling
-            .send_answer(answer.to_sdp_string(), me, request_id)
-            .await
-            .map_err(|e| WebRtcClientError::Signalling(e.to_string()))?;
+        let answer_sdp = answer.to_sdp_string();
 
-        let client = Self {
-            rtc,
+        if is_relay_only() {
+            let candidate_lines: Vec<&str> = answer_sdp.lines().filter(|l| l.starts_with("a=candidate:")).collect();
+            log::info!("[rtc-client] Answer SDP contains {} candidate line(s):", candidate_lines.len());
+            for line in &candidate_lines {
+                log::info!("[rtc-client]   {}", line);
+            }
+            if candidate_lines.is_empty() {
+                log::warn!("[rtc-client] WARNING: Answer SDP has NO candidates — offerer won't be able to connect!");
+            }
+        }
+
+        let answer_sdp = if is_relay_only() {
+            answer_sdp.replace("a=ice-options:trickle\r\n", "a=ice-options:trickle relay-only\r\n")
+        } else {
+            answer_sdp
+        };
+        let me_clone = me.clone();
+        let request_id_owned = request_id.to_string();
+        let original_sdp = offer_message.sdp.clone();
+
+        let ip_candidates = IceAgent::parse_ip_based_candidates(&original_sdp);
+
+        let (candidate_tx, candidate_rx) = tokio::sync::mpsc::channel::<str0m::Candidate>(16);
+
+        tokio::spawn(async move {
+            let stream = IceAgent::resolve_remote_candidates_stream(&original_sdp);
+            futures_util::pin_mut!(stream);
+            while let Some(candidate) = stream.next().await {
+                log::debug!("[rtc-client] Resolved remote candidate: {}", candidate);
+                if candidate_tx.send(candidate).await.is_err() {
+                    break;
+                }
+            }
+            log::info!("[rtc-client] Remote candidate resolution complete");
+        });
+
+        let mut client = Self {
+            rtc: RefCell::new(rtc),
             socket,
             local_addr,
             local_v4_addr,
@@ -239,11 +279,22 @@ impl RtcClient {
             buf: vec![0u8; 2000],
             cached_timeout: Instant::now(),
             channel_ids,
-            pending_transmits: VecDeque::new(),
-            early_events: Vec::new(),
-            turn: relay_info,
-            turn_wait: None,
+            pending_transmits: VecDeque::with_capacity(16),
+            early_events: Vec::with_capacity(8),
+            pending_remote_candidates: VecDeque::with_capacity(8),
+            candidate_rx,
+            turn: turn_info,
         };
+
+        for candidate in ip_candidates {
+            client.add_or_defer_remote_candidate(candidate, "IP-based");
+        }
+
+        if let Err(e) = signalling.send_answer(answer_sdp, me_clone, &request_id_owned).await {
+            log::warn!("[rtc-client] Failed to send answer: {}", e);
+        }
+
+        log::info!("[rtc-client] Answer sent, candidate resolution continuing in background");
 
         let connected = false;
         let client = client.wait_for_connected(connected).await?;
@@ -251,16 +302,12 @@ impl RtcClient {
         Ok(client.spawn_thread())
     }
 
-    /// Spawn the dedicated OS thread and return an RtcHandle.
     fn spawn_thread(self) -> RtcHandle {
         let channel_ids = self.channel_ids;
         let (event_tx, event_rx) = tokio::sync::mpsc::channel::<RtcEvent>(5);
         let (data_tx, data_rx) = tokio::sync::mpsc::channel::<(Vec<u8>, ChannelId)>(16);
-
-        // Use an 8 MB stack to avoid overflow during high-throughput transmit bursts.
         let thread_handle = std::thread::Builder::new()
             .name("rtc-io".to_string())
-            .stack_size(8 * 1024 * 1024)
             .spawn(move || {
                 let rt = tokio::runtime::Builder::new_current_thread()
                     .enable_all()
@@ -300,17 +347,15 @@ impl RtcClient {
         let mut ice_disconnected_since: Option<Instant> = None;
 
         let mut pending_spins = 0usize;
-        while self.rtc.is_alive() {
+        while self.rtc_mut().is_alive() {
             if let Some(since) = ice_disconnected_since {
                 if since.elapsed() >= ICE_DISCONNECT_TIMEOUT {
                     log::info!("[rtc-client] ICE disconnected for {:?}, tearing down", ICE_DISCONNECT_TIMEOUT);
-                    self.rtc.disconnect();
+                    self.rtc_mut().disconnect();
                     break;
                 }
             }
 
-            self.drain_pending_transmits();
-            self.fill_transmit_queue(&mut data_rx);
             self.drain_pending_transmits();
 
             let outcome = match self.poll_event().await {
@@ -381,54 +426,91 @@ impl RtcClient {
                     }
                 }
                 res = data_rx.recv() => {
-                    match res {
-                        Some(cmd) => {
-                            self.enqueue_command(cmd);
-                            self.drain_pending_transmits();
-                        }
-                        None => {
-                            log::info!("[rtc-client] RTC I/O thread shutdown: data channel closed");
-                            self.rtc.disconnect();
-                            break;
-                        }
+                    let Some(cmd) = res else {
+                        log::info!("[rtc-client] RTC I/O thread shutdown: data channel closed");
+                        self.rtc_mut().disconnect();
+                        break;
+                    };
+                    if !self.pending_transmits.is_empty() || !self.send(&cmd.0, cmd.1) {
+                        self.pending_transmits.push_back(cmd);
                     }
                 }
             }
         }
 
-        self.rtc.disconnect();
+        self.rtc_mut().disconnect();
         log::info!("[rtc-client] RTC connection no longer alive, stopping I/O thread");
     }
 
-    /// Handle a command.
-    fn enqueue_command(&mut self, cmd: (Vec<u8>, ChannelId)) {
-        self.pending_transmits.push_back(cmd);
-    }
-
     async fn wait_for_connected(mut self, mut connected: bool) -> Result<Self, WebRtcClientError> {
+        let connect_deadline = Instant::now() + CONNECT_TIMEOUT;
+        let mut pending_spins = 0usize;
         loop {
-            if let RtcOutcome::Event(event) = self.poll_event().await? {
-                match event {
-                    Event::Connected => {
-                        log::info!("[rtc-client] DTLS Connected");
-                        connected = true;
+            self.drive_turn().await?;
+            self.promote_ready_remote_candidates();
+
+            loop {
+                match self.candidate_rx.try_recv() {
+                    Ok(candidate) => {
+                        self.add_or_defer_remote_candidate(candidate, "resolved");
                     }
-                    Event::IceConnectionStateChange(state) => {
-                        log::info!("[rtc-client] ICE state: {:?}", state);
-                        if matches!(state, IceConnectionState::Disconnected) {
-                            return Err(WebRtcClientError::Connection("Peer disconnected during setup".into()));
+                    Err(tokio::sync::mpsc::error::TryRecvError::Empty) => break,
+                    Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
+                        log::info!("[rtc-client] Candidate resolution channel closed");
+                        break;
+                    }
+                }
+            }
+            self.promote_ready_remote_candidates();
+
+            match self.poll_event().await? {
+                RtcOutcome::Event(event) => {
+                    pending_spins = 0;
+                    match event {
+                        Event::Connected => {
+                            log::info!("[rtc-client] DTLS Connected");
+                            connected = true;
+                        }
+                        Event::IceConnectionStateChange(state) => {
+                            log::info!("[rtc-client] ICE state: {:?}", state);
+                            if matches!(state, IceConnectionState::Disconnected) {
+                                return Err(WebRtcClientError::Connection("Peer disconnected during setup".into()));
+                            }
+                        }
+                        Event::ChannelOpen(cid, _) => {
+                            log::info!("[rtc-client] Channel {:?} opened during connect phase", cid);
+                        }
+                        Event::ChannelData(_) => {
+                            log::info!("[rtc-client] Buffering early ChannelData during connect phase");
+                            self.early_events.push(event);
+                        }
+                        Event::PeerStats(s) => {
+                            if let Some(pair) = &s.selected_candidate_pair {
+                                log::info!(
+                                    "[rtc-client] Selected candidate pair -- local: {} ({:?}), remote: {} ({:?})",
+                                    pair.local.addr,
+                                    pair.protocol,
+                                    pair.remote.addr,
+                                    pair.protocol,
+                                );
+                            }
+                        }
+                        _ => {
+                            log::debug!("[rtc-client] Other event during connect: {:?}", event);
                         }
                     }
-                    Event::ChannelOpen(cid, _) => {
-                        log::info!("[rtc-client] Channel {:?} opened during connect phase", cid);
+                    continue;
+                }
+                RtcOutcome::MorePending => {
+                    pending_spins += 1;
+                    if pending_spins >= MAX_PENDING_SPINS_PER_STEP {
+                        pending_spins = 0;
+                    } else {
+                        continue;
                     }
-                    Event::ChannelData(_) => {
-                        log::info!("[rtc-client] Buffering early ChannelData during connect phase");
-                        self.early_events.push(event);
-                    }
-                    _ => {
-                        log::debug!("[rtc-client] Other event during connect: {:?}", event);
-                    }
+                }
+                RtcOutcome::Idle(_) => {
+                    pending_spins = 0;
                 }
             }
 
@@ -439,7 +521,7 @@ impl RtcClient {
                     self.channel_ids.ordered_msg,
                 ]
                 .iter()
-                .all(|&cid| self.rtc.channel(cid).is_some());
+                .all(|&cid| self.rtc_mut().channel(cid).is_some());
 
                 if ready {
                     self.configure_channel_watermarks();
@@ -448,73 +530,55 @@ impl RtcClient {
                 }
             }
 
-            if !self.rtc.is_alive() {
+            if !self.rtc_mut().is_alive() {
                 return Err(WebRtcClientError::Connection("RTC connection closed".into()));
             }
 
-            let timeout = self.timeout_duration();
+            if Instant::now() >= connect_deadline {
+                return Err(WebRtcClientError::Connection("Connection timeout during handshake".into()));
+            }
+
+            let timeout = self.timeout_duration().min(connect_deadline - Instant::now());
             self.wait_for_input(timeout).await?;
+
+            self.promote_ready_remote_candidates();
         }
     }
 
     async fn poll_event(&mut self) -> Result<RtcOutcome, WebRtcClientError> {
-        match self.rtc.poll_output().map_err(|e| WebRtcClientError::Rtc(e.to_string()))? {
+        let output = self.rtc_mut().poll_output().map_err(|e| WebRtcClientError::Rtc(e.to_string()))?;
+        match output {
             Output::Timeout(t) => {
                 self.cached_timeout = t;
                 Ok(RtcOutcome::Idle(t))
             }
             Output::Transmit(t) => {
-                let peer_addr = from_v6_mapped(t.destination);
-                let socket_dest = to_v6_mapped(peer_addr);
+                let dest = from_v6_mapped(t.destination);
 
-                if let Some(turn) = self.turn.as_mut() {
-                    if from_v6_mapped(t.source) == turn.relay_addr {
-                        if !turn.client.have_permission(TransportType::Udp, peer_addr.ip()) {
-                            match turn.client.create_permission(TransportType::Udp, peer_addr.ip(), stun_now(turn.stun_base)) {
-                                Ok(()) | Err(CreatePermissionError::AlreadyExists) => {
-                                    self.drive_turn().await;
-                                    return Ok(RtcOutcome::MorePending);
-                                }
-                                Err(e) => {
-                                    log::warn!("[rtc-client] Failed to create TURN permission for {}: {}", peer_addr, e);
-                                    return Ok(RtcOutcome::MorePending);
+                if let Some(ref mut turn) = self.turn {
+                    let source = from_v6_mapped(t.source);
+                    if source == turn.relay_addr {
+                        let now = stun_now(turn.stun_base);
+                        let payload: &[u8] = &t.contents;
+                        match turn.client.send_to(StunTransportType::Udp, dest, payload, now) {
+                            Ok(Some(transmit_build)) => {
+                                let built = transmit_build.build();
+                                let send_addr = to_v6_mapped(built.to);
+                                if let Err(e) = self.socket.send_to(&built.data, send_addr).await {
+                                    log::warn!("[rtc-client] TURN relay send error to {}: {}", send_addr, e);
                                 }
                             }
-                        }
-
-                        let tx_result = turn.client.send_to(TransportType::Udp, peer_addr, &*t.contents, stun_now(turn.stun_base));
-                        let transmit = match tx_result {
-                            Ok(Some(transmit)) => transmit,
-                            Ok(None) => return Ok(RtcOutcome::MorePending),
-                            Err(SendError::NoPermission) => {
-                                log::debug!("[rtc-client] TURN permission still pending for peer {}", peer_addr);
-                                return Ok(RtcOutcome::MorePending);
-                            }
+                            Ok(None) => {}
                             Err(e) => {
-                                log::warn!("[rtc-client] TURN send skipped for peer {}: {}", peer_addr, e);
-                                return Ok(RtcOutcome::MorePending);
+                                log::warn!("[rtc-client] TURN send_to failed for {}: {}", dest, e);
                             }
-                        };
-
-                        let out = transmit.build();
-                        let turn_server_dest = to_v6_mapped(out.to);
-                        if let Err(e) = self.socket.send_to(&out.data, turn_server_dest).await {
-                            log::warn!("[rtc-client] Failed to send TURN relay packet: {}", e);
-                            return Err(WebRtcClientError::Connection(format!("Failed to send packet: {e}")));
                         }
-
+                        self.flush_turn_transmits().await?;
                         return Ok(RtcOutcome::MorePending);
                     }
-
-                    // Regular peer packet - route directly
-                    if let Err(e) = self.socket.send_to(&t.contents, socket_dest).await {
-                        log::warn!("[rtc-client] Failed to send to {}: {}", socket_dest, e);
-                        return Err(WebRtcClientError::Connection(format!("Failed to send packet: {e}")));
-                    }
-
-                    return Ok(RtcOutcome::MorePending);
                 }
 
+                let socket_dest = to_v6_mapped(dest);
                 if let Err(e) = self.socket.send_to(&t.contents, socket_dest).await {
                     log::warn!("[rtc-client] Failed to send to {}: {}", socket_dest, e);
                     return Err(WebRtcClientError::Connection(format!("Failed to send packet: {e}")));
@@ -523,80 +587,24 @@ impl RtcClient {
                 Ok(RtcOutcome::MorePending)
             }
             Output::Event(e) => {
-                log::info!("[rtc-client] str0m Event: {:?}", e);
+                log::debug!("[rtc-client] str0m Event: {:?}", e);
                 Ok(RtcOutcome::Event(e))
             }
         }
     }
 
-    /// Drive the TURN state machine forward, processing events and transmitting as needed.
-    /// Returns the Duration until the next poll, or None if TURN is not active.
-    async fn drive_turn(&mut self) -> Option<Duration> {
-        let turn = self.turn.as_mut()?;
-
-        let now = stun_now(turn.stun_base);
-
-        // Advance the TURN client state
-        let wait_deadline = match turn.client.poll(now) {
-            TurnPollRet::WaitUntil(deadline) => deadline,
-            TurnPollRet::Closed => {
-                log::warn!("[rtc-client] TURN client closed");
-                self.turn = None;
-                return None;
-            }
-            TurnPollRet::TcpClose { .. } | TurnPollRet::AllocateTcpSocket { .. } => {
-                // UDP client won't get these - shouldn't happen
-                return None;
-            }
-        };
-
-        // Process any TURN events
-        while let Some(event) = turn.client.poll_event() {
-            match event {
-                TurnEvent::AllocationCreated(_, relayed) => {
-                    log::info!("[rtc-client] TURN allocation confirmed, relay: {}", relayed);
-                }
-                TurnEvent::AllocationCreateFailed(family) => {
-                    log::warn!("[rtc-client] TURN allocation failed for family: {:?}", family);
-                }
-                TurnEvent::PermissionCreated(transport, peer) => {
-                    log::info!("[rtc-client] TURN permission created for {:?} peer {}", transport, peer);
-                }
-                TurnEvent::PermissionCreateFailed(transport, peer) => {
-                    log::warn!("[rtc-client] TURN permission create failed for {:?} peer {}", transport, peer);
-                }
-                TurnEvent::ChannelCreated(_, _) => {}
-                TurnEvent::ChannelCreateFailed(_, _) => {}
-                TurnEvent::TcpConnected(_) => {}
-                TurnEvent::TcpConnectFailed(_) => {}
-            }
-        }
-
-        // Send any pending TURN transmits
-        let now = stun_now(turn.stun_base);
-        while let Some(transmit) = turn.client.poll_transmit(now) {
-            let dest = to_v6_mapped(transmit.to);
-            if let Err(e) = self.socket.send_to(&transmit.data, dest).await {
-                log::warn!("[rtc-client] TURN transmit failed: {}", e);
-            }
-        }
-
-        // Calculate duration until next poll and store for timeout_duration()
-        let wait = if wait_deadline > now { wait_deadline - now } else { Duration::ZERO };
-        self.turn_wait = Some(wait);
-
-        Some(wait)
-    }
-
     fn timeout_duration(&self) -> Duration {
-        let rtc_timeout = self.cached_timeout.saturating_duration_since(Instant::now());
-        let turn_timeout = self.turn_wait.unwrap_or(Duration::MAX);
-        rtc_timeout.min(turn_timeout)
+        let now = Instant::now();
+        let str0m_timeout = self.cached_timeout.saturating_duration_since(now);
+        self.turn
+            .as_ref()
+            .map_or(str0m_timeout, |turn| str0m_timeout.min(turn.cached_timeout.saturating_duration_since(now)))
     }
 
     async fn wait_for_input(&mut self, timeout: Duration) -> Result<(), WebRtcClientError> {
         if timeout.is_zero() {
-            self.rtc
+            self.drive_turn().await?;
+            self.rtc_mut()
                 .handle_input(Input::Timeout(Instant::now()))
                 .map_err(|e| WebRtcClientError::Rtc(e.to_string()))?;
             return Ok(());
@@ -605,77 +613,57 @@ impl RtcClient {
         match tokio::time::timeout(timeout, self.socket.recv_from(&mut self.buf[..])).await {
             Ok(Ok((n, source))) => {
                 let source = from_v6_mapped(source);
-                let packet_data = self.buf[..n].to_vec();
 
-                // Check if this is a TURN server packet (demux by source address)
-                if let Some(turn) = self.turn.as_mut() {
+                if let Some(ref mut turn) = self.turn {
                     if source == turn.server_addr {
-                        // Route to TURN client
                         let now = stun_now(turn.stun_base);
-                        let local = self.local_addr;
-                        let transmit = Transmit::new(&packet_data, StunTransportType::Udp, source, local);
+                        let local_addr = turn.client.local_addr();
+                        let transmit = Transmit::new(&self.buf[..n], StunTransportType::Udp, source, local_addr);
                         match turn.client.recv(transmit, now) {
                             TurnRecvRet::PeerData(peer_data) => {
-                                // Peer data through TURN relay - rebuild Receive for str0m
-                                let peer_source = peer_data.peer;
-                                let local_for_peer = if peer_source.is_ipv4() {
-                                    self.local_v4_addr.unwrap_or(self.local_addr)
-                                } else {
-                                    self.local_v6_addr.unwrap_or(self.local_addr)
-                                };
-                                match Receive::new(Protocol::Udp, peer_source, local_for_peer, peer_data.data()) {
+                                let peer_addr = peer_data.peer;
+                                let relay_addr = turn.relay_addr;
+                                let data = peer_data.data();
+                                match Receive::new(Protocol::Udp, peer_addr, relay_addr, data) {
                                     Ok(receive) => {
-                                        if let Err(e) = self.rtc.handle_input(Input::Receive(Instant::now(), receive)) {
-                                            log::warn!("[rtc-client] TURN peer data input drop: {}", e);
+                                        if let Err(e) = self.rtc.borrow_mut().handle_input(Input::Receive(Instant::now(), receive)) {
+                                            log::warn!("[rtc-client] str0m handle relayed input: {}", e);
                                         }
                                     }
                                     Err(e) => {
-                                        log::warn!("[rtc-client] Failed to parse TURN peer Receive: {}", e);
+                                        log::warn!("[rtc-client] Failed to parse Receive for relayed data: {}", e);
                                     }
                                 }
+                                self.flush_turn_transmits().await?;
+                                return Ok(());
                             }
                             TurnRecvRet::Handled => {
-                                // TURN control message handled internally
+                                log::debug!("[rtc-client] TURN control message handled from {}", source);
+                                self.flush_turn_transmits().await?;
+                                return Ok(());
                             }
-                            TurnRecvRet::Ignored(_) => {
-                                // Not a TURN message - fall through to str0m
-                                self.handle_str0m_receive(source, &packet_data)?;
-                            }
-                            TurnRecvRet::PeerIcmp {
-                                peer,
-                                transport,
-                                icmp_type,
-                                icmp_code,
-                                icmp_data,
-                            } => {
-                                log::warn!(
-                                    "[rtc-client] TURN ICMP from {:?} via {:?}: type={}, code={}, data={:?}",
-                                    peer,
-                                    transport,
-                                    icmp_type,
-                                    icmp_code,
-                                    icmp_data
+                            TurnRecvRet::Ignored(reason) => {
+                                log::debug!(
+                                    "[rtc-client] Packet from TURN server {} not a TURN message, passing to str0m. Reason: {:?}",
+                                    source, reason
                                 );
                             }
+                            TurnRecvRet::PeerIcmp { peer, .. } => {
+                                log::debug!("[rtc-client] TURN ICMP from peer {}", peer);
+                                return Ok(());
+                            }
                         }
-
-                        self.drive_turn().await;
-                    } else {
-                        // Regular peer packet - route to str0m
-                        self.handle_str0m_receive(source, &packet_data)?;
                     }
-                } else {
-                    // No TURN - route directly to str0m
-                    self.handle_str0m_receive(source, &packet_data)?;
                 }
+
+                self.handle_str0m_receive(source, n)?;
             }
             Ok(Err(e)) => return Err(e.into()),
             Err(_) => {
-                self.rtc
+                self.drive_turn().await?;
+                self.rtc_mut()
                     .handle_input(Input::Timeout(Instant::now()))
                     .map_err(|e| WebRtcClientError::Rtc(e.to_string()))?;
-                // Advance TURN state machine when timeout fires, so refreshes aren't missed
-                self.drive_turn().await;
             }
         }
 
@@ -683,15 +671,15 @@ impl RtcClient {
     }
 
     /// Handle a received packet destined for str0m.
-    fn handle_str0m_receive(&mut self, source: SocketAddr, data: &[u8]) -> Result<(), WebRtcClientError> {
+    fn handle_str0m_receive(&mut self, source: SocketAddr, buf_len: usize) -> Result<(), WebRtcClientError> {
         let local = if source.is_ipv4() {
             self.local_v4_addr.unwrap_or(self.local_addr)
         } else {
             self.local_v6_addr.unwrap_or(self.local_addr)
         };
-        match Receive::new(Protocol::Udp, source, local, data) {
+        match Receive::new(Protocol::Udp, source, local, &self.buf[..buf_len]) {
             Ok(receive) => {
-                if let Err(e) = self.rtc.handle_input(Input::Receive(Instant::now(), receive)) {
+                if let Err(e) = self.rtc.borrow_mut().handle_input(Input::Receive(Instant::now(), receive)) {
                     log::warn!("[rtc-client] Input handle packet drop: {}", e);
                 }
             }
@@ -703,28 +691,28 @@ impl RtcClient {
     }
 
     fn send(&mut self, data: &[u8], channel_id: ChannelId) -> bool {
-        if let Some(mut ch) = self.rtc.channel(channel_id) {
-            match ch.write(true, data) {
-                Ok(true) => true,
-                Ok(false) => false,
-                Err(e) => {
-                    log::error!("[rtc-client] Failed to write to channel {:?}: {:?}", channel_id, e);
-                    false
-                }
+        let mut rtc = self.rtc_mut();
+        let Some(mut ch) = rtc.channel(channel_id) else {
+            return false;
+        };
+        match ch.write(true, data) {
+            Ok(result) => result,
+            Err(e) => {
+                log::error!("[rtc-client] Failed to write to channel {:?}: {:?}", channel_id, e);
+                false
             }
-        } else {
-            false
         }
     }
 
     fn configure_channel_watermarks(&mut self) {
-        if let Some(mut channel) = self.rtc.channel(self.channel_ids.reliable) {
+        let channel_id = self.channel_ids.reliable;
+        if let Some(mut channel) = self.rtc_mut().channel(channel_id) {
             channel.set_buffered_amount_low_threshold(RELIABLE_BUFFERED_AMOUNT_LOW_THRESHOLD);
         }
     }
 
     fn channel_buffered_amount(&mut self, channel_id: ChannelId) -> Option<usize> {
-        self.rtc.channel(channel_id).map(|mut ch| ch.buffered_amount())
+        self.rtc_mut().channel(channel_id).map(|mut ch| ch.buffered_amount())
     }
 
     fn should_pause_transmit(&mut self, channel_id: ChannelId) -> bool {
@@ -752,10 +740,110 @@ impl RtcClient {
         }
     }
 
-    fn fill_transmit_queue(&mut self, data_rx: &mut tokio::sync::mpsc::Receiver<(Vec<u8>, ChannelId)>) {
-        while let Ok(cmd) = data_rx.try_recv() {
-            self.enqueue_command(cmd);
+    fn add_or_defer_remote_candidate(&mut self, candidate: str0m::Candidate, source: &str) {
+        log::debug!("[rtc-client] Received {source} remote candidate: {}", candidate);
+
+        let wait_for_channel = self.turn.as_mut().is_some_and(|turn| {
+            request_turn_channel(turn, &candidate, source);
+            should_wait_for_turn_channel(turn, &candidate)
+        });
+
+        if wait_for_channel {
+            log::debug!(
+                "[rtc-client] Deferring {source} remote candidate until TURN channel is bound for {}",
+                remote_candidate_permission_addr(&candidate)
+            );
+            self.pending_remote_candidates.push_back(candidate);
+            return;
         }
+
+        self.rtc_mut().add_remote_candidate(candidate);
+    }
+
+    fn promote_ready_remote_candidates(&mut self) {
+        if self.pending_remote_candidates.is_empty() {
+            return;
+        }
+
+        let mut pending = std::mem::take(&mut self.pending_remote_candidates);
+        while let Some(candidate) = pending.pop_front() {
+            let wait_for_channel = self
+                .turn
+                .as_ref()
+                .is_some_and(|turn| should_wait_for_turn_channel(turn, &candidate));
+            if wait_for_channel {
+                self.pending_remote_candidates.push_back(candidate);
+                continue;
+            }
+
+            log::debug!(
+                "[rtc-client] Activating deferred remote candidate after TURN channel bind: {}",
+                candidate
+            );
+            self.rtc_mut().add_remote_candidate(candidate);
+        }
+    }
+
+    /// Flush pending outgoing TURN protocol messages to the socket.
+    ///
+    /// Also drives the TURN state machine via `poll()` so that pending
+    /// transactions (CreatePermission, Refresh, etc.) are advanced before
+    /// we drain the transmit queue.
+    async fn flush_turn_transmits(&mut self) -> Result<(), WebRtcClientError> {
+        let Some(ref mut turn) = self.turn else {
+            return Ok(());
+        };
+        let now = stun_now(turn.stun_base);
+        match turn.client.poll(now) {
+            TurnPollRet::WaitUntil(deadline) => {
+                let wait = deadline.checked_duration_since(now).unwrap_or(Duration::ZERO);
+                turn.cached_timeout = Instant::now() + wait;
+            }
+            TurnPollRet::Closed => {
+                log::warn!("[rtc-client] TURN client closed during flush");
+                self.turn = None;
+                return Ok(());
+            }
+            TurnPollRet::TcpClose { .. } | TurnPollRet::AllocateTcpSocket { .. } => {}
+        }
+        let now = stun_now(turn.stun_base);
+        while let Some(transmit) = turn.client.poll_transmit(now) {
+            let send_addr = to_v6_mapped(transmit.to);
+            log::debug!(
+                "[rtc-client] TURN transmit to={} (mapped={}) from={} len={}",
+                transmit.to,
+                send_addr,
+                transmit.from,
+                transmit.data.as_ref().len()
+            );
+            if let Err(e) = self.socket.send_to(transmit.data.as_ref(), send_addr).await {
+                log::warn!("[rtc-client] TURN transmit send error to {}: {}", send_addr, e);
+            }
+        }
+        while let Some(event) = turn.client.poll_event() {
+            log::info!("[rtc-client] TURN event: {:?}", event);
+            match event {
+                TurnEvent::ChannelCreated(_, peer_addr) => {
+                    turn.mark_channel_bound(peer_addr);
+                }
+                TurnEvent::ChannelCreateFailed(_, peer_addr) => {
+                    turn.mark_channel_unbound(peer_addr);
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    async fn drive_turn(&mut self) -> Result<(), WebRtcClientError> {
+        if self.turn.is_none() {
+            return Ok(());
+        }
+        self.flush_turn_transmits().await
+    }
+
+    fn rtc_mut(&mut self) -> std::cell::RefMut<'_, Rtc> {
+        self.rtc.borrow_mut()
     }
 }
 
@@ -768,19 +856,96 @@ fn to_v6_mapped(addr: SocketAddr) -> SocketAddr {
 
 fn from_v6_mapped(addr: SocketAddr) -> SocketAddr {
     match addr {
-        SocketAddr::V6(v6) => {
-            let octets = v6.ip().octets();
-            if octets[0..12]
-                == [
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff,
-                ]
-            {
-                let v4 = std::net::Ipv4Addr::new(octets[12], octets[13], octets[14], octets[15]);
-                SocketAddr::new(v4.into(), v6.port())
-            } else {
-                addr
-            }
-        }
+        SocketAddr::V6(v6) => match v6.ip().to_ipv4_mapped() {
+            Some(v4) => SocketAddr::new(v4.into(), v6.port()),
+            None => addr,
+        },
         _ => addr,
+    }
+}
+
+fn remote_candidate_permission_addr(candidate: &str0m::Candidate) -> SocketAddr {
+    from_v6_mapped(candidate.addr())
+}
+
+fn request_turn_channel(turn: &mut TurnRelayInfo, candidate: &str0m::Candidate, source: &str) {
+    let peer_addr = remote_candidate_permission_addr(candidate);
+    let now = stun_now(turn.stun_base);
+    match turn.client.bind_channel(StunTransportType::Udp, peer_addr, now) {
+        Ok(()) | Err(BindChannelError::AlreadyExists) => {}
+        Err(e) => {
+            log::debug!("[rtc-client] TURN channel bind for {source} candidate {peer_addr}: {e}");
+        }
+    }
+}
+
+fn should_wait_for_turn_channel(turn: &TurnRelayInfo, candidate: &str0m::Candidate) -> bool {
+    is_relay_only()
+        && candidate.kind() == str0m::CandidateKind::Relayed
+        && !turn.have_bound_channel(remote_candidate_permission_addr(candidate))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{from_v6_mapped, remote_candidate_permission_addr};
+    use str0m::{Candidate, CandidateKind};
+
+    #[test]
+    fn relay_channel_peer_addr_uses_candidate_address_not_raddr() {
+        let candidate = Candidate::from_parts(
+            "relay".to_string(),
+            1,
+            str0m::net::Protocol::Udp,
+            1,
+            "127.0.0.1:54336".parse().unwrap(),
+            CandidateKind::Relayed,
+            Some("[::1]:50560".parse().unwrap()),
+            None,
+            None,
+        );
+
+        assert_eq!(
+            remote_candidate_permission_addr(&candidate),
+            "127.0.0.1:54336".parse::<std::net::SocketAddr>().unwrap()
+        );
+    }
+
+    #[test]
+    fn relay_channel_peer_addr_normalizes_ipv6_mapped_ipv4_addresses() {
+        let candidate = Candidate::from_parts(
+            "relay".to_string(),
+            1,
+            str0m::net::Protocol::Udp,
+            1,
+            "[::ffff:127.0.0.1]:54336".parse().unwrap(),
+            CandidateKind::Relayed,
+            None,
+            None,
+            None,
+        );
+
+        assert_eq!(
+            remote_candidate_permission_addr(&candidate),
+            "127.0.0.1:54336".parse::<std::net::SocketAddr>().unwrap()
+        );
+    }
+
+    #[test]
+    fn from_v6_mapped_passes_through_plain_ipv4() {
+        let addr: std::net::SocketAddr = "192.0.2.1:8080".parse().unwrap();
+        assert_eq!(from_v6_mapped(addr), addr);
+    }
+
+    #[test]
+    fn from_v6_mapped_passes_through_non_mapped_v6() {
+        let addr: std::net::SocketAddr = "[2001:db8::1]:443".parse().unwrap();
+        assert_eq!(from_v6_mapped(addr), addr);
+    }
+
+    #[test]
+    fn from_v6_mapped_unwraps_v4_mapped_v6() {
+        let v6: std::net::SocketAddr = "[::ffff:192.0.2.1]:9000".parse().unwrap();
+        let expected: std::net::SocketAddr = "192.0.2.1:9000".parse().unwrap();
+        assert_eq!(from_v6_mapped(v6), expected);
     }
 }

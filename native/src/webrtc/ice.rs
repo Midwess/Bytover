@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
+use std::pin::Pin;
 use std::time::{Duration, Instant};
 
 use str0m::Candidate;
@@ -17,6 +18,7 @@ use turn_client_proto::udp::{TurnClientUdp, TurnEvent, TurnPollRet, TurnRecvRet}
 use schema::devlog::rpc_signalling::server::IceConfig;
 
 use super::turn::{stun_now, TurnRelayInfo};
+use crate::config::is_relay_only;
 
 const STUN_TIMEOUT: Duration = Duration::from_millis(3000);
 const TURN_TIMEOUT: Duration = Duration::from_millis(5000);
@@ -879,32 +881,309 @@ async fn send_outbound_packets(socket: &tokio::net::UdpSocket, packets: Vec<Outb
     Ok(())
 }
 
+/// Strip all ICE candidate lines from an SDP string.
+///
+/// Removes:
+///   - Lines starting with `a=candidate:`
+///   - Lines starting with `a=end-of-candidates`
+///
+/// Preserves everything else (ICE ufrag/pwd, fingerprint, m-lines, SCTP, etc.).
+///
+/// This is used to produce a minimal SDP offer that can be accepted without
+/// waiting for DNS resolution of candidate hostnames.
+pub fn strip_candidates_from_sdp(sdp: &str) -> String {
+    sdp.lines()
+        .filter(|line| {
+            let trimmed = line.trim();
+            !trimmed.starts_with("a=candidate:") && !trimmed.starts_with("a=end-of-candidates")
+        })
+        .collect::<Vec<_>>()
+        .join("\r\n")
+}
+
+/// Parse a candidate line and resolve its hostname to an IP address.
+///
+/// Returns the parsed Candidate with resolved IP, or an error string on failure.
+/// This is a blocking DNS operation meant to be called from within spawn_blocking.
+fn resolve_candidate_line(line: &str) -> Result<Candidate, String> {
+    // Strip "a=candidate:" prefix if present
+    let candidate_str = line
+        .trim()
+        .strip_prefix("a=candidate:")
+        .unwrap_or(line.trim());
+
+    let parts: Vec<&str> = candidate_str.split_whitespace().collect();
+    if parts.len() < 6 {
+        return Err(format!("malformed candidate line: {}", line));
+    }
+
+    let foundation = parts[0].to_string();
+    let component_id: u16 = parts[1]
+        .parse()
+        .map_err(|e| format!("bad component-id: {}", e))?;
+    let proto_str = parts[2];
+    let proto = str0m::net::Protocol::try_from(proto_str)
+        .map_err(|_| format!("invalid protocol: {}", proto_str))?;
+    let prio: u32 = parts[3]
+        .parse()
+        .map_err(|e| format!("bad priority: {}", e))?;
+    let hostname = parts[4];
+    let port_str = parts[5];
+    let port: u16 = port_str
+        .parse()
+        .map_err(|e| format!("bad port: {}", e))?;
+
+    // Do DNS lookup for hostname
+    let lookup = format!("{}:{}", hostname, port);
+    let mut addrs = lookup
+        .to_socket_addrs()
+        .map_err(|e| format!("DNS lookup failed for {}: {}", hostname, e))?;
+    let addr = addrs
+        .next()
+        .ok_or_else(|| format!("no addresses returned for {}", hostname))?;
+
+    // Parse optional parts: typ <kind> [raddr <addr> rport <port>] [tcptype <type>] [ufrag <value>]
+    let mut kind_idx = 6;
+    if parts.len() <= kind_idx || parts[kind_idx] != "typ" {
+        return Err(format!("expected 'typ' at position {}, got: {:?}", kind_idx, parts.get(kind_idx)));
+    }
+    kind_idx += 1;
+    if parts.len() <= kind_idx {
+        return Err("missing candidate type".to_string());
+    }
+    let kind_str = parts[kind_idx];
+    let kind = match kind_str {
+        "host" => str0m::CandidateKind::Host,
+        "srflx" => str0m::CandidateKind::ServerReflexive,
+        "prflx" => str0m::CandidateKind::PeerReflexive,
+        "relay" => str0m::CandidateKind::Relayed,
+        other => return Err(format!("unknown candidate type: {}", other)),
+    };
+    kind_idx += 1;
+
+    // Parse optional extensions
+    let mut raddr = None;
+    let mut rport = None;
+    let mut tcptype = None;
+    let mut ufrag = None;
+
+    while kind_idx < parts.len() {
+        match parts[kind_idx] {
+            "raddr" => {
+                kind_idx += 1;
+                if kind_idx < parts.len() {
+                    let raddr_str = parts[kind_idx];
+                    raddr = Some(raddr_str.parse().map_err(|e| format!("bad raddr: {}", e))?);
+                }
+            }
+            "rport" => {
+                kind_idx += 1;
+                if kind_idx < parts.len() {
+                    let rport_val: u16 = parts[kind_idx]
+                        .parse()
+                        .map_err(|e| format!("bad rport: {}", e))?;
+                    rport = Some(rport_val);
+                }
+            }
+            "tcptype" => {
+                kind_idx += 1;
+                if kind_idx < parts.len() {
+                    tcptype = Some(parts[kind_idx].to_string());
+                }
+            }
+            "ufrag" => {
+                kind_idx += 1;
+                if kind_idx < parts.len() {
+                    ufrag = Some(parts[kind_idx].to_string());
+                }
+            }
+            _ => {}
+        }
+        kind_idx += 1;
+    }
+
+    // Convert raddr/rport to SocketAddr if present
+    let raddr_sock = match (raddr, rport) {
+        (Some(ip), Some(p)) => Some(std::net::SocketAddr::new(ip, p)),
+        _ => None,
+    };
+
+    // Convert tcptype string to TcpType
+    let tcptype_converted = match tcptype.as_deref() {
+        Some("active") => Some(str0m::net::TcpType::Active),
+        Some("passive") => Some(str0m::net::TcpType::Passive),
+        Some("so") => Some(str0m::net::TcpType::So),
+        Some(t) => return Err(format!("unknown tcptype: {}", t)),
+        None => None,
+    };
+
+    Ok(Candidate::from_parts(
+        foundation,
+        component_id,
+        proto,
+        prio,
+        addr,
+        kind,
+        raddr_sock,
+        tcptype_converted,
+        ufrag,
+    ))
+}
+
 pub struct IceAgent;
 
 impl IceAgent {
-    pub fn resolve_remote_candidates(sdp: &str) -> String {
+    /// Parse candidate lines from SDP and return only those with IP addresses.
+    ///
+    /// This is the IP-only complement of `resolve_remote_candidates_stream()`,
+    /// which handles hostname-based candidates that require DNS resolution.
+    pub fn parse_ip_based_candidates(sdp: &str) -> Vec<Candidate> {
+        sdp.lines()
+            .filter_map(|line| {
+                let trimmed = line.trim();
+                if !trimmed.starts_with("a=candidate:") {
+                    return None;
+                }
+                let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                if parts.len() < 6 {
+                    return None;
+                }
+                let address = parts[4];
+                let port: u16 = match parts[5].parse() {
+                    Ok(p) => p,
+                    Err(_) => return None,
+                };
+                let ip: std::net::IpAddr = match address.parse() {
+                    Ok(ip) => ip,
+                    Err(_) => return None, // hostname — not IP-based
+                };
+                let addr = SocketAddr::new(ip, port);
+
+                let foundation = parts[0].strip_prefix("a=candidate:").unwrap_or(parts[0]).to_string();
+                let component_id: u16 = parts[1].parse().unwrap_or(1);
+                let proto_str = parts[2];
+                let proto = str0m::net::Protocol::try_from(proto_str)
+                    .unwrap_or(str0m::net::Protocol::Udp);
+                let prio: u32 = parts[3].parse().unwrap_or(0);
+
+                // Find "typ <kind>" starting at index 6
+                let mut idx = 6;
+                if idx < parts.len() && parts[idx] == "typ" {
+                    idx += 1;
+                }
+                let kind_str = parts.get(idx).unwrap_or(&"host");
+                let kind = match *kind_str {
+                    "host" => str0m::CandidateKind::Host,
+                    "srflx" => str0m::CandidateKind::ServerReflexive,
+                    "prflx" => str0m::CandidateKind::PeerReflexive,
+                    "relay" => str0m::CandidateKind::Relayed,
+                    _ => str0m::CandidateKind::Host,
+                };
+
+                if is_relay_only() && kind != str0m::CandidateKind::Relayed {
+                    return None;
+                }
+
+                // Parse optional raddr/rport
+                let mut raddr = None;
+                let mut rport: Option<u16> = None;
+                idx += 1;
+                while idx + 1 < parts.len() {
+                    match parts[idx] {
+                        "raddr" => {
+                            if let Ok(a) = parts[idx + 1].parse() {
+                                raddr = Some(a);
+                            }
+                        }
+                        "rport" => {
+                            if let Ok(p) = parts[idx + 1].parse() {
+                                rport = Some(p);
+                            }
+                        }
+                        _ => {}
+                    }
+                    idx += 1;
+                }
+                let raddr_sock = match (raddr, rport) {
+                    (Some(ip), Some(p)) => Some(std::net::SocketAddr::new(ip, p)),
+                    _ => None,
+                };
+
+                Some(Candidate::from_parts(
+                    foundation, component_id, proto, prio, addr, kind, raddr_sock, None, None,
+                ))
+            })
+            .collect()
+    }
+
+    pub async fn resolve_remote_candidates(sdp: &str) -> String {
+        use std::collections::HashMap;
+
+        let lines: Vec<&str> = sdp.lines().collect();
+
+        let needs_resolution: Vec<(usize, String, String)> = lines
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, line)| {
+                if line.contains("candidate:") {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    if parts.len() > 5 {
+                        let hostname = parts[4];
+                        if hostname.parse::<std::net::IpAddr>().is_err() {
+                            return Some((idx, hostname.to_string(), parts[5].to_string()));
+                        }
+                    }
+                }
+                None
+            })
+            .collect();
+
+        let handles: Vec<_> = needs_resolution
+            .iter()
+            .map(|(idx, hostname, port)| {
+                let hostname = hostname.clone();
+                let port = port.clone();
+                let idx = *idx;
+                tokio::task::spawn_blocking(move || {
+                    let lookup = format!("{}:{}", hostname, port);
+                    (lookup.to_socket_addrs(), hostname, idx)
+                })
+            })
+            .collect();
+
+        let mut resolved: HashMap<(usize, String), String> = HashMap::new();
+        for h in handles {
+            match h.await {
+                Ok((result, hostname, idx)) => {
+                    match result {
+                        Ok(mut addrs) => {
+                            if let Some(resolved_addr) = addrs.next() {
+                                resolved.insert((idx, hostname), resolved_addr.ip().to_string());
+                            }
+                        }
+                        Err(e) => {
+                            log::warn!("[ice] Failed to resolve remote candidate {}: {}", hostname, e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    log::error!("[ice] spawn_blocking join error: {}", e);
+                }
+            }
+        }
+
         let mut resolved_lines = Vec::new();
-        for line in sdp.lines() {
+        for (idx, line) in lines.iter().enumerate() {
             if line.contains("candidate:") {
                 let parts: Vec<&str> = line.split_whitespace().collect();
                 if parts.len() > 5 {
                     let hostname = parts[4];
                     if hostname.parse::<std::net::IpAddr>().is_err() {
-                        let port = parts[5];
-                        let lookup = format!("{}:{}", hostname, port);
-                        match lookup.to_socket_addrs() {
-                            Ok(mut addrs) => {
-                                if let Some(resolved) = addrs.next() {
-                                    let mut new_parts = parts;
-                                    let ip_str = resolved.ip().to_string();
-                                    new_parts[4] = &ip_str;
-                                    resolved_lines.push(new_parts.join(" "));
-                                    continue;
-                                }
-                            }
-                            Err(e) => {
-                                log::warn!("[ice] Failed to resolve remote candidate {}: {}", hostname, e);
-                            }
+                        if let Some(ip) = resolved.get(&(idx, hostname.to_string())) {
+                            let mut new_parts = parts;
+                            new_parts[4] = ip;
+                            resolved_lines.push(new_parts.join(" "));
+                            continue;
                         }
                     }
                 }
@@ -912,6 +1191,91 @@ impl IceAgent {
             resolved_lines.push(line.to_string());
         }
         resolved_lines.join("\r\n")
+    }
+
+    /// Resolve remote ICE candidates from SDP, yielding each as it completes.
+    ///
+    /// Parses the SDP for candidate lines containing hostnames (not IP addresses),
+    /// spawns blocking DNS lookups for each hostname, and returns a stream that
+    /// yields resolved `Candidate` objects in the order DNS resolutions complete.
+    ///
+    /// This enables trickle ICE: the answer can be sent before all candidates
+    /// are resolved, and each resolved candidate is immediately available for
+    /// injection via `rtc.add_remote_candidate()`.
+    pub fn resolve_remote_candidates_stream(
+        sdp: &str,
+    ) -> Pin<Box<dyn futures_util::Stream<Item = Candidate> + Send>> {
+        use futures_util::StreamExt;
+        use tokio_stream::wrappers::UnboundedReceiverStream;
+
+        let lines: Vec<&str> = sdp.lines().collect();
+
+        let relay_only = is_relay_only();
+
+        // Parse candidate lines with hostnames
+        let candidates_to_resolve: Vec<String> = lines
+            .iter()
+            .filter_map(|line| {
+                let trimmed = line.trim();
+                if trimmed.starts_with("a=candidate:") {
+                    let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                    if parts.len() > 5 {
+                        let address = parts[4];
+                        if address.parse::<std::net::IpAddr>().is_err() {
+                            // Check if relay-only and not a relay candidate
+                            if relay_only {
+                                let mut idx = 6;
+                                while idx + 1 < parts.len() && parts[idx] != "typ" {
+                                    idx += 1;
+                                }
+                                idx += 1;
+                                let kind_str = parts.get(idx).unwrap_or(&"host");
+                                if *kind_str != "relay" {
+                                    return None;
+                                }
+                            }
+                            return Some(trimmed.to_string());
+                        }
+                    }
+                }
+                None
+            })
+            .collect();
+
+        // Create a channel for results
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<Result<Candidate, String>>();
+
+        // Spawn blocking tasks for DNS lookups
+        for line in candidates_to_resolve {
+            let tx = tx.clone();
+            tokio::task::spawn_blocking(move || {
+                match resolve_candidate_line(&line) {
+                    Ok(candidate) => {
+                        tx.send(Ok(candidate)).ok();
+                    }
+                    Err(err) => {
+                        tx.send(Err(err)).ok();
+                    }
+                }
+            });
+        }
+
+        // Drop the original sender so the channel closes when all tasks complete
+        drop(tx);
+
+        // Convert mpsc receiver to a Stream that filters out errors and logs them
+        let stream = UnboundedReceiverStream::new(rx)
+            .filter_map(|result| async move {
+                match result {
+                    Ok(candidate) => Some(candidate),
+                    Err(err) => {
+                        log::warn!("[ice] resolve_remote_candidates_stream: {}", err);
+                        None
+                    }
+                }
+            });
+
+        Box::pin(stream)
     }
 
     pub async fn gather_candidates(
@@ -922,7 +1286,58 @@ impl IceAgent {
         let gather_start = Instant::now();
 
         let mut candidates: HashSet<Candidate> = HashSet::new();
-        let local_port = socket.local_addr().map(|a| a.port()).unwrap_or(0);
+        let local_addr = socket.local_addr().unwrap_or_else(|_| SocketAddr::new(std::net::Ipv4Addr::UNSPECIFIED.into(), 0));
+
+        if is_relay_only() {
+            log::info!("[ice] Relay-only mode: skipping host and STUN candidate gathering");
+            let credentials =
+                turn_credentials_from_config(config).ok_or_else(|| IceError::Turn("missing TURN credentials".to_string()))?;
+            let mut turn_phase = TurnPhase::start(local_addr, &parse_turn_urls(config), credentials)?;
+            let mut buf = [0u8; STUN_MAX_PACKET];
+
+            loop {
+                let turn_drive = turn_phase.drive();
+                send_outbound_packets(socket, turn_drive.outbound).await?;
+
+                if let Some(reason) = turn_phase.failure() {
+                    return Err(IceError::Turn(reason.to_string()));
+                }
+
+                if turn_phase.is_complete() {
+                    let turn_info = turn_phase.take_success().expect("TURN phase completed without relay info");
+                    let relay_addr = turn_info.relay_addr;
+                    match Candidate::relayed(relay_addr, relay_addr, "udp") {
+                        Ok(candidate) => {
+                            log::debug!("[ice] Relayed candidate: {}", candidate);
+                            candidates.insert(candidate);
+                        }
+                        Err(error) => {
+                            return Err(IceError::Parse(format!(
+                                "failed to create relayed candidate for {relay_addr}: {error:?}"
+                            )));
+                        }
+                    }
+
+                    let result: Vec<Candidate> = candidates.into_iter().collect();
+                    log::info!("[ice] Gathered {:?} relay-only candidates in {:?}", result, gather_start.elapsed());
+                    return Ok((result, Some(turn_info)));
+                }
+
+                let wait_for = turn_drive.wait.unwrap_or(TURN_MIN_RECV_TIMEOUT).max(TURN_MIN_RECV_TIMEOUT);
+
+                match tokio::time::timeout(wait_for, socket.recv_from(&mut buf)).await {
+                    Ok(Ok((n, src))) => {
+                        turn_phase.handle_packet(&buf[..n], from_v6_mapped(src));
+                    }
+                    Ok(Err(error)) => {
+                        log::warn!("[ice] Socket recv error during relay-only gathering: {}", error);
+                    }
+                    Err(_) => {}
+                }
+            }
+        }
+
+        let local_port = local_addr.port();
         let host_start = Instant::now();
 
         if let Ok(ifaces) = if_addrs::get_if_addrs() {
@@ -944,7 +1359,6 @@ impl IceAgent {
         }
         log::info!("[ice] Host candidate enumeration completed in {:?}", host_start.elapsed());
 
-        let local_addr = socket.local_addr().unwrap_or_else(|_| SocketAddr::new(std::net::Ipv4Addr::UNSPECIFIED.into(), 0));
         let mut stun_phase = StunPhase::start(local_addr, &parse_stun_urls(config))?;
         let credentials =
             turn_credentials_from_config(config).ok_or_else(|| IceError::Turn("missing TURN credentials".to_string()))?;
@@ -1276,5 +1690,86 @@ mod tests {
             elapsed < TURN_TIMEOUT,
             "expected STUN failure to end gather before TURN timeout, got {elapsed:?}"
         );
+    }
+
+    #[test]
+    fn strip_candidates_from_sdp_removes_candidate_lines() {
+        let sdp = "v=0\r\n\
+            o=- 0 0 IN IP4 127.0.0.1\r\n\
+            s=-\r\n\
+            c=IN IP4 0.0.0.0\r\n\
+            a=candidate:1 1 UDP 2130706431 192.168.1.1 49152 typ host\r\n\
+            a=candidate:2 1 UDP 2130706432 10.0.0.1 49153 typ srflx\r\n\
+            a=end-of-candidates\r\n\
+            a=ice-pwd:password123\r\n";
+
+        let stripped = super::strip_candidates_from_sdp(sdp);
+
+        assert!(!stripped.contains("a=candidate:"));
+        assert!(!stripped.contains("a=end-of-candidates"));
+        assert!(stripped.contains("a=ice-pwd:password123"));
+        assert!(stripped.contains("c=IN IP4 0.0.0.0"));
+    }
+
+    #[test]
+    fn strip_candidates_from_sdp_preserves_non_candidate_lines() {
+        let sdp = "v=0\r\n\
+            o=- 0 0 IN IP4 127.0.0.1\r\n\
+            s=Test\r\n\
+            c=IN IP4 0.0.0.0\r\n\
+            a=ice-ufrag:user123\r\n\
+            a=ice-pwd:password123\r\n\
+            a=fingerprint:sha-256 AB:CD:EF:12:34:56\r\n";
+
+        let stripped = super::strip_candidates_from_sdp(sdp);
+
+        assert!(stripped.contains("v=0"));
+        assert!(stripped.contains("o=- 0 0 IN IP4 127.0.0.1"));
+        assert!(stripped.contains("s=Test"));
+        assert!(stripped.contains("a=ice-ufrag:user123"));
+        assert!(stripped.contains("a=ice-pwd:password123"));
+        assert!(stripped.contains("a=fingerprint:sha-256"));
+    }
+
+    #[test]
+    fn strip_candidates_from_sdp_empty_when_only_candidates() {
+        let sdp = "v=0\r\n\
+            a=candidate:1 1 UDP 2130706431 192.168.1.1 49152 typ host\r\n\
+            a=candidate:2 1 UDP 2130706432 10.0.0.1 49153 typ srflx\r\n";
+
+        let stripped = super::strip_candidates_from_sdp(sdp);
+
+        assert!(stripped.contains("v=0"));
+        assert!(!stripped.contains("a=candidate:"));
+    }
+
+    #[tokio::test]
+    async fn resolve_remote_candidates_stream_resolves_hostnames() {
+        use futures_util::StreamExt;
+        use std::net::SocketAddr;
+
+        let sdp = "v=0\r\n\
+            o=- 0 0 IN IP4 127.0.0.1\r\n\
+            s=-\r\n\
+            a=candidate:1 1 UDP 2130706431 127.0.0.1 49152 typ host\r\n";
+
+        let stream = super::IceAgent::resolve_remote_candidates_stream(sdp);
+        let candidates: Vec<_> = stream.collect().await;
+
+        assert!(candidates.is_empty(), "expected no candidates to resolve when all are IPs");
+    }
+
+    #[tokio::test]
+    async fn resolve_remote_candidates_stream_handles_empty_sdp() {
+        use futures_util::StreamExt;
+
+        let sdp = "v=0\r\n\
+            o=- 0 0 IN IP4 127.0.0.1\r\n\
+            s=-\r\n";
+
+        let stream = super::IceAgent::resolve_remote_candidates_stream(sdp);
+        let candidates: Vec<_> = stream.collect().await;
+
+        assert!(candidates.is_empty(), "expected no candidates in SDP without candidate lines");
     }
 }
