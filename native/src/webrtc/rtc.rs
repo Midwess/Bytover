@@ -216,20 +216,16 @@ impl RtcClient {
             ordered_msg: ordered_msg_id,
         };
 
-        // Accept offer - candidates stripped so none to add, early answer enabled
         let answer = rtc.sdp_api().accept_offer(offer).map_err(|e| WebRtcClientError::Rtc(e.to_string()))?;
 
-        // Wrap rtc in Arc<Mutex> so spawned task can add candidates
         let rtc = Arc::new(StdMutex::new(rtc));
         let rtc_for_spawn = rtc.clone();
 
-        // Send answer immediately while resolving candidates in background
         let answer_sdp = answer.to_sdp_string();
         let me_clone = me.clone();
         let request_id_owned = request_id.to_string();
         let original_sdp = offer_message.sdp.clone();
 
-        // Spawn candidate resolution to run concurrently with signaling
         tokio::spawn(async move {
             let stream = IceAgent::resolve_remote_candidates_stream(&original_sdp);
             futures_util::pin_mut!(stream);
@@ -240,14 +236,12 @@ impl RtcClient {
             log::info!("[rtc-client] Remote candidate resolution complete");
         });
 
-        // Send answer without waiting for candidate resolution
         if let Err(e) = signalling.send_answer(answer_sdp, me_clone, &request_id_owned).await {
             log::warn!("[rtc-client] Failed to send answer: {}", e);
         }
+
         log::info!("[rtc-client] Answer sent, candidate resolution continuing in background");
 
-        // rtc is Arc<StdMutex<Rtc>> with rtc_for_spawn held by spawned task
-        // Store Arc in struct - spawned task will add candidates as they're resolved
         let client = Self {
             rtc,
             socket,
@@ -267,16 +261,12 @@ impl RtcClient {
         Ok(client.spawn_thread())
     }
 
-    /// Spawn the dedicated OS thread and return an RtcHandle.
     fn spawn_thread(self) -> RtcHandle {
         let channel_ids = self.channel_ids;
         let (event_tx, event_rx) = tokio::sync::mpsc::channel::<RtcEvent>(5);
         let (data_tx, data_rx) = tokio::sync::mpsc::channel::<(Vec<u8>, ChannelId)>(16);
-
-        // Use an 8 MB stack to avoid overflow during high-throughput transmit bursts.
         let thread_handle = std::thread::Builder::new()
             .name("rtc-io".to_string())
-            .stack_size(8 * 1024 * 1024)
             .spawn(move || {
                 let rt = tokio::runtime::Builder::new_current_thread()
                     .enable_all()
@@ -325,8 +315,6 @@ impl RtcClient {
                 }
             }
 
-            self.drain_pending_transmits();
-            self.fill_transmit_queue(&mut data_rx);
             self.drain_pending_transmits();
 
             let outcome = match self.poll_event().await {
@@ -399,8 +387,14 @@ impl RtcClient {
                 res = data_rx.recv() => {
                     match res {
                         Some(cmd) => {
-                            self.enqueue_command(cmd);
-                            self.drain_pending_transmits();
+                            if self.pending_transmits.is_empty() {
+                                if !self.send(&cmd.0, cmd.1) {
+                                    self.pending_transmits.push_back(cmd);
+                                }
+                            }
+                            else {
+                                self.pending_transmits.push_back(cmd);
+                            }
                         }
                         None => {
                             log::info!("[rtc-client] RTC I/O thread shutdown: data channel closed");
@@ -414,11 +408,6 @@ impl RtcClient {
 
         self.rtc_mut().disconnect();
         log::info!("[rtc-client] RTC connection no longer alive, stopping I/O thread");
-    }
-
-    /// Handle a command.
-    fn enqueue_command(&mut self, cmd: (Vec<u8>, ChannelId)) {
-        self.pending_transmits.push_back(cmd);
     }
 
     async fn wait_for_connected(mut self, mut connected: bool) -> Result<Self, WebRtcClientError> {
@@ -600,12 +589,6 @@ impl RtcClient {
                 self.pending_transmits.push_front((data, channel_id));
                 break;
             }
-        }
-    }
-
-    fn fill_transmit_queue(&mut self, data_rx: &mut tokio::sync::mpsc::Receiver<(Vec<u8>, ChannelId)>) {
-        while let Ok(cmd) = data_rx.try_recv() {
-            self.enqueue_command(cmd);
         }
     }
 
