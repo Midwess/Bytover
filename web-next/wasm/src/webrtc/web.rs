@@ -57,6 +57,12 @@ impl DerefMut for RtcDataChannelWrapper {
     }
 }
 
+impl RtcDataChannelWrapper {
+    pub fn buffered_amount(&self) -> u32 {
+        self.0.buffered_amount()
+    }
+}
+
 impl Drop for RtcDataChannelWrapper {
     fn drop(&mut self) {
         log::info!("closing data channel on drop");

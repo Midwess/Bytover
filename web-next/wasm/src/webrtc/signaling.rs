@@ -2,7 +2,7 @@ use prost::Message as ProstMessage;
 
 use core_services::wasm::http::HttpClient;
 use schema::devlog::bitbridge::PeerMessage;
-use schema::devlog::rpc_signalling::server::{IceConfig, OfferMessage, OfferRequest, OfferResponse};
+use schema::devlog::rpc_signalling::server::{IceConfig, IceConfigList, OfferMessage, OfferRequest, OfferResponse};
 
 #[derive(Debug, Clone)]
 pub struct SignalingClient {
@@ -72,6 +72,32 @@ impl SignalingClient {
         }
 
         IceConfig::decode(&bytes[..]).map_err(|e| SignalingError::Decoding(e.to_string()))
+    }
+
+    pub async fn fetch_relay_configs(&self, key: &str, n: usize) -> Result<Vec<IceConfig>, SignalingError> {
+        let n = n.max(1);
+        let url = format!("{}/relay/{}?n={}", self.http_url.trim_end_matches('/'), key, n);
+
+        let (status, _headers, bytes) = HttpClient::new()
+            .method("GET")
+            .url(&url)
+            .fetch()
+            .map_err(|e| SignalingError::Network(format!("{:?}", e)))?
+            .bytes()
+            .await
+            .map_err(|e| SignalingError::Network(format!("{:?}", e)))?;
+
+        if status != 200 {
+            return Err(SignalingError::Server(String::from_utf8_lossy(&bytes).to_string()));
+        }
+
+        match IceConfigList::decode(&bytes[..]) {
+            Ok(list) if !list.configs.is_empty() => Ok(list.configs),
+            _ => {
+                let single = IceConfig::decode(&bytes[..]).map_err(|e| SignalingError::Decoding(e.to_string()))?;
+                Ok(vec![single])
+            }
+        }
     }
 }
 

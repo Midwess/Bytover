@@ -1,9 +1,11 @@
 use futures_util::StreamExt;
-use schema::devlog::rpc_signalling::server::OfferMessage;
+use schema::devlog::rpc_signalling::server::{IceConfig, OfferMessage};
 use socket2::{Domain, Socket, Type};
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use str0m::channel::{ChannelConfig, ChannelId};
 use str0m::net::{Protocol, Receive};
@@ -59,17 +61,15 @@ pub enum RtcOutcome {
     MorePending,
 }
 
-/// Async-friendly handle returned from connect(). Communicates with the
-/// dedicated OS thread that drives the RTC networking loop.
 pub struct RtcHandle {
-    event_rx: tokio::sync::mpsc::Receiver<RtcEvent>,
+    event_rx: Option<tokio::sync::mpsc::Receiver<RtcEvent>>,
     data_tx: Option<tokio::sync::mpsc::Sender<(Vec<u8>, ChannelId)>>,
     channel_ids: ChannelIds,
     thread_handle: Option<std::thread::JoinHandle<()>>,
+    reliable_buffered_amount: Arc<AtomicUsize>,
 }
 
 impl RtcHandle {
-    /// Connect to a peer via direct P2P, spawning the I/O thread on success.
     pub async fn connect(
         signalling_id: &str,
         offer_message: OfferMessage,
@@ -77,17 +77,39 @@ impl RtcHandle {
         signalling: SignallingSender,
         request_id: &str,
     ) -> Result<Self, WebRtcClientError> {
-        RtcClient::connect(signalling_id, offer_message, me, signalling, request_id).await
+        RtcClient::connect(signalling_id, offer_message, me, signalling, request_id, None).await
+    }
+
+    pub async fn connect_with_config(
+        signalling_id: &str,
+        offer_message: OfferMessage,
+        me: schema::devlog::bitbridge::PeerMessage,
+        signalling: SignallingSender,
+        request_id: &str,
+        ice_config: IceConfig,
+    ) -> Result<Self, WebRtcClientError> {
+        RtcClient::connect(signalling_id, offer_message, me, signalling, request_id, Some(ice_config)).await
+    }
+
+    pub fn buffered_amount(&self) -> usize {
+        self.reliable_buffered_amount.load(Ordering::Relaxed)
     }
 
     /// Await the next event from the RTC thread.
     pub async fn poll_event(&mut self) -> Option<RtcEvent> {
-        self.event_rx.recv().await
+        let rx = self.event_rx.as_mut()?;
+        rx.recv().await
     }
 
     /// Try to receive an event without blocking.
     pub fn try_poll_event(&mut self) -> Option<RtcEvent> {
-        self.event_rx.try_recv().ok()
+        self.event_rx.as_mut().and_then(|rx| rx.try_recv().ok())
+    }
+
+    /// Remove and return the event receiver so an external task can own it.
+    /// After this call, `poll_event` / `try_poll_event` return `None`.
+    pub fn take_event_rx(&mut self) -> Option<tokio::sync::mpsc::Receiver<RtcEvent>> {
+        self.event_rx.take()
     }
 
     /// Send data on a channel. Returns true if the command was queued.
@@ -101,13 +123,14 @@ impl RtcHandle {
         &self.channel_ids
     }
 
-    /// The handle is alive if the thread hasn't finished and the event channel is open.
+    /// The handle is alive if the I/O thread is still running and data can still be queued.
     pub fn is_alive(&self) -> bool {
-        !self.event_rx.is_closed() && self.thread_handle.as_ref().is_some_and(|h| !h.is_finished())
+        self.data_tx.as_ref().is_some_and(|tx| !tx.is_closed()) && self.thread_handle.as_ref().is_some_and(|h| !h.is_finished())
     }
 
     pub fn shutdown(&mut self) {
         drop(self.data_tx.take());
+        drop(self.event_rx.take());
         if let Some(handle) = self.thread_handle.take() {
             let _ = handle.join();
         }
@@ -133,8 +156,8 @@ struct RtcClient {
     early_events: Vec<Event>,
     pending_remote_candidates: VecDeque<str0m::Candidate>,
     candidate_rx: tokio::sync::mpsc::Receiver<str0m::Candidate>,
-    /// TURN relay state machine for relayed traffic. `None` when operating P2P-only.
     turn: Option<TurnRelayInfo>,
+    reliable_buffered_amount: Arc<AtomicUsize>,
 }
 
 impl RtcClient {
@@ -144,16 +167,23 @@ impl RtcClient {
         me: schema::devlog::bitbridge::PeerMessage,
         signalling: SignallingSender,
         request_id: &str,
+        ice_config_override: Option<IceConfig>,
     ) -> Result<RtcHandle, WebRtcClientError> {
-        let config = match signalling.fetch_relay_config(signalling_id).await {
-            Ok(cfg) => {
-                log::info!("[rtc-client] Using relay config with {} URLs", cfg.urls.len());
+        let config = match ice_config_override {
+            Some(cfg) => {
+                log::info!("[rtc-client] Using provided ice config with {} URLs", cfg.urls.len());
                 cfg
             }
-            Err(e) => {
-                log::warn!("[rtc-client] Failed to fetch relay config, using P2P only: {}", e);
-                schema::devlog::rpc_signalling::server::IceConfig::default()
-            }
+            None => match signalling.fetch_relay_config(signalling_id).await {
+                Ok(cfg) => {
+                    log::info!("[rtc-client] Using relay config with {} URLs", cfg.urls.len());
+                    cfg
+                }
+                Err(e) => {
+                    log::warn!("[rtc-client] Failed to fetch relay config, using P2P only: {}", e);
+                    IceConfig::default()
+                }
+            },
         };
 
         let socket = Socket::new(Domain::IPV6, Type::DGRAM, Some(socket2::Protocol::UDP))?;
@@ -321,10 +351,11 @@ impl RtcClient {
             .expect("Failed to spawn RTC I/O thread");
 
         RtcHandle {
-            event_rx,
+            event_rx: Some(event_rx),
             data_tx: Some(data_tx),
             channel_ids,
             thread_handle: Some(thread_handle),
+            reliable_buffered_amount,
         }
     }
 
@@ -738,6 +769,13 @@ impl RtcClient {
                 break;
             }
         }
+        self.refresh_reliable_buffered_amount();
+    }
+
+    fn refresh_reliable_buffered_amount(&mut self) {
+        let channel_id = self.channel_ids.reliable;
+        let amount = self.channel_buffered_amount(channel_id).unwrap_or(0);
+        self.reliable_buffered_amount.store(amount, Ordering::Relaxed);
     }
 
     fn add_or_defer_remote_candidate(&mut self, candidate: str0m::Candidate, source: &str) {

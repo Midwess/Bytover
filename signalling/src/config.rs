@@ -1,9 +1,12 @@
 const DEFAULT_REGION_CODE: &str = "local";
+const DEFAULT_CONNECTION_FANOUT: usize = 1;
+const MAX_CONNECTION_FANOUT: usize = 8;
 
 #[derive(Debug, Clone)]
 pub struct SignallingConfig {
     pub region_code: String,
     pub signalling_route: String,
+    pub connection_fanout: usize,
 }
 
 impl SignallingConfig {
@@ -13,9 +16,12 @@ impl SignallingConfig {
             normalize_railway_region(env_trimmed("RAILWAY_REPLICA_REGION").as_deref()).as_deref(),
         );
 
+        let connection_fanout = resolve_connection_fanout(env_trimmed("BYTOVER_CONNECTION_FANOUT").as_deref());
+
         Self {
             signalling_route: format!("rpc-signalling-{region_code}"),
             region_code,
+            connection_fanout,
         }
     }
 
@@ -51,6 +57,13 @@ fn resolve_region_code(bytover_region_code: Option<&str>, railway_replica_region
     .to_string()
 }
 
+fn resolve_connection_fanout(value: Option<&str>) -> usize {
+    value
+        .and_then(|raw| raw.parse::<usize>().ok())
+        .map(|n| n.clamp(1, MAX_CONNECTION_FANOUT))
+        .unwrap_or(DEFAULT_CONNECTION_FANOUT)
+}
+
 fn normalize_railway_region(region: Option<&str>) -> Option<String> {
     region
         .map(str::trim)
@@ -60,7 +73,33 @@ fn normalize_railway_region(region: Option<&str>) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_railway_region, resolve_region_code};
+    use super::{normalize_railway_region, resolve_connection_fanout, resolve_region_code, MAX_CONNECTION_FANOUT};
+
+    #[test]
+    fn connection_fanout_defaults_to_one_when_unset() {
+        assert_eq!(resolve_connection_fanout(None), 1);
+    }
+
+    #[test]
+    fn connection_fanout_parses_positive_value() {
+        assert_eq!(resolve_connection_fanout(Some("3")), 3);
+    }
+
+    #[test]
+    fn connection_fanout_clamps_zero_up_to_one() {
+        assert_eq!(resolve_connection_fanout(Some("0")), 1);
+    }
+
+    #[test]
+    fn connection_fanout_clamps_excessive_value() {
+        assert_eq!(resolve_connection_fanout(Some("999")), MAX_CONNECTION_FANOUT);
+    }
+
+    #[test]
+    fn connection_fanout_ignores_non_numeric_value() {
+        assert_eq!(resolve_connection_fanout(Some("abc")), 1);
+    }
+
 
     #[test]
     fn falls_back_to_railway_replica_region() {

@@ -5,7 +5,7 @@ use actix_web::{web, HttpRequest, HttpResponse};
 use base64::Engine;
 use devlog_sdk::tcp::listener::find_tcp_listener;
 use prost::Message as ProstMessage;
-use schema::devlog::rpc_signalling::server::{AnswerMessage, Message, OfferRequest, OfferResponse};
+use schema::devlog::rpc_signalling::server::{AnswerMessage, IceConfigList, Message, OfferRequest, OfferResponse};
 
 use crate::client::Client;
 use crate::client_manager::ClientManager;
@@ -16,6 +16,7 @@ use crate::turn_manager::TurnManager;
 struct ServerState {
     client_manager: Arc<ClientManager>,
     turn_manager: Arc<TurnManager>,
+    connection_fanout: usize,
 }
 
 pub struct SignallingServer {
@@ -42,6 +43,7 @@ impl SignallingServer {
         let state = web::Data::new(ServerState {
             client_manager: Arc::clone(&self.client_manager),
             turn_manager: Arc::clone(&self.turn_manager),
+            connection_fanout: self.config.connection_fanout,
         });
 
         let server = actix_web::HttpServer::new(move || {
@@ -56,11 +58,12 @@ impl SignallingServer {
         .run();
 
         log::info!(
-            "RPC Signalling Server listening on {}:{} (region={}, route={})",
+            "RPC Signalling Server listening on {}:{} (region={}, route={}, connection_fanout={})",
             public_host,
             port,
             self.config.region_code,
-            self.config.signalling_route
+            self.config.signalling_route,
+            self.config.connection_fanout
         );
 
         self.register_gateway(&public_host, port).await?;
@@ -169,7 +172,9 @@ async fn offer_handler(key: web::Path<String>, body: Bytes, state: web::Data<Ser
         ..Default::default()
     };
 
-    message.ice_config = state.turn_manager.get_relay_config(&key).await;
+    let ice_configs = state.turn_manager.get_relay_configs(&key, state.connection_fanout).await;
+    message.ice_config = ice_configs.first().cloned();
+    message.ice_configs = ice_configs;
 
     match client.request(message).await {
         Ok(response) => {
@@ -199,16 +204,33 @@ async fn offer_handler(key: web::Path<String>, body: Bytes, state: web::Data<Ser
     }
 }
 
-async fn relay_handler(key: web::Path<String>, state: web::Data<ServerState>) -> HttpResponse {
+#[derive(serde::Deserialize)]
+struct RelayQuery {
+    #[serde(default)]
+    n: Option<usize>,
+}
+
+async fn relay_handler(
+    key: web::Path<String>,
+    query: web::Query<RelayQuery>,
+    state: web::Data<ServerState>,
+) -> HttpResponse {
     let key = key.into_inner();
     let _ = state.client_manager.get(&key).await;
 
-    let relay_config = match state.turn_manager.get_relay_config(&key).await {
-        Some(config) => config,
-        None => return HttpResponse::ServiceUnavailable().body("client not connected"),
-    };
+    let requested_n = query.n.unwrap_or(state.connection_fanout).max(1);
+    let configs = state.turn_manager.get_relay_configs(&key, requested_n).await;
 
-    encode_binary_response(&relay_config)
+    if configs.is_empty() {
+        return HttpResponse::ServiceUnavailable().body("no relay available");
+    }
+
+    if query.n.is_some() {
+        let list = IceConfigList { configs };
+        return encode_binary_response(&list);
+    }
+
+    encode_binary_response(&configs.into_iter().next().unwrap())
 }
 
 fn parse_submitted_ipv4(value: &str) -> Option<std::net::Ipv4Addr> {
@@ -356,6 +378,7 @@ mod tests {
         web::Data::new(ServerState {
             client_manager: ClientManager::new(),
             turn_manager,
+            connection_fanout: 1,
         })
     }
 

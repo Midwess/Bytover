@@ -1,5 +1,5 @@
 use schema::devlog::rpc_signalling::server::IceConfig;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -22,8 +22,8 @@ pub struct RegisteredRelay {
 }
 
 pub struct TurnManager {
-    relays: Arc<Mutex<HashMap<String, RegisteredRelay>>>, // relay_id -> RegisteredRelay
-    client_relay_assignments: Arc<Mutex<HashMap<String, String>>>, // client_id -> relay_id
+    relays: Arc<Mutex<HashMap<String, RegisteredRelay>>>,
+    client_relay_assignments: Arc<Mutex<HashMap<String, Vec<String>>>>,
 }
 
 impl TurnManager {
@@ -33,7 +33,6 @@ impl TurnManager {
             client_relay_assignments: Arc::new(Mutex::new(HashMap::new())),
         };
 
-        // Start background task to prune expired relays
         let relays_clone = Arc::clone(&manager.relays);
         let assignments_clone = Arc::clone(&manager.client_relay_assignments);
         tokio::spawn(async move {
@@ -43,7 +42,6 @@ impl TurnManager {
                 let mut relays = relays_clone.lock().await;
                 let now = Instant::now();
 
-                // Identify IDs of relays that will be removed
                 let mut removed_ids = Vec::new();
                 relays.retain(|id, relay| {
                     if now.duration_since(relay.last_ping) > Duration::from_secs(30) {
@@ -61,10 +59,12 @@ impl TurnManager {
                     }
                 });
 
-                // Clean up any assignments pointing to those relays
                 if !removed_ids.is_empty() {
                     let mut assignments = assignments_clone.lock().await;
-                    assignments.retain(|_, relay_id| !removed_ids.contains(relay_id));
+                    assignments.retain(|_, relay_ids| {
+                        relay_ids.retain(|id| !removed_ids.contains(id));
+                        !relay_ids.is_empty()
+                    });
                 }
             }
         });
@@ -137,73 +137,125 @@ impl TurnManager {
 
     pub async fn unregister_client(&self, client_id: &str) {
         let mut assignments = self.client_relay_assignments.lock().await;
-        if let Some(relay_id) = assignments.remove(client_id) {
+        if let Some(relay_ids) = assignments.remove(client_id) {
             let relays = self.relays.lock().await;
-            if let Some(relay) = relays.get(&relay_id) {
-                relay.counter.fetch_sub(1, Ordering::Relaxed);
+            for relay_id in relay_ids {
+                if let Some(relay) = relays.get(&relay_id) {
+                    relay.counter.fetch_sub(1, Ordering::Relaxed);
+                }
             }
         }
     }
 
     pub async fn get_assigned_relay(&self, client_id: &str) -> Option<RegisteredRelay> {
+        self.get_assigned_relays(client_id, 1).await.into_iter().next()
+    }
+
+    pub async fn get_assigned_relays(&self, client_id: &str, n: usize) -> Vec<RegisteredRelay> {
+        let n = n.max(1);
         let mut assignments = self.client_relay_assignments.lock().await;
         let relays = self.relays.lock().await;
 
-        let assigned_relay_id = assignments.get(client_id);
+        let existing_ids: Vec<String> = assignments.get(client_id).cloned().unwrap_or_default();
+        let mut picked: Vec<RegisteredRelay> = existing_ids
+            .iter()
+            .filter_map(|id| relays.get(id).cloned())
+            .collect();
 
-        // Check if an existing assignment is still healthy
-        let healthy_relay = if let Some(id) = assigned_relay_id {
-            relays.get(id).cloned()
-        } else {
-            None
-        };
+        if picked.len() >= n {
+            picked.truncate(n);
+            assignments.insert(client_id.to_string(), picked.iter().map(|r| r.id.clone()).collect());
+            return picked;
+        }
 
-        Some(match healthy_relay {
-            Some(r) => r,
-            None => {
-                // Initial assignment or reassigning if the previous relay is gone
-                let best_relay = relays.values().min_by_key(|r| r.counter.load(Ordering::Relaxed))?.clone();
+        let already: HashSet<String> = picked.iter().map(|r| r.id.clone()).collect();
+        let mut candidates: Vec<RegisteredRelay> = relays
+            .values()
+            .filter(|r| !already.contains(&r.id))
+            .cloned()
+            .collect();
+        candidates.sort_by_key(|r| r.counter.load(Ordering::Relaxed));
 
-                best_relay.counter.fetch_add(1, Ordering::Relaxed);
-                assignments.insert(client_id.to_string(), best_relay.id.clone());
-                best_relay
-            }
-        })
+        let need = n - picked.len();
+        let take = need.min(candidates.len());
+        let available = picked.len() + take;
+
+        if available < n {
+            log::warn!(
+                "connection fanout requested n={} but only {} distinct relays available for client {}",
+                n,
+                available,
+                client_id
+            );
+        }
+
+        for relay in candidates.into_iter().take(take) {
+            relay.counter.fetch_add(1, Ordering::Relaxed);
+            picked.push(relay);
+        }
+
+        assignments.insert(client_id.to_string(), picked.iter().map(|r| r.id.clone()).collect());
+        picked
     }
 
     pub async fn get_relay_config(&self, client_id: &str) -> Option<IceConfig> {
-        let final_relay = self.get_assigned_relay(client_id).await?;
-        let mut urls = Vec::new();
+        self.get_relay_configs(client_id, 1).await.into_iter().next()
+    }
 
-        if let Some(public_ipv4) = final_relay.public_ipv4.as_ref() {
-            urls.push(format!("stun:{}:{}", public_ipv4, final_relay.stun_port));
+    pub async fn get_relay_configs(&self, client_id: &str, n: usize) -> Vec<IceConfig> {
+        self.get_assigned_relays(client_id, n)
+            .await
+            .into_iter()
+            .map(relay_to_ice_config)
+            .collect()
+    }
+}
+
+fn relay_to_ice_config(relay: RegisteredRelay) -> IceConfig {
+    let mut urls = Vec::new();
+
+    if let Some(public_ipv4) = relay.public_ipv4.as_ref() {
+        urls.push(format!("stun:{}:{}", public_ipv4, relay.stun_port));
+    }
+
+    if let Some(public_ipv6) = relay.public_ipv6.as_ref() {
+        urls.push(format!("stun:[{}]:{}", public_ipv6, relay.stun_port));
+    }
+
+    if relay.turn_port > 0 {
+        if let Some(public_ipv4) = relay.public_ipv4.as_ref() {
+            urls.push(format!("turn:{}:{}", public_ipv4, relay.turn_port));
         }
 
-        if let Some(public_ipv6) = final_relay.public_ipv6.as_ref() {
-            urls.push(format!("stun:[{}]:{}", public_ipv6, final_relay.stun_port));
+        if let Some(public_ipv6) = relay.public_ipv6.as_ref() {
+            urls.push(format!("turn:[{}]:{}", public_ipv6, relay.turn_port));
         }
+    }
 
-        if final_relay.turn_port > 0 {
-            if let Some(public_ipv4) = final_relay.public_ipv4.as_ref() {
-                urls.push(format!("turn:{}:{}", public_ipv4, final_relay.turn_port));
-            }
-
-            if let Some(public_ipv6) = final_relay.public_ipv6.as_ref() {
-                urls.push(format!("turn:[{}]:{}", public_ipv6, final_relay.turn_port));
-            }
-        }
-
-        Some(IceConfig {
-            urls,
-            username: final_relay.turn_username.clone(),
-            credential: final_relay.turn_password.clone(),
-        })
+    IceConfig {
+        urls,
+        username: relay.turn_username,
+        credential: relay.turn_password,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::TurnManager;
+
+    async fn register(manager: &TurnManager, ipv4: &str, port: u16) {
+        manager
+            .register_relay(
+                Some(ipv4.to_string()),
+                None,
+                port,
+                port,
+                port,
+                Some("relay".to_string()),
+                Some("relay-secret".to_string()),
+            )
+            .await;
+    }
 
     #[tokio::test]
     async fn assigned_relay_keeps_registered_relay_port() {
@@ -257,5 +309,69 @@ mod tests {
         );
         assert_eq!(relay.username.as_deref(), Some("relay"));
         assert_eq!(relay.credential.as_deref(), Some("relay-secret"));
+    }
+
+    #[tokio::test]
+    async fn get_relay_configs_returns_distinct_relays_up_to_n() {
+        let manager = TurnManager::new().await;
+        register(&manager, "198.51.100.10", 19101).await;
+        register(&manager, "198.51.100.11", 19102).await;
+        register(&manager, "198.51.100.12", 19103).await;
+
+        let configs = manager.get_relay_configs("client-1", 2).await;
+        assert_eq!(configs.len(), 2);
+
+        let hosts: Vec<String> = configs.iter().flat_map(|c| c.urls.iter()).cloned().collect();
+        let distinct_relay_ports: std::collections::HashSet<_> = hosts.iter().filter_map(|u| u.rsplit(':').next()).collect();
+        assert_eq!(distinct_relay_ports.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn get_relay_configs_caps_at_registered_count() {
+        let manager = TurnManager::new().await;
+        register(&manager, "198.51.100.10", 19101).await;
+        register(&manager, "198.51.100.11", 19102).await;
+
+        let configs = manager.get_relay_configs("client-1", 5).await;
+        assert_eq!(configs.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn get_relay_configs_treats_zero_as_one() {
+        let manager = TurnManager::new().await;
+        register(&manager, "198.51.100.10", 19101).await;
+
+        let configs = manager.get_relay_configs("client-1", 0).await;
+        assert_eq!(configs.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn get_relay_configs_is_sticky_across_calls() {
+        let manager = TurnManager::new().await;
+        register(&manager, "198.51.100.10", 19101).await;
+        register(&manager, "198.51.100.11", 19102).await;
+        register(&manager, "198.51.100.12", 19103).await;
+
+        let first = manager.get_relay_configs("client-1", 2).await;
+        let second = manager.get_relay_configs("client-1", 2).await;
+
+        let first_urls: Vec<_> = first.iter().flat_map(|c| c.urls.clone()).collect();
+        let second_urls: Vec<_> = second.iter().flat_map(|c| c.urls.clone()).collect();
+        assert_eq!(first_urls, second_urls);
+    }
+
+    #[tokio::test]
+    async fn unregister_client_decrements_counters_for_all_assigned_relays() {
+        let manager = TurnManager::new().await;
+        register(&manager, "198.51.100.10", 19101).await;
+        register(&manager, "198.51.100.11", 19102).await;
+
+        let _ = manager.get_relay_configs("client-1", 2).await;
+        manager.unregister_client("client-1").await;
+
+        let relays = manager.relays.lock().await;
+        for relay in relays.values() {
+            assert_eq!(relay.counter.load(std::sync::atomic::Ordering::Relaxed), 0);
+        }
     }
 }
