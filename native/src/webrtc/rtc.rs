@@ -135,6 +135,7 @@ struct RtcClient {
     channel_ids: ChannelIds,
     pending_transmits: VecDeque<(Vec<u8>, str0m::channel::ChannelId)>,
     early_events: Vec<Event>,
+    pending_remote_candidates: VecDeque<str0m::Candidate>,
     candidate_rx: tokio::sync::mpsc::Receiver<str0m::Candidate>,
     /// TURN relay state machine for relayed traffic. `None` when operating P2P-only.
     turn: Option<TurnRelayInfo>,
@@ -282,9 +283,20 @@ impl RtcClient {
             channel_ids,
             pending_transmits: VecDeque::new(),
             early_events: Vec::new(),
+            pending_remote_candidates: VecDeque::new(),
             candidate_rx,
             turn: turn_info,
         };
+
+        for candidate in ip_candidates {
+            client.add_or_defer_remote_candidate(candidate, "IP-based");
+        }
+
+        if let Err(e) = signalling.send_answer(answer_sdp, me_clone, &request_id_owned).await {
+            log::warn!("[rtc-client] Failed to send answer: {}", e);
+        }
+
+        log::info!("[rtc-client] Answer sent, candidate resolution continuing in background");
 
         let connected = false;
         let client = client.wait_for_connected(connected).await?;
