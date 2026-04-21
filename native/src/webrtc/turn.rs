@@ -3,6 +3,7 @@
 //! Provides types and utilities for integrating `turn_client_proto::TurnClientUdp`
 //! as a co-resident sans-I/O driver alongside str0m in the RTC event loop.
 
+use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::time::Instant;
 
@@ -26,6 +27,10 @@ pub struct TurnRelayInfo {
     /// Cached next deadline for the TURN client, as a `std::time::Instant`.
     /// Updated by `drive_turn()` in the RTC event loop.
     pub cached_timeout: Instant,
+    /// Peer addresses for which ChannelBind succeeded on this allocation.
+    /// Populated from `TurnEvent::ChannelCreated`. The RTC loop gates
+    /// deferred remote relay candidates on membership in this set.
+    bound_channels: HashSet<SocketAddr>,
 }
 
 impl TurnRelayInfo {
@@ -37,7 +42,20 @@ impl TurnRelayInfo {
             relay_addr,
             stun_base,
             cached_timeout: Instant::now(),
+            bound_channels: HashSet::new(),
         }
+    }
+
+    pub fn have_bound_channel(&self, peer: SocketAddr) -> bool {
+        self.bound_channels.contains(&peer)
+    }
+
+    pub fn mark_channel_bound(&mut self, peer: SocketAddr) {
+        self.bound_channels.insert(peer);
+    }
+
+    pub fn mark_channel_unbound(&mut self, peer: SocketAddr) {
+        self.bound_channels.remove(&peer);
     }
 }
 
