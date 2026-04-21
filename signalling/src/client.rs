@@ -53,8 +53,13 @@ impl Client {
     pub async fn request(
         self: &Arc<Self>,
         mut message: schema::devlog::rpc_signalling::server::Message,
+        slot_idx: Option<u32>,
     ) -> Result<schema::devlog::rpc_signalling::server::Message, ClientError> {
-        let request_id = Uuid::new_v4().to_string();
+        let base = Uuid::new_v4().to_string();
+        let request_id = match slot_idx {
+            Some(idx) if idx > 0 => format!("{base}-slot-{idx}"),
+            _ => base,
+        };
         message.request_id = Some(request_id.clone());
 
         let (tx, rx) = oneshot::channel();

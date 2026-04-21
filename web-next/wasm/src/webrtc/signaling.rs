@@ -20,6 +20,7 @@ impl SignalingClient {
         offer_sdp: &str,
         session_id: &str,
         me: PeerMessage,
+        slot_idx: u32,
     ) -> Result<(String, PeerMessage), SignalingError> {
         let url = format!("{}/offer/{}", self.http_url.trim_end_matches('/'), peer_id);
 
@@ -30,6 +31,7 @@ impl SignalingClient {
             },
             peer: me,
             session_id: Some(session_id.to_string()),
+            slot_idx: Some(slot_idx),
         };
 
         let mut encoded = Vec::new();

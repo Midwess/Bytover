@@ -163,6 +163,7 @@ async fn offer_handler(key: web::Path<String>, body: Bytes, state: web::Data<Ser
         }
     };
 
+    let slot_idx = offer_request.slot_idx;
     let mut message = Message {
         offer: Some(schema::devlog::rpc_signalling::server::OfferMessage {
             sdp: offer_request.offer.sdp,
@@ -176,7 +177,7 @@ async fn offer_handler(key: web::Path<String>, body: Bytes, state: web::Data<Ser
     message.ice_config = ice_configs.first().cloned();
     message.ice_configs = ice_configs;
 
-    match client.request(message).await {
+    match client.request(message, slot_idx).await {
         Ok(response) => {
             let answer = match response.answer {
                 Some(answer) => answer,

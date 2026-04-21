@@ -36,6 +36,67 @@ use crate::webrtc::web::{RtcConnectionWrapper, RtcDataChannelWrapper, WebRtcApi}
 
 pub type WebRtcClientError = WebRtcErrors;
 
+struct ReassemblyEntry {
+    buf: Vec<u8>,
+    received: u32,
+    part_count: u8,
+    final_len: usize,
+}
+
+impl ReassemblyEntry {
+    fn new(part_count: u8) -> Self {
+        debug_assert!(part_count > 0 && part_count < 32);
+        let cap = part_count as usize * WIRE_PART_SIZE;
+        let mut buf = Vec::with_capacity(cap);
+        unsafe {
+            buf.set_len(cap);
+        }
+        Self {
+            buf,
+            received: 0,
+            part_count,
+            final_len: 0,
+        }
+    }
+
+    fn insert(&mut self, part_index: u8, payload: &[u8]) -> bool {
+        debug_assert!(part_index < self.part_count);
+        debug_assert!(payload.len() <= WIRE_PART_SIZE);
+        debug_assert!(part_index + 1 == self.part_count || payload.len() == WIRE_PART_SIZE);
+
+        let bit = 1u32 << part_index;
+        if self.received & bit != 0 {
+            return false;
+        }
+        let dst_offset = part_index as usize * WIRE_PART_SIZE;
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                payload.as_ptr(),
+                self.buf.as_mut_ptr().add(dst_offset),
+                payload.len(),
+            );
+        }
+        self.received |= bit;
+        if part_index + 1 == self.part_count {
+            self.final_len = dst_offset + payload.len();
+        }
+        self.received == (1u32 << self.part_count) - 1
+    }
+
+    fn finalize(mut self) -> Vec<u8> {
+        unsafe {
+            self.buf.set_len(self.final_len);
+        }
+        self.buf
+    }
+}
+
+pub struct ConnectionSlot {
+    pub index: usize,
+    pub connection: Arc<RtcConnectionWrapper>,
+    pub reliable_channel: Arc<RtcDataChannelWrapper>,
+}
+
 pub struct WebRtcClient {
     transfers_context: TransfersContext,
     me: OnceCell<PeerEntity>,
@@ -49,8 +110,7 @@ pub struct WebRtcClient {
     msg_channel: OnceCell<DirectMessageChannel>,
     unordered_msg_channel: OnceCell<DirectMessageChannel>,
     prefix_channels: Mutex<HashMap<u16, mpsc::Sender<(u64, Vec<u8>)>>>,
-    connection: OnceCell<Arc<RtcConnectionWrapper>>,
-    reliable_channel: OnceCell<Arc<RtcDataChannelWrapper>>,
+    connections: Mutex<Vec<ConnectionSlot>>,
     disconnect_signal: Mutex<Option<oneshot::Sender<()>>>,
     disconnect_receiver: YieldContainer<oneshot::Receiver<()>>,
     disconnect_requested: AtomicBool,
@@ -82,18 +142,30 @@ impl WebRtcClient {
     ) -> Result<Arc<Self>, WebRtcClientError> {
         log::info!("WebRtcClient connecting to peer {}", peer_id);
 
-        let ice_config = signaling.fetch_relay_config(peer_id).await.unwrap_or_else(|e| {
-            log::warn!("Failed to fetch relay config: {:?}", e);
-            schema::devlog::rpc_signalling::server::IceConfig {
+        let ice_configs = signaling
+            .fetch_relay_configs(peer_id, 1)
+            .await
+            .unwrap_or_else(|e| {
+                log::warn!("Failed to fetch relay configs: {:?}", e);
+                vec![schema::devlog::rpc_signalling::server::IceConfig {
+                    urls: vec!["stun:stun.l.google.com:19302".to_string()],
+                    ..Default::default()
+                }]
+            });
+
+        let total_slots = ice_configs.len().max(1);
+        log::info!("Using {} ice config(s) (total_slots={})", ice_configs.len(), total_slots);
+
+        let primary_config = ice_configs
+            .first()
+            .cloned()
+            .unwrap_or_else(|| schema::devlog::rpc_signalling::server::IceConfig {
                 urls: vec!["stun:stun.l.google.com:19302".to_string()],
                 ..Default::default()
-            }
-        });
-
-        log::info!("Using ice config {ice_config:?}");
+            });
         let session_id = uuid::Uuid::new_v4().to_string();
 
-        let api = WebRtcApi::new(ice_config.clone());
+        let api = WebRtcApi::new(primary_config.clone());
         let connection = api.create_peer_connection().map_err(|e| WebRtcClientError::Connection(e.to_string()))?;
 
         let (msg_inbound_tx, msg_inbound_rx) = unbounded();
@@ -102,7 +174,6 @@ impl WebRtcClient {
         let (unordered_out_tx, unordered_out_rx) = mpsc::channel(16);
         let (disconnect_tx, disconnect_rx) = oneshot::channel();
 
-        // Setup P2P channels
         let reliable_channel = api
             .create_unordered_channel(connection.clone(), RELIABLE_DATA_CHANNEL_ID)
             .map_err(|e| WebRtcClientError::Connection(e.to_string()))?;
@@ -124,7 +195,6 @@ impl WebRtcClient {
             .await
             .map_err(|e| WebRtcClientError::Connection(e.to_string()))?;
 
-        // ICE gathering for P2P
         ice_agent
             .wait_for_gathering_complete(&connection)
             .await
@@ -137,7 +207,7 @@ impl WebRtcClient {
 
         log::info!("ICE gathering complete, SDP ready. Starting signalling.");
 
-        let (open_tx, mut _open_rx) = mpsc::channel::<()>(1);
+        let (open_tx, mut open_rx) = mpsc::channel::<()>(1);
 
         let p2p_tx = open_tx.clone();
         let sig_p2p = signaling.clone();
@@ -163,16 +233,17 @@ impl WebRtcClient {
             msg_channel: OnceCell::new(),
             unordered_msg_channel: OnceCell::new(),
             prefix_channels: Mutex::new(HashMap::new()),
-            connection: OnceCell::new(),
-            reliable_channel: OnceCell::new(),
+            connections: Mutex::new(Vec::with_capacity(total_slots)),
             disconnect_signal: Mutex::new(Some(disconnect_tx)),
             disconnect_receiver: YieldContainer::new(disconnect_rx),
             disconnect_requested: AtomicBool::new(false),
         });
 
-        let _ = client.me.set(me);
+        let _ = client.me.set(me.clone());
 
-        let p2p_res = sig_p2p.send_offer(&peer_id_p2p, &local_sdp_p2p, &session_id_p2p, me_proto).await;
+        let p2p_res = sig_p2p
+            .send_offer(&peer_id_p2p, &local_sdp_p2p, &session_id_p2p, me_proto.clone(), 0)
+            .await;
         let mut p2p_answer_sdp = None;
         if let Ok((answer_sdp, remote_peer_proto)) = p2p_res {
             log::info!("Got P2P answer from remote peer {answer_sdp:?}");
@@ -193,28 +264,114 @@ impl WebRtcClient {
             }
             let _ = api.wait_for_channel_open(reliable_channel_p2p).await;
             let _ = api.wait_for_channel_open(unordered_channel_p2p).await;
-            if let Ok(_) = api.wait_for_channel_open(ordered_channel_p2p).await {
-                log::info!("[webrtc-client] truly P2P connected!");
+            if api.wait_for_channel_open(ordered_channel_p2p).await.is_ok() {
+                log::info!("[webrtc-client] slot 0 open!");
                 let _ = p2p_tx.clone().send(()).await;
             }
         });
 
-        let _ = client.connection.set(connection);
-        let _ = client.reliable_channel.set(reliable_channel);
+        client.connections.lock().await.push(ConnectionSlot {
+            index: 0,
+            connection: connection.clone(),
+            reliable_channel: reliable_channel.clone(),
+        });
 
         let _ = client.msg_channel.set(DirectMessageChannel::new(ordered_out_tx));
         let _ = client.unordered_msg_channel.set(DirectMessageChannel::new(unordered_out_tx));
 
-        // For outbound, we send data over the open channel
         spawn_outbound_sender(ordered_channel.clone(), ordered_out_rx);
         spawn_outbound_sender(unordered_channel.clone(), unordered_out_rx);
 
-        // Wait for connection to open
-        let _ = _open_rx.next().await;
+        let _ = open_rx.next().await;
 
-        log::info!("WebRtcClient connection established (at least one leg open), peer info exchanged via signaling.");
+        log::info!("WebRtcClient slot 0 established; peer info exchanged via signaling.");
+
+        for (i, slot_config) in ice_configs.into_iter().enumerate().skip(1) {
+            let sig = signaling.clone();
+            let ice_agent = ice_agent.clone();
+            let peer_id_owned = peer_id.to_string();
+            let session_id_owned = session_id.clone();
+            let data_inbound_tx = data_inbound_tx.clone();
+            let me_proto = schema::devlog::bitbridge::PeerMessage::from(me.clone());
+            let client_weak = Arc::downgrade(&client);
+
+            wasm_bindgen_futures::spawn_local(async move {
+                match Self::install_slot(i, slot_config, sig, ice_agent, peer_id_owned, session_id_owned, me_proto, data_inbound_tx)
+                    .await
+                {
+                    Ok(slot) => {
+                        if let Some(client) = client_weak.upgrade() {
+                            client.connections.lock().await.push(slot);
+                            log::info!("[webrtc-client] slot {i} joined pool");
+                        }
+                    }
+                    Err(e) => {
+                        log::warn!("[webrtc-client] slot {i} failed to connect: {e:?}");
+                    }
+                }
+            });
+        }
 
         Ok(client)
+    }
+
+    async fn install_slot(
+        index: usize,
+        ice_config: schema::devlog::rpc_signalling::server::IceConfig,
+        signaling: SignalingClient,
+        ice_agent: IceAgent,
+        peer_id: String,
+        session_id: String,
+        me_proto: schema::devlog::bitbridge::PeerMessage,
+        data_inbound_tx: mpsc::UnboundedSender<Vec<u8>>,
+    ) -> Result<ConnectionSlot, WebRtcClientError> {
+        log::info!("[webrtc-client] Installing slot {index}");
+
+        let api = WebRtcApi::new(ice_config);
+        let connection = api
+            .create_peer_connection()
+            .map_err(|e| WebRtcClientError::Connection(e.to_string()))?;
+
+        let reliable_channel = api
+            .create_unordered_channel(connection.clone(), RELIABLE_DATA_CHANNEL_ID)
+            .map_err(|e| WebRtcClientError::Connection(e.to_string()))?;
+
+        api.setup_channel_handlers(reliable_channel.clone(), data_inbound_tx)
+            .map_err(|e| WebRtcClientError::Connection(e.to_string()))?;
+
+        api.create_offer_and_set_local(&connection)
+            .await
+            .map_err(|e| WebRtcClientError::Connection(e.to_string()))?;
+
+        ice_agent
+            .wait_for_gathering_complete(&connection)
+            .await
+            .map_err(|e| WebRtcClientError::Connection(e.to_string()))?;
+
+        let local_sdp = connection
+            .local_description()
+            .ok_or_else(|| WebRtcClientError::Connection(format!("No local description for slot {index}")))?
+            .sdp();
+
+        let slot_idx = u32::try_from(index).unwrap_or(u32::MAX);
+        let (answer_sdp, _remote_peer) = signaling
+            .send_offer(&peer_id, &local_sdp, &session_id, me_proto, slot_idx)
+            .await
+            .map_err(|e| WebRtcClientError::Signalling(format!("slot {index} signalling failed: {e:?}")))?;
+
+        api.set_remote_description(&connection, &answer_sdp)
+            .await
+            .map_err(|e| WebRtcClientError::Connection(format!("slot {index} remote desc failed: {e:?}")))?;
+
+        api.wait_for_channel_open(reliable_channel.clone())
+            .await
+            .map_err(|e| WebRtcClientError::Connection(format!("slot {index} channel never opened: {e:?}")))?;
+
+        Ok(ConnectionSlot {
+            index,
+            connection,
+            reliable_channel,
+        })
     }
 
     pub async fn run(self: Arc<Self>) -> Result<(), WebRtcClientError> {
@@ -549,13 +706,12 @@ impl WebRtcClient {
 
         log::info!("Disconnecting WebRtcClient from peer {:?}", self.peer_id());
 
-        if let Some(channel) = self.reliable_channel.get() {
-            channel.close();
+        let mut slots = self.connections.lock().await;
+        for slot in slots.drain(..) {
+            slot.reliable_channel.close();
+            slot.connection.close();
         }
-
-        if let Some(connection) = self.connection.get() {
-            connection.close();
-        }
+        drop(slots);
 
         if let Some(signal) = self.disconnect_signal.lock().await.take() {
             let _ = signal.send(());

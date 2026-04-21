@@ -35,6 +35,7 @@ impl IceCandidateTracker {
     }
 }
 
+#[derive(Clone)]
 pub struct IceAgent {
     timeout_ms: u64,
     early_check_ms: u64,
