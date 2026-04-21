@@ -18,6 +18,7 @@ use turn_client_proto::udp::{TurnClientUdp, TurnEvent, TurnPollRet, TurnRecvRet}
 use schema::devlog::rpc_signalling::server::IceConfig;
 
 use super::turn::{stun_now, TurnRelayInfo};
+use crate::config::is_relay_only;
 
 const STUN_TIMEOUT: Duration = Duration::from_millis(3000);
 const TURN_TIMEOUT: Duration = Duration::from_millis(5000);
@@ -1058,7 +1059,7 @@ impl IceAgent {
                 };
                 let addr = SocketAddr::new(ip, port);
 
-                let foundation = parts[0].to_string();
+                let foundation = parts[0].strip_prefix("a=candidate:").unwrap_or(parts[0]).to_string();
                 let component_id: u16 = parts[1].parse().unwrap_or(1);
                 let proto_str = parts[2];
                 let proto = str0m::net::Protocol::try_from(proto_str)
@@ -1078,6 +1079,10 @@ impl IceAgent {
                     "relay" => str0m::CandidateKind::Relayed,
                     _ => str0m::CandidateKind::Host,
                 };
+
+                if is_relay_only() && kind != str0m::CandidateKind::Relayed {
+                    return None;
+                }
 
                 // Parse optional raddr/rport
                 let mut raddr = None;
@@ -1205,6 +1210,8 @@ impl IceAgent {
 
         let lines: Vec<&str> = sdp.lines().collect();
 
+        let relay_only = is_relay_only();
+
         // Parse candidate lines with hostnames
         let candidates_to_resolve: Vec<String> = lines
             .iter()
@@ -1215,6 +1222,18 @@ impl IceAgent {
                     if parts.len() > 5 {
                         let address = parts[4];
                         if address.parse::<std::net::IpAddr>().is_err() {
+                            // Check if relay-only and not a relay candidate
+                            if relay_only {
+                                let mut idx = 6;
+                                while idx + 1 < parts.len() && parts[idx] != "typ" {
+                                    idx += 1;
+                                }
+                                idx += 1;
+                                let kind_str = parts.get(idx).unwrap_or(&"host");
+                                if *kind_str != "relay" {
+                                    return None;
+                                }
+                            }
                             return Some(trimmed.to_string());
                         }
                     }
@@ -1267,7 +1286,58 @@ impl IceAgent {
         let gather_start = Instant::now();
 
         let mut candidates: HashSet<Candidate> = HashSet::new();
-        let local_port = socket.local_addr().map(|a| a.port()).unwrap_or(0);
+        let local_addr = socket.local_addr().unwrap_or_else(|_| SocketAddr::new(std::net::Ipv4Addr::UNSPECIFIED.into(), 0));
+
+        if is_relay_only() {
+            log::info!("[ice] Relay-only mode: skipping host and STUN candidate gathering");
+            let credentials =
+                turn_credentials_from_config(config).ok_or_else(|| IceError::Turn("missing TURN credentials".to_string()))?;
+            let mut turn_phase = TurnPhase::start(local_addr, &parse_turn_urls(config), credentials)?;
+            let mut buf = [0u8; STUN_MAX_PACKET];
+
+            loop {
+                let turn_drive = turn_phase.drive();
+                send_outbound_packets(socket, turn_drive.outbound).await?;
+
+                if let Some(reason) = turn_phase.failure() {
+                    return Err(IceError::Turn(reason.to_string()));
+                }
+
+                if turn_phase.is_complete() {
+                    let turn_info = turn_phase.take_success().expect("TURN phase completed without relay info");
+                    let relay_addr = turn_info.relay_addr;
+                    match Candidate::relayed(relay_addr, relay_addr, "udp") {
+                        Ok(candidate) => {
+                            log::debug!("[ice] Relayed candidate: {}", candidate);
+                            candidates.insert(candidate);
+                        }
+                        Err(error) => {
+                            return Err(IceError::Parse(format!(
+                                "failed to create relayed candidate for {relay_addr}: {error:?}"
+                            )));
+                        }
+                    }
+
+                    let result: Vec<Candidate> = candidates.into_iter().collect();
+                    log::info!("[ice] Gathered {:?} relay-only candidates in {:?}", result, gather_start.elapsed());
+                    return Ok((result, Some(turn_info)));
+                }
+
+                let wait_for = turn_drive.wait.unwrap_or(TURN_MIN_RECV_TIMEOUT).max(TURN_MIN_RECV_TIMEOUT);
+
+                match tokio::time::timeout(wait_for, socket.recv_from(&mut buf)).await {
+                    Ok(Ok((n, src))) => {
+                        turn_phase.handle_packet(&buf[..n], from_v6_mapped(src));
+                    }
+                    Ok(Err(error)) => {
+                        log::warn!("[ice] Socket recv error during relay-only gathering: {}", error);
+                    }
+                    Err(_) => {}
+                }
+            }
+        }
+
+        let local_port = local_addr.port();
         let host_start = Instant::now();
 
         if let Ok(ifaces) = if_addrs::get_if_addrs() {
@@ -1289,7 +1359,6 @@ impl IceAgent {
         }
         log::info!("[ice] Host candidate enumeration completed in {:?}", host_start.elapsed());
 
-        let local_addr = socket.local_addr().unwrap_or_else(|_| SocketAddr::new(std::net::Ipv4Addr::UNSPECIFIED.into(), 0));
         let mut stun_phase = StunPhase::start(local_addr, &parse_stun_urls(config))?;
         let credentials =
             turn_credentials_from_config(config).ok_or_else(|| IceError::Turn("missing TURN credentials".to_string()))?;
