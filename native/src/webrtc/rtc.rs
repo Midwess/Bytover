@@ -1,7 +1,7 @@
 use socket2::{Domain, Socket, Type};
+use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex as StdMutex};
 use std::time::{Duration, Instant};
 use str0m::channel::{ChannelConfig, ChannelId};
 use str0m::net::{Protocol, Receive};
@@ -120,7 +120,7 @@ impl Drop for RtcHandle {
 }
 
 struct RtcClient {
-    rtc: Arc<StdMutex<Rtc>>,
+    rtc: RefCell<Rtc>,
     socket: tokio::net::UdpSocket,
     local_addr: SocketAddr,
     local_v4_addr: Option<SocketAddr>,
@@ -129,9 +129,8 @@ struct RtcClient {
     cached_timeout: Instant,
     channel_ids: ChannelIds,
     pending_transmits: VecDeque<(Vec<u8>, str0m::channel::ChannelId)>,
-    /// Events received during the connect/handshake phase that need to be
-    /// replayed once the run loop starts (e.g. early ChannelData).
     early_events: Vec<Event>,
+    candidate_rx: tokio::sync::mpsc::Receiver<str0m::Candidate>,
 }
 
 impl RtcClient {
@@ -218,20 +217,27 @@ impl RtcClient {
 
         let answer = rtc.sdp_api().accept_offer(offer).map_err(|e| WebRtcClientError::Rtc(e.to_string()))?;
 
-        let rtc = Arc::new(StdMutex::new(rtc));
-        let rtc_for_spawn = rtc.clone();
-
         let answer_sdp = answer.to_sdp_string();
         let me_clone = me.clone();
         let request_id_owned = request_id.to_string();
         let original_sdp = offer_message.sdp.clone();
+
+        let ip_candidates = IceAgent::parse_ip_based_candidates(&original_sdp);
+        for candidate in &ip_candidates {
+            log::debug!("[rtc-client] Adding IP-based remote candidate: {}", candidate);
+            rtc.add_remote_candidate(candidate.clone());
+        }
+
+        let (candidate_tx, candidate_rx) = tokio::sync::mpsc::channel::<str0m::Candidate>(16);
 
         tokio::spawn(async move {
             let stream = IceAgent::resolve_remote_candidates_stream(&original_sdp);
             futures_util::pin_mut!(stream);
             while let Some(candidate) = stream.next().await {
                 log::debug!("[rtc-client] Resolved remote candidate: {}", candidate);
-                rtc_for_spawn.lock().unwrap().add_remote_candidate(candidate);
+                if candidate_tx.send(candidate).await.is_err() {
+                    break;
+                }
             }
             log::info!("[rtc-client] Remote candidate resolution complete");
         });
@@ -243,7 +249,7 @@ impl RtcClient {
         log::info!("[rtc-client] Answer sent, candidate resolution continuing in background");
 
         let client = Self {
-            rtc,
+            rtc: RefCell::new(rtc),
             socket,
             local_addr,
             local_v4_addr,
@@ -253,6 +259,7 @@ impl RtcClient {
             channel_ids,
             pending_transmits: VecDeque::new(),
             early_events: Vec::new(),
+            candidate_rx,
         };
 
         let connected = false;
@@ -413,6 +420,20 @@ impl RtcClient {
     async fn wait_for_connected(mut self, mut connected: bool) -> Result<Self, WebRtcClientError> {
         let connect_deadline = Instant::now() + CONNECT_TIMEOUT;
         loop {
+            loop {
+                match self.candidate_rx.try_recv() {
+                    Ok(candidate) => {
+                        log::debug!("[rtc-client] Adding trickle candidate: {}", candidate);
+                        self.rtc_mut().add_remote_candidate(candidate);
+                    }
+                    Err(tokio::sync::mpsc::error::TryRecvError::Empty) => break,
+                    Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
+                        log::info!("[rtc-client] Candidate resolution channel closed");
+                        break;
+                    }
+                }
+            }
+
             if let RtcOutcome::Event(event) = self.poll_event().await? {
                 match event {
                     Event::Connected => {
@@ -592,8 +613,8 @@ impl RtcClient {
         }
     }
 
-    fn rtc_mut(&mut self) -> std::sync::MutexGuard<'_, Rtc> {
-        self.rtc.lock().unwrap()
+    fn rtc_mut(&mut self) -> std::cell::RefMut<'_, Rtc> {
+        self.rtc.borrow_mut()
     }
 }
 

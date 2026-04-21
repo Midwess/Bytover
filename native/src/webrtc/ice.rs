@@ -1032,6 +1032,85 @@ fn resolve_candidate_line(line: &str) -> Result<Candidate, String> {
 pub struct IceAgent;
 
 impl IceAgent {
+    /// Parse candidate lines from SDP and return only those with IP addresses.
+    ///
+    /// This is the IP-only complement of `resolve_remote_candidates_stream()`,
+    /// which handles hostname-based candidates that require DNS resolution.
+    pub fn parse_ip_based_candidates(sdp: &str) -> Vec<Candidate> {
+        sdp.lines()
+            .filter_map(|line| {
+                let trimmed = line.trim();
+                if !trimmed.starts_with("a=candidate:") {
+                    return None;
+                }
+                let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                if parts.len() < 6 {
+                    return None;
+                }
+                let address = parts[4];
+                let port: u16 = match parts[5].parse() {
+                    Ok(p) => p,
+                    Err(_) => return None,
+                };
+                let ip: std::net::IpAddr = match address.parse() {
+                    Ok(ip) => ip,
+                    Err(_) => return None, // hostname — not IP-based
+                };
+                let addr = SocketAddr::new(ip, port);
+
+                let foundation = parts[0].to_string();
+                let component_id: u16 = parts[1].parse().unwrap_or(1);
+                let proto_str = parts[2];
+                let proto = str0m::net::Protocol::try_from(proto_str)
+                    .unwrap_or(str0m::net::Protocol::Udp);
+                let prio: u32 = parts[3].parse().unwrap_or(0);
+
+                // Find "typ <kind>" starting at index 6
+                let mut idx = 6;
+                if idx < parts.len() && parts[idx] == "typ" {
+                    idx += 1;
+                }
+                let kind_str = parts.get(idx).unwrap_or(&"host");
+                let kind = match *kind_str {
+                    "host" => str0m::CandidateKind::Host,
+                    "srflx" => str0m::CandidateKind::ServerReflexive,
+                    "prflx" => str0m::CandidateKind::PeerReflexive,
+                    "relay" => str0m::CandidateKind::Relayed,
+                    _ => str0m::CandidateKind::Host,
+                };
+
+                // Parse optional raddr/rport
+                let mut raddr = None;
+                let mut rport: Option<u16> = None;
+                idx += 1;
+                while idx + 1 < parts.len() {
+                    match parts[idx] {
+                        "raddr" => {
+                            if let Ok(a) = parts[idx + 1].parse() {
+                                raddr = Some(a);
+                            }
+                        }
+                        "rport" => {
+                            if let Ok(p) = parts[idx + 1].parse() {
+                                rport = Some(p);
+                            }
+                        }
+                        _ => {}
+                    }
+                    idx += 1;
+                }
+                let raddr_sock = match (raddr, rport) {
+                    (Some(ip), Some(p)) => Some(std::net::SocketAddr::new(ip, p)),
+                    _ => None,
+                };
+
+                Some(Candidate::from_parts(
+                    foundation, component_id, proto, prio, addr, kind, raddr_sock, None, None,
+                ))
+            })
+            .collect()
+    }
+
     pub async fn resolve_remote_candidates(sdp: &str) -> String {
         use std::collections::HashMap;
 
