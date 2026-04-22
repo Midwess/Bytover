@@ -1,4 +1,5 @@
 use crate::file_system::device_file::{wasm_file, WebFile};
+use crate::file_system::path_extension::PICKED_SCHEME;
 use crate::web_worker::bridge::{WebWorkerBridge, WorkerMessage};
 use crate::web_worker::opfs::{FileOperation, OpfsOperation, OpfsOperationOutput, OpfsWorker};
 use anyhow::{anyhow, Result};
@@ -264,11 +265,14 @@ pub struct IOWriterOpfsImpl {
     path: PathBuf,
     position: usize,
     compression_support: bool,
+    is_picked: bool,
+    finalized: bool,
 }
 
 impl IOWriterOpfsImpl {
     pub async fn new(path: PathBuf, compression_support: bool) -> Result<Self> {
         let path_str = path.to_string_lossy().to_string();
+        let is_picked = path_str.starts_with(PICKED_SCHEME);
 
         let msg = WorkerMessage::new(OpfsOperation {
             file_path: path_str,
@@ -282,6 +286,8 @@ impl IOWriterOpfsImpl {
                 path,
                 position: 0,
                 compression_support,
+                is_picked,
+                finalized: false,
             }),
             OpfsOperationOutput::Error(e) => Err(anyhow::anyhow!("Failed to open file for writing: {:?}", e)),
             _ => Err(anyhow::anyhow!("Unexpected response")),
@@ -326,6 +332,14 @@ impl IOWriter for IOWriterOpfsImpl {
 
     async fn end(&mut self) -> Result<()> {
         self.flush().await?;
+        if self.is_picked && !self.finalized {
+            let msg = WorkerMessage::new(OpfsOperation {
+                file_path: self.path.to_string_lossy().to_string(),
+                operation: FileOperation::FinalizePicked { commit: true },
+            });
+            OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to finalize picked writer"))?;
+            self.finalized = true;
+        }
         Ok(())
     }
 
@@ -337,6 +351,18 @@ impl IOWriter for IOWriterOpfsImpl {
 
         OPFS_WORKER.send(msg).await.ok_or(anyhow::anyhow!("Failed to flush"))?;
         Ok(())
+    }
+}
+
+impl Drop for IOWriterOpfsImpl {
+    fn drop(&mut self) {
+        if self.is_picked && !self.finalized {
+            let msg = WorkerMessage::new(OpfsOperation {
+                file_path: self.path.to_string_lossy().to_string(),
+                operation: FileOperation::FinalizePicked { commit: false },
+            });
+            OPFS_WORKER.unbounded_send(msg);
+        }
     }
 }
 

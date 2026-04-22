@@ -550,7 +550,8 @@ impl WebRtcClient {
         };
 
         let compressed = start_delimiter.compressed();
-        let mut writer = self.resource_repo.write(resource.path.clone(), compressed).await?;
+        let write_path = crate::take_picked_path(session_order_id, resource_order_id).unwrap_or_else(|| resource.path.clone());
+        let mut writer = self.resource_repo.write(write_path, compressed).await?;
 
         let mut expected_size: Option<u64> = None;
         let mut reassembly: HashMap<u64, ReassemblyEntry> = HashMap::new();
@@ -651,6 +652,7 @@ impl WebRtcClient {
         }
 
         drop(reassembly);
+        writer.end().await.map_err(|e| WebRtcClientError::Transfer(e.to_string()))?;
         self.prefix_channels.lock().await.remove(&transfer_id);
         Ok(progress)
     }

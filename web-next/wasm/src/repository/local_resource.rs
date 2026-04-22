@@ -176,8 +176,8 @@ impl LocalResourceRepository for LocalResourceRepositoryImpl {
     }
 
     async fn write(&self, path: LocalResourcePath, compressed: bool) -> Result<Box<dyn DIOWriter>, PersistenceError> {
-        if let Some(path) = path.opfs_path() {
-            let writer = IOWriterOpfsImpl::new(path.into(), compressed).await?;
+        if let Some(worker_path) = path.any_worker_path() {
+            let writer = IOWriterOpfsImpl::new(worker_path.into(), compressed).await?;
             return Ok(Box::new(writer));
         }
 
