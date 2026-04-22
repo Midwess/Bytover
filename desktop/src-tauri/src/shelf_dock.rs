@@ -187,11 +187,13 @@ pub fn begin_dock<R: Runtime>(app: &AppHandle<R>, window: &WebviewWindow<R>, edg
 
     let sliver_width_phys = (SLIVER_WIDTH_LOGICAL * scale).round().max(20.0) as u32;
 
+    let clamped_pre_dock_pos = clamp_pos_to_monitor(current_pos, current_size, *m_pos, *m_size);
+
     let target_x = match edge {
         DockEdge::Left => m_pos.x,
         DockEdge::Right => m_pos.x + m_size.width as i32 - sliver_width_phys as i32,
     };
-    let target_y = current_pos.y.max(m_pos.y);
+    let target_y = clamped_pre_dock_pos.y;
 
     let target_pos = PhysicalPosition { x: target_x, y: target_y };
     let target_size = PhysicalSize { width: sliver_width_phys, height: current_size.height };
@@ -199,12 +201,15 @@ pub fn begin_dock<R: Runtime>(app: &AppHandle<R>, window: &WebviewWindow<R>, edg
     let state = DockState {
         edge,
         pre_dock_size: current_size,
-        pre_dock_pos: current_pos,
+        pre_dock_pos: clamped_pre_dock_pos,
     };
     store_dock(&label, state);
 
     let app_clone = app.clone();
     let label_for_emit = label.clone();
+    let label_for_check = label.clone();
+    let monitor_left = m_pos.x;
+    let monitor_right = m_pos.x + m_size.width as i32;
     animate_geometry(
         app.clone(),
         label.clone(),
@@ -214,10 +219,35 @@ pub fn begin_dock<R: Runtime>(app: &AppHandle<R>, window: &WebviewWindow<R>, edg
         target_size,
         Some(Box::new(move |_app| {
             if let Some(w) = app_clone.get_webview_window(&label_for_emit) {
+                if let Ok(final_pos) = w.outer_position() {
+                    if final_pos.x < monitor_left || final_pos.x >= monitor_right {
+                        log::warn!(
+                            "shelf_dock: post-dock position {:?} for {} is outside monitor [{}, {})",
+                            final_pos, label_for_check, monitor_left, monitor_right
+                        );
+                    }
+                }
                 let _ = w.emit("shelf-docked", serde_json::json!({ "edge": edge.as_str() }));
             }
         })),
     );
+}
+
+fn clamp_pos_to_monitor(
+    pos: PhysicalPosition<i32>,
+    size: PhysicalSize<u32>,
+    m_pos: PhysicalPosition<i32>,
+    m_size: PhysicalSize<u32>,
+) -> PhysicalPosition<i32> {
+    let min_x = m_pos.x;
+    let max_x = m_pos.x + m_size.width as i32 - size.width as i32;
+    let min_y = m_pos.y;
+    let max_y = m_pos.y + m_size.height as i32 - size.height as i32;
+
+    let x = if max_x >= min_x { pos.x.clamp(min_x, max_x) } else { pos.x };
+    let y = if max_y >= min_y { pos.y.clamp(min_y, max_y) } else { pos.y };
+
+    PhysicalPosition { x, y }
 }
 
 pub fn begin_expand<R: Runtime>(app: &AppHandle<R>, window: &WebviewWindow<R>) {
@@ -280,28 +310,28 @@ pub fn maybe_detect_edge_dock<R: Runtime>(app: &AppHandle<R>, window: &WebviewWi
     let m_pos = monitor.position();
     let m_size = monitor.size();
 
-    let center_x = pos.x as f64 + size.width as f64 / 2.0;
-    let left_edge = m_pos.x as f64;
-    let right_edge = m_pos.x as f64 + m_size.width as f64;
+    let window_left = pos.x as f64;
+    let window_right = pos.x as f64 + size.width as f64;
+    let screen_left = m_pos.x as f64;
+    let screen_right = m_pos.x as f64 + m_size.width as f64;
 
     let snap_phys = EDGE_SNAP_PX * scale;
     let undock_phys = UNDOCK_THRESHOLD_PX * scale;
 
     if let Some(state) = dock_state(&label) {
-        let sliver_phys = SLIVER_WIDTH_LOGICAL * scale;
-        let docked_edge_x = match state.edge {
-            DockEdge::Left => left_edge + sliver_phys / 2.0,
-            DockEdge::Right => right_edge - sliver_phys / 2.0,
+        let distance_from_edge = match state.edge {
+            DockEdge::Left => window_left - screen_left,
+            DockEdge::Right => screen_right - window_right,
         };
-        if (center_x - docked_edge_x).abs() > undock_phys {
+        if distance_from_edge > undock_phys {
             begin_expand(app, window);
         }
         return;
     }
 
-    if center_x - left_edge < snap_phys {
+    if window_left - screen_left <= snap_phys {
         begin_dock(app, window, DockEdge::Left);
-    } else if right_edge - center_x < snap_phys {
+    } else if screen_right - window_right <= snap_phys {
         begin_dock(app, window, DockEdge::Right);
     }
 }

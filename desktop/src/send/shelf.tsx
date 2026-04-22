@@ -81,17 +81,39 @@ function ShelfWrapper({children, isDraggingOver = false, shelfName}: {
     )
 }
 
-function DockedSliver({edge, onExpand}: { edge: DockEdge, onExpand: () => void }) {
+function DockedSliver({edge, onExpand, shelfName, isOnline}: {
+    edge: DockEdge,
+    onExpand: () => void,
+    shelfName?: string,
+    isOnline: boolean,
+}) {
     const Icon = edge === "right" ? ChevronLeft : ChevronRight;
     const roundedSide = edge === "right" ? "rounded-l-2xl" : "rounded-r-2xl";
+    const onlineShadow = isOnline
+        ? "shadow-[0_0_10px_3px_rgb(var(--bluePrimary))_inset] animate-pulse"
+        : "";
+    const verticalWritingStyle = {
+        writingMode: "vertical-rl" as const,
+        transform: edge === "right" ? "rotate(180deg)" : undefined,
+    };
 
     return (
         <Card
-            className={`w-full h-full border-white/20 ${roundedSide} flex items-center justify-center p-0 overflow-hidden bg-card`}>
+            className={`group w-full h-full border-white/20 ${roundedSide} flex flex-col items-center justify-between p-0 overflow-hidden bg-card transition-all duration-300 ${onlineShadow}`}>
+            <div
+                className="flex-1 w-full flex items-center justify-center pt-2 overflow-hidden"
+                style={verticalWritingStyle}
+            >
+                {shelfName && (
+                    <span className="text-[10px] font-medium text-foreground/60 group-hover:text-foreground transition-opacity duration-150 opacity-70 group-hover:opacity-100 whitespace-nowrap select-none tracking-wide">
+                        {shelfName}
+                    </span>
+                )}
+            </div>
             <button
                 onClick={onExpand}
                 aria-label="Expand shelf"
-                className="w-full h-full flex items-center justify-center text-foreground/80 hover:text-foreground hover:bg-muted-foreground/15 transition-colors cursor-pointer animate-in fade-in duration-300">
+                className="w-full h-10 shrink-0 flex items-center justify-center text-foreground/80 hover:text-foreground hover:bg-muted-foreground/15 transition-colors cursor-pointer animate-in fade-in duration-300">
                 <Icon className="w-5 h-5"/>
             </button>
         </Card>
@@ -104,6 +126,8 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
     const dock = useShelfDock(window)
     const selectedResources = core.useSelectedResourcesForShelf(shelfId)
     const currentShelf = core.useCurrentShelf(shelfId)
+    const p2pSession = core.useP2PSessionForShelf(shelfId)
+    const isOnline = !!p2pSession
     const isResourceRemoveAllowed = currentShelf?.is_resource_remove_allowed ?? true
     const effectRan = useRef(false);
     const [isDraggingOver, setIsDraggingOver] = useState(false);
@@ -206,7 +230,14 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
     }, [shelfId]);
 
     if (dock.isDocked && dock.edge) {
-        return <DockedSliver edge={dock.edge} onExpand={dock.expand}/>;
+        return (
+            <DockedSliver
+                edge={dock.edge}
+                onExpand={dock.expand}
+                shelfName={currentShelf?.name}
+                isOnline={isOnline}
+            />
+        );
     }
 
     if (!shelfId) {
