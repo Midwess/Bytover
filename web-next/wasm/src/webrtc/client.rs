@@ -23,7 +23,7 @@ use shared::entities::peer::Peer as PeerEntity;
 use shared::entities::transfer_session::TransferProgress;
 use shared::protocol::webrtc::errors::WebRtcErrors;
 use shared::protocol::webrtc::message_channel::DirectMessageChannel;
-use shared::protocol::webrtc::packet::WebRtcPacket;
+use shared::protocol::webrtc::packet::{WebRtcPacket, WEBRTC_PACKET_HEADER_LEN, WIRE_PART_SIZE};
 use shared::protocol::webrtc::transfer::{TransferDelimiterShema, TransfersContext};
 use shared::repository::local_resource::LocalResourceRepository;
 use shared::repository::transfer_session::TransferSessionRepository;
@@ -109,7 +109,7 @@ pub struct WebRtcClient {
 
     msg_channel: OnceCell<DirectMessageChannel>,
     unordered_msg_channel: OnceCell<DirectMessageChannel>,
-    prefix_channels: Mutex<HashMap<u16, mpsc::Sender<(u64, Vec<u8>)>>>,
+    prefix_channels: Mutex<HashMap<u16, mpsc::Sender<(u64, u8, u8, Vec<u8>)>>>,
     connections: Mutex<Vec<ConnectionSlot>>,
     disconnect_signal: Mutex<Option<oneshot::Sender<()>>>,
     disconnect_receiver: YieldContainer<oneshot::Receiver<()>>,
@@ -511,7 +511,11 @@ impl WebRtcClient {
             transfer_id: transfer_id as u32,
         };
 
-        let (tx, mut rx) = mpsc::channel::<(u64, Vec<u8>)>(10);
+        // Capacity sized to hold at least one full compression block's worth of
+        // wire parts (128 KB / 8 KB = 16) plus headroom so the producer
+        // (`data_receiving_loop`) does not stall while the consumer is awaiting
+        // the OPFS write on a completed block.
+        let (tx, mut rx) = mpsc::channel::<(u64, u8, u8, Vec<u8>)>(64);
         self.prefix_channels.lock().await.insert(transfer_id, tx);
 
         let resource_token = self.transfers_context.get_or_create_resource_token(session_order_id, resource_order_id).await;
@@ -530,8 +534,11 @@ impl WebRtcClient {
 
         let start_delimiter = loop {
             match rx.next().with_cancel(&resource_token).await? {
-                Some((_, packet)) => {
-                    if let Ok(v) = TransferDelimiterShema::from_start_packet(&packet, session_order_id) {
+                Some((_, _, _, packet)) => {
+                    if packet.len() < WEBRTC_PACKET_HEADER_LEN {
+                        continue;
+                    }
+                    if let Ok(v) = TransferDelimiterShema::from_start_packet(&packet[WEBRTC_PACKET_HEADER_LEN..], session_order_id) {
                         break v;
                     }
                 }
@@ -546,39 +553,77 @@ impl WebRtcClient {
         let mut writer = self.resource_repo.write(resource.path.clone(), compressed).await?;
 
         let mut expected_size: Option<u64> = None;
-        loop {
+        let mut reassembly: HashMap<u64, ReassemblyEntry> = HashMap::new();
+        'recv: loop {
             match rx.next().with_cancel(&resource_token).await? {
-                Some((offset, packet)) => {
-                    if let Ok(delimiter) = TransferDelimiterShema::from_bytes(&packet) {
-                        if matches!(delimiter, TransferDelimiterShema::End { .. }) && delimiter.session_id() == Some(session_order_id)
-                        {
-                            expected_size = delimiter.total_size();
-
-                            if let Some(target) = expected_size {
-                                if progress.total_bytes() >= target {
-                                    progress.success();
-                                    core_request
-                                        .response(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
-                                        .await;
-                                    break;
-                                }
-                            } else {
-                                progress.success();
-                                core_request
-                                    .response(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
-                                    .await;
-                                break;
-                            }
-                            continue;
-                        }
+                Some((offset, part_index, part_count, packet)) => {
+                    if part_count == 0 || part_index >= part_count {
+                        log::warn!(
+                            "Invalid part header at offset {}: part_index={} part_count={}",
+                            offset,
+                            part_index,
+                            part_count
+                        );
+                        continue;
                     }
 
-                    // Stop tracking transfer if context is cancelled
                     if resource_token.is_cancelled() {
                         break;
                     }
 
-                    let bytes = Bytes::from(packet.to_vec());
+                    // `packet` still carries the 12-byte wire header at the front.
+                    // We slice it off at each use site instead of doing a shift
+                    // copy in the parser. Delimiter decoding and reassembly
+                    // `insert` use `&packet[HEADER_LEN..]` (a cheap slice); the
+                    // single-part write path uses `Bytes::from(packet).slice(..)`
+                    // which is zero-copy (refcounted view over the same Vec).
+                    if packet.len() < WEBRTC_PACKET_HEADER_LEN {
+                        continue;
+                    }
+
+                    let bytes = if part_count == 1 {
+                        if let Ok(delimiter) = TransferDelimiterShema::from_bytes(&packet[WEBRTC_PACKET_HEADER_LEN..]) {
+                            if matches!(delimiter, TransferDelimiterShema::End { .. })
+                                && delimiter.session_id() == Some(session_order_id)
+                            {
+                                expected_size = delimiter.total_size();
+                                if let Some(target) = expected_size {
+                                    if progress.total_bytes() >= target {
+                                        progress.success();
+                                        core_request
+                                            .response(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
+                                            .await;
+                                        break 'recv;
+                                    }
+                                } else {
+                                    progress.success();
+                                    core_request
+                                        .response(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
+                                        .await;
+                                    break 'recv;
+                                }
+                                continue;
+                            }
+                        }
+                        Bytes::from(packet).slice(WEBRTC_PACKET_HEADER_LEN..)
+                    } else {
+                        let entry = reassembly.entry(offset).or_insert_with(|| ReassemblyEntry::new(part_count));
+                        if entry.part_count != part_count {
+                            log::warn!(
+                                "part_count mismatch at offset {}: entry={} packet={}, dropping",
+                                offset,
+                                entry.part_count,
+                                part_count
+                            );
+                            continue;
+                        }
+                        let complete = entry.insert(part_index, &packet[WEBRTC_PACKET_HEADER_LEN..]);
+                        if !complete {
+                            continue;
+                        }
+                        Bytes::from(reassembly.remove(&offset).unwrap().finalize())
+                    };
+
                     if let Some(written) =
                         writer.d_write_at(bytes, offset).await.map_err(|e| WebRtcClientError::Transfer(e.to_string()))?
                     {
@@ -593,7 +638,7 @@ impl WebRtcClient {
                                 core_request
                                     .response(TransferOperationOutput::TransferResourceProgressUpdate(progress.clone()))
                                     .await;
-                                break;
+                                break 'recv;
                             }
                         }
                     }
@@ -605,6 +650,7 @@ impl WebRtcClient {
             }
         }
 
+        drop(reassembly);
         self.prefix_channels.lock().await.remove(&transfer_id);
         Ok(progress)
     }
@@ -873,12 +919,22 @@ impl WebRtcClient {
         let mut inbound_data_receiver = self.inbound_data_receiver.retrieve().await?;
 
         while let Some(data) = inbound_data_receiver.next().await {
-            let (prefix, offset, payload) = WebRtcPacket::deserialize(data);
-            let mut channels = self.prefix_channels.lock().await;
-            if let Some(tx) = channels.get_mut(&prefix) {
-                if let Err(e) = tx.send((offset, payload)).await {
+            // Parse the 12-byte header without shifting the payload. The full
+            // `data` Vec (header + payload) is forwarded intact; downstream
+            // consumers slice `&data[WEBRTC_PACKET_HEADER_LEN..]`.
+            let Some((prefix, offset, part_index, part_count)) = WebRtcPacket::parse_header(&data) else {
+                continue;
+            };
+            // Clone the Sender out of the mutex *before* awaiting `tx.send`.
+            // Holding the lock across the await would block any other task
+            // that needs to insert, remove, or look up a prefix channel for
+            // the entire duration of a full per-prefix backpressure stall
+            // (e.g. while a consumer is awaiting an OPFS write).
+            let tx_opt = self.prefix_channels.lock().await.get(&prefix).cloned();
+            if let Some(mut tx) = tx_opt {
+                if let Err(e) = tx.send((offset, part_index, part_count, data)).await {
                     log::warn!("Prefix channel {} dropped: {:?}", prefix, e);
-                    channels.remove(&prefix);
+                    self.prefix_channels.lock().await.remove(&prefix);
                 }
             }
         }
