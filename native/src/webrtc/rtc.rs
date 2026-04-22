@@ -216,14 +216,36 @@ impl RtcClient {
         let mut rtc = config.build(Instant::now());
         let mut local_v4_addr = None;
         let mut local_v6_addr = None;
-        log::info!("[rtc-client] Adding {} gathered candidates to RTC engine", candidates.len());
+        for candidate in &candidates {
+            if candidate.kind() != str0m::CandidateKind::Host {
+                continue;
+            }
+            let addr = candidate.addr();
+            if addr.is_ipv4() && local_v4_addr.is_none() {
+                local_v4_addr = Some(addr);
+            } else if addr.is_ipv6() && local_v6_addr.is_none() {
+                local_v6_addr = Some(addr);
+            }
+        }
+        for candidate in &candidates {
+            if candidate.kind() != str0m::CandidateKind::ServerReflexive {
+                continue;
+            }
+            let addr = candidate.addr();
+            if addr.is_ipv4() && local_v4_addr.is_none() {
+                local_v4_addr = Some(addr);
+            } else if addr.is_ipv6() && local_v6_addr.is_none() {
+                local_v6_addr = Some(addr);
+            }
+        }
+        log::info!(
+            "[rtc-client] Adding {} gathered candidates to RTC engine (preferred local v4={:?}, v6={:?})",
+            candidates.len(),
+            local_v4_addr,
+            local_v6_addr
+        );
         for candidate in candidates {
             log::debug!("[rtc-client] Adding candidate: {}", candidate);
-            if candidate.addr().is_ipv4() && local_v4_addr.is_none() {
-                local_v4_addr = Some(candidate.addr());
-            } else if candidate.addr().is_ipv6() && local_v6_addr.is_none() {
-                local_v6_addr = Some(candidate.addr());
-            }
             rtc.add_local_candidate(candidate);
         }
 
