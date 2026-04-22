@@ -1,6 +1,6 @@
 const DEFAULT_REGION_CODE: &str = "local";
 const DEFAULT_CONNECTION_FANOUT: usize = 2;
-const MAX_CONNECTION_FANOUT: usize = 8;
+const MAX_CONNECTION_FANOUT: usize = 3;
 
 #[derive(Debug, Clone)]
 pub struct SignallingConfig {

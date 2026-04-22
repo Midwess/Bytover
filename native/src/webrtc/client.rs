@@ -33,11 +33,14 @@ use crate::webrtc::rtc::{RtcEvent, RtcHandle};
 use crate::webrtc::signalling::SignallingSender;
 use str0m::channel::ChannelId;
 
-pub static CHUNK_SIZE: usize = 16 * 1024;
-pub static MAX_BUFFER_SIZE: usize = 1024 * 1024 * 5;
-pub static MIN_BUFFER_SIZE: usize = CHUNK_SIZE;
-const RELIABLE_DATA_QUEUE_CAPACITY: usize = MAX_BUFFER_SIZE / CHUNK_SIZE + 1;
+pub static MAX_BUFFER_SIZE: usize = WIRE_PART_SIZE * 20;
+pub static MIN_BUFFER_SIZE: usize = WIRE_PART_SIZE;
+const RELIABLE_DATA_QUEUE_CAPACITY: usize = MAX_BUFFER_SIZE / WIRE_PART_SIZE + 1;
 const OUTBOUND_RETRY_DELAY: Duration = Duration::from_millis(3);
+
+const _PART_COUNT_FITS_BITMAP: () = {
+    assert!((COMPRESSION_BLOCK_SIZE + WIRE_PART_SIZE - 1) / WIRE_PART_SIZE <= 31);
+};
 
 pub type WebRtcClientError = WebRtcErrors;
 
@@ -85,7 +88,7 @@ impl WebRtcClient {
             return Err(WebRtcClientError::Signalling("No signalling ID".to_string()));
         };
 
-        let me_proto = schema::devlog::bitbridge::PeerMessage::from(me.clone());
+        let me_proto = PeerMessage::from(me.clone());
 
         log::info!("[webrtc-client] Connecting via P2P (total_slots={total_slots})");
 
