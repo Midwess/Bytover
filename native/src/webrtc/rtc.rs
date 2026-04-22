@@ -603,19 +603,21 @@ impl RtcClient {
                             }
                             Ok(None) => {}
                             Err(SendError::NoPermission) => {
-                                match turn.client.bind_channel(StunTransportType::Udp, dest, now) {
-                                    Ok(()) | Err(BindChannelError::AlreadyExists) => {
-                                        log::debug!(
-                                            "[rtc-client] Lazy-binding TURN channel for peer-reflexive dest {}",
-                                            dest
-                                        );
-                                    }
-                                    Err(e) => {
-                                        log::warn!(
-                                            "[rtc-client] Lazy TURN channel bind for {} failed: {}",
-                                            dest,
-                                            e
-                                        );
+                                if turn.try_mark_channel_attempt(dest) {
+                                    match turn.client.bind_channel(StunTransportType::Udp, dest, now) {
+                                        Ok(()) | Err(BindChannelError::AlreadyExists) => {
+                                            log::debug!(
+                                                "[rtc-client] Lazy-binding TURN channel for peer-reflexive dest {}",
+                                                dest
+                                            );
+                                        }
+                                        Err(e) => {
+                                            log::warn!(
+                                                "[rtc-client] Lazy TURN channel bind for {} failed: {}",
+                                                dest,
+                                                e
+                                            );
+                                        }
                                     }
                                 }
                             }
@@ -927,6 +929,9 @@ fn remote_candidate_permission_addr(candidate: &str0m::Candidate) -> SocketAddr 
 
 fn request_turn_channel(turn: &mut TurnRelayInfo, candidate: &str0m::Candidate, source: &str) {
     let peer_addr = remote_candidate_permission_addr(candidate);
+    if !turn.try_mark_channel_attempt(peer_addr) {
+        return;
+    }
     let now = stun_now(turn.stun_base);
     match turn.client.bind_channel(StunTransportType::Udp, peer_addr, now) {
         Ok(()) | Err(BindChannelError::AlreadyExists) => {}
