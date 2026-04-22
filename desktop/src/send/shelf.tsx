@@ -5,6 +5,7 @@ import {noop} from "motion";
 import {invoke} from "@tauri-apps/api/core";
 import {convertFileSrc} from "@tauri-apps/api/core";
 import {useEffect, useRef, useState, ReactNode} from "react";
+import {createPortal} from "react-dom";
 import {useShelfClipboard} from "@/hooks/use-shelf-clipboard.ts";
 import core from "@/core.ts";
 import {
@@ -94,11 +95,11 @@ function DockedSliver({edge, onExpand, shelfName, isOnline}: {
         : "";
     const nameRotation = edge === "left" ? "rotate(180deg)" : undefined;
 
-    return (
+    return createPortal(
         <button
             onClick={onExpand}
             aria-label="Expand shelf"
-            className={`group w-full h-full border border-white/20 ${roundedSide} flex flex-col items-center justify-between p-0 overflow-hidden bg-card transition-all duration-300 cursor-pointer hover:bg-muted-foreground/10 animate-in fade-in ${onlineShadow}`}
+            className={`group fixed inset-0 w-screen h-screen z-[9999] border border-white/20 ${roundedSide} flex flex-col items-center justify-between p-0 overflow-hidden bg-card cursor-pointer hover:bg-muted-foreground/10 animate-in fade-in transition-shadow duration-500 ${onlineShadow}`}
         >
             <div className="flex-1 w-full flex items-center justify-center pt-2 overflow-hidden">
                 {shelfName && (
@@ -110,10 +111,11 @@ function DockedSliver({edge, onExpand, shelfName, isOnline}: {
                     </span>
                 )}
             </div>
-            <span className="w-full h-10 shrink-0 flex items-center justify-center text-foreground/80 group-hover:text-foreground transition-colors">
+            <span className="w-full h-10 shrink-0 flex items-center justify-center text-foreground/80 group-hover:text-foreground">
                 <Icon className="w-5 h-5"/>
             </span>
-        </button>
+        </button>,
+        document.body
     );
 }
 
