@@ -1,3 +1,4 @@
+use schema::devlog::app_gateway::models::Capabilities as CapabilitiesMsg;
 use schema::devlog::app_gateway::rpc::MeRequest;
 use tonic::body::Body;
 use tonic::codegen::http::Request;
@@ -5,7 +6,10 @@ use tonic::metadata::MetadataValue;
 use tonic::{async_trait, Status};
 use tonic_middleware::RequestInterceptor;
 
+use crate::app_gateway::plan::build_capabilities_msg;
 use crate::di_container::DiContainer;
+use crate::entities::user_capabilities::UserCapabilities;
+use crate::repositories::user_capabilities::UserCapabilitiesRepository;
 use crate::user::Token;
 
 #[derive(Clone)]
@@ -42,6 +46,17 @@ impl RequestInterceptor for AuthInterceptor {
                 let app = user_info.app;
                 let device = user_info.device;
 
+                let plan_seeder = di_container.get_plan_seeder();
+                let seed_plan = plan_seeder.seed_plan(user.order_id);
+                let caps_repo = di_container.get_user_capabilities_repository().await;
+                let caps_row = caps_repo
+                    .find_or_seed(user.order_id, seed_plan)
+                    .await
+                    .map_err(|e| Status::internal(e.to_string()))?;
+                let caps_msg = build_capabilities_msg(&caps_row);
+
+                req.extensions_mut().insert::<UserCapabilities>(caps_row);
+                req.extensions_mut().insert::<CapabilitiesMsg>(caps_msg);
                 req.extensions_mut().insert(device);
                 req.extensions_mut().insert(user);
                 req.extensions_mut().insert(app);

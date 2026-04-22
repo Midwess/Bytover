@@ -4,8 +4,10 @@ use crate::cloud_storage::storage::{CloudStorage, CloudStorageErrors};
 use crate::entities::transfer_progress::{TransferProgressErrors, TransferProgressStatus};
 use crate::entities::transfer_resource::{TransferResource, TransferResourceType};
 use crate::entities::transfer_session::{TransferSession, TransferSessionErrors};
+use crate::entities::user_capabilities::UserCapabilities;
 use crate::mail::service::EmailService;
 use crate::repositories::transfer_session::{TransferSessionId, TransferSessionRepository};
+use crate::repositories::user_capabilities::{IncrementOutcome, UserCapabilitiesRepository};
 use core_services::db::repository::abstraction::errors::RepositoryError;
 use futures::join;
 use schema::crafter::email_template::Template::{self};
@@ -39,6 +41,12 @@ pub enum TransferErrors {
     MarkovError(#[from] MarkovErrors),
     #[error("Application service error {0}")]
     ApplicationServiceError(#[from] AppInfoErrors),
+    #[error("Current plan does not allow password-protected sessions")]
+    PlanForbidsPasswordEncryption,
+    #[error("File count {total} exceeds the per-transfer cap {cap}")]
+    FileCountExceed { total: u32, cap: u32 },
+    #[error("Lifetime transfer cap reached: cap {cap}, used {used}, requested {requested}")]
+    LifetimeBytesExceed { cap: u64, used: u64, requested: u64 },
 }
 
 pub struct TransferResourceRequest {
@@ -64,18 +72,24 @@ pub struct TransferService {
     pub app_service: Box<dyn AppInfoService>,
     pub markov_generator: Box<dyn Markov>,
     pub email_service: Box<dyn EmailService>,
+    pub user_capabilities_repository: std::sync::Arc<dyn UserCapabilitiesRepository>,
 }
 
 impl TransferService {
     pub async fn create_public_transfer_session(
         &self,
         user: &User,
+        capabilities: &UserCapabilities,
         password: Option<String>,
         to_emails: Vec<String>,
     ) -> Result<TransferSession, TransferErrors> {
         let user_id = user.id.id;
         let mut password = password.map(|it| it.trim().to_owned());
         if let Some(ref value) = password {
+            if !value.is_empty() && !capabilities.password_encryption_allowed() {
+                return Err(TransferErrors::PlanForbidsPasswordEncryption);
+            }
+
             if value.len() > 20 {
                 return Err(TransferErrors::PasswordLengthExceed(20));
             }
@@ -132,26 +146,50 @@ impl TransferService {
                 let (next_upload_result, complete_upload_result) =
                     join!(gen_upload_request, self.cloud_storage.complete_upload(user, completion));
                 let current_resource_id = session.current_resource().map(|it| it.order_id()).unwrap_or(0);
-                let Some(current_progress) = session.current_resource_progress_mut() else {
-                    return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted);
-                };
+
                 if let Err(e) = complete_upload_result {
-                    current_progress.cancel();
+                    let Some(p) = session.current_resource_progress_mut() else {
+                        return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted);
+                    };
+                    p.cancel();
                     self.transfer_repository.update_one(session).await?;
                     log::info!("Failed to complete upload for completion {completion:?}: {e}");
                     return Err(TransferErrors::CloudStorageError(e));
                 }
 
-                let expected_id = current_resource_id;
-                if expected_id != resource_id {
+                if current_resource_id != resource_id {
                     log::warn!(
-                        "Id {resource_id} is not matched with current resource {expected_id} session_id {}",
+                        "Id {resource_id} is not matched with current resource {current_resource_id} session_id {}",
                         session.order_id()
                     );
 
                     return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted);
                 }
 
+                let completed_size = session
+                    .resources()
+                    .iter()
+                    .find(|r| r.order_id() == resource_id)
+                    .map(|r| r.size_in_bytes())
+                    .unwrap_or(0);
+
+                if completed_size > 0 {
+                    let outcome = self
+                        .user_capabilities_repository
+                        .increment_bytes_used(user.order_id, completed_size)
+                        .await?;
+                    if let IncrementOutcome::WouldExceedCap { cap, used, requested } = outcome {
+                        if let Some(p) = session.current_resource_progress_mut() {
+                            p.cancel();
+                        }
+                        self.transfer_repository.update_one(session).await?;
+                        return Err(TransferErrors::LifetimeBytesExceed { cap, used, requested });
+                    }
+                }
+
+                let Some(current_progress) = session.current_resource_progress_mut() else {
+                    return Err(TransferErrors::ResourceNotFoundOrAlreadyCompleted);
+                };
                 current_progress.commit(TransferProgressStatus::Success)?;
 
                 let mut session = self.transfer_repository.update_one(session).await?;

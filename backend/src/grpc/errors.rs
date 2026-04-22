@@ -21,6 +21,9 @@ impl From<TransferErrors> for Status {
             TransferErrors::SessionNotFound => Status::not_found(value_msg),
             TransferErrors::ResourceNotFoundOrAlreadyCompleted => Status::internal(value_msg),
             TransferErrors::EmptyResources => Status::invalid_argument(value_msg),
+            TransferErrors::PlanForbidsPasswordEncryption => Status::failed_precondition(value_msg),
+            TransferErrors::FileCountExceed { .. } => Status::failed_precondition(value_msg),
+            TransferErrors::LifetimeBytesExceed { .. } => Status::failed_precondition(value_msg),
 
             _ => Status::internal(value_msg),
         }
