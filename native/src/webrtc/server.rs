@@ -281,6 +281,7 @@ impl WebRtcServer {
                         let _sess = msg.session_id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
                         if slot_idx == 0 {
+                            let ice_config = msg.ice_configs.first().cloned().or_else(|| msg.ice_config.clone());
                             connect_futs.push(async move {
                                 let result = WebRtcClient::connect(
                                     user.clone(),
@@ -289,6 +290,7 @@ impl WebRtcServer {
                                     rid,
                                     repo,
                                     total_slots,
+                                    ice_config,
                                 )
                                 .await;
 

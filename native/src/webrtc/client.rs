@@ -79,6 +79,7 @@ impl WebRtcClient {
         request_id: String,
         resource_repo: Arc<dyn LocalResourceRepository>,
         total_slots: usize,
+        ice_config: Option<schema::devlog::rpc_signalling::server::IceConfig>,
     ) -> Result<Self, WebRtcClientError> {
         let Some(signalling_id) = me.signalling_id.clone() else {
             return Err(WebRtcClientError::Signalling("No signalling ID".to_string()));
@@ -90,7 +91,12 @@ impl WebRtcClient {
 
         let peer_from_offer = offer_message.peer.clone();
 
-        let rtc_client = RtcHandle::connect(&signalling_id, offer_message, me_proto, signalling, &request_id).await?;
+        let rtc_client = match ice_config {
+            Some(cfg) => {
+                RtcHandle::connect_with_config(&signalling_id, offer_message, me_proto, signalling, &request_id, cfg).await?
+            }
+            None => RtcHandle::connect(&signalling_id, offer_message, me_proto, signalling, &request_id).await?,
+        };
 
         let (ordered_msg_tx, ordered_msg_rx) = futures_mpsc::channel::<Vec<u8>>(64);
         let (_unordered_msg_tx, unordered_msg_rx) = futures_mpsc::channel::<Vec<u8>>(64);
