@@ -40,3 +40,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 railway-ref
+# Apple Certificates and Profiles
+*.provisionprofile
+*.cer
+*.p12
+*.p7b

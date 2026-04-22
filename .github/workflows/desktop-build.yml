@@ -69,7 +69,7 @@ jobs:
           retention-days: 1
 
   deploy:
-    needs: generate-types
+    needs: [generate-types]
     environment: production
     strategy:
       fail-fast: false
@@ -227,9 +227,9 @@ jobs:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          # ----------------
           PKG_CONFIG_PATH: ${{ matrix.target == 'aarch64-unknown-linux-gnu' && '/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig' || '' }}
           TAURI_LINUX_AYATANA_APPINDICATOR: true
           # --- Bytover Environment ---
@@ -247,3 +247,32 @@ jobs:
           prerelease: false
           projectPath: desktop
           args: ${{ matrix.platform == 'macos-latest' && '--target universal-apple-darwin --features log-file' || format('--target {0} --features log-file', matrix.tauri_target) }}
+
+      - name: Verify macOS signing
+        if: matrix.enable && matrix.platform == 'macos-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_DIR="target/universal-apple-darwin/release/bundle/macos"
+          if [ ! -d "$APP_DIR" ]; then
+            echo "Bundle directory not found: $APP_DIR"
+            echo "--- searching for any .app bundle ---"
+            find target -maxdepth 6 -name "*.app" -type d 2>/dev/null || true
+            exit 1
+          fi
+          APP=$(find "$APP_DIR" -maxdepth 1 -name "*.app" -print -quit)
+          if [ -z "$APP" ]; then
+            echo "No .app bundle found under $APP_DIR"
+            exit 1
+          fi
+          echo "Verifying: $APP"
+          echo "---- codesign signature ----"
+          codesign -dv --verbose=4 "$APP" 2>&1 || true
+          echo "---- codesign entitlements ----"
+          codesign -d --entitlements - --xml "$APP" 2>&1 || true
+          echo "---- codesign --verify ----"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          echo "---- spctl assess ----"
+          spctl --assess --type exec --verbose=4 "$APP"
+          echo "---- stapler validate ----"
+          xcrun stapler validate "$APP"

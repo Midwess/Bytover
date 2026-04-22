@@ -866,8 +866,28 @@ pub async fn run() {
                 }
             });
 
-            let _ = check_accessibility_permission(true);
-            let _ = check_input_monitoring_permission(true);
+            let accessibility_granted = check_accessibility_permission(true);
+            let input_monitoring_granted = check_input_monitoring_permission(true);
+            log::info!(
+                "macOS permissions at startup — accessibility: {}, input monitoring: {}",
+                accessibility_granted,
+                input_monitoring_granted
+            );
+            #[cfg(target_os = "macos")]
+            {
+                if !accessibility_granted {
+                    log::warn!("Accessibility not granted — opening System Settings pane");
+                    let _ = std::process::Command::new("open")
+                        .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+                        .spawn();
+                }
+                if !input_monitoring_granted {
+                    log::warn!("Input Monitoring not granted — opening System Settings pane");
+                    let _ = std::process::Command::new("open")
+                        .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")
+                        .spawn();
+                }
+            }
 
             start_mouse_monitor(MouseMonitorConfig::default(), handle.clone());
             #[cfg(target_os = "macos")]

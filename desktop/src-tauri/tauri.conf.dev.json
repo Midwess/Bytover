@@ -1,0 +1,12 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "macOS": {
+      "signingIdentity": "Mac Developer: Minh Tien Dang (7DTN6785Y2)",
+      "entitlements": "entitlements.dev.plist",
+      "files": {
+        "embedded.provisionprofile": "Bytover.provisionprofile"
+      }
+    }
+  }
+}
