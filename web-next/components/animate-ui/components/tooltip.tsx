@@ -470,7 +470,6 @@ function TooltipTrigger({ children }: TooltipTriggerProps) {
      
   }, [content, arrow, currentTooltip?.id]);
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks -- Ref access pattern required for cloneElement
   return React.cloneElement(children, {
     ref: triggerRef,
     onMouseEnter: handleMouseEnter,
