@@ -1,7 +1,7 @@
 use core_services::utils::yield_container::YieldError;
 use futures_util::{SinkExt, StreamExt};
 use prost::Message as ProstMessage;
-use schema::devlog::rpc_signalling::server::{AnswerMessage, IceConfig, Message};
+use schema::devlog::rpc_signalling::server::{AnswerMessage, IceConfig, IceConfigList, Message};
 use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::mpsc;
@@ -73,7 +73,11 @@ impl SignallingSender {
 
         let bytes = response.bytes().await.map_err(|e| SignallingError::HttpFailed(format!("{e}")))?;
 
-        IceConfig::decode(&bytes[..]).map_err(SignallingError::from)
+        let list = IceConfigList::decode(&bytes[..]).map_err(SignallingError::from)?;
+        list.configs
+            .into_iter()
+            .next()
+            .ok_or_else(|| SignallingError::HttpFailed("relay endpoint returned empty config list".to_string()))
     }
 
     pub async fn send_answer(

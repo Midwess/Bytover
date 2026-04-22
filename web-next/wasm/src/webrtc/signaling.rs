@@ -2,7 +2,7 @@ use prost::Message as ProstMessage;
 
 use core_services::wasm::http::HttpClient;
 use schema::devlog::bitbridge::PeerMessage;
-use schema::devlog::rpc_signalling::server::{IceConfig, OfferMessage, OfferRequest, OfferResponse};
+use schema::devlog::rpc_signalling::server::{IceConfig, IceConfigList, OfferMessage, OfferRequest, OfferResponse};
 
 #[derive(Debug, Clone)]
 pub struct SignalingClient {
@@ -20,6 +20,7 @@ impl SignalingClient {
         offer_sdp: &str,
         session_id: &str,
         me: PeerMessage,
+        slot_idx: u32,
     ) -> Result<(String, PeerMessage), SignalingError> {
         let url = format!("{}/offer/{}", self.http_url.trim_end_matches('/'), peer_id);
 
@@ -30,6 +31,7 @@ impl SignalingClient {
             },
             peer: me,
             session_id: Some(session_id.to_string()),
+            slot_idx: Some(slot_idx),
         };
 
         let mut encoded = Vec::new();
@@ -55,7 +57,7 @@ impl SignalingClient {
         Ok((response_msg.answer.sdp, response_msg.peer))
     }
 
-    pub async fn fetch_relay_config(&self, key: &str) -> Result<IceConfig, SignalingError> {
+    pub async fn fetch_relay_configs(&self, key: &str) -> Result<Vec<IceConfig>, SignalingError> {
         let url = format!("{}/relay/{}", self.http_url.trim_end_matches('/'), key);
 
         let (status, _headers, bytes) = HttpClient::new()
@@ -71,7 +73,8 @@ impl SignalingClient {
             return Err(SignalingError::Server(String::from_utf8_lossy(&bytes).to_string()));
         }
 
-        IceConfig::decode(&bytes[..]).map_err(|e| SignalingError::Decoding(e.to_string()))
+        let list = IceConfigList::decode(&bytes[..]).map_err(|e| SignalingError::Decoding(e.to_string()))?;
+        Ok(list.configs)
     }
 }
 

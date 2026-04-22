@@ -31,6 +31,12 @@ pub struct TurnRelayInfo {
     /// Populated from `TurnEvent::ChannelCreated`. The RTC loop gates
     /// deferred remote relay candidates on membership in this set.
     bound_channels: HashSet<SocketAddr>,
+    /// Peer addresses for which `bind_channel` has been attempted on this
+    /// allocation, regardless of outcome. Used to ensure at most one
+    /// ChannelBind request per peer per allocation lifetime; without this
+    /// gate, repeated `NoPermission` send failures would drive an unbounded
+    /// retry loop that exhausts the TURN allocation's quota.
+    attempted_channels: HashSet<SocketAddr>,
 }
 
 impl TurnRelayInfo {
@@ -43,6 +49,7 @@ impl TurnRelayInfo {
             stun_base,
             cached_timeout: Instant::now(),
             bound_channels: HashSet::new(),
+            attempted_channels: HashSet::new(),
         }
     }
 
@@ -56,6 +63,13 @@ impl TurnRelayInfo {
 
     pub fn mark_channel_unbound(&mut self, peer: SocketAddr) {
         self.bound_channels.remove(&peer);
+    }
+
+    /// Record a ChannelBind attempt for `peer`. Returns `true` the first time
+    /// it's called for a given address (caller should issue the bind), `false`
+    /// on subsequent calls (caller should skip — we've already tried).
+    pub fn try_mark_channel_attempt(&mut self, peer: SocketAddr) -> bool {
+        self.attempted_channels.insert(peer)
     }
 }
 

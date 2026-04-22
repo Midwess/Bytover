@@ -28,22 +28,27 @@ use shared::repository::local_resource::LocalResourceRepository;
 use shared::shell::api::CoreRequest;
 use shared::utils::compression::is_compressible;
 
+use crate::webrtc::pool::ConnectionPool;
 use crate::webrtc::rtc::{RtcEvent, RtcHandle};
 use crate::webrtc::signalling::SignallingSender;
 use str0m::channel::ChannelId;
 
-pub static CHUNK_SIZE: usize = 16 * 1024;
-pub static MAX_BUFFER_SIZE: usize = 1024 * 1024 * 5;
-pub static MIN_BUFFER_SIZE: usize = CHUNK_SIZE;
-const RELIABLE_DATA_QUEUE_CAPACITY: usize = MAX_BUFFER_SIZE / CHUNK_SIZE + 1;
+pub static MAX_BUFFER_SIZE: usize = WIRE_PART_SIZE * 20;
+pub static MIN_BUFFER_SIZE: usize = WIRE_PART_SIZE;
+const RELIABLE_DATA_QUEUE_CAPACITY: usize = MAX_BUFFER_SIZE / WIRE_PART_SIZE + 1;
 const OUTBOUND_RETRY_DELAY: Duration = Duration::from_millis(3);
+
+const _PART_COUNT_FITS_BITMAP: () = {
+    assert!((COMPRESSION_BLOCK_SIZE + WIRE_PART_SIZE - 1) / WIRE_PART_SIZE <= 31);
+};
 
 pub type WebRtcClientError = WebRtcErrors;
 
 pub struct WebRtcClient {
     msg_channel: OnceCell<DirectMessageChannel>,
 
-    rtc: YieldContainer<Option<RtcHandle>>,
+    pool: OnceCell<Arc<ConnectionPool>>,
+    pool_event_rx: YieldContainer<mpsc::Receiver<(usize, RtcEvent)>>,
 
     peer: OnceCell<Peer>,
     transfers_context: TransfersContext,
@@ -76,24 +81,33 @@ impl WebRtcClient {
         signalling: SignallingSender,
         request_id: String,
         resource_repo: Arc<dyn LocalResourceRepository>,
+        total_slots: usize,
+        ice_config: Option<schema::devlog::rpc_signalling::server::IceConfig>,
     ) -> Result<Self, WebRtcClientError> {
         let Some(signalling_id) = me.signalling_id.clone() else {
             return Err(WebRtcClientError::Signalling("No signalling ID".to_string()));
         };
 
-        let me_proto = schema::devlog::bitbridge::PeerMessage::from(me.clone());
+        let me_proto = PeerMessage::from(me.clone());
 
-        log::info!("[webrtc-client] Connecting via P2P...");
+        log::info!("[webrtc-client] Connecting via P2P (total_slots={total_slots})");
 
         let peer_from_offer = offer_message.peer.clone();
 
-        let rtc_client = RtcHandle::connect(&signalling_id, offer_message, me_proto, signalling, &request_id).await?;
+        let rtc_client = match ice_config {
+            Some(cfg) => {
+                RtcHandle::connect_with_config(&signalling_id, offer_message, me_proto, signalling, &request_id, cfg).await?
+            }
+            None => RtcHandle::connect(&signalling_id, offer_message, me_proto, signalling, &request_id).await?,
+        };
 
         let (ordered_msg_tx, ordered_msg_rx) = futures_mpsc::channel::<Vec<u8>>(64);
         let (_unordered_msg_tx, unordered_msg_rx) = futures_mpsc::channel::<Vec<u8>>(64);
-        // Keep roughly one SCTP buffer worth of reliable packets queued by bytes, not by packet count.
         let (reliable_data_tx, reliable_data_rx) = mpsc::channel::<Vec<u8>>(RELIABLE_DATA_QUEUE_CAPACITY);
         let (outbound_tx, outbound_rx) = futures_mpsc::channel::<(u16, u64, Vec<u8>, bool)>(32);
+        let (pool_event_tx, pool_event_rx) = mpsc::channel::<(usize, RtcEvent)>(32);
+
+        let pool = ConnectionPool::new_with_primary(rtc_client, total_slots.max(1), pool_event_tx);
 
         let msg_channel = DirectMessageChannel::new(ordered_msg_tx);
         let peer: OnceCell<Peer> = OnceCell::new();
@@ -107,8 +121,12 @@ impl WebRtcClient {
         let outbound_packet_sender_cell = OnceCell::new();
         let _ = outbound_packet_sender_cell.set(outbound_tx);
 
+        let pool_cell: OnceCell<Arc<ConnectionPool>> = OnceCell::new();
+        let _ = pool_cell.set(pool);
+
         let client = Self {
-            rtc: YieldContainer::new(Some(rtc_client)),
+            pool: pool_cell,
+            pool_event_rx: YieldContainer::new(pool_event_rx),
             msg_channel: msg_channel_cell,
             peer,
             session_id: Default::default(),
@@ -131,12 +149,55 @@ impl WebRtcClient {
         Ok(client)
     }
 
+    pub fn install_slot(
+        self: &Arc<Self>,
+        slot_idx: usize,
+        offer_message: OfferMessage,
+        me: Peer,
+        signalling: SignallingSender,
+        request_id: String,
+        ice_config: Option<schema::devlog::rpc_signalling::server::IceConfig>,
+    ) -> Result<(), WebRtcClientError> {
+        let Some(pool) = self.pool.get().cloned() else {
+            return Err(WebRtcClientError::Connection(
+                "Connection pool not initialized; cannot install slot".into(),
+            ));
+        };
+
+        let Some(signalling_id) = me.signalling_id.clone() else {
+            return Err(WebRtcClientError::Signalling("No signalling ID for slot install".to_string()));
+        };
+
+        let me_proto = schema::devlog::bitbridge::PeerMessage::from(me);
+
+        log::info!("[webrtc-client] Installing slot {slot_idx} for peer {:?}", self.peer_id());
+
+        let connect_fut = async move {
+            match ice_config {
+                Some(cfg) => {
+                    RtcHandle::connect_with_config(&signalling_id, offer_message, me_proto, signalling, &request_id, cfg).await
+                }
+                None => RtcHandle::connect(&signalling_id, offer_message, me_proto, signalling, &request_id).await,
+            }
+        };
+
+        pool.spawn_lazy_slot(slot_idx, connect_fut);
+        Ok(())
+    }
+
     pub async fn run(self: Arc<Self>) -> Result<(), WebRtcClientError> {
         if let (Some(core_req), Some(p)) = (self.core_request.get(), self.peer.get()) {
             let _ = core_req.response(CoreOperationOutput::P2P(P2POperationOutput::PeerConnected(p.clone()))).await;
         }
 
-        let mut rtc_guard = self.rtc.retrieve().await?;
+        let pool = self
+            .pool
+            .get()
+            .ok_or_else(|| WebRtcClientError::Connection("Connection pool not initialized".to_string()))?
+            .clone();
+        let cids = pool.channel_ids();
+
+        let mut pool_event_rx_guard = self.pool_event_rx.retrieve().await?;
         let mut ordered_msg_rx_guard = self.ordered_msg_rx.retrieve().await?;
         let mut unordered_msg_rx_guard = self.unordered_msg_rx.retrieve().await?;
         let mut outbound_rx_guard = self.outbound_rx.retrieve().await?;
@@ -155,41 +216,26 @@ impl WebRtcClient {
             this_msg.msg_loop(msg_rx).await;
         });
 
-        let mut rtc = rtc_guard.value.take().unwrap();
-
-        let cids = if let Some(ref rtc) = rtc {
-            *rtc.channel_ids()
-        } else {
-            return Err(WebRtcClientError::Connection("No connection available".to_string()));
-        };
-
+        let mut pool_event_rx = pool_event_rx_guard.value.take().unwrap();
         let mut ordered_msg_rx = ordered_msg_rx_guard.value.take().unwrap();
         let mut unordered_msg_rx = unordered_msg_rx_guard.value.take().unwrap();
         let mut reliable_data_rx = reliable_data_rx;
-        let mut pending_data: VecDeque<(Vec<u8>, ChannelId)> = VecDeque::new();
+        let mut pending_reliable: Option<Vec<u8>> = None;
+        let mut pending_control: VecDeque<(Vec<u8>, ChannelId)> = VecDeque::new();
 
         let mut retry_timer = Box::pin(tokio::time::sleep(OUTBOUND_RETRY_DELAY));
 
-        while rtc.as_ref().is_some_and(|r| r.is_alive()) {
+        while pool.slot0_alive() {
             if sending_handle.is_finished() || msg_handle.is_finished() {
                 break;
             }
 
             if self.disconnect_requested.load(Ordering::SeqCst) {
                 log::info!("[webrtc-client] Disconnect requested, stopping run loop");
-                if let Some(mut rtc) = rtc.take() {
-                    rtc.shutdown();
-                }
+                pool.shutdown_all();
                 break;
             }
 
-            // Proactively clear dead connections so sends fall through to the live one
-            if rtc.as_ref().is_some_and(|r| !r.is_alive()) {
-                log::info!("[webrtc-client] P2P RTC no longer alive, clearing");
-                rtc = None;
-            }
-
-            let mut outbound_data = None;
             let mut flush_pending = false;
 
             tokio::select! {
@@ -197,55 +243,43 @@ impl WebRtcClient {
 
                 _ = self.disconnect_notify.notified() => {
                     log::info!("[webrtc-client] Disconnect notification received");
-                    if let Some(mut rtc) = rtc.take() {
-                        rtc.shutdown();
-                    }
+                    pool.shutdown_all();
                     break;
                 }
 
-                // 1. Retry mechanism for pending outbound data blocked by backpressure
-                () = &mut retry_timer, if !pending_data.is_empty() => {
+                () = &mut retry_timer, if pending_reliable.is_some() || !pending_control.is_empty() => {
                     flush_pending = true;
                 }
 
-                // 2. P2P events
-                Some(rtc_event) = async {
-                    match rtc.as_mut() {
-                        Some(rtc) => rtc.poll_event().await,
-                        None => std::future::pending().await,
-                    }
-                } => {
+                Some((slot_idx, rtc_event)) = pool_event_rx.recv() => {
                     flush_pending = matches!(
                         &rtc_event, RtcEvent::Str0mEvent(str0m::Event::ChannelBufferedAmountLow(cid))
                         if *cid == cids.reliable
                     );
-                    if !self.handle_rtc_event(rtc_event, &cids, &msg_tx).await {
-                        rtc = None;
+                    if !self.handle_rtc_event(slot_idx, rtc_event, &cids, &msg_tx).await {
+                        log::info!("[webrtc-client] Slot {slot_idx} reported terminal error");
                     }
                 }
 
-                // 3. Outbound sending from queues
                 Some(d) = ordered_msg_rx.next() => {
                     log::info!("Received ordered msg request");
-                    outbound_data = Some((cids.ordered_msg, d));
+                    pending_control.push_back((d, cids.ordered_msg));
+                    flush_pending = true;
                 }
                 Some(d) = unordered_msg_rx.next() => {
                     log::info!("Received unordered msg request");
-                    outbound_data = Some((cids.unordered_msg, d));
+                    pending_control.push_back((d, cids.unordered_msg));
+                    flush_pending = true;
                 }
-                Some(d) = reliable_data_rx.recv() => {
-                    outbound_data = Some((cids.reliable, d));
+                Some(d) = reliable_data_rx.recv(), if pending_reliable.is_none() => {
+                    pending_reliable = Some(d);
+                    flush_pending = true;
                 }
-            }
-
-            if let Some((cid, d)) = outbound_data {
-                pending_data.push_back((d, cid));
-                flush_pending = true;
             }
 
             if flush_pending {
-                self.flush_pending_outbound(&mut pending_data, rtc.as_ref(), &cids);
-                if !pending_data.is_empty() {
+                self.flush_pending_outbound(&mut pending_reliable, &mut pending_control, &pool);
+                if pending_reliable.is_some() || !pending_control.is_empty() {
                     retry_timer.as_mut().reset(tokio::time::Instant::now() + OUTBOUND_RETRY_DELAY);
                 }
             }
@@ -258,41 +292,32 @@ impl WebRtcClient {
         Ok(())
     }
 
-    fn try_send_outbound(data: &[u8], channel_id: ChannelId, rtc: Option<&RtcHandle>) -> bool {
-        if let Some(rtc) = rtc {
-            if rtc.is_alive() && rtc.send(data, channel_id) {
-                return true;
-            }
-        }
-
-        false
-    }
-
     fn flush_pending_outbound(
         &self,
-        pending_data: &mut VecDeque<(Vec<u8>, ChannelId)>,
-        rtc: Option<&RtcHandle>,
-        cids: &crate::webrtc::rtc::ChannelIds,
+        pending_reliable: &mut Option<Vec<u8>>,
+        pending_control: &mut VecDeque<(Vec<u8>, ChannelId)>,
+        pool: &Arc<ConnectionPool>,
     ) {
-        loop {
-            let Some((data, channel_id)) = pending_data.pop_front() else {
-                break;
-            };
-
-            if Self::try_send_outbound(&data, channel_id, rtc) {
-                if channel_id == cids.reliable {
-                    self.bytes_sent_counter.fetch_add(data.len(), Ordering::Relaxed);
-                }
+        while let Some((data, channel_id)) = pending_control.pop_front() {
+            if pool.try_send_control(&data, channel_id) {
                 continue;
             }
-
-            pending_data.push_front((data, channel_id));
+            pending_control.push_front((data, channel_id));
             break;
+        }
+
+        if let Some(data) = pending_reliable.take() {
+            if pool.try_send_reliable(&data) {
+                self.bytes_sent_counter.fetch_add(data.len(), Ordering::Relaxed);
+            } else {
+                *pending_reliable = Some(data);
+            }
         }
     }
 
     async fn handle_rtc_event(
         self: &Arc<Self>,
+        _slot_idx: usize,
         event: RtcEvent,
         cids: &crate::webrtc::rtc::ChannelIds,
         msg_tx: &tokio::sync::mpsc::UnboundedSender<(String, Request)>,

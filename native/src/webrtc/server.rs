@@ -56,6 +56,15 @@ impl From<WebRtcServerError> for CoreError {
     }
 }
 
+fn parse_slot_request_id(request_id: &str) -> (String, usize) {
+    if let Some((base, slot_part)) = request_id.rsplit_once("-slot-") {
+        if let Ok(idx) = slot_part.parse::<usize>() {
+            return (base.to_string(), idx);
+        }
+    }
+    (request_id.to_string(), 0)
+}
+
 pub struct WebRtcServer {
     clients: Mutex<HashMap<String, Weak<WebRtcClient>>>,
     resource_repo: Arc<dyn LocalResourceRepository>,
@@ -262,6 +271,8 @@ impl WebRtcServer {
 
                     log::info!("Received offer {:?}", msg.offer);
                     if let Some(offer) = msg.offer {
+                        let (base_request_id, slot_idx) = parse_slot_request_id(&request_id);
+                        let total_slots = msg.ice_configs.len().max(1);
                         let user = current_user.clone();
                         let repo = resource_repo.clone();
                         let sig_sender = signalling.get_sender().expect("Signalling sender must be available");
@@ -269,27 +280,73 @@ impl WebRtcServer {
                         let off = offer.clone();
                         let _sess = msg.session_id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
-                        connect_futs.push(async move {
-                            let result = WebRtcClient::connect(
-                                user.clone(),
-                                off,
-                                sig_sender,
-                                rid,
-                                repo,
-                            )
-                            .await;
+                        if slot_idx == 0 {
+                            let ice_config = msg.ice_configs.first().cloned().or_else(|| msg.ice_config.clone());
+                            connect_futs.push(async move {
+                                let result = WebRtcClient::connect(
+                                    user.clone(),
+                                    off,
+                                    sig_sender,
+                                    rid,
+                                    repo,
+                                    total_slots,
+                                    ice_config,
+                                )
+                                .await;
 
-                            match &result {
-                                Ok(_) => log::info!("[webrtc-server] Client connected successfully"),
-                                Err(e) => log::error!("[webrtc-server] Client connection failed: {:?}", e),
-                            }
+                                match &result {
+                                    Ok(_) => log::info!(
+                                        "[webrtc-server] Client connected successfully (slot 0, total_slots={total_slots})"
+                                    ),
+                                    Err(e) => log::error!("[webrtc-server] Client connection failed: {:?}", e),
+                                }
 
-                            if let Ok(client) = result {
-                                Some((Arc::new(client), user))
-                            } else {
-                                None
+                                if let Ok(client) = result {
+                                    Some((Arc::new(client), user))
+                                } else {
+                                    None
+                                }
+                            });
+                        } else {
+                            let peer_id = offer.peer.peer_id.clone();
+                            let existing_client = {
+                                let mut clients = self.clients.lock().await;
+                                let result = clients.get(&peer_id).cloned().and_then(|c| c.upgrade());
+                                if result.is_none() {
+                                    clients.remove(&peer_id);
+                                }
+                                result
+                            };
+
+                            match existing_client {
+                                Some(client) => {
+                                    let ice_config = msg
+                                        .ice_configs
+                                        .get(slot_idx)
+                                        .cloned()
+                                        .or_else(|| msg.ice_config.clone());
+                                    log::info!(
+                                        "[webrtc-server] Routing slot {} offer (base={}) to existing client {}",
+                                        slot_idx,
+                                        base_request_id,
+                                        peer_id
+                                    );
+                                    if let Err(e) = client.install_slot(slot_idx, off, user, sig_sender, rid, ice_config) {
+                                        log::warn!(
+                                            "[webrtc-server] install_slot {slot_idx} for peer {peer_id} failed: {e:?}"
+                                        );
+                                    }
+                                }
+                                None => {
+                                    log::warn!(
+                                        "[webrtc-server] Received slot {} offer (base={}) for unknown peer {}; dropping",
+                                        slot_idx,
+                                        base_request_id,
+                                        peer_id
+                                    );
+                                }
                             }
-                        });
+                        }
                     }
                 }
 
@@ -340,5 +397,45 @@ impl WebRtcServer {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_slot_request_id;
+
+    #[test]
+    fn parse_request_id_without_slot_suffix_is_slot_zero() {
+        let (base, idx) = parse_slot_request_id("abc-123");
+        assert_eq!(base, "abc-123");
+        assert_eq!(idx, 0);
+    }
+
+    #[test]
+    fn parse_request_id_with_slot_suffix_extracts_base_and_index() {
+        let (base, idx) = parse_slot_request_id("abc-123-slot-2");
+        assert_eq!(base, "abc-123");
+        assert_eq!(idx, 2);
+    }
+
+    #[test]
+    fn parse_request_id_with_slot_zero_suffix_returns_zero() {
+        let (base, idx) = parse_slot_request_id("session-42-slot-0");
+        assert_eq!(base, "session-42");
+        assert_eq!(idx, 0);
+    }
+
+    #[test]
+    fn parse_request_id_non_numeric_slot_part_falls_back_to_raw() {
+        let (base, idx) = parse_slot_request_id("abc-slot-notanumber");
+        assert_eq!(base, "abc-slot-notanumber");
+        assert_eq!(idx, 0);
+    }
+
+    #[test]
+    fn parse_request_id_base_may_contain_dashes() {
+        let (base, idx) = parse_slot_request_id("a-b-c-slot-5");
+        assert_eq!(base, "a-b-c");
+        assert_eq!(idx, 5);
     }
 }

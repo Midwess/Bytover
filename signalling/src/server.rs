@@ -5,7 +5,7 @@ use actix_web::{web, HttpRequest, HttpResponse};
 use base64::Engine;
 use devlog_sdk::tcp::listener::find_tcp_listener;
 use prost::Message as ProstMessage;
-use schema::devlog::rpc_signalling::server::{AnswerMessage, Message, OfferRequest, OfferResponse};
+use schema::devlog::rpc_signalling::server::{AnswerMessage, IceConfigList, Message, OfferRequest, OfferResponse};
 
 use crate::client::Client;
 use crate::client_manager::ClientManager;
@@ -16,6 +16,7 @@ use crate::turn_manager::TurnManager;
 struct ServerState {
     client_manager: Arc<ClientManager>,
     turn_manager: Arc<TurnManager>,
+    connection_fanout: usize,
 }
 
 pub struct SignallingServer {
@@ -42,6 +43,7 @@ impl SignallingServer {
         let state = web::Data::new(ServerState {
             client_manager: Arc::clone(&self.client_manager),
             turn_manager: Arc::clone(&self.turn_manager),
+            connection_fanout: self.config.connection_fanout,
         });
 
         let server = actix_web::HttpServer::new(move || {
@@ -56,11 +58,12 @@ impl SignallingServer {
         .run();
 
         log::info!(
-            "RPC Signalling Server listening on {}:{} (region={}, route={})",
+            "RPC Signalling Server listening on {}:{} (region={}, route={}, connection_fanout={})",
             public_host,
             port,
             self.config.region_code,
-            self.config.signalling_route
+            self.config.signalling_route,
+            self.config.connection_fanout
         );
 
         self.register_gateway(&public_host, port).await?;
@@ -133,14 +136,12 @@ async fn ws_handler(
     state.client_manager.register(key.clone(), &client).await;
 
     let client_manager = Arc::clone(&state.client_manager);
-    let turn_manager = Arc::clone(&state.turn_manager);
     let client_for_spawn = Arc::clone(&client);
     let key_clone = key.clone();
 
     tokio::task::spawn_local(async move {
         <Arc<Client> as Clone>::clone(&client_for_spawn).run(msg_stream).await;
         client_manager.unregister(&key_clone).await;
-        turn_manager.unregister_client(&key_clone).await;
     });
 
     Ok(response)
@@ -160,6 +161,7 @@ async fn offer_handler(key: web::Path<String>, body: Bytes, state: web::Data<Ser
         }
     };
 
+    let slot_idx = offer_request.slot_idx;
     let mut message = Message {
         offer: Some(schema::devlog::rpc_signalling::server::OfferMessage {
             sdp: offer_request.offer.sdp,
@@ -169,9 +171,11 @@ async fn offer_handler(key: web::Path<String>, body: Bytes, state: web::Data<Ser
         ..Default::default()
     };
 
-    message.ice_config = state.turn_manager.get_relay_config(&key).await;
+    let ice_configs = state.turn_manager.get_relay_configs(&key, state.connection_fanout).await;
+    message.ice_config = ice_configs.first().cloned();
+    message.ice_configs = ice_configs;
 
-    match client.request(message).await {
+    match client.request(message, slot_idx).await {
         Ok(response) => {
             let answer = match response.answer {
                 Some(answer) => answer,
@@ -203,12 +207,16 @@ async fn relay_handler(key: web::Path<String>, state: web::Data<ServerState>) ->
     let key = key.into_inner();
     let _ = state.client_manager.get(&key).await;
 
-    let relay_config = match state.turn_manager.get_relay_config(&key).await {
-        Some(config) => config,
-        None => return HttpResponse::ServiceUnavailable().body("client not connected"),
-    };
+    let configs = state
+        .turn_manager
+        .get_relay_configs(&key, state.connection_fanout.max(1))
+        .await;
 
-    encode_binary_response(&relay_config)
+    if configs.is_empty() {
+        return HttpResponse::ServiceUnavailable().body("no relay available");
+    }
+
+    encode_binary_response(&IceConfigList { configs })
 }
 
 fn parse_submitted_ipv4(value: &str) -> Option<std::net::Ipv4Addr> {
@@ -356,6 +364,7 @@ mod tests {
         web::Data::new(ServerState {
             client_manager: ClientManager::new(),
             turn_manager,
+            connection_fanout: 1,
         })
     }
 
@@ -382,7 +391,7 @@ mod tests {
         let bytes = to_bytes(response.into_body()).await.unwrap();
         assert_eq!(std::str::from_utf8(&bytes).unwrap(), "{\"ip_address\":\"198.51.100.7\"}");
 
-        let relay = turn_manager.get_relay_config("client-1").await.unwrap();
+        let relay = turn_manager.get_relay_configs("client-1", 1).await.into_iter().next().unwrap();
         assert_eq!(
             relay.urls,
             vec![
@@ -394,7 +403,7 @@ mod tests {
         );
         assert_eq!(relay.username.as_deref(), Some("relay"));
         assert_eq!(relay.credential.as_deref(), Some("relay-secret"));
-        let assigned = turn_manager.get_assigned_relay("client-1").await.unwrap();
+        let assigned = turn_manager.get_assigned_relays("client-1", 1).await.into_iter().next().unwrap();
         assert_eq!(assigned.relay_host, "198.51.100.7");
     }
 
@@ -418,7 +427,7 @@ mod tests {
         let response = register_relay_handler(req, body, state).await;
 
         assert_eq!(response.status(), StatusCode::OK);
-        let relay = turn_manager.get_relay_config("client-1").await.unwrap();
+        let relay = turn_manager.get_relay_configs("client-1", 1).await.into_iter().next().unwrap();
         assert_eq!(
             relay.urls,
             vec![
@@ -428,7 +437,7 @@ mod tests {
         );
         assert_eq!(relay.username.as_deref(), Some("relay"));
         assert_eq!(relay.credential.as_deref(), Some("relay-secret"));
-        let assigned = turn_manager.get_assigned_relay("client-1").await.unwrap();
+        let assigned = turn_manager.get_assigned_relays("client-1", 1).await.into_iter().next().unwrap();
         assert_eq!(assigned.relay_host, "2001:db8::8");
     }
 

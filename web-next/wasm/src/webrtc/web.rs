@@ -57,6 +57,12 @@ impl DerefMut for RtcDataChannelWrapper {
     }
 }
 
+impl RtcDataChannelWrapper {
+    pub fn buffered_amount(&self) -> u32 {
+        self.0.buffered_amount()
+    }
+}
+
 impl Drop for RtcDataChannelWrapper {
     fn drop(&mut self) {
         log::info!("closing data channel on drop");
@@ -119,6 +125,7 @@ impl WebRtcApi {
         }
 
         let conn = RtcPeerConnection::new_with_configuration(&config).map_err(|e| WebError::Connection(format!("{:?}", e)))?;
+        attach_lifecycle_logging(&conn);
         Ok(RtcConnectionWrapper::new(conn))
     }
 
@@ -269,6 +276,60 @@ impl WebRtcApi {
         log::info!("Data channel {} opened", channel_id);
         Ok(())
     }
+}
+
+fn attach_lifecycle_logging(conn: &RtcPeerConnection) {
+    fn string_prop(obj: &JsValue, key: &str) -> String {
+        js_sys::Reflect::get(obj, &JsValue::from_str(key))
+            .ok()
+            .and_then(|v| v.as_string())
+            .unwrap_or_else(|| "?".into())
+    }
+
+    let pc: JsValue = conn.clone().into();
+    let pc_for_ice = pc.clone();
+    let on_ice = Closure::wrap(Box::new(move |_: Event| {
+        log::info!(
+            "[pc] iceConnectionState={} iceGatheringState={} signalingState={} connectionState={}",
+            string_prop(&pc_for_ice, "iceConnectionState"),
+            string_prop(&pc_for_ice, "iceGatheringState"),
+            string_prop(&pc_for_ice, "signalingState"),
+            string_prop(&pc_for_ice, "connectionState"),
+        );
+    }) as Box<dyn FnMut(Event)>);
+    conn.set_oniceconnectionstatechange(Some(on_ice.as_ref().unchecked_ref()));
+    on_ice.forget();
+
+    let pc_for_conn = pc.clone();
+    let on_conn = Closure::wrap(Box::new(move |_: Event| {
+        log::info!(
+            "[pc] connectionState={}",
+            string_prop(&pc_for_conn, "connectionState")
+        );
+    }) as Box<dyn FnMut(Event)>);
+    let _ = js_sys::Reflect::set(
+        &pc,
+        &JsValue::from_str("onconnectionstatechange"),
+        on_conn.as_ref().unchecked_ref(),
+    );
+    on_conn.forget();
+
+    let on_err = Closure::wrap(Box::new(move |evt: JsValue| {
+        log::warn!(
+            "[pc] icecandidateerror address={} port={} url={} errorCode={} errorText={}",
+            string_prop(&evt, "address"),
+            string_prop(&evt, "port"),
+            string_prop(&evt, "url"),
+            string_prop(&evt, "errorCode"),
+            string_prop(&evt, "errorText"),
+        );
+    }) as Box<dyn FnMut(JsValue)>);
+    let _ = js_sys::Reflect::set(
+        &pc,
+        &JsValue::from_str("onicecandidateerror"),
+        on_err.as_ref().unchecked_ref(),
+    );
+    on_err.forget();
 }
 
 #[derive(Debug, thiserror::Error)]
