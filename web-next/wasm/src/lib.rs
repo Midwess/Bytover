@@ -29,81 +29,127 @@ pub use crux_core::{Core, Request};
 use devlog_sdk::distributed_id::gen_id;
 use erased_serde::Serialize;
 use js_sys::{Array, Promise};
-use n0_future::{task, time};
+use n0_future::task;
 use serde::Deserialize;
 use shared::app::shelf::module::ResourceSelection;
 use shared::entities::local_resource::{LocalResource, LocalResourcePath};
 use shared::shell::api::{CoreRequest, CruxRequest};
 use shared::CoreOperation;
-use std::cell::OnceCell;
+use std::collections::HashSet;
 use std::sync::LazyLock;
-use std::time::Duration;
+use wasm_bindgen::closure::Closure;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::js_sys::Uint8Array;
-use web_sys::{window, File};
+use wasm_bindgen_futures::JsFuture;
+use web_sys::{window, File, LockMode, LockOptions};
 
 static CORE_WORKER: LazyLock<NeverSend<WebWorkerBridge<CoreWorker>>> =
     LazyLock::new(|| NeverSend(WebWorkerBridge::spawn("core-worker")));
 
-thread_local! {
-    static STORAGE_SESSION_ID: OnceCell<String> = const { OnceCell::new() };
+const LOCK_NAME_PREFIX: &str = "bitbridge_session_";
+const LEGACY_STORAGE_PREFIX: &str = "bitbridge_storage_session_";
+const OPFS_SESSION_PREFIX: &str = "session-";
+
+fn hold_session_lock_forever(lock_name: &str) -> Result<(), JsValue> {
+    let window = window().ok_or_else(|| JsValue::from_str("no window"))?;
+    let locks = window.navigator().locks();
+
+    let options = LockOptions::new();
+    options.set_mode(LockMode::Exclusive);
+
+    let callback = Closure::wrap(Box::new(|_lock: JsValue| -> Promise {
+        Promise::new(&mut |_resolve, _reject| {})
+    }) as Box<dyn FnMut(JsValue) -> Promise>);
+
+    let _ = locks.request_with_options_and_callback(
+        lock_name,
+        &options,
+        callback.as_ref().unchecked_ref(),
+    );
+
+    callback.forget();
+    Ok(())
 }
 
-fn get_storage_session_id() -> Option<String> {
-    STORAGE_SESSION_ID.with(|cell| cell.get().cloned())
-}
-
-const STALE_THRESHOLD_MS: f64 = 300_000.0;
-
-fn scan_and_get_stale_paths() -> Vec<String> {
-    let mut stale_paths = Vec::new();
-    let now = js_sys::Date::now();
-
+async fn query_held_session_uuids() -> HashSet<String> {
+    let mut set = HashSet::new();
     let Some(w) = window() else {
-        return stale_paths;
+        return set;
+    };
+    let locks = w.navigator().locks();
+
+    let Ok(snapshot) = JsFuture::from(locks.query()).await else {
+        return set;
     };
 
+    let Ok(held_val) = js_sys::Reflect::get(&snapshot, &JsValue::from_str("held")) else {
+        return set;
+    };
+
+    let held_array = Array::from(&held_val);
+    for entry in held_array.iter() {
+        let Ok(name_val) = js_sys::Reflect::get(&entry, &JsValue::from_str("name")) else {
+            continue;
+        };
+        let Some(name) = name_val.as_string() else {
+            continue;
+        };
+        if let Some(uuid) = name.strip_prefix(LOCK_NAME_PREFIX) {
+            set.insert(uuid.to_string());
+        }
+    }
+    set
+}
+
+async fn list_orphan_session_paths() -> Vec<String> {
+    let held = query_held_session_uuids().await;
+
+    let Some(response) = OPFS_WORKER
+        .send(WorkerMessage::new(OpfsOperation {
+            file_path: "/".to_owned(),
+            operation: FileOperation::ListSessions,
+        }))
+        .await
+    else {
+        return Vec::new();
+    };
+
+    let OpfsOperationOutput::Sessions(dirs) = response.message else {
+        return Vec::new();
+    };
+
+    let mut orphans = Vec::new();
+    for dir in dirs {
+        let Some(uuid) = dir.strip_prefix(OPFS_SESSION_PREFIX) else {
+            continue;
+        };
+        if !held.contains(uuid) {
+            orphans.push(dir);
+        }
+    }
+    orphans
+}
+
+fn purge_legacy_heartbeat_keys() {
+    let Some(w) = window() else {
+        return;
+    };
     let Ok(Some(storage)) = w.local_storage() else {
-        return stale_paths;
+        return;
     };
-
-    let current_session = get_storage_session_id();
     let len = storage.length().unwrap_or(0);
-
+    let mut keys = Vec::new();
     for i in 0..len {
         let Ok(Some(key)) = storage.key(i) else {
             continue;
         };
-
-        if !key.starts_with("bitbridge_storage_session_") {
-            continue;
-        }
-
-        let session_id = key.trim_start_matches("bitbridge_storage_session_");
-
-        if current_session.as_deref() == Some(session_id) {
-            continue;
-        }
-
-        let Ok(Some(value)) = storage.get_item(&key) else {
-            continue;
-        };
-
-        let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&value) else {
-            continue;
-        };
-
-        let Some(last_ping) = parsed.get("lastPing").and_then(|v| v.as_f64()) else {
-            continue;
-        };
-
-        if now - last_ping > STALE_THRESHOLD_MS {
-            stale_paths.push(format!("session-{}", session_id));
-            let _ = storage.remove_item(&key);
+        if key.starts_with(LEGACY_STORAGE_PREFIX) {
+            keys.push(key);
         }
     }
-
-    stale_paths
+    for key in keys {
+        let _ = storage.remove_item(&key);
+    }
 }
 
 #[wasm_bindgen]
@@ -172,10 +218,16 @@ pub async fn is_compatible() -> bool {
         return false;
     }
 
-    let storage = with_browser.navigator().storage();
+    let navigator = with_browser.navigator();
+    let storage = navigator.storage();
 
     if storage.is_null() || storage.is_undefined() {
         log::info!("Storage is null");
+        return false;
+    }
+
+    if !js_sys::Reflect::has(&navigator, &JsValue::from_str("locks")).unwrap_or(false) {
+        log::info!("No navigator.locks");
         return false;
     }
 
@@ -187,10 +239,13 @@ pub async fn init() {
     logger::setup();
 
     let session_id = uuid::Uuid::new_v4().to_string();
-    STORAGE_SESSION_ID.with(|cell| {
-        let _ = cell.set(session_id.clone());
-    });
     log::info!("Storage session initialized: {}", session_id);
+
+    let lock_name = format!("{}{}", LOCK_NAME_PREFIX, session_id);
+    if let Err(e) = hold_session_lock_forever(&lock_name) {
+        log::error!("Failed to acquire session lock {}: {:?}", lock_name, e);
+        return;
+    }
 
     let di_container = DiContainer::get_instance();
     di_container.init().await;
@@ -203,31 +258,33 @@ pub async fn init() {
     });
     OPFS_WORKER.send(init_msg).await;
 
-    let heartbeat_session_id = session_id.clone();
     task::spawn(async move {
-        let key = format!("bitbridge_storage_session_{}", heartbeat_session_id);
-        loop {
-            if let Some(w) = window() {
-                if let Ok(Some(storage)) = w.local_storage() {
-                    let now = js_sys::Date::now() as u64;
-                    let _ = storage.set_item(&key, &format!(r#"{{"lastPing":{}}}"#, now));
-                }
-            }
-            time::sleep(Duration::from_secs(60)).await;
-        }
-    });
-
-    task::spawn(async move {
-        let stale_paths = scan_and_get_stale_paths();
-        if !stale_paths.is_empty() {
-            log::info!("Cleaning {} stale paths in background", stale_paths.len());
+        purge_legacy_heartbeat_keys();
+        let orphans = list_orphan_session_paths().await;
+        if !orphans.is_empty() {
+            log::info!("Reaping {} orphan session workspaces", orphans.len());
             let cleanup_msg = WorkerMessage::new(OpfsOperation {
                 file_path: "/".to_owned(),
-                operation: FileOperation::CleanUp { paths: stale_paths },
+                operation: FileOperation::CleanUp { paths: orphans },
             });
             OPFS_WORKER.send(cleanup_msg).await;
         }
     });
+}
+
+#[wasm_bindgen]
+pub async fn force_cleanup() {
+    let orphans = list_orphan_session_paths().await;
+    log::info!("force_cleanup: {} orphan(s)", orphans.len());
+    if orphans.is_empty() {
+        return;
+    }
+    let _ = OPFS_WORKER
+        .send(WorkerMessage::new(OpfsOperation {
+            file_path: "/".to_owned(),
+            operation: FileOperation::CleanUp { paths: orphans },
+        }))
+        .await;
 }
 
 /// Add device files to opfs

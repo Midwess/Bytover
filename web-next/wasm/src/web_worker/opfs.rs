@@ -20,7 +20,7 @@ use std::cell::OnceCell;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
-use wasm_bindgen::JsValue;
+use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
     Blob, File, FileSystemDirectoryHandle, FileSystemReadWriteOptions, FileSystemRemoveOptions, FileSystemSyncAccessHandle,
@@ -76,6 +76,7 @@ pub enum FileOperation {
     CleanUp {
         paths: Vec<String>,
     },
+    ListSessions,
     CreateZipWriter {
         zip_filename: String,
     },
@@ -107,6 +108,7 @@ pub enum OpfsOperationOutput {
     DownloadUrl(String),
     Blob(#[serde(with = "serde_wasm_bindgen::preserve")] Blob),
     Cursor(u32),
+    Sessions(Vec<String>),
 }
 
 unsafe impl Send for OpfsOperationOutput {}
@@ -177,6 +179,24 @@ impl OpfsWorker {
             return OpfsOperationOutput::Void;
         }
 
+        if let FileOperation::ListSessions = operation {
+            let opfs_root = match self.get_opfs_root().await {
+                Ok(r) => r,
+                Err(e) => {
+                    log::error!("Failed to get OPFS root for list sessions: {:?}", e);
+                    return OpfsOperationOutput::Error(e);
+                }
+            };
+
+            match list_session_directories(&opfs_root).await {
+                Ok(names) => return OpfsOperationOutput::Sessions(names),
+                Err(e) => {
+                    log::error!("Failed to enumerate OPFS sessions: {:?}", e);
+                    return OpfsOperationOutput::Sessions(Vec::new());
+                }
+            }
+        }
+
         let Some(root) = self.root.get().cloned() else {
             log::error!("OPFS root not initialized, call Init first");
             return OpfsOperationOutput::Error(JsValue::from("OPFS root not initialized"));
@@ -227,7 +247,7 @@ impl OpfsWorker {
                     Err(e) => OpfsOperationOutput::Error(e),
                 }
             }
-            FileOperation::Init { .. } | FileOperation::CleanUp { .. } => {
+            FileOperation::Init { .. } | FileOperation::CleanUp { .. } | FileOperation::ListSessions => {
                 unreachable!()
             }
             FileOperation::Cursor { buffer_size } => {
@@ -630,4 +650,36 @@ impl Worker for OpfsWorker {
             scope.respond(id, WorkerMessage::response(msg_id, result));
         });
     }
+}
+
+async fn list_session_directories(root: &FileSystemDirectoryHandle) -> Result<Vec<String>, JsValue> {
+    let entries_fn_val = js_sys::Reflect::get(root.as_ref(), &JsValue::from_str("entries"))?;
+    let entries_fn: js_sys::Function = entries_fn_val.dyn_into()?;
+    let iter_obj = entries_fn.call0(root.as_ref())?;
+    let next_fn_val = js_sys::Reflect::get(&iter_obj, &JsValue::from_str("next"))?;
+    let next_fn: js_sys::Function = next_fn_val.dyn_into()?;
+
+    let mut names = Vec::new();
+    loop {
+        let next_val = next_fn.call0(&iter_obj)?;
+        let promise: js_sys::Promise = next_val.dyn_into()?;
+        let result = JsFuture::from(promise).await?;
+        let done = js_sys::Reflect::get(&result, &JsValue::from_str("done"))?
+            .as_bool()
+            .unwrap_or(true);
+        if done {
+            break;
+        }
+        let value = js_sys::Reflect::get(&result, &JsValue::from_str("value"))?;
+        let entry_arr: js_sys::Array = value.dyn_into()?;
+        let name = entry_arr.get(0).as_string().unwrap_or_default();
+        let handle = entry_arr.get(1);
+        let kind = js_sys::Reflect::get(&handle, &JsValue::from_str("kind"))?
+            .as_string()
+            .unwrap_or_default();
+        if kind == "directory" && name.starts_with("session-") {
+            names.push(name);
+        }
+    }
+    Ok(names)
 }
