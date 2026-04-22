@@ -215,14 +215,14 @@ impl WebRtcClient {
 
         let mut retry_timer = Box::pin(tokio::time::sleep(OUTBOUND_RETRY_DELAY));
 
-        while pool.slot0_alive().await {
+        while pool.slot0_alive() {
             if sending_handle.is_finished() || msg_handle.is_finished() {
                 break;
             }
 
             if self.disconnect_requested.load(Ordering::SeqCst) {
                 log::info!("[webrtc-client] Disconnect requested, stopping run loop");
-                pool.shutdown_all().await;
+                pool.shutdown_all();
                 break;
             }
 
@@ -234,7 +234,7 @@ impl WebRtcClient {
 
                 _ = self.disconnect_notify.notified() => {
                     log::info!("[webrtc-client] Disconnect notification received");
-                    pool.shutdown_all().await;
+                    pool.shutdown_all();
                     break;
                 }
 
@@ -271,7 +271,7 @@ impl WebRtcClient {
             }
 
             if flush_pending {
-                self.flush_pending_outbound(&mut pending_data, &pool, &cids).await;
+                self.flush_pending_outbound(&mut pending_data, &pool, &cids);
                 if !pending_data.is_empty() {
                     retry_timer.as_mut().reset(tokio::time::Instant::now() + OUTBOUND_RETRY_DELAY);
                 }
@@ -285,7 +285,7 @@ impl WebRtcClient {
         Ok(())
     }
 
-    async fn flush_pending_outbound(
+    fn flush_pending_outbound(
         &self,
         pending_data: &mut VecDeque<(Vec<u8>, ChannelId)>,
         pool: &Arc<ConnectionPool>,
@@ -297,9 +297,9 @@ impl WebRtcClient {
             };
 
             let sent = if channel_id == cids.reliable {
-                pool.try_send_reliable(&data).await
+                pool.try_send_reliable(&data)
             } else {
-                pool.try_send_control(&data, channel_id).await
+                pool.try_send_control(&data, channel_id)
             };
 
             if sent {

@@ -66,7 +66,7 @@ pub struct RtcHandle {
     data_tx: Option<tokio::sync::mpsc::Sender<(Vec<u8>, ChannelId)>>,
     channel_ids: ChannelIds,
     thread_handle: Option<std::thread::JoinHandle<()>>,
-    reliable_buffered_amount: Arc<AtomicUsize>,
+    data_buffered_amount: Arc<AtomicUsize>,
 }
 
 impl RtcHandle {
@@ -91,8 +91,8 @@ impl RtcHandle {
         RtcClient::connect(signalling_id, offer_message, me, signalling, request_id, Some(ice_config)).await
     }
 
-    pub fn buffered_amount(&self) -> usize {
-        self.reliable_buffered_amount.load(Ordering::Relaxed)
+    pub fn data_buffered_amount(&self) -> usize {
+        self.data_buffered_amount.load(Ordering::Relaxed)
     }
 
     /// Await the next event from the RTC thread.
@@ -157,7 +157,7 @@ struct RtcClient {
     pending_remote_candidates: VecDeque<str0m::Candidate>,
     candidate_rx: tokio::sync::mpsc::Receiver<str0m::Candidate>,
     turn: Option<TurnRelayInfo>,
-    reliable_buffered_amount: Arc<AtomicUsize>,
+    data_buffered_amount: Arc<AtomicUsize>,
 }
 
 impl RtcClient {
@@ -314,7 +314,7 @@ impl RtcClient {
             pending_remote_candidates: VecDeque::with_capacity(8),
             candidate_rx,
             turn: turn_info,
-            reliable_buffered_amount: Arc::new(AtomicUsize::new(0)),
+            data_buffered_amount: Arc::new(AtomicUsize::new(0)),
         };
 
         for candidate in ip_candidates {
@@ -335,7 +335,7 @@ impl RtcClient {
 
     fn spawn_thread(self) -> RtcHandle {
         let channel_ids = self.channel_ids;
-        let reliable_buffered_amount = Arc::clone(&self.reliable_buffered_amount);
+        let data_buffered_amount = Arc::clone(&self.data_buffered_amount);
         let (event_tx, event_rx) = tokio::sync::mpsc::channel::<RtcEvent>(5);
         let (data_tx, data_rx) = tokio::sync::mpsc::channel::<(Vec<u8>, ChannelId)>(16);
         let thread_handle = std::thread::Builder::new()
@@ -357,7 +357,7 @@ impl RtcClient {
             data_tx: Some(data_tx),
             channel_ids,
             thread_handle: Some(thread_handle),
-            reliable_buffered_amount,
+            data_buffered_amount,
         }
     }
 
@@ -771,13 +771,13 @@ impl RtcClient {
                 break;
             }
         }
-        self.refresh_reliable_buffered_amount();
+        self.refresh_data_buffered_amount();
     }
 
-    fn refresh_reliable_buffered_amount(&mut self) {
+    fn refresh_data_buffered_amount(&mut self) {
         let channel_id = self.channel_ids.reliable;
         let amount = self.channel_buffered_amount(channel_id).unwrap_or(0);
-        self.reliable_buffered_amount.store(amount, Ordering::Relaxed);
+        self.data_buffered_amount.store(amount, Ordering::Relaxed);
     }
 
     fn add_or_defer_remote_candidate(&mut self, candidate: str0m::Candidate, source: &str) {

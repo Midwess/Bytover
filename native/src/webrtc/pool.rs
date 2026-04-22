@@ -1,35 +1,35 @@
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, OnceLock};
 
 use str0m::channel::ChannelId;
-use tokio::sync::Mutex;
 
 use crate::webrtc::client::WebRtcClientError;
 use crate::webrtc::rtc::{ChannelIds, RtcEvent, RtcHandle};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SlotState {
-    Pending,
-    Ready,
-    Failed,
-    Dead,
-}
-
 pub struct Slot {
     pub index: usize,
-    pub handle: Option<RtcHandle>,
-    pub state: SlotState,
+    pub handle: RtcHandle,
 }
 
 impl Slot {
-    fn is_ready(&self) -> bool {
-        matches!(self.state, SlotState::Ready) && self.handle.as_ref().is_some_and(|h| h.is_alive())
+    pub fn is_alive(&self) -> bool {
+        self.handle.is_alive()
+    }
+
+    pub fn data_buffered_amount(&self) -> usize {
+        self.handle.data_buffered_amount()
+    }
+
+    pub fn send(&self, data: &[u8], channel_id: ChannelId) -> bool {
+        self.handle.send(data, channel_id)
     }
 }
 
 pub struct ConnectionPool {
-    slots: Mutex<Vec<Slot>>,
+    slots: Box<[OnceLock<Slot>]>,
     channel_ids: ChannelIds,
     event_tx: tokio::sync::mpsc::Sender<(usize, RtcEvent)>,
+    closed: AtomicBool,
 }
 
 impl ConnectionPool {
@@ -41,24 +41,19 @@ impl ConnectionPool {
         let channel_ids = *primary.channel_ids();
         let primary_event_rx = primary.take_event_rx();
 
-        let mut slots = Vec::with_capacity(total_slots.max(1));
-        slots.push(Slot {
-            index: 0,
-            handle: Some(primary),
-            state: SlotState::Ready,
-        });
-        for idx in 1..total_slots.max(1) {
-            slots.push(Slot {
-                index: idx,
-                handle: None,
-                state: SlotState::Pending,
-            });
-        }
+        let n = total_slots.max(1);
+        let slots: Box<[OnceLock<Slot>]> = (0..n).map(|_| OnceLock::new()).collect();
+
+        slots[0]
+            .set(Slot { index: 0, handle: primary })
+            .ok()
+            .expect("primary slot must start empty");
 
         let pool = Arc::new(Self {
-            slots: Mutex::new(slots),
+            slots,
             channel_ids,
             event_tx: event_tx.clone(),
+            closed: AtomicBool::new(false),
         });
 
         if let Some(rx) = primary_event_rx {
@@ -81,29 +76,19 @@ impl ConnectionPool {
             match connect_fut.await {
                 Ok(mut handle) => {
                     let event_rx = handle.take_event_rx();
-                    let installed = {
-                        let mut slots = pool.slots.lock().await;
-                        if let Some(slot) = slots.get_mut(idx) {
-                            slot.handle = Some(handle);
-                            slot.state = SlotState::Ready;
-                            true
-                        } else {
-                            false
-                        }
+                    let installed = match pool.slots.get(idx) {
+                        Some(cell) => cell.set(Slot { index: idx, handle }).is_ok(),
+                        None => false,
                     };
                     if installed {
                         log::info!("[pool] slot {} connected and ready", idx);
                         if let Some(rx) = event_rx {
-                            Self::spawn_slot_event_forwarder(Arc::clone(&pool), idx, rx);
+                            Self::spawn_slot_event_forwarder(pool, idx, rx);
                         }
                     }
                 }
                 Err(e) => {
                     log::warn!("[pool] slot {} failed to connect: {:?}", idx, e);
-                    let mut slots = pool.slots.lock().await;
-                    if let Some(slot) = slots.get_mut(idx) {
-                        slot.state = SlotState::Failed;
-                    }
                 }
             }
         });
@@ -117,61 +102,67 @@ impl ConnectionPool {
                     return;
                 }
             }
-
-            let mut slots = pool.slots.lock().await;
-            if let Some(slot) = slots.get_mut(idx) {
-                slot.state = SlotState::Dead;
-                slot.handle = None;
-            }
         });
     }
 
-    pub async fn try_send_reliable(&self, data: &[u8]) -> bool {
-        let slots = self.slots.lock().await;
-        let candidates = slots
+    pub fn try_send_reliable(&self, data: &[u8]) -> bool {
+        if self.closed.load(Ordering::Relaxed) {
+            return false;
+        }
+
+        let candidates = self
+            .slots
             .iter()
-            .filter(|s| s.is_ready())
-            .filter_map(|s| s.handle.as_ref().map(|h| (s.index, h.buffered_amount())));
+            .filter_map(|cell| cell.get())
+            .filter(|s| s.is_alive())
+            .map(|s| (s.index, s.data_buffered_amount()));
 
         let Some(idx) = pick_least_buffered(candidates) else {
             return false;
         };
-        match slots.get(idx).and_then(|s| s.handle.as_ref()) {
-            Some(handle) => handle.send(data, self.channel_ids.reliable),
+        match self.slots.get(idx).and_then(|cell| cell.get()) {
+            Some(slot) => slot.send(data, self.channel_ids.reliable),
             None => false,
         }
     }
 
-    pub async fn try_send_control(&self, data: &[u8], channel_id: ChannelId) -> bool {
-        let slots = self.slots.lock().await;
-        let Some(slot) = slots.first() else { return false };
-        if !slot.is_ready() {
+    pub fn try_send_control(&self, data: &[u8], channel_id: ChannelId) -> bool {
+        if self.closed.load(Ordering::Relaxed) {
             return false;
         }
-        match slot.handle.as_ref() {
-            Some(handle) => handle.send(data, channel_id),
-            None => false,
+
+        let Some(slot) = self.slots.first().and_then(|cell| cell.get()) else {
+            return false;
+        };
+        if !slot.is_alive() {
+            return false;
         }
+        slot.send(data, channel_id)
     }
 
-    pub async fn slot0_alive(&self) -> bool {
-        let slots = self.slots.lock().await;
-        slots.first().map(|s| s.is_ready()).unwrap_or(false)
-    }
-
-    pub async fn alive_count(&self) -> usize {
-        let slots = self.slots.lock().await;
-        slots.iter().filter(|s| s.is_ready()).count()
-    }
-
-    pub async fn shutdown_all(&self) {
-        let mut slots = self.slots.lock().await;
-        for slot in slots.iter_mut() {
-            if let Some(mut handle) = slot.handle.take() {
-                handle.shutdown();
-            }
-            slot.state = SlotState::Dead;
+    pub fn slot0_alive(&self) -> bool {
+        if self.closed.load(Ordering::Relaxed) {
+            return false;
         }
+        self.slots
+            .first()
+            .and_then(|cell| cell.get())
+            .is_some_and(|s| s.is_alive())
+    }
+
+    pub fn alive_count(&self) -> usize {
+        if self.closed.load(Ordering::Relaxed) {
+            return 0;
+        }
+        self.slots
+            .iter()
+            .filter_map(|cell| cell.get())
+            .filter(|s| s.is_alive())
+            .count()
+    }
+
+    pub fn shutdown_all(&self) {
+        self.closed.store(true, Ordering::Relaxed);
     }
 }
 
@@ -192,24 +183,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{pick_least_buffered, Slot, SlotState};
-
-    #[test]
-    fn slot_without_handle_is_not_ready() {
-        let slot = Slot {
-            index: 0,
-            handle: None,
-            state: SlotState::Ready,
-        };
-        assert!(!slot.is_ready());
-    }
-
-    #[test]
-    fn slot_state_transitions() {
-        assert_ne!(SlotState::Pending, SlotState::Ready);
-        assert_ne!(SlotState::Ready, SlotState::Failed);
-        assert_ne!(SlotState::Ready, SlotState::Dead);
-    }
+    use super::pick_least_buffered;
 
     #[test]
     fn pick_least_buffered_returns_none_when_empty() {
