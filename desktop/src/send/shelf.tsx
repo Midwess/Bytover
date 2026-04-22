@@ -58,7 +58,9 @@ function ShelfWrapper({children, isDraggingOver = false, shelfName}: {
                 items-center
                 px-0
                 w-full h-full
-                transition-all duration-200 relative overflow-hidden
+                relative overflow-hidden
+                animate-in fade-in duration-300
+                transition-[box-shadow,border-color] duration-200
                 ${isDraggingOver
                 ? 'border-bluePrimary shadow-[0_0_8px_2px_rgb(var(--bluePrimary))_inset]'
                 : 'border-white/20'
