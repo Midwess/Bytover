@@ -84,21 +84,24 @@ function ShelfWrapper({children, isDraggingOver = false, shelfName}: {
     )
 }
 
-function DockedSliver({edge, onExpand, shelfName, isOnline}: {
+function DockedSliver({edge, onExpand, shelfName, isOnline, isFading}: {
     edge: DockEdge,
     onExpand: () => void,
     shelfName?: string,
     isOnline: boolean,
+    isFading: boolean,
 }) {
     const Icon = edge === "right" ? ChevronLeft : ChevronRight;
     const roundedSide = edge === "right" ? "rounded-l-2xl" : "rounded-r-2xl";
+    const edgePos = edge === "right" ? "right-0" : "left-0";
     const nameRotation = edge === "left" ? "rotate(180deg)" : undefined;
+    const fadeState = isFading ? "opacity-0 pointer-events-none" : "opacity-100";
 
     return createPortal(
         <button
             onClick={onExpand}
             aria-label="Expand shelf"
-            className={`dark group fixed inset-0 z-[9999] bg-card border border-white/20 ${roundedSide} flex flex-col items-center justify-between p-0 overflow-hidden cursor-pointer hover:bg-muted animate-in fade-in transition-colors duration-200`}
+            className={`dark group fixed top-0 ${edgePos} w-6 h-screen z-[9999] bg-card border border-white/20 ${roundedSide} flex flex-col items-center justify-between p-0 overflow-hidden cursor-pointer hover:bg-muted animate-in fade-in transition-[background-color,opacity] duration-200 ${fadeState}`}
         >
             <span className="shrink-0 pt-2 h-4 flex items-center justify-center">
                 {isOnline && (
@@ -141,6 +144,19 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
     const effectRan = useRef(false);
     const [isDraggingOver, setIsDraggingOver] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
+    const [visibleEdge, setVisibleEdge] = useState<DockEdge | null>(null);
+    const isSliverFading = !dock.isDocked && visibleEdge !== null;
+
+    useEffect(() => {
+        if (dock.isDocked && dock.edge) {
+            setVisibleEdge(dock.edge);
+            return;
+        }
+        if (visibleEdge !== null) {
+            const t = setTimeout(() => setVisibleEdge(null), 220);
+            return () => clearTimeout(t);
+        }
+    }, [dock.isDocked, dock.edge, visibleEdge]);
 
     useShelfClipboard({shelfId});
 
@@ -238,26 +254,29 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
         };
     }, [shelfId]);
 
-    if (dock.isDocked && dock.edge) {
-        return (
-            <DockedSliver
-                edge={dock.edge}
-                onExpand={dock.expand}
-                shelfName={currentShelf?.name}
-                isOnline={isOnline}
-            />
-        );
-    }
+    const sliverOverlay = visibleEdge && (
+        <DockedSliver
+            edge={visibleEdge}
+            onExpand={dock.expand}
+            shelfName={currentShelf?.name}
+            isOnline={isOnline}
+            isFading={isSliverFading}
+        />
+    );
 
     if (!shelfId) {
         return (
-            <ShelfWrapper>
-                <Loader2 className="h-6 w-6 text-foreground animate-spin"/>
-            </ShelfWrapper>
+            <>
+                <ShelfWrapper>
+                    <Loader2 className="h-6 w-6 text-foreground animate-spin"/>
+                </ShelfWrapper>
+                {sliverOverlay}
+            </>
         )
     }
 
     return (
+        <>
         <ShelfWrapper isDraggingOver={isDraggingOver} shelfName={currentShelf?.name}>
             <div ref={containerRef} tabIndex={0} className="w-full h-full outline-none">
             <div

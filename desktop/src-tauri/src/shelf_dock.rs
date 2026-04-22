@@ -271,8 +271,8 @@ pub fn begin_expand<R: Runtime>(app: &AppHandle<R>, window: &WebviewWindow<R>) {
 
     release_dock(&label);
 
-    let _ = window.emit("shelf-expanded", serde_json::json!({}));
-
+    let app_clone = app.clone();
+    let label_for_emit = label.clone();
     animate_geometry(
         app.clone(),
         label.clone(),
@@ -280,7 +280,11 @@ pub fn begin_expand<R: Runtime>(app: &AppHandle<R>, window: &WebviewWindow<R>) {
         current_size,
         state.pre_dock_pos,
         state.pre_dock_size,
-        None,
+        Some(Box::new(move |_app| {
+            if let Some(w) = app_clone.get_webview_window(&label_for_emit) {
+                let _ = w.emit("shelf-expanded", serde_json::json!({}));
+            }
+        })),
     );
 }
 
