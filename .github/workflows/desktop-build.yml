@@ -12,11 +12,44 @@ on:
           - windows
           - linux
           - all
+      profile:
+        description: 'Signing profile (auto = production on production branch, development otherwise)'
+        required: true
+        type: choice
+        default: auto
+        options:
+          - auto
+          - development
+          - production
 
 permissions:
   contents: write
 
 jobs:
+  resolve-profile:
+    runs-on: ubuntu-22.04
+    outputs:
+      environment: ${{ steps.pick.outputs.environment }}
+      profile: ${{ steps.pick.outputs.profile }}
+    steps:
+      - id: pick
+        env:
+          INPUT_PROFILE: ${{ github.event.inputs.profile }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$INPUT_PROFILE" = "production" ]; then
+            PROFILE=production
+          elif [ "$INPUT_PROFILE" = "development" ]; then
+            PROFILE=development
+          elif [ "$REF_NAME" = "production" ]; then
+            PROFILE=production
+          else
+            PROFILE=development
+          fi
+          echo "profile=$PROFILE" >> "$GITHUB_OUTPUT"
+          echo "environment=$PROFILE" >> "$GITHUB_OUTPUT"
+          echo "Resolved profile=$PROFILE for branch=$REF_NAME"
+
   generate-types:
     # Runs on Ubuntu to generate TypeScript types (requires pnpm)
     # All other platforms download these artifacts instead of regenerating
@@ -69,8 +102,8 @@ jobs:
           retention-days: 1
 
   deploy:
-    needs: generate-types
-    environment: production
+    needs: [generate-types, resolve-profile]
+    environment: ${{ needs.resolve-profile.outputs.environment }}
     strategy:
       fail-fast: false
       matrix:
@@ -227,8 +260,11 @@ jobs:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Notarization credentials — only supplied for production profile.
+          # tauri-action treats empty APPLE_ID as "skip notarization".
+          APPLE_ID: ${{ needs.resolve-profile.outputs.profile == 'production' && secrets.APPLE_ID || '' }}
+          APPLE_PASSWORD: ${{ needs.resolve-profile.outputs.profile == 'production' && secrets.APPLE_PASSWORD || '' }}
           # ----------------
           PKG_CONFIG_PATH: ${{ matrix.target == 'aarch64-unknown-linux-gnu' && '/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig' || '' }}
           TAURI_LINUX_AYATANA_APPINDICATOR: true
@@ -242,8 +278,42 @@ jobs:
         with:
           tagName: ${{ github.ref_name == 'production' && 'v__VERSION__' || 'v__VERSION__-beta' }}
           releaseName: "Bytover v__VERSION__ ${{ github.ref_name != 'production' && '(Beta)' || '' }}"
-          artifactName: Bytover-${{ github.ref_name != 'production' && '__VERSION__-beta' || '__VERSION__' }}-${{ matrix.platform }}
+          artifactName: Bytover-${{ github.ref_name != 'production' && '__VERSION__-beta' || '__VERSION__' }}-${{ needs.resolve-profile.outputs.profile }}-${{ matrix.platform }}
           releaseDraft: true
           prerelease: false
           projectPath: desktop
-          args: ${{ matrix.platform == 'macos-latest' && '--target universal-apple-darwin --features log-file' || format('--target {0} --features log-file', matrix.tauri_target) }}
+          args: ${{ matrix.platform == 'macos-latest' && format('--target universal-apple-darwin --features log-file{0}', needs.resolve-profile.outputs.profile == 'development' && ' --config src-tauri/tauri.conf.dev.json' || '') || format('--target {0} --features log-file', matrix.tauri_target) }}
+
+      - name: Verify macOS signing
+        if: matrix.enable && matrix.platform == 'macos-latest'
+        shell: bash
+        env:
+          PROFILE: ${{ needs.resolve-profile.outputs.profile }}
+        run: |
+          set -euo pipefail
+          APP_DIR="desktop/src-tauri/target/universal-apple-darwin/release/bundle/macos"
+          if [ ! -d "$APP_DIR" ]; then
+            echo "Bundle directory not found: $APP_DIR"
+            ls -la desktop/src-tauri/target/universal-apple-darwin/release/bundle || true
+            exit 1
+          fi
+          APP=$(find "$APP_DIR" -maxdepth 1 -name "*.app" -print -quit)
+          if [ -z "$APP" ]; then
+            echo "No .app bundle found under $APP_DIR"
+            exit 1
+          fi
+          echo "Verifying: $APP"
+          echo "---- codesign signature ----"
+          codesign -dv --verbose=4 "$APP" 2>&1 || true
+          echo "---- codesign entitlements ----"
+          codesign -d --entitlements - --xml "$APP" 2>&1 || true
+          echo "---- codesign --verify ----"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          if [ "$PROFILE" = "production" ]; then
+            echo "---- spctl assess ----"
+            spctl --assess --type exec --verbose=4 "$APP"
+            echo "---- stapler validate ----"
+            xcrun stapler validate "$APP"
+          else
+            echo "Development profile: skipping spctl + stapler checks (expected to fail for non-notarized dev-signed bundles)"
+          fi

@@ -51,12 +51,9 @@
       "icons/icon.ico"
     ],
     "macOS": {
-      "signingIdentity":  "Apple Development",
+      "signingIdentity": "-",
       "entitlements": "entitlements.plist",
-      "minimumSystemVersion": "10.13",
-      "files": {
-        "embedded.provisionprofile": "./Bytover.provisionprofile"
-      }
+      "minimumSystemVersion": "10.13"
     }
   }
 }
