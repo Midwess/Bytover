@@ -217,7 +217,8 @@ impl WebRtcClient {
         let mut ordered_msg_rx = ordered_msg_rx_guard.value.take().unwrap();
         let mut unordered_msg_rx = unordered_msg_rx_guard.value.take().unwrap();
         let mut reliable_data_rx = reliable_data_rx;
-        let mut pending_data: VecDeque<(Vec<u8>, ChannelId)> = VecDeque::new();
+        let mut pending_reliable: Option<Vec<u8>> = None;
+        let mut pending_control: VecDeque<(Vec<u8>, ChannelId)> = VecDeque::new();
 
         let mut retry_timer = Box::pin(tokio::time::sleep(OUTBOUND_RETRY_DELAY));
 
@@ -232,7 +233,6 @@ impl WebRtcClient {
                 break;
             }
 
-            let mut outbound_data = None;
             let mut flush_pending = false;
 
             tokio::select! {
@@ -244,7 +244,7 @@ impl WebRtcClient {
                     break;
                 }
 
-                () = &mut retry_timer, if !pending_data.is_empty() => {
+                () = &mut retry_timer, if pending_reliable.is_some() || !pending_control.is_empty() => {
                     flush_pending = true;
                 }
 
@@ -260,25 +260,23 @@ impl WebRtcClient {
 
                 Some(d) = ordered_msg_rx.next() => {
                     log::info!("Received ordered msg request");
-                    outbound_data = Some((cids.ordered_msg, d));
+                    pending_control.push_back((d, cids.ordered_msg));
+                    flush_pending = true;
                 }
                 Some(d) = unordered_msg_rx.next() => {
                     log::info!("Received unordered msg request");
-                    outbound_data = Some((cids.unordered_msg, d));
+                    pending_control.push_back((d, cids.unordered_msg));
+                    flush_pending = true;
                 }
-                Some(d) = reliable_data_rx.recv() => {
-                    outbound_data = Some((cids.reliable, d));
+                Some(d) = reliable_data_rx.recv(), if pending_reliable.is_none() => {
+                    pending_reliable = Some(d);
+                    flush_pending = true;
                 }
-            }
-
-            if let Some((cid, d)) = outbound_data {
-                pending_data.push_back((d, cid));
-                flush_pending = true;
             }
 
             if flush_pending {
-                self.flush_pending_outbound(&mut pending_data, &pool, &cids);
-                if !pending_data.is_empty() {
+                self.flush_pending_outbound(&mut pending_reliable, &mut pending_control, &pool);
+                if pending_reliable.is_some() || !pending_control.is_empty() {
                     retry_timer.as_mut().reset(tokio::time::Instant::now() + OUTBOUND_RETRY_DELAY);
                 }
             }
@@ -293,30 +291,24 @@ impl WebRtcClient {
 
     fn flush_pending_outbound(
         &self,
-        pending_data: &mut VecDeque<(Vec<u8>, ChannelId)>,
+        pending_reliable: &mut Option<Vec<u8>>,
+        pending_control: &mut VecDeque<(Vec<u8>, ChannelId)>,
         pool: &Arc<ConnectionPool>,
-        cids: &crate::webrtc::rtc::ChannelIds,
     ) {
-        loop {
-            let Some((data, channel_id)) = pending_data.pop_front() else {
-                break;
-            };
-
-            let sent = if channel_id == cids.reliable {
-                pool.try_send_reliable(&data)
-            } else {
-                pool.try_send_control(&data, channel_id)
-            };
-
-            if sent {
-                if channel_id == cids.reliable {
-                    self.bytes_sent_counter.fetch_add(data.len(), Ordering::Relaxed);
-                }
+        while let Some((data, channel_id)) = pending_control.pop_front() {
+            if pool.try_send_control(&data, channel_id) {
                 continue;
             }
-
-            pending_data.push_front((data, channel_id));
+            pending_control.push_front((data, channel_id));
             break;
+        }
+
+        if let Some(data) = pending_reliable.take() {
+            if pool.try_send_reliable(&data) {
+                self.bytes_sent_counter.fetch_add(data.len(), Ordering::Relaxed);
+            } else {
+                *pending_reliable = Some(data);
+            }
         }
     }
 
