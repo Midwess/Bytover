@@ -34,3 +34,5 @@ native-windows-gui
 str0m
 !third_party/str0m/
 !third_party/str0m/**
+
+*.provisionprofile
