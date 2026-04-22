@@ -19,6 +19,8 @@ import {
     Loader2,
     ClipboardPaste,
     ExternalLink,
+    ChevronLeft,
+    ChevronRight,
 } from "lucide-react";
 import {Button} from "@/components/ui/button.tsx";
 import {
@@ -33,6 +35,7 @@ import {
 } from "shared_types/types/shared_types";
 import {formatFileSize} from "@/utils/format-file-size";
 import useWindow from "@/hooks/use-window.ts";
+import useShelfDock, {DockEdge} from "@/hooks/use-shelf-dock.ts";
 import {throttle} from "lodash";
 import {UnlimitedLineText} from "@/components/ui/unlimited-line-text";
 import {PeerAvatarGroup} from "@/send/peer-avatar-group";
@@ -78,9 +81,27 @@ function ShelfWrapper({children, isDraggingOver = false, shelfName}: {
     )
 }
 
+function DockedSliver({edge, onExpand}: { edge: DockEdge, onExpand: () => void }) {
+    const Icon = edge === "right" ? ChevronLeft : ChevronRight;
+    const roundedSide = edge === "right" ? "rounded-l-2xl" : "rounded-r-2xl";
+
+    return (
+        <Card
+            className={`w-full h-full border-white/20 ${roundedSide} flex items-center justify-center p-0 overflow-hidden bg-card`}>
+            <button
+                onClick={onExpand}
+                aria-label="Expand shelf"
+                className="w-full h-full flex items-center justify-center text-foreground/80 hover:text-foreground hover:bg-muted-foreground/15 transition-colors cursor-pointer animate-in fade-in duration-300">
+                <Icon className="w-5 h-5"/>
+            </button>
+        </Card>
+    );
+}
+
 export function Shelf({shelfId}: { shelfId: string | undefined }) {
     const window = getCurrentWindow()
     const windowInfo = useWindow(window)
+    const dock = useShelfDock(window)
     const selectedResources = core.useSelectedResourcesForShelf(shelfId)
     const currentShelf = core.useCurrentShelf(shelfId)
     const isResourceRemoveAllowed = currentShelf?.is_resource_remove_allowed ?? true
@@ -183,6 +204,10 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
             container.removeEventListener("drop", onDrop);
         };
     }, [shelfId]);
+
+    if (dock.isDocked && dock.edge) {
+        return <DockedSliver edge={dock.edge} onExpand={dock.expand}/>;
+    }
 
     if (!shelfId) {
         return (

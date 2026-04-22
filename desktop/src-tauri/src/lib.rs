@@ -50,6 +50,7 @@ mod content_handlers;
 pub mod extensions;
 pub(crate) mod mouse_tracking;
 mod pasteboard;
+mod shelf_dock;
 mod theme;
 mod thumbnail;
 
@@ -704,7 +705,9 @@ pub async fn run() {
             content_handlers::add_url_resource,
             content_handlers::add_text_resource,
             content_handlers::add_html_resource,
-            content_handlers::paste_from_clipboard
+            content_handlers::paste_from_clipboard,
+            shelf_dock::dock_shelf_edge,
+            shelf_dock::expand_shelf
         ])
         .setup(|app| {
             #[cfg(target_os = "macos")]

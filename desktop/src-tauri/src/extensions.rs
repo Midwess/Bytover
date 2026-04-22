@@ -5,6 +5,8 @@ use tauri::window::{Effect, EffectState, EffectsBuilder};
 use tauri::{Emitter, Manager, Runtime, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use tauri_plugin_positioner::{Position, WindowExt};
 
+use crate::shelf_dock;
+
 // ── Shelf slot registry ───────────────────────────────────────────────────────
 //
 // Each monitor has a full-screen grid of (col, row) slots that tiles its entire
@@ -257,10 +259,18 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
                     .expect("failed to create shelf window");
 
                 let label_clone = label.clone();
-                w.on_window_event(move |event| {
-                    if let tauri::WindowEvent::Destroyed = event {
+                let app_clone = self.clone();
+                w.on_window_event(move |event| match event {
+                    tauri::WindowEvent::Destroyed => {
                         release_registry_slot(&label_clone);
+                        shelf_dock::release_dock(&label_clone);
                     }
+                    tauri::WindowEvent::Moved(_) => {
+                        if let Some(win) = app_clone.get_webview_window(&label_clone) {
+                            shelf_dock::maybe_detect_edge_dock(&app_clone, &win);
+                        }
+                    }
+                    _ => {}
                 });
                 w
             }
