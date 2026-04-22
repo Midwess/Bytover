@@ -645,10 +645,7 @@ impl RtcClient {
 
                 Ok(RtcOutcome::MorePending)
             }
-            Output::Event(e) => {
-                log::debug!("[rtc-client] str0m Event: {:?}", e);
-                Ok(RtcOutcome::Event(e))
-            }
+            Output::Event(e) => Ok(RtcOutcome::Event(e)),
         }
     }
 
@@ -865,15 +862,13 @@ impl RtcClient {
         let now = stun_now(turn.stun_base);
         while let Some(transmit) = turn.client.poll_transmit(now) {
             let send_addr = to_v6_mapped(transmit.to);
-            log::debug!(
-                "[rtc-client] TURN transmit to={} (mapped={}) from={} len={}",
-                transmit.to,
-                send_addr,
-                transmit.from,
-                transmit.data.as_ref().len()
-            );
             if let Err(e) = self.socket.send_to(transmit.data.as_ref(), send_addr).await {
-                log::warn!("[rtc-client] TURN transmit send error to {}: {}", send_addr, e);
+                log::warn!(
+                    "[rtc-client] TURN transmit send error to {}: kind={:?}, err={}",
+                    send_addr,
+                    e.kind(),
+                    e
+                );
             }
         }
         while let Some(event) = turn.client.poll_event() {
