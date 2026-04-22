@@ -92,7 +92,7 @@ function DockedSliver({edge, onExpand, shelfName, isOnline, isFading}: {
     isFading: boolean,
 }) {
     const Icon = edge === "right" ? ChevronLeft : ChevronRight;
-    const roundedSide = edge === "right" ? "rounded-l-2xl" : "rounded-r-2xl";
+    const roundedSide = edge === "right" ? "rounded-l-[30px]" : "rounded-r-[30px]";
     const edgePos = edge === "right" ? "right-0" : "left-0";
     const nameRotation = edge === "left" ? "rotate(180deg)" : undefined;
     const fadeState = isFading ? "opacity-0 pointer-events-none" : "opacity-100";
