@@ -22,21 +22,16 @@ impl WebRtcPacket {
     }
 
     #[inline]
-    pub fn deserialize(mut data: Vec<u8>) -> (u16, u64, u8, u8, Vec<u8>) {
+    pub fn parse_header(data: &[u8]) -> Option<(u16, u64, u8, u8)> {
         if data.len() < WEBRTC_PACKET_HEADER_LEN {
-            return (0, 0, 0, 0, data);
+            return None;
         }
         unsafe {
             let prefix = u16::from_le_bytes(*(data.as_ptr() as *const [u8; 2]));
             let offset = u64::from_le_bytes(*(data.as_ptr().add(2) as *const [u8; 8]));
             let part_index = *data.as_ptr().add(10);
             let part_count = *data.as_ptr().add(11);
-
-            let len = data.len();
-            std::ptr::copy(data.as_ptr().add(WEBRTC_PACKET_HEADER_LEN), data.as_mut_ptr(), len - WEBRTC_PACKET_HEADER_LEN);
-            data.set_len(len - WEBRTC_PACKET_HEADER_LEN);
-
-            (prefix, offset, part_index, part_count, data)
+            Some((prefix, offset, part_index, part_count))
         }
     }
 }
@@ -46,7 +41,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_serialize_deserialize() {
+    fn test_serialize_parse_header() {
         let prefix = 0x1234u16;
         let offset = 0x1122334455667788u64;
         let part_index = 7u8;
@@ -62,28 +57,30 @@ mod tests {
         assert_eq!(serialized[11], part_count);
         assert_eq!(&serialized[WEBRTC_PACKET_HEADER_LEN..], &payload[..]);
 
-        let (d_prefix, d_offset, d_part_index, d_part_count, d_payload) = WebRtcPacket::deserialize(serialized);
+        let (d_prefix, d_offset, d_part_index, d_part_count) =
+            WebRtcPacket::parse_header(&serialized).expect("header should parse");
         assert_eq!(d_prefix, prefix);
         assert_eq!(d_offset, offset);
         assert_eq!(d_part_index, part_index);
         assert_eq!(d_part_count, part_count);
-        assert_eq!(d_payload, payload);
+        assert_eq!(&serialized[WEBRTC_PACKET_HEADER_LEN..], &payload[..]);
     }
 
     #[test]
     fn test_empty_payload() {
         let prefix = 0xFFFFu16;
         let offset = 0u64;
-        let payload = vec![];
+        let payload: Vec<u8> = vec![];
         let serialized = WebRtcPacket::serialize(prefix, offset, 0, 1, &payload);
         assert_eq!(serialized.len(), WEBRTC_PACKET_HEADER_LEN);
 
-        let (d_prefix, d_offset, d_part_index, d_part_count, d_payload) = WebRtcPacket::deserialize(serialized);
+        let (d_prefix, d_offset, d_part_index, d_part_count) =
+            WebRtcPacket::parse_header(&serialized).expect("header should parse");
         assert_eq!(d_prefix, prefix);
         assert_eq!(d_offset, offset);
         assert_eq!(d_part_index, 0);
         assert_eq!(d_part_count, 1);
-        assert_eq!(d_payload, payload);
+        assert!(serialized[WEBRTC_PACKET_HEADER_LEN..].is_empty());
     }
 
     #[test]
@@ -92,10 +89,10 @@ mod tests {
         let offset = 0u64;
         let payload = vec![0xDE, 0xAD, 0xBE, 0xEF];
         let serialized = WebRtcPacket::serialize(prefix, offset, 0, 1, &payload);
-        let (_, _, part_index, part_count, d_payload) = WebRtcPacket::deserialize(serialized);
+        let (_, _, part_index, part_count) = WebRtcPacket::parse_header(&serialized).expect("header should parse");
         assert_eq!(part_index, 0);
         assert_eq!(part_count, 1);
-        assert_eq!(d_payload, payload);
+        assert_eq!(&serialized[WEBRTC_PACKET_HEADER_LEN..], &payload[..]);
     }
 
     #[test]
@@ -104,10 +101,16 @@ mod tests {
         let offset = 128u64 * 1024;
         let payload = vec![0xAA; 3000];
         let serialized = WebRtcPacket::serialize(prefix, offset, 15, 16, &payload);
-        let (_, d_offset, part_index, part_count, d_payload) = WebRtcPacket::deserialize(serialized);
+        let (_, d_offset, part_index, part_count) = WebRtcPacket::parse_header(&serialized).expect("header should parse");
         assert_eq!(d_offset, offset);
         assert_eq!(part_index, 15);
         assert_eq!(part_count, 16);
-        assert_eq!(d_payload, payload);
+        assert_eq!(&serialized[WEBRTC_PACKET_HEADER_LEN..], &payload[..]);
+    }
+
+    #[test]
+    fn test_parse_header_rejects_short_input() {
+        let short: [u8; 5] = [0, 0, 0, 0, 0];
+        assert!(WebRtcPacket::parse_header(&short).is_none());
     }
 }
