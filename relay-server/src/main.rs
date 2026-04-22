@@ -51,6 +51,7 @@ async fn async_main() -> Result<(), MainErrors> {
                 external: turn_external_addr,
                 idle_timeout: 20,
                 mtu: 1500,
+                demuxer_capacity: 4096,
             }],
             ..Default::default()
         },
