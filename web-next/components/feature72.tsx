@@ -50,7 +50,6 @@ const Feature72 = ({
                     playsInline
                   />
                 ) : feature.image ? (
-                  /* eslint-disable-next-line @next/next/no-img-element */
                   <img
                     src={feature.image}
                     alt={feature.heading}

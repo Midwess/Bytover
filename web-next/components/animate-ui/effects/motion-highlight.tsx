@@ -138,7 +138,6 @@ function MotionHighlight<T extends string>({
   const [activeClassNameState, setActiveClassNameState] =
     React.useState<string>('');
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- React Compiler cannot preserve memoization
   const safeSetActiveValue = React.useCallback(
     (id: T | null) => {
       setActiveValue((prev) => (prev === id ? prev : id));
@@ -147,7 +146,6 @@ function MotionHighlight<T extends string>({
     [activeValue, onValueChange],
   );
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- React Compiler cannot preserve memoization
   const safeSetBounds = React.useCallback(
     (bounds: DOMRect) => {
       if (!localRef.current) return;
@@ -211,7 +209,6 @@ function MotionHighlight<T extends string>({
     return () => container.removeEventListener('scroll', onScroll);
   }, [mode, activeValue, safeSetBounds]);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- React Compiler cannot preserve memoization
   const render = React.useCallback(
     (children: React.ReactNode) => {
       if (mode === 'parent') {
@@ -474,7 +471,6 @@ function MotionHighlightItem({
 
   if (asChild) {
     if (mode === 'children') {
-      // eslint-disable-next-line react-hooks/rules-of-hooks -- Ref access pattern required for cloneElement
       return React.cloneElement(
         element,
         {
@@ -527,7 +523,6 @@ function MotionHighlightItem({
       );
     }
 
-    // eslint-disable-next-line react-hooks/rules-of-hooks -- Ref access pattern required for cloneElement
     return React.cloneElement(element, {
       ref: localRef,
       ...getNonOverridingDataAttributes(element, {

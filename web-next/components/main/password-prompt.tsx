@@ -20,7 +20,7 @@ export function PasswordPrompt({ errorMessage, onSubmit, theme = 'dark' }: Passw
     return (
         <div className={`w-full max-w-sm p-10 rounded-[40px] shadow-2xl space-y-8 ${isLight ? 'bg-white border border-zinc-200' : 'bg-[#1A1A1A] border border-white/5'}`}>
             <div className="text-center space-y-2">
-                <h2 className={`text-xl font-bold ${isLight ? 'text-zinc-900' : 'text-white'}`}>Locked Drop</h2>
+                <h2 className={`text-xl font-bold ${isLight ? 'text-zinc-900' : 'text-white'}`}>Locked</h2>
                 <p className="text-sm text-zinc-500 font-medium">Provide the encryption key to decrypt metadata.</p>
             </div>
             <div className="space-y-4">

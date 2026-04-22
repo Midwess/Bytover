@@ -52,7 +52,6 @@ export function ResourceCard(props: {
             <div className="flex items-center gap-6 min-w-0">
                 <div className="w-12 h-12 shrink-0 flex items-center justify-center rounded-xl relative overflow-hidden text-zinc-500 group-hover:text-white transition-colors">
                     {thumbnailSource ? (
-                        /* eslint-disable-next-line @next/next/no-img-element */
                         <img
                             className={isMedia ? "w-full h-full object-cover rounded-lg" : "w-6 h-6 object-contain opacity-40 group-hover:opacity-100 transition-opacity"}
                             alt={model.name}
@@ -61,7 +60,6 @@ export function ResourceCard(props: {
                         />
                     ) : (
                         <div className="w-full h-full flex items-center justify-center">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                                 className={isMedia ? "w-full h-full object-cover" : "w-6 h-6 object-contain opacity-40 group-hover:opacity-100 transition-opacity"}
                                 alt={model.name}

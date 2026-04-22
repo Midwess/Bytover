@@ -78,7 +78,6 @@ function Slot<T extends HTMLElement = HTMLElement>({
 
   const mergedProps = mergeProps(childProps, props);
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks -- Dynamic component creation required for motion wrapper
   return (
     <Base {...mergedProps} ref={mergeRefs(childRef as React.Ref<T>, ref)} />
   );

@@ -139,8 +139,6 @@ function DropdownMenuSubTrigger({
   ...props
 }: DropdownMenuSubTriggerProps) {
   const { setHighlightedValue } = useDropdownMenu();
-  // eslint-disable-next-line react-hooks/rules-of-hooks -- Closure captures ref before assignment (safe at runtime)
-  // eslint-disable-next-line react-hooks/rules-of-hooks -- Closure captures ref before assignment (safe at runtime)
   const [, highlightedRef] = useDataState<HTMLDivElement>(
     'highlighted',
     undefined,
@@ -356,7 +354,6 @@ function DropdownMenuItem({
   ...props
 }: DropdownMenuItemProps) {
   const { setHighlightedValue } = useDropdownMenu();
-  // eslint-disable-next-line react-hooks/rules-of-hooks -- Closure captures ref before assignment (safe at runtime)
   const [, highlightedRef] = useDataState<HTMLDivElement>(
     'highlighted',
     undefined,
@@ -401,7 +398,6 @@ function DropdownMenuCheckboxItem({
   ...props
 }: DropdownMenuCheckboxItemProps) {
   const { setHighlightedValue } = useDropdownMenu();
-  // eslint-disable-next-line react-hooks/rules-of-hooks -- Closure captures ref before assignment (safe at runtime)
   const [, highlightedRef] = useDataState<HTMLDivElement>(
     'highlighted',
     undefined,
@@ -447,7 +443,6 @@ function DropdownMenuRadioItem({
   ...props
 }: DropdownMenuRadioItemProps) {
   const { setHighlightedValue } = useDropdownMenu();
-  // eslint-disable-next-line react-hooks/rules-of-hooks -- Closure captures ref before assignment (safe at runtime)
   const [, highlightedRef] = useDataState<HTMLDivElement>(
     'highlighted',
     undefined,
