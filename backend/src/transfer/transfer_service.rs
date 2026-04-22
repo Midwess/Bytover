@@ -224,6 +224,7 @@ impl TransferService {
         user: &User,
         device: &Device,
         app: &Application,
+        capabilities: &UserCapabilities,
         session_order_id: u64,
         requests: Vec<TransferResourceRequest>,
     ) -> Result<TransferResourcesResponse, TransferErrors> {
@@ -239,6 +240,22 @@ impl TransferService {
         let Some(mut session) = self.transfer_repository.find_one(&session_id).await? else {
             return Err(TransferErrors::SessionNotFound);
         };
+
+        let existing_count = session.resources().len() as u32;
+        let incoming_count = requests.len() as u32;
+        let total_count = existing_count.saturating_add(incoming_count);
+        if let Some(cap) = capabilities.would_exceed_file_count(total_count) {
+            return Err(TransferErrors::FileCountExceed { total: total_count, cap });
+        }
+
+        let incoming_bytes: u64 = requests.iter().map(|r| r.size).sum();
+        if capabilities.would_exceed_lifetime_cap(incoming_bytes) {
+            return Err(TransferErrors::LifetimeBytesExceed {
+                cap: capabilities.total_transfer_bytes_lifetime_cap(),
+                used: capabilities.total_transfer_bytes_used(),
+                requested: incoming_bytes,
+            });
+        }
 
         for request in requests.iter() {
             session
