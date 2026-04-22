@@ -8,8 +8,8 @@
     "web:build": "pnpm tailwind && tsc && vite build",
     "dev": "tauri dev --no-watch --release",
     "tauri": "tauri",
+    "tauri:build:adhoc": "tauri build",
     "tauri:build:dev": "tauri build --config src-tauri/tauri.conf.dev.json",
-    "tauri:build:prod": "tauri build",
     "tailwind": "pnpx @tailwindcss/cli -i ./src/input.css -o ./output.css"
   },
   "dependencies": {
