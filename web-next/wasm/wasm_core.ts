@@ -57,7 +57,10 @@ import init_core, {
     get_device_file,
     get_download_url,
     init, is_compatible,
-    view
+    view,
+    register_picked_handle,
+    is_picked_path,
+    abort_picked_handle
 } from "core_wasm"
 import { process_event, handle_response } from "core_wasm";
 import BPromise from 'bluebird'
@@ -474,7 +477,46 @@ export class WasmCore {
         return get_download_url(data)
     }
 
+    isPickedPath(path: LocalResourcePath): boolean {
+        return is_picked_path(serialize(path))
+    }
+
+    isSaveFilePickerSupported(): boolean {
+        return typeof window !== 'undefined' && 'showSaveFilePicker' in window
+    }
+
+    async pickSaveLocation(filename: string): Promise<FileSystemFileHandle | null> {
+        if (!this.isSaveFilePickerSupported()) return null
+        try {
+            const opts: any = { suggestedName: filename }
+            return await (window as any).showSaveFilePicker(opts)
+        } catch (err: any) {
+            if (err?.name === 'AbortError') return null
+            throw err
+        }
+    }
+
+    async registerPickedHandle(
+        sessionOrderId: bigint,
+        resourceOrderId: bigint,
+        filename: string,
+        handle: FileSystemFileHandle
+    ): Promise<LocalResourcePath> {
+        const ext = extractExtension(filename)
+        const bytes = await register_picked_handle(sessionOrderId, resourceOrderId, ext, handle)
+        const deserializer = new BincodeDeserializer(bytes)
+        return LocalResourcePath.deserialize(deserializer)
+    }
+
+    async abortPickedHandle(sessionOrderId: bigint, resourceOrderId: bigint): Promise<void> {
+        await abort_picked_handle(sessionOrderId, resourceOrderId)
+    }
+
     async downloadFile(path: LocalResourcePath, filename: string): Promise<void> {
+        if (this.isPickedPath(path)) {
+            return
+        }
+
         const downloadUrl = await this.getDownloadUrl(path)
 
         if (!downloadUrl) {
@@ -552,6 +594,12 @@ export function serialize(object: any): Uint8Array {
 const core = new WasmCore();
 
 export default core
+
+function extractExtension(filename: string): string {
+    const idx = filename.lastIndexOf('.')
+    if (idx <= 0 || idx === filename.length - 1) return 'bin'
+    return filename.slice(idx + 1)
+}
 
 function getOrCreateDeviceId(): string {
     const DEVICE_ID_KEY = 'bitbridge_device_id';

@@ -47,10 +47,16 @@ static CORE_WORKER: LazyLock<NeverSend<WebWorkerBridge<CoreWorker>>> =
 
 thread_local! {
     static STORAGE_SESSION_ID: OnceCell<String> = const { OnceCell::new() };
+    static PICKED_OVERRIDES: std::cell::RefCell<std::collections::HashMap<(u64, u64), LocalResourcePath>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
 }
 
 fn get_storage_session_id() -> Option<String> {
     STORAGE_SESSION_ID.with(|cell| cell.get().cloned())
+}
+
+pub fn take_picked_path(session_order_id: u64, resource_order_id: u64) -> Option<LocalResourcePath> {
+    PICKED_OVERRIDES.with(|cell| cell.borrow_mut().remove(&(session_order_id, resource_order_id)))
 }
 
 const STALE_THRESHOLD_MS: f64 = 300_000.0;
@@ -371,6 +377,58 @@ pub async fn execute(request_id: u32, effect: Uint8Array) -> Uint8Array {
     let request = CoreRequest::new(CruxRequest::Id(request_id), bridge);
     let output = executor.handle(request.clone(), effect).await;
     handle_response(request_id, serialize(&output)).await
+}
+
+#[wasm_bindgen]
+pub async fn register_picked_handle(
+    session_order_id: u64,
+    resource_order_id: u64,
+    extension: String,
+    handle: JsValue,
+) -> Result<Uint8Array, JsValue> {
+    let picked_path = LocalResourcePath::picked_session_resource(session_order_id, resource_order_id, extension);
+    let file_path = picked_path.any_worker_path().ok_or_else(|| JsValue::from("Failed to build picked path"))?;
+
+    let response = OPFS_WORKER
+        .send(WorkerMessage::new(OpfsOperation {
+            file_path,
+            operation: FileOperation::RegisterPickedHandle { handle },
+        }))
+        .await
+        .ok_or_else(|| JsValue::from("Failed to register picked handle"))?;
+
+    match response.message {
+        OpfsOperationOutput::Void => {
+            PICKED_OVERRIDES.with(|cell| {
+                cell.borrow_mut().insert((session_order_id, resource_order_id), picked_path.clone());
+            });
+            Ok(serialize(&picked_path))
+        }
+        OpfsOperationOutput::Error(e) => Err(e),
+        _ => Err(JsValue::from("Unexpected response")),
+    }
+}
+
+#[wasm_bindgen]
+pub fn is_picked_path(path: Uint8Array) -> bool {
+    let path: LocalResourcePath = deserialize(&path);
+    path.is_picked()
+}
+
+#[wasm_bindgen]
+pub async fn abort_picked_handle(session_order_id: u64, resource_order_id: u64) {
+    let Some(path) = take_picked_path(session_order_id, resource_order_id) else {
+        return;
+    };
+    let Some(file_path) = path.any_worker_path() else {
+        return;
+    };
+    let _ = OPFS_WORKER
+        .send(WorkerMessage::new(OpfsOperation {
+            file_path,
+            operation: FileOperation::FinalizePicked { commit: false },
+        }))
+        .await;
 }
 
 pub fn deserialize<E: Serialize>(data: &Uint8Array) -> E

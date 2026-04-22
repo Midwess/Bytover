@@ -1,6 +1,8 @@
 use crate::file_system::device_file::{DeviceFile, DeviceFolder, WebFile};
 use crate::file_system::io::IOReaderBlobImpl;
 use crate::file_system::opfs::FileSystemDirectoryHandleExt;
+use crate::file_system::path_extension::PICKED_SCHEME;
+use crate::file_system::picked_writer::PickedWriter;
 use crate::file_system::zip_writer::OpfsZipWriter;
 use crate::web_worker::bridge::{TrustedWorkerMessage, WorkerMessage};
 use crate::{get_directory, serialize};
@@ -20,10 +22,11 @@ use std::cell::OnceCell;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
-use wasm_bindgen::JsValue;
+use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
-    Blob, File, FileSystemDirectoryHandle, FileSystemReadWriteOptions, FileSystemRemoveOptions, FileSystemSyncAccessHandle,
+    Blob, File, FileSystemDirectoryHandle, FileSystemFileHandle, FileSystemReadWriteOptions, FileSystemRemoveOptions,
+    FileSystemSyncAccessHandle,
 };
 
 /// Web worker that support file system on browser
@@ -82,6 +85,13 @@ pub enum FileOperation {
     FinalizeZip {
         zip_filename: String,
     },
+    RegisterPickedHandle {
+        #[serde(with = "serde_wasm_bindgen::preserve")]
+        handle: JsValue,
+    },
+    FinalizePicked {
+        commit: bool,
+    },
 }
 
 unsafe impl Send for OpfsOperation {}
@@ -114,6 +124,10 @@ unsafe impl Sync for OpfsOperationOutput {}
 
 pub type AMutex<T> = Arc<Mutex<T>>;
 
+pub struct PickedEntry {
+    pub writer: PickedWriter,
+}
+
 #[derive(Clone)]
 pub struct OpfsWorker {
     root: Arc<OnceCell<Arc<FileSystemDirectoryHandle>>>,
@@ -123,6 +137,7 @@ pub struct OpfsWorker {
     cursors: AMutex<HashMap<u32, AMutex<Box<dyn IOCursor>>>>,
     device_folders: AMutex<HashMap<String, AMutex<DeviceFolder>>>,
     zip_writers: AMutex<HashMap<String, AMutex<OpfsZipWriter>>>,
+    picked_handles: AMutex<HashMap<String, AMutex<PickedEntry>>>,
     id_gen: Arc<AtomicU32>,
 }
 
@@ -171,10 +186,87 @@ impl OpfsWorker {
             let options = FileSystemRemoveOptions::new();
             options.set_recursive(true);
             for path in paths {
+                if path.starts_with(PICKED_SCHEME) {
+                    continue;
+                }
                 let fut = opfs_root.remove_entry_with_options(&path, &options);
                 let _ = JsFuture::from(fut).await;
             }
             return OpfsOperationOutput::Void;
+        }
+
+        if let FileOperation::RegisterPickedHandle { handle } = operation {
+            let cast: Result<FileSystemFileHandle, _> = handle.dyn_into();
+            let Ok(fs_handle) = cast else {
+                return OpfsOperationOutput::Error(JsValue::from("RegisterPickedHandle requires a FileSystemFileHandle"));
+            };
+            let mut map = self.picked_handles.lock().await;
+            if let Some(existing) = map.remove(&file_path) {
+                if let Ok(inner) = Arc::try_unwrap(existing) {
+                    let entry = inner.into_inner();
+                    let _ = entry.writer.abort("replaced by new registration").await;
+                }
+            }
+            map.insert(
+                file_path.clone(),
+                Arc::new(Mutex::new(PickedEntry {
+                    writer: PickedWriter::new(fs_handle),
+                })),
+            );
+            return OpfsOperationOutput::Void;
+        }
+
+        if let FileOperation::FinalizePicked { commit } = operation {
+            let entry = self.picked_handles.lock().await.remove(&file_path);
+            let Some(entry) = entry else {
+                return OpfsOperationOutput::Void;
+            };
+            let entry = match Arc::try_unwrap(entry) {
+                Ok(inner) => inner.into_inner(),
+                Err(_) => {
+                    return OpfsOperationOutput::Error(JsValue::from("Failed to take picked entry ownership"));
+                }
+            };
+            let result = if commit {
+                entry.writer.close().await
+            } else {
+                entry.writer.abort("cancelled").await
+            };
+            return match result {
+                Ok(_) => OpfsOperationOutput::Void,
+                Err(e) => OpfsOperationOutput::Error(JsValue::from(e.to_string())),
+            };
+        }
+
+        if file_path.starts_with(PICKED_SCHEME) {
+            match &operation {
+                FileOperation::Open => return OpfsOperationOutput::Void,
+                FileOperation::Flush => return OpfsOperationOutput::Void,
+                FileOperation::Write { data, position, decompress } => {
+                    let entry = self.picked_handles.lock().await.get(&file_path).cloned();
+                    let Some(entry) = entry else {
+                        return OpfsOperationOutput::Error(JsValue::from("No picked handle registered"));
+                    };
+                    let bytes = if *decompress {
+                        match decompress_size_prepended(data.to_vec().as_slice()) {
+                            Ok(out) => out,
+                            Err(e) => {
+                                return OpfsOperationOutput::Error(JsValue::from(format!("Failed to decompress: {}", e)));
+                            }
+                        }
+                    } else {
+                        data.to_vec()
+                    };
+                    let mut guard = entry.lock().await;
+                    return match guard.writer.write_at(&bytes, *position as u64).await {
+                        Ok(written) => OpfsOperationOutput::Written(written),
+                        Err(e) => OpfsOperationOutput::Error(JsValue::from(e.to_string())),
+                    };
+                }
+                _ => {
+                    return OpfsOperationOutput::Error(JsValue::from("Unsupported operation for picked path"));
+                }
+            }
         }
 
         let Some(root) = self.root.get().cloned() else {
@@ -227,7 +319,10 @@ impl OpfsWorker {
                     Err(e) => OpfsOperationOutput::Error(e),
                 }
             }
-            FileOperation::Init { .. } | FileOperation::CleanUp { .. } => {
+            FileOperation::Init { .. }
+            | FileOperation::CleanUp { .. }
+            | FileOperation::RegisterPickedHandle { .. }
+            | FileOperation::FinalizePicked { .. } => {
                 unreachable!()
             }
             FileOperation::Cursor { buffer_size } => {
