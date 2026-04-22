@@ -92,18 +92,26 @@ function DockedSliver({edge, onExpand, shelfName, isOnline}: {
 }) {
     const Icon = edge === "right" ? ChevronLeft : ChevronRight;
     const roundedSide = edge === "right" ? "rounded-l-2xl" : "rounded-r-2xl";
-    const onlineShadow = isOnline
-        ? "shadow-[0_0_10px_2px_var(--color-greenSecondary)_inset]"
-        : "";
     const nameRotation = edge === "left" ? "rotate(180deg)" : undefined;
 
     return createPortal(
         <button
             onClick={onExpand}
             aria-label="Expand shelf"
-            className={`dark group fixed inset-0 z-[9999] bg-card border border-white/20 ${roundedSide} flex flex-col items-center justify-between p-0 overflow-hidden cursor-pointer hover:bg-muted-foreground/10 animate-in fade-in transition-shadow duration-500 ${onlineShadow}`}
+            className={`dark group fixed inset-0 z-[9999] bg-card border border-white/20 ${roundedSide} flex flex-col items-center justify-between p-0 overflow-hidden cursor-pointer hover:bg-muted animate-in fade-in transition-colors duration-200`}
         >
-            <div className="flex-1 w-full flex items-center justify-center pt-2 overflow-hidden">
+            <span className="shrink-0 pt-2 h-4 flex items-center justify-center">
+                {isOnline && (
+                    <span
+                        className="w-1.5 h-1.5 rounded-full"
+                        style={{
+                            backgroundColor: "var(--color-greenSecondary)",
+                            boxShadow: "0 0 4px var(--color-greenSecondary)",
+                        }}
+                    />
+                )}
+            </span>
+            <div className="flex-1 w-full flex items-center justify-center overflow-hidden">
                 {shelfName && (
                     <span
                         className="text-[10px] font-medium text-foreground/60 group-hover:text-foreground transition-opacity duration-150 opacity-70 group-hover:opacity-100 whitespace-nowrap select-none tracking-wide"
