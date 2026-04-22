@@ -22,7 +22,7 @@ use shared::entities::peer::Peer;
 use shared::errors::CoreError;
 use shared::protocol::webrtc::errors::WebRtcErrors;
 use shared::protocol::webrtc::message_channel::DirectMessageChannel;
-use shared::protocol::webrtc::packet::WebRtcPacket;
+use shared::protocol::webrtc::packet::{COMPRESSION_BLOCK_SIZE, WebRtcPacket, WIRE_PART_SIZE};
 use shared::protocol::webrtc::transfer::{TransferDelimiterShema, TransfersContext};
 use shared::repository::local_resource::LocalResourceRepository;
 use shared::shell::api::CoreRequest;

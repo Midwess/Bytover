@@ -21,6 +21,14 @@ impl WebRtcPacket {
         vec
     }
 
+    /// Reads the 12-byte header without touching the payload.
+    ///
+    /// Intentionally does NOT split the payload off into a separate buffer:
+    /// the previous `deserialize` API did an in-place `ptr::copy` to shift the
+    /// payload left by `WEBRTC_PACKET_HEADER_LEN` bytes, which added ~8 KB of
+    /// memcpy per wire packet (128 KB per compression block on the receiver
+    /// hot path). Callers instead slice `&data[WEBRTC_PACKET_HEADER_LEN..]`
+    /// when they need the payload, keeping the copy count at one.
     #[inline]
     pub fn parse_header(data: &[u8]) -> Option<(u16, u64, u8, u8)> {
         if data.len() < WEBRTC_PACKET_HEADER_LEN {
