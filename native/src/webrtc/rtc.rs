@@ -12,7 +12,7 @@ use str0m::net::{Protocol, Receive};
 use str0m::{Event, IceConnectionState, Input, Output, Rtc, RtcConfig};
 use stun_proto::agent::Transmit;
 use stun_proto::types::TransportType as StunTransportType;
-use turn_client_proto::api::{BindChannelError, TurnClientApi};
+use turn_client_proto::api::{BindChannelError, SendError, TurnClientApi};
 use turn_client_proto::udp::{TurnEvent, TurnPollRet, TurnRecvRet};
 
 use crate::config::is_relay_only;
@@ -602,6 +602,23 @@ impl RtcClient {
                                 }
                             }
                             Ok(None) => {}
+                            Err(SendError::NoPermission) => {
+                                match turn.client.bind_channel(StunTransportType::Udp, dest, now) {
+                                    Ok(()) | Err(BindChannelError::AlreadyExists) => {
+                                        log::debug!(
+                                            "[rtc-client] Lazy-binding TURN channel for peer-reflexive dest {}",
+                                            dest
+                                        );
+                                    }
+                                    Err(e) => {
+                                        log::warn!(
+                                            "[rtc-client] Lazy TURN channel bind for {} failed: {}",
+                                            dest,
+                                            e
+                                        );
+                                    }
+                                }
+                            }
                             Err(e) => {
                                 log::warn!("[rtc-client] TURN send_to failed for {}: {}", dest, e);
                             }
