@@ -90,33 +90,30 @@ function DockedSliver({edge, onExpand, shelfName, isOnline}: {
     const Icon = edge === "right" ? ChevronLeft : ChevronRight;
     const roundedSide = edge === "right" ? "rounded-l-2xl" : "rounded-r-2xl";
     const onlineShadow = isOnline
-        ? "shadow-[0_0_10px_3px_rgb(var(--bluePrimary))_inset] animate-pulse"
+        ? "shadow-[0_0_8px_2px_var(--color-greenSecondary)_inset]"
         : "";
-    const verticalWritingStyle = {
-        writingMode: "vertical-rl" as const,
-        transform: edge === "right" ? "rotate(180deg)" : undefined,
-    };
+    const nameRotation = edge === "left" ? "rotate(180deg)" : undefined;
 
     return (
-        <Card
-            className={`group w-full h-full border-white/20 ${roundedSide} flex flex-col items-center justify-between p-0 overflow-hidden bg-card transition-all duration-300 ${onlineShadow}`}>
-            <div
-                className="flex-1 w-full flex items-center justify-center pt-2 overflow-hidden"
-                style={verticalWritingStyle}
-            >
+        <button
+            onClick={onExpand}
+            aria-label="Expand shelf"
+            className={`group w-full h-full border border-white/20 ${roundedSide} flex flex-col items-center justify-between p-0 overflow-hidden bg-card transition-all duration-300 cursor-pointer hover:bg-muted-foreground/10 animate-in fade-in ${onlineShadow}`}
+        >
+            <div className="flex-1 w-full flex items-center justify-center pt-2 overflow-hidden">
                 {shelfName && (
-                    <span className="text-[10px] font-medium text-foreground/60 group-hover:text-foreground transition-opacity duration-150 opacity-70 group-hover:opacity-100 whitespace-nowrap select-none tracking-wide">
+                    <span
+                        className="text-[10px] font-medium text-foreground/60 group-hover:text-foreground transition-opacity duration-150 opacity-70 group-hover:opacity-100 whitespace-nowrap select-none tracking-wide"
+                        style={{writingMode: "vertical-rl", transform: nameRotation}}
+                    >
                         {shelfName}
                     </span>
                 )}
             </div>
-            <button
-                onClick={onExpand}
-                aria-label="Expand shelf"
-                className="w-full h-10 shrink-0 flex items-center justify-center text-foreground/80 hover:text-foreground hover:bg-muted-foreground/15 transition-colors cursor-pointer animate-in fade-in duration-300">
+            <span className="w-full h-10 shrink-0 flex items-center justify-center text-foreground/80 group-hover:text-foreground transition-colors">
                 <Icon className="w-5 h-5"/>
-            </button>
-        </Card>
+            </span>
+        </button>
     );
 }
 
