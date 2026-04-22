@@ -3,7 +3,10 @@
   "bundle": {
     "macOS": {
       "signingIdentity": "Apple Development",
-      "entitlements": "entitlements.dev.plist"
+      "entitlements": "entitlements.dev.plist",
+      "files": {
+        "embedded.provisionprofile": "Bytover.provisionprofile"
+      }
     }
   }
 }
