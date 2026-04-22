@@ -155,7 +155,7 @@ struct RtcClient {
     pending_transmits: VecDeque<(Vec<u8>, str0m::channel::ChannelId)>,
     early_events: Vec<Event>,
     pending_remote_candidates: VecDeque<str0m::Candidate>,
-    candidate_rx: tokio::sync::mpsc::Receiver<str0m::Candidate>,
+    candidate_rx: Option<tokio::sync::mpsc::Receiver<str0m::Candidate>>,
     turn: Option<TurnRelayInfo>,
     data_buffered_amount: Arc<AtomicUsize>,
 }
@@ -312,7 +312,7 @@ impl RtcClient {
             pending_transmits: VecDeque::with_capacity(16),
             early_events: Vec::with_capacity(8),
             pending_remote_candidates: VecDeque::with_capacity(8),
-            candidate_rx,
+            candidate_rx: Some(candidate_rx),
             turn: turn_info,
             data_buffered_amount: Arc::new(AtomicUsize::new(0)),
         };
@@ -482,16 +482,23 @@ impl RtcClient {
             self.drive_turn().await?;
             self.promote_ready_remote_candidates();
 
-            loop {
-                match self.candidate_rx.try_recv() {
-                    Ok(candidate) => {
-                        self.add_or_defer_remote_candidate(candidate, "resolved");
+            if let Some(mut rx) = self.candidate_rx.take() {
+                let mut closed = false;
+                loop {
+                    match rx.try_recv() {
+                        Ok(candidate) => {
+                            self.add_or_defer_remote_candidate(candidate, "resolved");
+                        }
+                        Err(tokio::sync::mpsc::error::TryRecvError::Empty) => break,
+                        Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
+                            log::info!("[rtc-client] Candidate resolution channel closed");
+                            closed = true;
+                            break;
+                        }
                     }
-                    Err(tokio::sync::mpsc::error::TryRecvError::Empty) => break,
-                    Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
-                        log::info!("[rtc-client] Candidate resolution channel closed");
-                        break;
-                    }
+                }
+                if !closed {
+                    self.candidate_rx = Some(rx);
                 }
             }
             self.promote_ready_remote_candidates();
