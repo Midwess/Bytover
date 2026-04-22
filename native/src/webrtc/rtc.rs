@@ -152,7 +152,7 @@ struct RtcClient {
     buf: Vec<u8>,
     cached_timeout: Instant,
     channel_ids: ChannelIds,
-    pending_transmits: VecDeque<(Vec<u8>, str0m::channel::ChannelId)>,
+    pending_transmit: Option<(Vec<u8>, str0m::channel::ChannelId)>,
     early_events: Vec<Event>,
     pending_remote_candidates: VecDeque<str0m::Candidate>,
     candidate_rx: Option<tokio::sync::mpsc::Receiver<str0m::Candidate>>,
@@ -309,7 +309,7 @@ impl RtcClient {
             buf: vec![0u8; 2000],
             cached_timeout: Instant::now(),
             channel_ids,
-            pending_transmits: VecDeque::with_capacity(16),
+            pending_transmit: None,
             early_events: Vec::with_capacity(8),
             pending_remote_candidates: VecDeque::with_capacity(8),
             candidate_rx: Some(candidate_rx),
@@ -389,7 +389,7 @@ impl RtcClient {
                 }
             }
 
-            self.drain_pending_transmits();
+            self.flush_pending_transmit();
 
             let outcome = match self.poll_event().await {
                 Ok(o) => o,
@@ -422,7 +422,7 @@ impl RtcClient {
                     }
 
                     if matches!(&event, Event::ChannelBufferedAmountLow(cid) if *cid == self.channel_ids.reliable) {
-                        self.drain_pending_transmits();
+                        self.flush_pending_transmit();
                     }
 
                     if event_tx.send(RtcEvent::Str0mEvent(event)).await.is_err() {
@@ -458,14 +458,14 @@ impl RtcClient {
                         return;
                     }
                 }
-                res = data_rx.recv() => {
+                res = data_rx.recv(), if self.pending_transmit.is_none() => {
                     let Some(cmd) = res else {
                         log::info!("[rtc-client] RTC I/O thread shutdown: data channel closed");
                         self.rtc_mut().disconnect();
                         break;
                     };
-                    if !self.pending_transmits.is_empty() || !self.send(&cmd.0, cmd.1) {
-                        self.pending_transmits.push_back(cmd);
+                    if self.should_pause_transmit(cmd.1) || !self.send(&cmd.0, cmd.1) {
+                        self.pending_transmit = Some(cmd);
                     }
                 }
             }
@@ -781,20 +781,10 @@ impl RtcClient {
                 .is_some_and(|buffered| buffered >= RELIABLE_BUFFERED_AMOUNT_REFILL_TARGET)
     }
 
-    fn drain_pending_transmits(&mut self) {
-        loop {
-            let Some((data, channel_id)) = self.pending_transmits.pop_front() else {
-                break;
-            };
-
-            if self.should_pause_transmit(channel_id) {
-                self.pending_transmits.push_front((data, channel_id));
-                break;
-            }
-
-            if !self.send(&data, channel_id) {
-                self.pending_transmits.push_front((data, channel_id));
-                break;
+    fn flush_pending_transmit(&mut self) {
+        if let Some((data, channel_id)) = self.pending_transmit.take() {
+            if self.should_pause_transmit(channel_id) || !self.send(&data, channel_id) {
+                self.pending_transmit = Some((data, channel_id));
             }
         }
         self.refresh_data_buffered_amount();
