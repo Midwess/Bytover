@@ -136,14 +136,12 @@ async fn ws_handler(
     state.client_manager.register(key.clone(), &client).await;
 
     let client_manager = Arc::clone(&state.client_manager);
-    let turn_manager = Arc::clone(&state.turn_manager);
     let client_for_spawn = Arc::clone(&client);
     let key_clone = key.clone();
 
     tokio::task::spawn_local(async move {
         <Arc<Client> as Clone>::clone(&client_for_spawn).run(msg_stream).await;
         client_manager.unregister(&key_clone).await;
-        turn_manager.unregister_client(&key_clone).await;
     });
 
     Ok(response)

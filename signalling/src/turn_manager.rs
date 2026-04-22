@@ -1,10 +1,16 @@
 use schema::devlog::rpc_signalling::server::IceConfig;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 use uuid::Uuid;
+
+const SESSION_PICK_TTL: Duration = Duration::from_secs(45);
+const PRUNE_INTERVAL: Duration = Duration::from_secs(5);
+const COUNTER_RESET_INTERVAL: Duration = Duration::from_secs(300);
+const COUNTER_RESET_TICKS: u32 = (COUNTER_RESET_INTERVAL.as_secs() / PRUNE_INTERVAL.as_secs()) as u32;
+const RELAY_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone)]
 pub struct RegisteredRelay {
@@ -21,50 +27,61 @@ pub struct RegisteredRelay {
     pub counter: Arc<AtomicUsize>,
 }
 
+#[derive(Debug, Clone)]
+struct SessionPick {
+    relay_ids: Vec<String>,
+    chosen_at: Instant,
+}
+
 pub struct TurnManager {
     relays: Arc<Mutex<HashMap<String, RegisteredRelay>>>,
-    client_relay_assignments: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    session_picks: Arc<Mutex<HashMap<String, SessionPick>>>,
 }
 
 impl TurnManager {
     pub async fn new() -> Self {
         let manager = Self {
             relays: Arc::new(Mutex::new(HashMap::new())),
-            client_relay_assignments: Arc::new(Mutex::new(HashMap::new())),
+            session_picks: Arc::new(Mutex::new(HashMap::new())),
         };
 
         let relays_clone = Arc::clone(&manager.relays);
-        let assignments_clone = Arc::clone(&manager.client_relay_assignments);
+        let picks_clone = Arc::clone(&manager.session_picks);
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(10));
+            let mut interval = tokio::time::interval(PRUNE_INTERVAL);
+            let mut tick: u32 = 0;
             loop {
                 interval.tick().await;
-                let mut relays = relays_clone.lock().await;
+                tick = tick.wrapping_add(1);
                 let now = Instant::now();
 
-                let mut removed_ids = Vec::new();
-                relays.retain(|id, relay| {
-                    if now.duration_since(relay.last_ping) > Duration::from_secs(30) {
-                        log::info!(
-                            "Relay {} (IPv4: {:?}, IPv6: {:?}, host: {}) timed out, removing",
-                            id,
-                            relay.public_ipv4,
-                            relay.public_ipv6,
-                            relay.relay_host
-                        );
-                        removed_ids.push(id.clone());
-                        false
-                    } else {
-                        true
-                    }
-                });
-
-                if !removed_ids.is_empty() {
-                    let mut assignments = assignments_clone.lock().await;
-                    assignments.retain(|_, relay_ids| {
-                        relay_ids.retain(|id| !removed_ids.contains(id));
-                        !relay_ids.is_empty()
+                {
+                    let mut relays = relays_clone.lock().await;
+                    relays.retain(|id, relay| {
+                        if now.duration_since(relay.last_ping) > RELAY_TIMEOUT {
+                            log::info!(
+                                "Relay {} (IPv4: {:?}, IPv6: {:?}, host: {}) timed out, removing",
+                                id,
+                                relay.public_ipv4,
+                                relay.public_ipv6,
+                                relay.relay_host
+                            );
+                            false
+                        } else {
+                            true
+                        }
                     });
+
+                    if tick % COUNTER_RESET_TICKS == 0 {
+                        for relay in relays.values() {
+                            relay.counter.store(0, Ordering::Relaxed);
+                        }
+                    }
+                }
+
+                {
+                    let mut picks = picks_clone.lock().await;
+                    picks.retain(|_, pick| now.duration_since(pick.chosen_at) < SESSION_PICK_TTL);
                 }
             }
         });
@@ -135,62 +152,52 @@ impl TurnManager {
         }
     }
 
-    pub async fn unregister_client(&self, client_id: &str) {
-        let mut assignments = self.client_relay_assignments.lock().await;
-        if let Some(relay_ids) = assignments.remove(client_id) {
-            let relays = self.relays.lock().await;
-            for relay_id in relay_ids {
-                if let Some(relay) = relays.get(&relay_id) {
-                    relay.counter.fetch_sub(1, Ordering::Relaxed);
+    pub async fn get_assigned_relays(&self, client_id: &str, n: usize) -> Vec<RegisteredRelay> {
+        let n = n.max(1);
+        let mut picks = self.session_picks.lock().await;
+        let relays = self.relays.lock().await;
+
+        if let Some(pick) = picks.get(client_id) {
+            if pick.chosen_at.elapsed() < SESSION_PICK_TTL {
+                let resolved: Vec<RegisteredRelay> = pick
+                    .relay_ids
+                    .iter()
+                    .filter_map(|id| relays.get(id).cloned())
+                    .collect();
+                if !resolved.is_empty() {
+                    return resolved;
                 }
             }
         }
-    }
 
-    pub async fn get_assigned_relays(&self, client_id: &str, n: usize) -> Vec<RegisteredRelay> {
-        let n = n.max(1);
-        let mut assignments = self.client_relay_assignments.lock().await;
-        let relays = self.relays.lock().await;
-
-        let existing_ids: Vec<String> = assignments.get(client_id).cloned().unwrap_or_default();
-        let mut picked: Vec<RegisteredRelay> = existing_ids
-            .iter()
-            .filter_map(|id| relays.get(id).cloned())
-            .collect();
-
-        if picked.len() >= n {
-            picked.truncate(n);
-            assignments.insert(client_id.to_string(), picked.iter().map(|r| r.id.clone()).collect());
-            return picked;
-        }
-
-        let already: HashSet<String> = picked.iter().map(|r| r.id.clone()).collect();
-        let mut candidates: Vec<RegisteredRelay> = relays
-            .values()
-            .filter(|r| !already.contains(&r.id))
-            .cloned()
-            .collect();
+        let mut candidates: Vec<RegisteredRelay> = relays.values().cloned().collect();
         candidates.sort_by_key(|r| r.counter.load(Ordering::Relaxed));
 
-        let need = n - picked.len();
-        let take = need.min(candidates.len());
-        let available = picked.len() + take;
-
-        if available < n {
+        let take = n.min(candidates.len());
+        if take < n {
             log::warn!(
                 "connection fanout requested n={} but only {} distinct relays available for client {}",
                 n,
-                available,
+                take,
                 client_id
             );
         }
 
-        for relay in candidates.into_iter().take(take) {
+        let picked: Vec<RegisteredRelay> = candidates.into_iter().take(take).collect();
+        for relay in &picked {
             relay.counter.fetch_add(1, Ordering::Relaxed);
-            picked.push(relay);
         }
 
-        assignments.insert(client_id.to_string(), picked.iter().map(|r| r.id.clone()).collect());
+        if !picked.is_empty() {
+            picks.insert(
+                client_id.to_string(),
+                SessionPick {
+                    relay_ids: picked.iter().map(|r| r.id.clone()).collect(),
+                    chosen_at: Instant::now(),
+                },
+            );
+        }
+
         picked
     }
 
@@ -338,7 +345,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn get_relay_configs_is_sticky_across_calls() {
+    async fn get_relay_configs_is_stable_within_ttl() {
         let manager = TurnManager::new().await;
         register(&manager, "198.51.100.10", 19101).await;
         register(&manager, "198.51.100.11", 19102).await;
@@ -353,17 +360,50 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn unregister_client_decrements_counters_for_all_assigned_relays() {
+    async fn two_peer_consistency_within_ttl() {
+        let manager = TurnManager::new().await;
+        register(&manager, "198.51.100.10", 19101).await;
+        register(&manager, "198.51.100.11", 19102).await;
+        register(&manager, "198.51.100.12", 19103).await;
+
+        let offerer = manager.get_relay_configs("peer-key", 2).await;
+        let receiver = manager.get_relay_configs("peer-key", 2).await;
+
+        let offerer_urls: Vec<_> = offerer.iter().flat_map(|c| c.urls.clone()).collect();
+        let receiver_urls: Vec<_> = receiver.iter().flat_map(|c| c.urls.clone()).collect();
+        assert_eq!(offerer_urls, receiver_urls);
+    }
+
+    #[tokio::test]
+    async fn counter_increments_per_pick() {
         let manager = TurnManager::new().await;
         register(&manager, "198.51.100.10", 19101).await;
         register(&manager, "198.51.100.11", 19102).await;
 
-        let _ = manager.get_relay_configs("client-1", 2).await;
-        manager.unregister_client("client-1").await;
+        let _ = manager.get_relay_configs("client-a", 2).await;
+        let _ = manager.get_relay_configs("client-b", 2).await;
 
         let relays = manager.relays.lock().await;
         for relay in relays.values() {
-            assert_eq!(relay.counter.load(std::sync::atomic::Ordering::Relaxed), 0);
+            assert_eq!(relay.counter.load(std::sync::atomic::Ordering::Relaxed), 2);
         }
+    }
+
+    #[tokio::test]
+    async fn distinct_peers_pick_least_loaded_first() {
+        let manager = TurnManager::new().await;
+        register(&manager, "198.51.100.10", 19101).await;
+        register(&manager, "198.51.100.11", 19102).await;
+
+        let _ = manager.get_relay_configs("client-a", 1).await;
+        let _ = manager.get_relay_configs("client-b", 1).await;
+
+        let relays = manager.relays.lock().await;
+        let counts: Vec<usize> = relays
+            .values()
+            .map(|r| r.counter.load(std::sync::atomic::Ordering::Relaxed))
+            .collect();
+        assert_eq!(counts.iter().sum::<usize>(), 2);
+        assert!(counts.iter().all(|&c| c == 1));
     }
 }
