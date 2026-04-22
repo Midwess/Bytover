@@ -652,6 +652,7 @@ impl WebRtcClient {
         }
 
         drop(reassembly);
+        writer.end().await.map_err(|e| WebRtcClientError::Transfer(e.to_string()))?;
         self.prefix_channels.lock().await.remove(&transfer_id);
         Ok(progress)
     }

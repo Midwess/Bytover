@@ -83,6 +83,7 @@ export class WasmCore {
     alertMessageState: Observable<DialogOperationVariantMessage[]> = new Observable()
 
     private autoDownloadedResources: Set<string> = new Set()
+    private pickedResources: Set<string> = new Set()
 
     constructor() { }
 
@@ -92,6 +93,18 @@ export class WasmCore {
 
     public markAutoDownloaded(sessionId: string, orderId: string): void {
         this.autoDownloadedResources.add(`${sessionId}_${orderId}`)
+    }
+
+    public isResourcePicked(sessionId: string, orderId: string): boolean {
+        return this.pickedResources.has(`${sessionId}_${orderId}`)
+    }
+
+    private markResourcePicked(sessionId: string, orderId: string): void {
+        this.pickedResources.add(`${sessionId}_${orderId}`)
+    }
+
+    private unmarkResourcePicked(sessionId: string, orderId: string): void {
+        this.pickedResources.delete(`${sessionId}_${orderId}`)
     }
 
     public useReceivedCloudSession() {
@@ -505,10 +518,13 @@ export class WasmCore {
         const ext = extractExtension(filename)
         const bytes = await register_picked_handle(sessionOrderId, resourceOrderId, ext, handle)
         const deserializer = new BincodeDeserializer(bytes)
-        return LocalResourcePath.deserialize(deserializer)
+        const path = LocalResourcePath.deserialize(deserializer)
+        this.markResourcePicked(sessionOrderId.toString(), resourceOrderId.toString())
+        return path
     }
 
     async abortPickedHandle(sessionOrderId: bigint, resourceOrderId: bigint): Promise<void> {
+        this.unmarkResourcePicked(sessionOrderId.toString(), resourceOrderId.toString())
         await abort_picked_handle(sessionOrderId, resourceOrderId)
     }
 

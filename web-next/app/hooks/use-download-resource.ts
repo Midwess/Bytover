@@ -90,6 +90,10 @@ export function useDownloadResource({
 
     useEffect(() => {
         if (session?.is_scope_online && resource?.is_success && resource?.model.path) {
+            if (core.isResourcePicked(session.id, resource.model.order_id)) {
+                core.markAutoDownloaded(session.id, resource.model.order_id);
+                return;
+            }
             if (!core.hasAutoDownloaded(session.id, resource.model.order_id)) {
                 core.downloadFile(resource.model.path, resource.model.name);
                 core.markAutoDownloaded(session.id, resource.model.order_id);
