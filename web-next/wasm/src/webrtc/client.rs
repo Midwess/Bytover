@@ -143,7 +143,7 @@ impl WebRtcClient {
         log::info!("WebRtcClient connecting to peer {}", peer_id);
 
         let ice_configs = signaling
-            .fetch_relay_configs(peer_id, 1)
+            .fetch_relay_configs(peer_id, 8)
             .await
             .unwrap_or_else(|e| {
                 log::warn!("Failed to fetch relay configs: {:?}", e);

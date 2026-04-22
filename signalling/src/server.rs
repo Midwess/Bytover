@@ -219,7 +219,11 @@ async fn relay_handler(
     let key = key.into_inner();
     let _ = state.client_manager.get(&key).await;
 
-    let requested_n = query.n.unwrap_or(state.connection_fanout).max(1);
+    let requested_n = query
+        .n
+        .unwrap_or(state.connection_fanout)
+        .min(state.connection_fanout)
+        .max(1);
     let configs = state.turn_manager.get_relay_configs(&key, requested_n).await;
 
     if configs.is_empty() {
