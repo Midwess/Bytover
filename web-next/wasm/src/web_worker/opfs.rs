@@ -710,6 +710,7 @@ impl Worker for OpfsWorker {
             id_gen: Arc::new(AtomicU32::new(0)),
             device_folders: Default::default(),
             zip_writers: Default::default(),
+            picked_handles: Default::default(),
         }
     }
 
