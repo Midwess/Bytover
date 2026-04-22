@@ -205,37 +205,20 @@ async fn offer_handler(key: web::Path<String>, body: Bytes, state: web::Data<Ser
     }
 }
 
-#[derive(serde::Deserialize)]
-struct RelayQuery {
-    #[serde(default)]
-    n: Option<usize>,
-}
-
-async fn relay_handler(
-    key: web::Path<String>,
-    query: web::Query<RelayQuery>,
-    state: web::Data<ServerState>,
-) -> HttpResponse {
+async fn relay_handler(key: web::Path<String>, state: web::Data<ServerState>) -> HttpResponse {
     let key = key.into_inner();
     let _ = state.client_manager.get(&key).await;
 
-    let requested_n = query
-        .n
-        .unwrap_or(state.connection_fanout)
-        .min(state.connection_fanout)
-        .max(1);
-    let configs = state.turn_manager.get_relay_configs(&key, requested_n).await;
+    let configs = state
+        .turn_manager
+        .get_relay_configs(&key, state.connection_fanout.max(1))
+        .await;
 
     if configs.is_empty() {
         return HttpResponse::ServiceUnavailable().body("no relay available");
     }
 
-    if query.n.is_some() {
-        let list = IceConfigList { configs };
-        return encode_binary_response(&list);
-    }
-
-    encode_binary_response(&configs.into_iter().next().unwrap())
+    encode_binary_response(&IceConfigList { configs })
 }
 
 fn parse_submitted_ipv4(value: &str) -> Option<std::net::Ipv4Addr> {

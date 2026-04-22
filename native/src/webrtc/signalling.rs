@@ -73,44 +73,11 @@ impl SignallingSender {
 
         let bytes = response.bytes().await.map_err(|e| SignallingError::HttpFailed(format!("{e}")))?;
 
-        IceConfig::decode(&bytes[..]).map_err(SignallingError::from)
-    }
-
-    pub async fn fetch_relay_configs(&self, key: &str, n: usize) -> Result<Vec<IceConfig>, SignallingError> {
-        let n = n.max(1);
-
-        if let Some(server) = crate::config::get_relay_server_override() {
-            log::info!("[signalling] Using relay server override: {}", server);
-            return Ok(vec![IceConfig {
-                urls: vec![
-                    format!("stun:{}", server),
-                    format!("turn:{}?transport=udp", server),
-                    format!("turn:{}?transport=tcp", server),
-                ],
-                username: Some(crate::config::get_relay_turn_username()),
-                credential: Some(crate::config::get_relay_turn_password()),
-            }]);
-        }
-
-        let url = format!("{}/relay/{}?n={}", self.http_url, key, n);
-        let response = reqwest::get(&url).await.map_err(|e| SignallingError::HttpFailed(format!("{e:?}")))?;
-
-        if !response.status().is_success() {
-            return Err(SignallingError::HttpFailed(format!(
-                "relay endpoint returned {}",
-                response.status()
-            )));
-        }
-
-        let bytes = response.bytes().await.map_err(|e| SignallingError::HttpFailed(format!("{e}")))?;
-
-        match IceConfigList::decode(&bytes[..]) {
-            Ok(list) if !list.configs.is_empty() => Ok(list.configs),
-            _ => {
-                let single = IceConfig::decode(&bytes[..]).map_err(SignallingError::from)?;
-                Ok(vec![single])
-            }
-        }
+        let list = IceConfigList::decode(&bytes[..]).map_err(SignallingError::from)?;
+        list.configs
+            .into_iter()
+            .next()
+            .ok_or_else(|| SignallingError::HttpFailed("relay endpoint returned empty config list".to_string()))
     }
 
     pub async fn send_answer(

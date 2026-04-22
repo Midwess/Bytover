@@ -57,7 +57,7 @@ impl SignalingClient {
         Ok((response_msg.answer.sdp, response_msg.peer))
     }
 
-    pub async fn fetch_relay_config(&self, key: &str) -> Result<IceConfig, SignalingError> {
+    pub async fn fetch_relay_configs(&self, key: &str) -> Result<Vec<IceConfig>, SignalingError> {
         let url = format!("{}/relay/{}", self.http_url.trim_end_matches('/'), key);
 
         let (status, _headers, bytes) = HttpClient::new()
@@ -73,33 +73,8 @@ impl SignalingClient {
             return Err(SignalingError::Server(String::from_utf8_lossy(&bytes).to_string()));
         }
 
-        IceConfig::decode(&bytes[..]).map_err(|e| SignalingError::Decoding(e.to_string()))
-    }
-
-    pub async fn fetch_relay_configs(&self, key: &str, n: usize) -> Result<Vec<IceConfig>, SignalingError> {
-        let n = n.max(1);
-        let url = format!("{}/relay/{}?n={}", self.http_url.trim_end_matches('/'), key, n);
-
-        let (status, _headers, bytes) = HttpClient::new()
-            .method("GET")
-            .url(&url)
-            .fetch()
-            .map_err(|e| SignalingError::Network(format!("{:?}", e)))?
-            .bytes()
-            .await
-            .map_err(|e| SignalingError::Network(format!("{:?}", e)))?;
-
-        if status != 200 {
-            return Err(SignalingError::Server(String::from_utf8_lossy(&bytes).to_string()));
-        }
-
-        match IceConfigList::decode(&bytes[..]) {
-            Ok(list) if !list.configs.is_empty() => Ok(list.configs),
-            _ => {
-                let single = IceConfig::decode(&bytes[..]).map_err(|e| SignalingError::Decoding(e.to_string()))?;
-                Ok(vec![single])
-            }
-        }
+        let list = IceConfigList::decode(&bytes[..]).map_err(|e| SignalingError::Decoding(e.to_string()))?;
+        Ok(list.configs)
     }
 }
 
