@@ -91,7 +91,7 @@ function DockedSliver({edge, onExpand, shelfName, isOnline}: {
     const Icon = edge === "right" ? ChevronLeft : ChevronRight;
     const roundedSide = edge === "right" ? "rounded-l-2xl" : "rounded-r-2xl";
     const onlineShadow = isOnline
-        ? "shadow-[0_0_8px_2px_var(--color-greenSecondary)_inset]"
+        ? "shadow-[0_0_10px_2px_var(--color-greenSecondary)_inset]"
         : "";
     const nameRotation = edge === "left" ? "rotate(180deg)" : undefined;
 
@@ -99,7 +99,7 @@ function DockedSliver({edge, onExpand, shelfName, isOnline}: {
         <button
             onClick={onExpand}
             aria-label="Expand shelf"
-            className={`group fixed inset-0 w-screen h-screen z-[9999] border border-white/20 ${roundedSide} flex flex-col items-center justify-between p-0 overflow-hidden bg-card cursor-pointer hover:bg-muted-foreground/10 animate-in fade-in transition-shadow duration-500 ${onlineShadow}`}
+            className={`dark group fixed inset-0 z-[9999] bg-card border border-white/20 ${roundedSide} flex flex-col items-center justify-between p-0 overflow-hidden cursor-pointer hover:bg-muted-foreground/10 animate-in fade-in transition-shadow duration-500 ${onlineShadow}`}
         >
             <div className="flex-1 w-full flex items-center justify-center pt-2 overflow-hidden">
                 {shelfName && (
