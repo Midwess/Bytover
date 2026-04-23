@@ -343,14 +343,9 @@ impl AppModule<BitBridge> for ShelfModule {
             .and_then(|c| c.shelf_limit())
             .map(|n| n as usize);
 
-        let mut unlocked_ids: std::collections::HashSet<u64> = std::collections::HashSet::new();
-        if let Some(limit) = shelf_limit {
-            let mut sorted: Vec<&Shelf> = model.shelf.shelves.iter().collect();
-            sorted.sort_by(|a, b| a.id.cmp(&b.id));
-            for shelf in sorted.into_iter().take(limit) {
-                unlocked_ids.insert(shelf.id);
-            }
-        }
+        let unlocked_ids = shelf_limit
+            .map(|limit| compute_unlocked_shelf_ids(&model.shelf.shelves, limit))
+            .unwrap_or_default();
 
         let mut shelves: Vec<ShelfItemViewModel> = model
             .shelf
@@ -394,9 +389,62 @@ impl AppModule<BitBridge> for ShelfModule {
     }
 }
 
+fn compute_unlocked_shelf_ids(shelves: &[Shelf], limit: usize) -> std::collections::HashSet<u64> {
+    let mut sorted: Vec<&Shelf> = shelves.iter().collect();
+    sorted.sort_by(|a, b| a.id.cmp(&b.id));
+    sorted.into_iter().take(limit).map(|s| s.id).collect()
+}
+
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
 pub struct ResourceSelection {
     pub path: LocalResourcePath,
     // This is optional, if it is None, we will detect by Rust code to see if it should be a Folder or a File
     pub r#type: Option<ResourceType>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn shelf_with_id(id: u64) -> Shelf {
+        Shelf::with_id(id, format!("shelf-{id}"))
+    }
+
+    #[test]
+    fn free_user_with_two_shelves_locks_the_newer_one() {
+        let old = shelf_with_id(100);
+        let new = shelf_with_id(200);
+        let unlocked = compute_unlocked_shelf_ids(&[old.clone(), new.clone()], 1);
+        assert!(unlocked.contains(&old.id), "older shelf (smaller id) must stay unlocked");
+        assert!(!unlocked.contains(&new.id), "newer shelf (larger id) must be locked");
+    }
+
+    #[test]
+    fn stored_order_does_not_affect_lock_selection() {
+        let older = shelf_with_id(100);
+        let newer = shelf_with_id(200);
+        let unlocked_a = compute_unlocked_shelf_ids(&[older.clone(), newer.clone()], 1);
+        let unlocked_b = compute_unlocked_shelf_ids(&[newer.clone(), older.clone()], 1);
+        assert_eq!(unlocked_a, unlocked_b);
+        assert_eq!(unlocked_a, [100u64].into_iter().collect());
+    }
+
+    #[test]
+    fn limit_larger_than_count_unlocks_everything() {
+        let a = shelf_with_id(10);
+        let b = shelf_with_id(20);
+        let unlocked = compute_unlocked_shelf_ids(&[a, b], 5);
+        assert_eq!(unlocked.len(), 2);
+    }
+
+    #[test]
+    fn limit_of_two_keeps_two_oldest_unlocked() {
+        let s1 = shelf_with_id(1);
+        let s2 = shelf_with_id(2);
+        let s3 = shelf_with_id(3);
+        let unlocked = compute_unlocked_shelf_ids(&[s3.clone(), s1.clone(), s2.clone()], 2);
+        assert!(unlocked.contains(&1));
+        assert!(unlocked.contains(&2));
+        assert!(!unlocked.contains(&3));
+    }
 }
