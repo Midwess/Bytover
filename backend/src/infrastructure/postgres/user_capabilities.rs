@@ -68,6 +68,33 @@ impl UserCapabilitiesRepository for UserCapabilitiesPostgresRepository {
         }
     }
 
+    async fn upgrade_to_paid(&self, user_order_id: u64) -> Result<UserCapabilities, RepositoryError> {
+        self.find_or_create_default(user_order_id).await?;
+
+        let existing = model::Entity::find_by_id(user_order_id as i64)
+            .one(&self.db)
+            .await
+            .map_err(|e| RepositoryError::DbError(e.to_string()))?
+            .ok_or_else(|| RepositoryError::DbError("upgrade_to_paid: row missing after seed".to_owned()))?;
+
+        let paid_defaults = defaults_for(Plan::Paid);
+        let now = chrono::Utc::now().into();
+        let mut active: model::ActiveModel = existing.into();
+        active.plan = Set(Plan::Paid.as_i16());
+        active.password_encryption_allowed = Set(paid_defaults.password_encryption_allowed);
+        active.max_files_per_transfer = Set(paid_defaults.max_files_per_transfer as i32);
+        active.total_transfer_bytes_lifetime_cap = Set(paid_defaults.total_transfer_bytes_lifetime_cap as i64);
+        active.max_visible_shelves = Set(paid_defaults.max_visible_shelves as i32);
+        active.updated_at = Set(now);
+
+        let updated = active
+            .update(&self.db)
+            .await
+            .map_err(|e| RepositoryError::DbError(e.to_string()))?;
+
+        Ok(Self::model_to_entity(updated))
+    }
+
     async fn increment_bytes_used(&self, user_order_id: u64, delta: u64) -> Result<IncrementOutcome, RepositoryError> {
         let sql = r#"
             UPDATE user_capabilities

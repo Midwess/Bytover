@@ -4,14 +4,44 @@ use crate::protocol::rpc::connection::RpcNetworkModule;
 use crate::protocol::rpc::errors::RpcErrors;
 use core_services::utils::maybe::MaybeSend;
 use schema::devlog::bitbridge::bit_bridge_cloud_service_client::BitBridgeCloudServiceClient;
+use schema::devlog::bitbridge::submit_store_kit_transaction_response::Outcome as SubmitStoreKitOutcome;
 use schema::devlog::bitbridge::update_transfer_progress_request::Status;
 use schema::devlog::bitbridge::{
     AddResourcesRequest, AddResourcesResponse, CancelSessionRequest, ClientUploadRequest, CloudResourceMessage,
     CompleteUploadPartRequest, CreatePublicTransferSessionRequest, FindSessionRequest, FindSessionResponse,
-    GetCapabilitiesRequest, MultiPartUpload, PublicSessionId, PublicTransferSessionMessage, SubscribeSessionInfoRequest,
-    SubscribeSessionInfoResponse, UpdateTransferProgressRequest,
+    GetCapabilitiesRequest, MultiPartUpload, PublicSessionId, PublicTransferSessionMessage, SubmitStoreKitErrorCode,
+    SubmitStoreKitTransactionRequest, SubscribeSessionInfoRequest, SubscribeSessionInfoResponse, UpdateTransferProgressRequest,
 };
+use serde::{Deserialize, Serialize};
 use tonic::{Request, Streaming};
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum SubmitStoreKitResult {
+    Success {
+        payment_statement_id: u64,
+        product_id: String,
+        duplicate: bool,
+        upgraded_to_paid: bool,
+        capabilities: UserCapabilities,
+    },
+    Rejected {
+        code: SubmitStoreKitRejectionCode,
+        message: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum SubmitStoreKitRejectionCode {
+    Unknown,
+    NotFound,
+    BundleMismatch,
+    InvalidSignature,
+    EnvMismatch,
+    AppleApiError,
+    ProductUnknown,
+    ConfigMissing,
+    Internal,
+}
 
 pub struct CloudServer<T>
 where
@@ -161,6 +191,70 @@ where
         let response = client.complete_upload_part(request).await?;
 
         Ok(response.into_inner().part)
+    }
+
+    pub async fn submit_storekit_transaction(
+        &self,
+        transaction_id: String,
+        product_id: String,
+    ) -> Result<SubmitStoreKitResult, RpcErrors> {
+        let channel = self.rpc_module.connect().await?;
+        let mut client = BitBridgeCloudServiceClient::new(channel);
+        let mut request = Request::new(SubmitStoreKitTransactionRequest {
+            transaction_id,
+            product_id,
+        });
+        self.auth_provider.with_auth(&mut request).await?;
+
+        let response = client.submit_storekit_transaction(request).await?.into_inner();
+        let Some(outcome) = response.outcome else {
+            return Err(RpcErrors::InternalServerError("Empty submit_storekit_transaction response".to_owned()));
+        };
+
+        match outcome {
+            SubmitStoreKitOutcome::Success(s) => {
+                let caps = &s.capabilities;
+                let plan = match caps.plan {
+                    x if x == schema::devlog::bitbridge::Plan::Paid as i32 => Plan::Paid,
+                    _ => Plan::Free,
+                };
+                Ok(SubmitStoreKitResult::Success {
+                    payment_statement_id: s.payment_statement_id,
+                    product_id: s.product_id,
+                    duplicate: s.duplicate,
+                    upgraded_to_paid: s.upgraded_to_paid,
+                    capabilities: UserCapabilities {
+                        plan,
+                        transfer_limits: TransferLimits {
+                            password_encryption_allowed: caps.transfer_limits.password_encryption_allowed,
+                            max_files_per_transfer: caps.transfer_limits.max_files_per_transfer,
+                            total_transfer_bytes_lifetime_cap: caps.transfer_limits.total_transfer_bytes_lifetime_cap,
+                        },
+                        transfer_usage: TransferUsage {
+                            total_transfer_bytes_used: caps.transfer_usage.total_transfer_bytes_used,
+                        },
+                        presentation: PresentationLimits {
+                            max_visible_shelves: caps.presentation.max_visible_shelves,
+                        },
+                        capabilities_version: caps.capabilities_version,
+                    },
+                })
+            }
+            SubmitStoreKitOutcome::Error(e) => {
+                let code = match SubmitStoreKitErrorCode::try_from(e.code).unwrap_or(SubmitStoreKitErrorCode::Unknown) {
+                    SubmitStoreKitErrorCode::Unknown => SubmitStoreKitRejectionCode::Unknown,
+                    SubmitStoreKitErrorCode::NotFound => SubmitStoreKitRejectionCode::NotFound,
+                    SubmitStoreKitErrorCode::BundleMismatch => SubmitStoreKitRejectionCode::BundleMismatch,
+                    SubmitStoreKitErrorCode::InvalidSignature => SubmitStoreKitRejectionCode::InvalidSignature,
+                    SubmitStoreKitErrorCode::EnvMismatch => SubmitStoreKitRejectionCode::EnvMismatch,
+                    SubmitStoreKitErrorCode::AppleApiError => SubmitStoreKitRejectionCode::AppleApiError,
+                    SubmitStoreKitErrorCode::ProductUnknown => SubmitStoreKitRejectionCode::ProductUnknown,
+                    SubmitStoreKitErrorCode::ConfigMissing => SubmitStoreKitRejectionCode::ConfigMissing,
+                    SubmitStoreKitErrorCode::Internal => SubmitStoreKitRejectionCode::Internal,
+                };
+                Ok(SubmitStoreKitResult::Rejected { code, message: e.message })
+            }
+        }
     }
 
     pub async fn get_capabilities(&self) -> Result<UserCapabilities, RpcErrors> {

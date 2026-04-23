@@ -1,5 +1,6 @@
 use crate::app_gateway::app_info::AppInfoService;
 use crate::app_gateway::markov::Markov;
+use crate::app_gateway::payment_gateway::PaymentGateway;
 use crate::cloud_storage::storage::CloudStorage;
 use crate::config::{load_app_store_config, AppStoreConfig};
 use crate::grpc::cloud_service::CloudGrpcService;
@@ -194,6 +195,12 @@ impl DiContainer {
     }
 
     pub async fn get_app_service(&'static self) -> impl AppInfoService {
+        AppGatewayImpl {
+            channel: self.grpc_gateway_channel.clone(),
+        }
+    }
+
+    pub async fn get_payment_gateway(&'static self) -> impl PaymentGateway {
         AppGatewayImpl {
             channel: self.grpc_gateway_channel.clone(),
         }

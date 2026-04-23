@@ -47,11 +47,13 @@ use uuid::Uuid;
 use {hostname, machine_uid};
 
 pub mod api;
+mod commands;
 mod content_handlers;
 pub mod extensions;
 pub(crate) mod mouse_tracking;
 mod pasteboard;
 mod shelf_dock;
+mod storekit;
 mod theme;
 mod thumbnail;
 
@@ -951,7 +953,10 @@ pub async fn run() {
             content_handlers::add_html_resource,
             content_handlers::paste_from_clipboard,
             shelf_dock::dock_shelf_edge,
-            shelf_dock::expand_shelf
+            shelf_dock::expand_shelf,
+            commands::purchase::purchase_premium,
+            commands::purchase::restore_purchases,
+            commands::purchase::resume_pending_transactions
         ])
         .setup(|app| {
             #[cfg(target_os = "macos")]
