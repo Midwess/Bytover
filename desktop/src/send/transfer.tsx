@@ -10,7 +10,7 @@ import {
     Card,
     CardContent,
 } from "@/components/ui/card"
-import {PasswordInput} from "@/components/ui/password-input"
+import {TransferPasswordField} from "@/send/transfer-password-field"
 import {
     Copy,
     Check,
@@ -112,12 +112,11 @@ function P2PSend({ shelfId }: { shelfId: string | undefined }) {
             <MyPeerInfo/>
         </Card>
         <Card shadowSize={0.5} className="flex flex-col p-1">
-            <PasswordInput
+            <TransferPasswordField
                 className={"bg-secondary shadow-background h-9"}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={setPassword}
                 maxLength={20}
-                placeholder="Password (Optional)"
                 disabled={isInProgress}
             />
         </Card>
@@ -216,12 +215,11 @@ function PublicTransfer({ shelfId }: { shelfId: string | undefined }) {
             </p>
         </Card>
         <Card shadowSize={0.5} className="flex flex-col p-1">
-            <PasswordInput className={"h-9 bg-secondary shadow-background"}
-                   value={pwd}
-                   onChange={(e) => {
-                       setPwd(e.target.value)
-                   }}
-                   placeholder={"Password (Optional)"}/>
+            <TransferPasswordField
+                className={"h-9 bg-secondary shadow-background"}
+                value={pwd}
+                onChange={setPwd}
+            />
         </Card>
         {
             cloudSession?.access_url &&
