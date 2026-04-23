@@ -408,7 +408,7 @@ function PlanComparison({currentPlan, onUpgrade}: {currentPlan: PlanKind; onUpgr
 
     return (
         <div className="px-4 py-3">
-            <div className="grid grid-cols-[auto_80px_80px] items-center">
+            <div className="grid grid-cols-[100px_1fr_1fr] items-center">
                 <div className="pb-2 pr-6" />
                 <div className="pb-2 px-2 flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/40">
                     Free
