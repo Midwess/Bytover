@@ -5,6 +5,7 @@ import {noop} from "motion";
 import {invoke} from "@tauri-apps/api/core";
 import {convertFileSrc} from "@tauri-apps/api/core";
 import {useEffect, useRef, useState, ReactNode} from "react";
+import {createPortal} from "react-dom";
 import {useShelfClipboard} from "@/hooks/use-shelf-clipboard.ts";
 import core from "@/core.ts";
 import {
@@ -19,8 +20,6 @@ import {
     Loader2,
     ClipboardPaste,
     ExternalLink,
-    ChevronLeft,
-    ChevronRight,
 } from "lucide-react";
 import {Button} from "@/components/ui/button.tsx";
 import {
@@ -68,44 +67,45 @@ function ShelfWrapper({
     const activeEdge = dockEdge ?? progressEdge;
     const clampedProgress = Math.min(Math.max(progress, 0), 1);
     const state2Opacity = clampedProgress;
-    const Icon = activeEdge === "right" ? ChevronLeft : ChevronRight;
     const nameRotation = activeEdge === "left" ? "rotate(180deg)" : undefined;
     const innerEdgePos = activeEdge === "right" ? "left-0" : "right-0";
 
     return (
-        <Card
-            className={`
-                rounded-[30px]
-                justify-center
-                items-center
-                px-0
-                w-full h-full
-                relative overflow-hidden
-                animate-in fade-in duration-300
-                transition-[box-shadow,border-color] duration-200
-                ${isDraggingOver
-                ? 'border-bluePrimary shadow-[0_0_8px_2px_rgb(var(--bluePrimary))_inset]'
-                : 'border-white/20'
-            }
-            `}>
-            <div className="absolute inset-0">
-                <div
-                    className="flex flex-col absolute top-0 left-0 right-0 h-5 bg-gradient-to-b from-card to-transparent pointer-events-none z-20"/>
-                <div data-tauri-drag-region
-                     className={"w-full py-1 absolute top-0 flex justify-center items-center z-[60] peer group flex-col cursor-pointer"}>
-                   <Minus
-                        className={"pointer-events-none scale-x-200 scale-y-200 text-primary transition-transform duration-200 group-hover:scale-x-[3] group-hover:scale-y-[2.5]"}/>
+        <>
+            <Card
+                className={`
+                    rounded-[30px]
+                    justify-center
+                    items-center
+                    px-0
+                    w-full h-full
+                    relative overflow-hidden
+                    animate-in fade-in duration-300
+                    transition-[box-shadow,border-color] duration-200
+                    ${isDraggingOver
+                    ? 'border-bluePrimary shadow-[0_0_8px_2px_rgb(var(--bluePrimary))_inset]'
+                    : 'border-white/20'
+                }
+                `}>
+                <div className="absolute inset-0">
+                    <div
+                        className="flex flex-col absolute top-0 left-0 right-0 h-5 bg-gradient-to-b from-card to-transparent pointer-events-none z-20"/>
+                    <div data-tauri-drag-region
+                         className={"w-full py-1 absolute top-0 flex justify-center items-center z-[60] peer group flex-col cursor-pointer"}>
+                       <Minus
+                            className={"pointer-events-none scale-x-200 scale-y-200 text-primary transition-transform duration-200 group-hover:scale-x-[3] group-hover:scale-y-[2.5]"}/>
+                    </div>
+                    <button
+                        onClick={handleClose}
+                        className="hover:cursor-pointer absolute -top-0 -right-4.5 w-20 h-4.5 bg-muted-foreground/10 rounded-xl z-100 rotate-45 flex items-center justify-start pl-10 transition-all group z-50 -pb-5.5 opacity-0 peer-hover:opacity-100 hover:opacity-100 rounded-2xl"
+                    >
+                        <Minus className="w-4 h-4.5 scale-y-180 text-lg font-bold text-foreground -rotate-45"></Minus>
+                    </button>
+                    {children}
                 </div>
-                <button
-                    onClick={handleClose}
-                    className="hover:cursor-pointer absolute -top-0 -right-4.5 w-20 h-4.5 bg-muted-foreground/10 rounded-xl z-100 rotate-45 flex items-center justify-start pl-10 transition-all group z-50 -pb-5.5 opacity-0 peer-hover:opacity-100 hover:opacity-100 rounded-2xl"
-                >
-                    <Minus className="w-4 h-4.5 scale-y-180 text-lg font-bold text-foreground -rotate-45"></Minus>
-                </button>
-                {children}
-            </div>
+            </Card>
 
-            {activeEdge && (
+            {activeEdge && createPortal(
                 <button
                     onClick={onExpand}
                     disabled={!isDocked}
@@ -117,7 +117,7 @@ function ShelfWrapper({
                     }}
                 >
                     <div
-                        className={`absolute top-0 bottom-0 w-[72px] ${innerEdgePos} overflow-hidden`}
+                        className={`absolute top-0 bottom-0 w-[48px] ${innerEdgePos} overflow-hidden`}
                     >
                         <span className="absolute top-3 left-1/2 -translate-x-1/2 h-4 flex items-center justify-center">
                             {isOnline && (
@@ -130,8 +130,8 @@ function ShelfWrapper({
                                 />
                             )}
                         </span>
-                        <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center text-foreground/80 group-hover:text-foreground">
-                            <Icon className="w-5 h-5"/>
+                        <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
+                            <Minus className="pointer-events-none scale-x-200 scale-y-200 text-primary transition-transform duration-200 group-hover:scale-x-[3] group-hover:scale-y-[2.5]"/>
                         </span>
                         <div className="absolute bottom-3 left-1/2 -translate-x-1/2 max-h-[calc(50%-2rem)] flex items-end justify-center overflow-hidden">
                             {shelfName && (
@@ -144,9 +144,10 @@ function ShelfWrapper({
                             )}
                         </div>
                     </div>
-                </button>
+                </button>,
+                document.body
             )}
-        </Card>
+        </>
     )
 }
 
