@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, EventTarget, Manager, PhysicalPosition, PhysicalSize, Runtime, WebviewWindow};
 
 pub const SLIVER_WIDTH_LOGICAL: f64 = 24.0;
-pub const EDGE_SNAP_PX: f64 = 40.0;
+pub const DOCK_COMMIT_RATIO: f64 = 0.30;
 pub const UNDOCK_THRESHOLD_PX: f64 = 80.0;
 pub const ANIM_DURATION_MS: u64 = 160;
 pub const ANIM_FRAMES: u32 = 10;
@@ -46,12 +46,14 @@ pub struct DockState {
 
 struct PendingDock {
     edge: DockEdge,
+    progress: f64,
     last_update: Instant,
     task_alive: bool,
 }
 
 enum PendingCheckResult {
     Commit(DockEdge),
+    Reset,
     Wait(Duration),
     Empty,
 }
@@ -99,7 +101,7 @@ pub fn release_dock(label: &str) {
     }
 }
 
-fn record_pending_dock(label: &str, edge: DockEdge) -> bool {
+fn record_pending_dock(label: &str, edge: DockEdge, progress: f64) -> bool {
     let Ok(mut reg) = DOCK_REGISTRY.lock() else {
         return false;
     };
@@ -107,6 +109,7 @@ fn record_pending_dock(label: &str, edge: DockEdge) -> bool {
     match reg.pending.get_mut(label) {
         Some(p) => {
             p.edge = edge;
+            p.progress = progress;
             p.last_update = now;
             if p.task_alive {
                 false
@@ -120,6 +123,7 @@ fn record_pending_dock(label: &str, edge: DockEdge) -> bool {
                 label.to_string(),
                 PendingDock {
                     edge,
+                    progress,
                     last_update: now,
                     task_alive: true,
                 },
@@ -144,9 +148,14 @@ fn check_pending_dock(label: &str, debounce: Duration) -> PendingCheckResult {
     };
     let elapsed = p.last_update.elapsed();
     if elapsed >= debounce {
-        let edge = p.edge;
-        reg.pending.remove(label);
-        PendingCheckResult::Commit(edge)
+        if p.progress >= 1.0 {
+            let edge = p.edge;
+            reg.pending.remove(label);
+            PendingCheckResult::Commit(edge)
+        } else {
+            reg.pending.remove(label);
+            PendingCheckResult::Reset
+        }
     } else {
         PendingCheckResult::Wait(debounce - elapsed)
     }
@@ -455,7 +464,6 @@ pub fn maybe_detect_edge_dock<R: Runtime>(app: &AppHandle<R>, window: &WebviewWi
     let screen_left = m_pos.x as f64;
     let screen_right = m_pos.x as f64 + m_size.width as f64;
 
-    let snap_phys = EDGE_SNAP_PX * scale;
     let undock_phys = UNDOCK_THRESHOLD_PX * scale;
 
     if let Some(state) = dock_state(&label) {
@@ -469,22 +477,51 @@ pub fn maybe_detect_edge_dock<R: Runtime>(app: &AppHandle<R>, window: &WebviewWi
         return;
     }
 
-    let intent = if window_left - screen_left <= snap_phys {
-        Some(DockEdge::Left)
-    } else if screen_right - window_right <= snap_phys {
-        Some(DockEdge::Right)
+    let overshoot_left = (screen_left - window_left).max(0.0);
+    let overshoot_right = (window_right - screen_right).max(0.0);
+
+    let (intent, overshoot) = if overshoot_right >= overshoot_left && overshoot_right > 0.0 {
+        (Some(DockEdge::Right), overshoot_right)
+    } else if overshoot_left > 0.0 {
+        (Some(DockEdge::Left), overshoot_left)
     } else {
-        None
+        (None, 0.0)
     };
 
-    let Some(edge) = intent else {
-        clear_pending_dock(&label);
-        return;
+    let width = size.width as f64;
+    let progress = if width > 0.0 {
+        (overshoot / (width * DOCK_COMMIT_RATIO)).clamp(0.0, 1.0)
+    } else {
+        0.0
     };
 
-    if record_pending_dock(&label, edge) {
-        spawn_pending_dock_task(app.clone(), label);
+    emit_dock_progress(window, intent, progress);
+
+    match intent {
+        Some(edge) => {
+            if record_pending_dock(&label, edge, progress) {
+                spawn_pending_dock_task(app.clone(), label);
+            }
+        }
+        None => {
+            clear_pending_dock(&label);
+        }
     }
+}
+
+fn emit_dock_progress<R: Runtime>(
+    window: &WebviewWindow<R>,
+    edge: Option<DockEdge>,
+    progress: f64,
+) {
+    let _ = window.emit_to(
+        EventTarget::webview_window(window.label()),
+        "dock-progress",
+        serde_json::json!({
+            "progress": progress,
+            "edge": edge.map(|e| e.as_str()),
+        }),
+    );
 }
 
 fn spawn_pending_dock_task<R: Runtime>(app: AppHandle<R>, label: String) {
@@ -499,6 +536,12 @@ fn spawn_pending_dock_task<R: Runtime>(app: AppHandle<R>, label: String) {
                         if let Some(win) = app.get_webview_window(&label) {
                             begin_dock(&app, &win, edge);
                         }
+                    }
+                    return;
+                }
+                PendingCheckResult::Reset => {
+                    if let Some(win) = app.get_webview_window(&label) {
+                        emit_dock_progress(&win, None, 0.0);
                     }
                     return;
                 }

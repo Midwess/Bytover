@@ -5,7 +5,6 @@ import {noop} from "motion";
 import {invoke} from "@tauri-apps/api/core";
 import {convertFileSrc} from "@tauri-apps/api/core";
 import {useEffect, useRef, useState, ReactNode} from "react";
-import {createPortal} from "react-dom";
 import {useShelfClipboard} from "@/hooks/use-shelf-clipboard.ts";
 import core from "@/core.ts";
 import {
@@ -41,14 +40,36 @@ import {throttle} from "lodash";
 import {UnlimitedLineText} from "@/components/ui/unlimited-line-text";
 import {PeerAvatarGroup} from "@/send/peer-avatar-group";
 
-function ShelfWrapper({children, isDraggingOver = false, shelfName}: {
+function ShelfWrapper({
+    children,
+    isDraggingOver = false,
+    shelfName,
+    isDocked = false,
+    dockEdge = null,
+    onExpand,
+    progress = 0,
+    progressEdge = null,
+    isOnline = false,
+}: {
     children: ReactNode,
     isDraggingOver?: boolean,
-    shelfName?: string
+    shelfName?: string,
+    isDocked?: boolean,
+    dockEdge?: DockEdge | null,
+    onExpand?: () => void,
+    progress?: number,
+    progressEdge?: DockEdge | null,
+    isOnline?: boolean,
 }) {
     const handleClose = () => {
         getCurrentWindow()?.close()
     }
+
+    const activeEdge = dockEdge ?? progressEdge;
+    const effectiveProgress = isDocked ? 1 : Math.min(Math.max(progress, 0), 1);
+    const contentOpacity = 1 - effectiveProgress;
+    const Icon = activeEdge === "right" ? ChevronLeft : ChevronRight;
+    const nameRotation = activeEdge === "left" ? "rotate(180deg)" : undefined;
 
     return (
         <Card
@@ -67,69 +88,62 @@ function ShelfWrapper({children, isDraggingOver = false, shelfName}: {
             }
             `}>
             <div
-                className="flex flex-col absolute top-0 left-0 right-0 h-5 bg-gradient-to-b from-card to-transparent pointer-events-none z-20"/>
-            <div data-tauri-drag-region
-                 className={"w-full py-1 absolute top-0 flex justify-center items-center z-[60] peer group flex-col cursor-pointer"}>
-               <Minus
-                    className={"pointer-events-none scale-x-200 scale-y-200 text-primary transition-transform duration-200 group-hover:scale-x-[3] group-hover:scale-y-[2.5]"}/>
-            </div>
-            <button
-                onClick={handleClose}
-                className="hover:cursor-pointer absolute -top-0 -right-4.5 w-20 h-4.5 bg-muted-foreground/10 rounded-xl z-100 rotate-45 flex items-center justify-start pl-10 transition-all group z-50 -pb-5.5 opacity-0 peer-hover:opacity-100 hover:opacity-100 rounded-2xl"
+                className="absolute inset-0 transition-opacity duration-150"
+                style={{
+                    opacity: contentOpacity,
+                    pointerEvents: isDocked ? "none" : "auto",
+                }}
             >
-                <Minus className="w-4 h-4.5 scale-y-180 text-lg font-bold text-foreground -rotate-45"></Minus>
-            </button>
-            {children}
+                <div
+                    className="flex flex-col absolute top-0 left-0 right-0 h-5 bg-gradient-to-b from-card to-transparent pointer-events-none z-20"/>
+                <div data-tauri-drag-region
+                     className={"w-full py-1 absolute top-0 flex justify-center items-center z-[60] peer group flex-col cursor-pointer"}>
+                   <Minus
+                        className={"pointer-events-none scale-x-200 scale-y-200 text-primary transition-transform duration-200 group-hover:scale-x-[3] group-hover:scale-y-[2.5]"}/>
+                </div>
+                <button
+                    onClick={handleClose}
+                    className="hover:cursor-pointer absolute -top-0 -right-4.5 w-20 h-4.5 bg-muted-foreground/10 rounded-xl z-100 rotate-45 flex items-center justify-start pl-10 transition-all group z-50 -pb-5.5 opacity-0 peer-hover:opacity-100 hover:opacity-100 rounded-2xl"
+                >
+                    <Minus className="w-4 h-4.5 scale-y-180 text-lg font-bold text-foreground -rotate-45"></Minus>
+                </button>
+                {children}
+            </div>
+
+            {isDocked && activeEdge && (
+                <button
+                    onClick={onExpand}
+                    aria-label="Expand shelf"
+                    className="group absolute inset-0 z-50 flex flex-col items-center justify-between p-0 bg-transparent hover:bg-muted/20 transition-colors cursor-pointer animate-in fade-in duration-200"
+                >
+                    <span className="shrink-0 pt-2 h-4 flex items-center justify-center">
+                        {isOnline && (
+                            <span
+                                className="w-1.5 h-1.5 rounded-full"
+                                style={{
+                                    backgroundColor: "var(--color-greenSecondary)",
+                                    boxShadow: "0 0 4px var(--color-greenSecondary)",
+                                }}
+                            />
+                        )}
+                    </span>
+                    <div className="flex-1 w-full flex items-center justify-center overflow-hidden">
+                        {shelfName && (
+                            <span
+                                className="text-[10px] font-medium text-foreground/60 group-hover:text-foreground transition-opacity duration-150 opacity-70 group-hover:opacity-100 whitespace-nowrap select-none tracking-wide"
+                                style={{writingMode: "vertical-rl", transform: nameRotation}}
+                            >
+                                {shelfName}
+                            </span>
+                        )}
+                    </div>
+                    <span className="w-full h-10 shrink-0 flex items-center justify-center text-foreground/80 group-hover:text-foreground">
+                        <Icon className="w-5 h-5"/>
+                    </span>
+                </button>
+            )}
         </Card>
     )
-}
-
-function DockedSliver({edge, onExpand, shelfName, isOnline, isFading}: {
-    edge: DockEdge,
-    onExpand: () => void,
-    shelfName?: string,
-    isOnline: boolean,
-    isFading: boolean,
-}) {
-    const Icon = edge === "right" ? ChevronLeft : ChevronRight;
-    const roundedSide = edge === "right" ? "rounded-l-[30px]" : "rounded-r-[30px]";
-    const edgePos = edge === "right" ? "right-0" : "left-0";
-    const nameRotation = edge === "left" ? "rotate(180deg)" : undefined;
-    const fadeState = isFading ? "opacity-0 pointer-events-none" : "opacity-100";
-
-    return createPortal(
-        <button
-            onClick={onExpand}
-            aria-label="Expand shelf"
-            className={`dark group fixed top-0 ${edgePos} w-6 h-screen z-[9999] bg-card border border-white/20 ${roundedSide} flex flex-col items-center justify-between p-0 overflow-hidden cursor-pointer hover:bg-muted animate-in fade-in transition-[background-color,opacity] duration-200 ${fadeState}`}
-        >
-            <span className="shrink-0 pt-2 h-4 flex items-center justify-center">
-                {isOnline && (
-                    <span
-                        className="w-1.5 h-1.5 rounded-full"
-                        style={{
-                            backgroundColor: "var(--color-greenSecondary)",
-                            boxShadow: "0 0 4px var(--color-greenSecondary)",
-                        }}
-                    />
-                )}
-            </span>
-            <div className="flex-1 w-full flex items-center justify-center overflow-hidden">
-                {shelfName && (
-                    <span
-                        className="text-[10px] font-medium text-foreground/60 group-hover:text-foreground transition-opacity duration-150 opacity-70 group-hover:opacity-100 whitespace-nowrap select-none tracking-wide"
-                        style={{writingMode: "vertical-rl", transform: nameRotation}}
-                    >
-                        {shelfName}
-                    </span>
-                )}
-            </div>
-            <span className="w-full h-10 shrink-0 flex items-center justify-center text-foreground/80 group-hover:text-foreground">
-                <Icon className="w-5 h-5"/>
-            </span>
-        </button>,
-        document.body
-    );
 }
 
 export function Shelf({shelfId}: { shelfId: string | undefined }) {
@@ -144,19 +158,6 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
     const effectRan = useRef(false);
     const [isDraggingOver, setIsDraggingOver] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
-    const [visibleEdge, setVisibleEdge] = useState<DockEdge | null>(null);
-    const isSliverFading = !dock.isDocked && visibleEdge !== null;
-
-    useEffect(() => {
-        if (dock.isDocked && dock.edge) {
-            setVisibleEdge(dock.edge);
-            return;
-        }
-        if (visibleEdge !== null) {
-            const t = setTimeout(() => setVisibleEdge(null), 220);
-            return () => clearTimeout(t);
-        }
-    }, [dock.isDocked, dock.edge, visibleEdge]);
 
     useShelfClipboard({shelfId});
 
@@ -254,30 +255,29 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
         };
     }, [shelfId]);
 
-    const sliverOverlay = visibleEdge && (
-        <DockedSliver
-            edge={visibleEdge}
-            onExpand={dock.expand}
-            shelfName={currentShelf?.name}
-            isOnline={isOnline}
-            isFading={isSliverFading}
-        />
-    );
+    const wrapperDockProps = {
+        isDocked: dock.isDocked,
+        dockEdge: dock.edge,
+        onExpand: dock.expand,
+        progress: dock.progress,
+        progressEdge: dock.progressEdge,
+        isOnline,
+    };
 
     if (!shelfId) {
         return (
-            <>
-                <ShelfWrapper>
-                    <Loader2 className="h-6 w-6 text-foreground animate-spin"/>
-                </ShelfWrapper>
-                {sliverOverlay}
-            </>
+            <ShelfWrapper {...wrapperDockProps} shelfName={currentShelf?.name}>
+                <Loader2 className="h-6 w-6 text-foreground animate-spin"/>
+            </ShelfWrapper>
         )
     }
 
     return (
-        <>
-        <ShelfWrapper isDraggingOver={isDraggingOver} shelfName={currentShelf?.name}>
+        <ShelfWrapper
+            isDraggingOver={isDraggingOver}
+            shelfName={currentShelf?.name}
+            {...wrapperDockProps}
+        >
             <div ref={containerRef} tabIndex={0} className="w-full h-full outline-none">
             <div
                 className={`absolute z-40 inset-0 bg-bluePrimary/10 backdrop-blur-[3px] flex items-center justify-center animate-in fade-in duration-200 ${!isDraggingOver && 'hidden'}`}>
