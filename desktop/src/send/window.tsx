@@ -5,9 +5,10 @@ import { Transfer } from "./transfer.tsx";
 import core from "@/core.ts";
 import {useOverlayScrollbars} from "@/hooks/use-overlay-scrollbar.ts";
 import {getCurrentWindow, LogicalSize} from "@tauri-apps/api/window";
-import {ArrowRight} from "lucide-react";
+import {ArrowRight, Check} from "lucide-react";
 import {Button} from "@/components/ui/button.tsx";
 import {invoke} from "@tauri-apps/api/core";
+import {listen} from "@tauri-apps/api/event";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>
@@ -21,24 +22,32 @@ function Window() {
     const [isExpanded, setIsExpanded] = useState(false)
     const [shelfId, setShelfId] = useState<string | undefined>(undefined)
     const [animationSettled, setAnimationSettled] = useState(false)
+    const [isUpgradeDialog, setIsUpgradeDialog] = useState(false)
     const shelfInitializedRef = useRef(false)
-    const currentShelf = core.useCurrentShelf(shelfId)
-    const isLocked = currentShelf?.is_locked ?? false
-    const showExpand = !isLocked
+    const showExpand = !isUpgradeDialog
     const effectiveExpanded = showExpand && isExpanded
 
-    // Extract shelf ID from window label on mount (label format: "send-{shelf_id}")
     const label = window.label
     useEffect(() => {
         if (label.startsWith("send-") && !shelfInitializedRef.current) {
             shelfInitializedRef.current = true
-            const id = label.substring(5) // Remove "send-" prefix
+            const id = label.substring(5)
             setShelfId(id)
             invoke("get_or_create_shelf", { shelfId: id })
                 .then(() => console.log('get_or_create_shelf success'))
                 .catch((err) => console.error('get_or_create_shelf error:', err))
         }
     }, [label]);
+
+    useEffect(() => {
+        const unlistenPromise = listen("show-upgrade-dialog", () => {
+            setIsUpgradeDialog(true)
+            setIsExpanded(false)
+        })
+        return () => {
+            unlistenPromise.then((unlisten) => unlisten())
+        }
+    }, [])
 
     useEffect(() => {
         core.launch()
@@ -66,7 +75,11 @@ function Window() {
         <main className={`w-screen h-screen dark bg-transparent flex items-center justify-start p-3.5 overflow-clip`} data-no-scrollbar>
             <div className={`${effectiveExpanded ? 'w-[412px]' : 'w-[230px]'} h-[255px] flex flex-row rounded-2xl bg-transparent space-x-0 animate-popup transition-all duration-300`}>
                 <div className={`h-[230px] bg-transparent relative min-w-[200px] w-[200px]`}>
-                   <Shelf shelfId={shelfId} />
+                   {isUpgradeDialog ? (
+                       <UpgradeDialogContent />
+                   ) : (
+                       <Shelf shelfId={shelfId} />
+                   )}
                    {showExpand && (
                        <Button
                            onClick={() => setIsExpanded(!isExpanded)}
@@ -83,6 +96,49 @@ function Window() {
                 </div>
            </div>
         </main>
+    )
+}
+
+function UpgradeDialogContent() {
+    const onUpgrade = () => {
+        invoke("show_settings_with_tab", {tab: "account"})
+        getCurrentWindow().close()
+    }
+    const onClose = () => getCurrentWindow().close()
+    const features = [
+        "Unlimited shelves",
+        "No transfer size cap",
+        "Password-protected transfers",
+    ]
+    return (
+        <div className="w-full h-full rounded-2xl bg-[#1e1e1e] border border-white/5 flex flex-col px-4 py-4 select-none">
+            <div className="flex flex-col mb-3">
+                <span className="text-[12.5px] font-semibold text-white tracking-tight">Bytover Pro</span>
+                <span className="text-[10.5px] text-white/40 mt-0.5">One shelf at a time on Free</span>
+            </div>
+            <ul className="flex flex-col gap-1.5 flex-1">
+                {features.map((f) => (
+                    <li key={f} className="flex items-start gap-1.5">
+                        <Check className="w-3 h-3 text-white/70 mt-[3px] shrink-0" strokeWidth={2.5} />
+                        <span className="text-[11px] text-white/85 leading-tight">{f}</span>
+                    </li>
+                ))}
+            </ul>
+            <div className="flex flex-col gap-1.5 mt-3">
+                <Button
+                    onClick={onUpgrade}
+                    className="w-full h-[26px] text-[11px] font-semibold bg-white text-black hover:bg-white/90 border-none rounded-md shadow-none"
+                >
+                    Upgrade · $14.89
+                </Button>
+                <button
+                    onClick={onClose}
+                    className="text-[10.5px] text-white/40 hover:text-white/60 transition-colors"
+                >
+                    Not now
+                </button>
+            </div>
+        </div>
     )
 }
 

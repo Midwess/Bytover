@@ -12,8 +12,6 @@ use crate::errors::CoreError;
 use crate::repository::local_resource::LocalResourceId;
 use crate::{gen_shelf_id, CoreOperation};
 
-pub const MAX_SHELVES: usize = 10;
-
 impl AppCommand {
     pub async fn load_shelves(&self) -> Result<(), CoreError> {
         let shelves = ShelfPersistentOperation::find_all(Some(10)).into_future(self.ctx()).await?;
@@ -129,7 +127,7 @@ impl AppCommand {
             }
         }
 
-        let shelves = ShelfPersistentOperation::find_all(Some(MAX_SHELVES))
+        let shelves = ShelfPersistentOperation::find_all(None)
             .into_future(self.ctx())
             .await
             .unwrap_or_default();
@@ -142,31 +140,6 @@ impl AppCommand {
         }
 
         uuid::Uuid::new_v4().to_string()
-    }
-
-    pub async fn ensure_shelf_limit(&self, sessions: &[(u64, Option<u64>)]) -> Result<(), CoreError> {
-        let shelves = ShelfPersistentOperation::find_all(Some(MAX_SHELVES + 1)).into_future(self.ctx()).await?;
-
-        if shelves.len() < MAX_SHELVES {
-            return Ok(());
-        }
-
-        let active_shelf_ids: Vec<u64> = sessions.iter().filter_map(|(_, shelf_id)| *shelf_id).collect();
-
-        let mut sorted_shelves = shelves;
-        sorted_shelves.sort_by_key(|s| s.id);
-
-        for shelf in sorted_shelves {
-            if !active_shelf_ids.contains(&shelf.id) {
-                log::info!("Auto-removing shelf {} to make room for new shelf", shelf.id);
-                self.delete_shelf(shelf.id).await?;
-                self.notify_event(ShelfEvent::ShelfDeleted(shelf.id));
-                DeviceOperation::close_shelf(shelf.id).into_future(self.ctx()).await;
-                return Ok(());
-            }
-        }
-
-        Ok(())
     }
 
     pub async fn delete_shelf(&self, shelf_id: u64) -> Result<bool, CoreError> {

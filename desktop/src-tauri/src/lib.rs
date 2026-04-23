@@ -484,7 +484,7 @@ fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel], is_p
     };
 
     let mut recent_submenu_builder = SubmenuBuilder::with_id(app_handle, "recent_shelves", "Recent Shelves");
-    for shelf in shelves.iter().filter(|s| !s.is_locked).take(10) {
+    for shelf in shelves.iter().take(10) {
         let shelf_id = format!("shelf_{}", shelf.id);
         let online_indicator = if shelf.is_online { "🟢 " } else { "" };
         let menu_text = format!("{}{} - {}", online_indicator, shelf.name, shelf.description);
@@ -615,6 +615,15 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
                 DeviceOperation::PasteClipboard(_shelf_id) => {
                     let selections = content_handlers::read_clipboard_selections(&app_handle).await.unwrap_or_default();
                     CORE.resolve(&mut handle, CoreOperationOutput::ResourceSelections(selections)).unwrap_or_default()
+                }
+                DeviceOperation::ShowUpgradeDialog(shelf_id) => {
+                    let label = format!("send-{}", shelf_id);
+                    if let Some(window) = app_handle.get_webview_window(&label) {
+                        let _ = window.emit("show-upgrade-dialog", ());
+                    } else {
+                        log::warn!("ShowUpgradeDialog: no window {label} found");
+                    }
+                    CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
                 }
             },
             CoreOperation::WebView(WebViewOperation::OpenUrl(url)) => {

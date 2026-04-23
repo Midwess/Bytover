@@ -8,7 +8,6 @@ use crate::app::view_models::selected_resource::SelectedResourceViewModel;
 use crate::app::{AppModel, BitBridge};
 use crate::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use crate::entities::shelf::Shelf;
-use crate::entities::transfer_session::TransferType;
 use crate::repository::local_resource::LocalResourceId;
 use core_services::db::repository::abstraction::table::Table;
 use crux_core::{App, Command};
@@ -37,8 +36,6 @@ pub struct ShelfItemViewModel {
     pub description: String,
     pub is_online: bool,
     pub is_resource_remove_allowed: bool,
-    pub is_locked: bool,
-    pub lock_reason: Option<String>,
     pub resources: Vec<SelectedResourceViewModel>,
 }
 
@@ -54,8 +51,6 @@ impl ShelfItemViewModel {
             description,
             is_online,
             is_resource_remove_allowed: true,
-            is_locked: false,
-            lock_reason: None,
             resources: shelf.resources.iter().map(SelectedResourceViewModel::from).collect(),
         }
     }
@@ -264,39 +259,23 @@ impl AppModule<BitBridge> for ShelfModule {
                     return Command::done();
                 }
 
-                let active_sessions: Vec<(u64, Option<u64>)> = model
-                    .transfer
-                    .sessions
-                    .iter()
-                    .filter(|s| !s.is_completed() && s.target.is_peer())
-                    .map(|s| match s.transfer_type {
-                        TransferType::Send { from_shelf_id } => (s.order_id, Some(from_shelf_id)),
-                        _ => (s.order_id, None),
-                    })
-                    .collect();
+                if is_shelf_limit_reached(model) {
+                    return Command::operate(DeviceOperation::ShowUpgradeDialog(shelf_id));
+                }
 
                 Command::handle_result(move |it| async move {
-                    it.app().ensure_shelf_limit(&active_sessions).await?;
                     it.app().create_shelf(shelf_id).await
                 })
             }
             Self::Event::CreateAndPasteFromClipboard { shelf_id } => {
                 let shelf_exists = model.shelf.get_shelf(shelf_id).is_some();
 
-                let active_sessions: Vec<(u64, Option<u64>)> = model
-                    .transfer
-                    .sessions
-                    .iter()
-                    .filter(|s| !s.is_completed() && s.target.is_peer())
-                    .map(|s| match s.transfer_type {
-                        TransferType::Send { from_shelf_id } => (s.order_id, Some(from_shelf_id)),
-                        _ => (s.order_id, None),
-                    })
-                    .collect();
+                if !shelf_exists && is_shelf_limit_reached(model) {
+                    return Command::operate(DeviceOperation::ShowUpgradeDialog(shelf_id));
+                }
 
                 Command::new(move |it| async move {
                     if !shelf_exists {
-                        let _ = it.app().ensure_shelf_limit(&active_sessions).await;
                         let _ = it.app().create_shelf(shelf_id).await;
                     }
                     let selections = DeviceOperation::paste_clipboard(shelf_id).into_future(it.clone()).await;
@@ -389,10 +368,14 @@ impl AppModule<BitBridge> for ShelfModule {
     }
 }
 
-fn compute_unlocked_shelf_ids(shelves: &[Shelf], limit: usize) -> std::collections::HashSet<u64> {
-    let mut sorted: Vec<&Shelf> = shelves.iter().collect();
-    sorted.sort_by(|a, b| a.id.cmp(&b.id));
-    sorted.into_iter().take(limit).map(|s| s.id).collect()
+fn is_shelf_limit_reached(model: &AppModel) -> bool {
+    model
+        .authentication
+        .capabilities
+        .as_ref()
+        .and_then(|c| c.shelf_limit())
+        .map(|limit| model.shelf.shelves.len() >= limit as usize)
+        .unwrap_or(false)
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]

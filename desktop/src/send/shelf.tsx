@@ -20,7 +20,6 @@ import {
     Loader2,
     ClipboardPaste,
     ExternalLink,
-    Lock,
 } from "lucide-react";
 import {Button} from "@/components/ui/button.tsx";
 import {
@@ -161,8 +160,6 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
     const p2pSession = core.useP2PSessionForShelf(shelfId)
     const isOnline = !!p2pSession
     const isResourceRemoveAllowed = currentShelf?.is_resource_remove_allowed ?? true
-    const isLocked = currentShelf?.is_locked ?? false
-    const lockReason = currentShelf?.lock_reason ?? "Upgrade to unlimited plan"
     const effectRan = useRef(false);
     const [isDraggingOver, setIsDraggingOver] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -276,14 +273,6 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
         return (
             <ShelfWrapper {...wrapperDockProps} shelfName={currentShelf?.name}>
                 <Loader2 className="h-6 w-6 text-foreground animate-spin"/>
-            </ShelfWrapper>
-        )
-    }
-
-    if (isLocked) {
-        return (
-            <ShelfWrapper {...wrapperDockProps} shelfName={currentShelf?.name}>
-                <LockedShelfNotice reason={lockReason} onUpgrade={() => invoke("show_settings_with_tab", {tab: "account"})} />
             </ShelfWrapper>
         )
     }
@@ -542,27 +531,3 @@ function MediaView(props: {
     );
 }
 
-function LockedShelfNotice({reason, onUpgrade}: {reason: string; onUpgrade: () => void}) {
-    return (
-        <div className="w-full h-full flex flex-col items-center justify-center gap-3 px-4 select-none">
-            <div className="w-9 h-9 rounded-full bg-white/[0.04] border border-white/[0.08] flex items-center justify-center">
-                <Lock className="w-4 h-4 text-white/50" strokeWidth={1.75} />
-            </div>
-            <div className="flex flex-col items-center gap-0.5 text-center">
-                <p className="text-[12px] text-white/85 font-semibold tracking-tight leading-tight">
-                    {reason}
-                </p>
-                <p className="text-[10.5px] text-white/45 font-medium leading-tight">
-                    One shelf at a time on Free
-                </p>
-            </div>
-            <Button
-                size="sm"
-                onClick={onUpgrade}
-                className="h-[24px] px-3 text-[11px] font-semibold bg-[#3b82f6] hover:bg-[#2563eb] text-white border-none rounded-full shadow-none"
-            >
-                Upgrade
-            </Button>
-        </div>
-    );
-}

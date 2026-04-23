@@ -28,6 +28,7 @@ pub enum DeviceOperation {
     },
     CloseShelf(u64),
     PasteClipboard(u64),
+    ShowUpgradeDialog(u64),
 }
 
 impl DeviceOperation {
@@ -62,6 +63,10 @@ impl DeviceOperation {
 
     pub fn close_shelf(shelf_id: u64) -> AppRequestBuilder<impl Future<Output = ()>> {
         AppCommand::request_from_shell(DeviceOperation::CloseShelf(shelf_id)).map(|_it| ())
+    }
+
+    pub fn show_upgrade_dialog(shelf_id: u64) -> AppRequestBuilder<impl Future<Output = ()>> {
+        AppCommand::request_from_shell(DeviceOperation::ShowUpgradeDialog(shelf_id)).map(|_it| ())
     }
 
     pub fn paste_clipboard(
