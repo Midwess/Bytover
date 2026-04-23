@@ -413,7 +413,7 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
             None => {
                 let window = WebviewWindowBuilder::new(self, "settings", WebviewUrl::App(format!("settings.html?tab={}", tab).into()))
                     .title("Settings")
-                    .inner_size(560.0, 373.0)
+                    .inner_size(728.0, 485.0)
                     .decorations(true)
                     .transparent(true)
                     .resizable(false)
@@ -446,7 +446,7 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
             None => {
                 let window = WebviewWindowBuilder::new(self, "settings", WebviewUrl::App("settings.html".into()))
                     .title("Settings")
-                    .inner_size(560.0, 373.0)
+                    .inner_size(728.0, 485.0)
                     .decorations(true)
                     .transparent(true)
                     .resizable(false)
