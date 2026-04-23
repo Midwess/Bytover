@@ -67,7 +67,7 @@ function ShelfWrapper({
 
     const activeEdge = dockEdge ?? progressEdge;
     const clampedProgress = Math.min(Math.max(progress, 0), 1);
-    const state2Opacity = isDocked ? 1 : clampedProgress;
+    const state2Opacity = clampedProgress;
     const Icon = activeEdge === "right" ? ChevronLeft : ChevronRight;
     const nameRotation = activeEdge === "left" ? "rotate(180deg)" : undefined;
     const innerEdgePos = activeEdge === "right" ? "left-0" : "right-0";
@@ -105,27 +105,27 @@ function ShelfWrapper({
                 {children}
             </div>
 
-            {activeEdge && state2Opacity > 0 && (
+            {activeEdge && (
                 <button
                     onClick={onExpand}
                     disabled={!isDocked}
                     aria-label="Expand shelf"
-                    className="group fixed inset-0 z-[200] p-0 bg-card cursor-pointer transition-[opacity,background-color] duration-150 hover:bg-muted disabled:cursor-default"
+                    className="group fixed inset-0 z-[200] p-0 bg-card cursor-pointer transition-[opacity,background-color] duration-200 ease-out hover:bg-muted disabled:cursor-default"
                     style={{
                         opacity: state2Opacity,
                         pointerEvents: isDocked ? "auto" : "none",
                     }}
                 >
                     <div
-                        className={`absolute top-0 bottom-0 w-6 ${innerEdgePos} flex flex-col items-center justify-between overflow-hidden`}
+                        className={`absolute top-0 bottom-0 w-[60px] ${innerEdgePos} flex flex-col items-center justify-between overflow-hidden`}
                     >
-                        <span className="shrink-0 pt-2 h-4 flex items-center justify-center">
+                        <span className="shrink-0 pt-3 h-6 flex items-center justify-center">
                             {isOnline && (
                                 <span
-                                    className="w-1.5 h-1.5 rounded-full"
+                                    className="w-2 h-2 rounded-full"
                                     style={{
                                         backgroundColor: "var(--color-greenSecondary)",
-                                        boxShadow: "0 0 4px var(--color-greenSecondary)",
+                                        boxShadow: "0 0 6px var(--color-greenSecondary)",
                                     }}
                                 />
                             )}
@@ -133,15 +133,15 @@ function ShelfWrapper({
                         <div className="flex-1 w-full flex items-center justify-center overflow-hidden">
                             {shelfName && (
                                 <span
-                                    className="text-[10px] font-medium text-foreground/60 group-hover:text-foreground transition-opacity duration-150 opacity-70 group-hover:opacity-100 whitespace-nowrap select-none tracking-wide"
+                                    className="text-xs font-medium text-foreground/60 group-hover:text-foreground transition-opacity duration-150 opacity-70 group-hover:opacity-100 whitespace-nowrap select-none tracking-wide"
                                     style={{writingMode: "vertical-rl", transform: nameRotation}}
                                 >
                                     {shelfName}
                                 </span>
                             )}
                         </div>
-                        <span className="w-full h-10 shrink-0 flex items-center justify-center text-foreground/80 group-hover:text-foreground">
-                            <Icon className="w-5 h-5"/>
+                        <span className="w-full h-16 shrink-0 flex items-center justify-center text-foreground/80 group-hover:text-foreground">
+                            <Icon className="w-[50px] h-[50px]"/>
                         </span>
                     </div>
                 </button>
