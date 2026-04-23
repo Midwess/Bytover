@@ -390,6 +390,20 @@ pub(crate) async fn process_event(event: impl Into<AppEvent> + Send + Sync + 'st
     process_effects(effects, app_handle).await;
 }
 
+pub(crate) fn is_shelf_limit_reached() -> bool {
+    let view = CORE.view();
+    let Some(limit) = view
+        .authentication
+        .as_ref()
+        .and_then(|a| a.capabilities.as_ref())
+        .and_then(|c| c.shelf_limit())
+    else {
+        return false;
+    };
+    let current = view.shelf.as_ref().map(|s| s.shelves.len()).unwrap_or(0);
+    current >= limit as usize
+}
+
 fn render(view: AppViewModel, app_handle: AppHandle) {
     let is_authorized = view.authentication.as_ref().map(|auth| auth.user.is_some()).unwrap_or(false);
 
@@ -621,7 +635,7 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
                     CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
                 }
                 DeviceOperation::NotifiedShelfLimitReached => {
-                    app_handle.show_fake_shelf();
+                    app_handle.show_fake_shelf(None);
                     CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
                 }
             },

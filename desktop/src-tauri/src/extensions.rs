@@ -106,7 +106,8 @@ pub trait AppHandleExt<R: Runtime> {
     fn show_send(&self) -> WebviewWindow<R>;
     fn show_shelf(&self, shelf_id: u64, mouse_pos: Option<tauri::PhysicalPosition<f64>>) -> WebviewWindow<R>;
     fn open_new_shelf_window(&self, mouse_pos: Option<tauri::PhysicalPosition<f64>>) -> WebviewWindow<R>;
-    fn show_fake_shelf(&self) -> WebviewWindow<R>;
+    fn open_new_shelf_gated(&self, mouse_pos: Option<tauri::PhysicalPosition<f64>>) -> WebviewWindow<R>;
+    fn show_fake_shelf(&self, mouse_pos: Option<tauri::PhysicalPosition<f64>>) -> WebviewWindow<R>;
     fn show_settings(&self) -> WebviewWindow<R>;
     fn show_settings_with_tab(&self, tab: &str) -> WebviewWindow<R>;
     fn hide_auth(&self);
@@ -382,7 +383,15 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
         self.show_shelf(shelf_id, mouse_pos)
     }
 
-    fn show_fake_shelf(&self) -> WebviewWindow<R> {
+    fn open_new_shelf_gated(&self, mouse_pos: Option<tauri::PhysicalPosition<f64>>) -> WebviewWindow<R> {
+        if crate::is_shelf_limit_reached() {
+            self.show_fake_shelf(mouse_pos)
+        } else {
+            self.open_new_shelf_window(mouse_pos)
+        }
+    }
+
+    fn show_fake_shelf(&self, mouse_pos: Option<tauri::PhysicalPosition<f64>>) -> WebviewWindow<R> {
         let label = "fake-shelf";
         if let Some(existing) = self.get_webview_window(label) {
             let _ = existing.set_focus();
@@ -405,21 +414,43 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
             .expect("failed to create fake shelf window");
 
         let monitors = self.available_monitors().unwrap_or_default();
-        if !monitors.is_empty() {
-            let primary_hash = self.primary_monitor().ok().flatten().map(|m| monitor_hash(&m));
-            let mut candidates: Vec<(u64, usize, usize, f64, f64, f64, f64)> = Vec::new();
-            for monitor in &monitors {
-                let mh = monitor_hash(monitor);
-                let (num_cols, num_rows) = grid_dimensions(monitor);
-                for col in 0..num_cols {
-                    for row in 0..num_rows {
-                        let (cx, cy, wx, wy) = slot_physics(monitor, col, row);
-                        candidates.push((mh, col, row, cx, cy, wx, wy));
-                    }
+        if monitors.is_empty() {
+            animate_window(window.clone());
+            return window;
+        }
+
+        let mut candidates: Vec<(u64, usize, usize, f64, f64, f64, f64, f64, f64)> = Vec::new();
+        for monitor in &monitors {
+            let mh = monitor_hash(monitor);
+            let scale = monitor.scale_factor();
+            let win_w = WIN_WIDTH * scale;
+            let win_h = WIN_HEIGHT * scale;
+            let (num_cols, num_rows) = grid_dimensions(monitor);
+            for col in 0..num_cols {
+                for row in 0..num_rows {
+                    let (cx, cy, wx, wy) = slot_physics(monitor, col, row);
+                    candidates.push((mh, col, row, cx, cy, wx, wy, wx + win_w, wy + win_h));
                 }
             }
+        }
 
-            let chosen = if let Ok(reg) = SHELF_REGISTRY.lock() {
+        let primary_hash = self.primary_monitor().ok().flatten().map(|m| monitor_hash(&m));
+        let chosen = if let Ok(reg) = SHELF_REGISTRY.lock() {
+            if let Some(pos) = mouse_pos {
+                candidates
+                    .iter()
+                    .filter(|c| {
+                        let free = !reg.slots.contains_key(&(c.0, c.1, c.2));
+                        let under_mouse = pos.x >= c.5 && pos.x < c.7 && pos.y >= c.6 && pos.y < c.8;
+                        free && !under_mouse
+                    })
+                    .min_by(|a, b| {
+                        let da = (pos.x - a.3).powi(2) + (pos.y - a.4).powi(2);
+                        let db = (pos.x - b.3).powi(2) + (pos.y - b.4).powi(2);
+                        da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+                    })
+                    .map(|c| (c.5, c.6))
+            } else {
                 let mut sorted = candidates.clone();
                 sorted.sort_by(|a, b| {
                     let a_primary = primary_hash.map_or(false, |ph| ph == a.0);
@@ -430,16 +461,16 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
                     .iter()
                     .find(|c| !reg.slots.contains_key(&(c.0, c.1, c.2)))
                     .map(|c| (c.5, c.6))
-            } else {
-                None
-            };
-
-            if let Some((wx, wy)) = chosen {
-                let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition {
-                    x: wx as i32,
-                    y: wy as i32,
-                }));
             }
+        } else {
+            None
+        };
+
+        if let Some((wx, wy)) = chosen {
+            let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition {
+                x: wx as i32,
+                y: wy as i32,
+            }));
         }
 
         animate_window(window.clone());
