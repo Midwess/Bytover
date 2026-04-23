@@ -1,6 +1,6 @@
 use crate::app::core::extensions::{CoreCommandContextUtils, CoreCommandUtils};
 use crate::app::{AppModel, BitBridge};
-use crate::entities::capabilities::UserCapabilities;
+use crate::entities::capabilities::{UserCapabilities, EXPECTED_CAPABILITIES_VERSION};
 use crate::entities::user::User;
 use core_services::utils::string::StringExt;
 use crux_core::{App, Command};
@@ -97,6 +97,22 @@ impl AppModule<BitBridge> for AuthenticationModule {
                 Command::all(vec![Command::render(), fetch_caps])
             }
             AuthenticationEvent::CapabilitiesLoaded(caps) => {
+                if caps.capabilities_version > EXPECTED_CAPABILITIES_VERSION {
+                    log::error!(
+                        "Server sent capabilities_version={} but client expects <= {}; refusing to apply. Update the client.",
+                        caps.capabilities_version,
+                        EXPECTED_CAPABILITIES_VERSION
+                    );
+                    return Command::done();
+                }
+                if caps.capabilities_version < EXPECTED_CAPABILITIES_VERSION {
+                    log::warn!(
+                        "Server sent capabilities_version={} older than client expects ({}); applying with defaults where missing.",
+                        caps.capabilities_version,
+                        EXPECTED_CAPABILITIES_VERSION
+                    );
+                }
+
                 let limit = caps.shelf_limit();
                 model.authentication.capabilities.replace(caps);
 

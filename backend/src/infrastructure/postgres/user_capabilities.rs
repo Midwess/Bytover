@@ -110,42 +110,5 @@ impl UserCapabilitiesRepository for UserCapabilitiesPostgresRepository {
         })
     }
 
-    async fn set_plan(&self, user_order_id: u64, plan: Plan) -> Result<UserCapabilities, RepositoryError> {
-        let defaults = defaults_for(plan);
-        let existing = model::Entity::find_by_id(user_order_id as i64)
-            .one(&self.db)
-            .await
-            .map_err(|e| RepositoryError::DbError(e.to_string()))?;
-
-        let now = chrono::Utc::now().into();
-        match existing {
-            Some(m) => {
-                let mut active: model::ActiveModel = m.into();
-                active.plan = Set(plan.as_i16());
-                active.password_encryption_allowed = Set(defaults.password_encryption_allowed);
-                active.max_files_per_transfer = Set(defaults.max_files_per_transfer as i32);
-                active.total_transfer_bytes_lifetime_cap = Set(defaults.total_transfer_bytes_lifetime_cap as i64);
-                active.max_visible_shelves = Set(defaults.max_visible_shelves as i32);
-                active.updated_at = Set(now);
-                let updated = active.update(&self.db).await.map_err(|e| RepositoryError::DbError(e.to_string()))?;
-                Ok(Self::model_to_entity(updated))
-            }
-            None => {
-                let active = model::ActiveModel {
-                    user_order_id: Set(user_order_id as i64),
-                    plan: Set(plan.as_i16()),
-                    password_encryption_allowed: Set(defaults.password_encryption_allowed),
-                    max_files_per_transfer: Set(defaults.max_files_per_transfer as i32),
-                    total_transfer_bytes_lifetime_cap: Set(defaults.total_transfer_bytes_lifetime_cap as i64),
-                    total_transfer_bytes_used: Set(0),
-                    max_visible_shelves: Set(defaults.max_visible_shelves as i32),
-                    created_at: Set(now),
-                    updated_at: Set(now),
-                };
-                let inserted = active.insert(&self.db).await.map_err(|e| RepositoryError::DbError(e.to_string()))?;
-                Ok(Self::model_to_entity(inserted))
-            }
-        }
-    }
 }
 
