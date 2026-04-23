@@ -66,10 +66,11 @@ function ShelfWrapper({
     }
 
     const activeEdge = dockEdge ?? progressEdge;
-    const effectiveProgress = isDocked ? 1 : Math.min(Math.max(progress, 0), 1);
-    const contentOpacity = 1 - effectiveProgress;
+    const clampedProgress = Math.min(Math.max(progress, 0), 1);
+    const state2Opacity = isDocked ? 1 : clampedProgress;
     const Icon = activeEdge === "right" ? ChevronLeft : ChevronRight;
     const nameRotation = activeEdge === "left" ? "rotate(180deg)" : undefined;
+    const innerEdgePos = activeEdge === "right" ? "left-0" : "right-0";
 
     return (
         <Card
@@ -87,13 +88,7 @@ function ShelfWrapper({
                 : 'border-white/20'
             }
             `}>
-            <div
-                className="absolute inset-0 transition-opacity duration-150"
-                style={{
-                    opacity: contentOpacity,
-                    pointerEvents: isDocked ? "none" : "auto",
-                }}
-            >
+            <div className="absolute inset-0">
                 <div
                     className="flex flex-col absolute top-0 left-0 right-0 h-5 bg-gradient-to-b from-card to-transparent pointer-events-none z-20"/>
                 <div data-tauri-drag-region
@@ -110,36 +105,45 @@ function ShelfWrapper({
                 {children}
             </div>
 
-            {isDocked && activeEdge && (
+            {activeEdge && state2Opacity > 0 && (
                 <button
                     onClick={onExpand}
+                    disabled={!isDocked}
                     aria-label="Expand shelf"
-                    className="group absolute inset-0 z-50 flex flex-col items-center justify-between p-0 bg-transparent hover:bg-muted/20 transition-colors cursor-pointer animate-in fade-in duration-200"
+                    className="group absolute inset-0 z-50 p-0 bg-card cursor-pointer transition-[opacity,background-color] duration-150 hover:bg-muted disabled:cursor-default"
+                    style={{
+                        opacity: state2Opacity,
+                        pointerEvents: isDocked ? "auto" : "none",
+                    }}
                 >
-                    <span className="shrink-0 pt-2 h-4 flex items-center justify-center">
-                        {isOnline && (
-                            <span
-                                className="w-1.5 h-1.5 rounded-full"
-                                style={{
-                                    backgroundColor: "var(--color-greenSecondary)",
-                                    boxShadow: "0 0 4px var(--color-greenSecondary)",
-                                }}
-                            />
-                        )}
-                    </span>
-                    <div className="flex-1 w-full flex items-center justify-center overflow-hidden">
-                        {shelfName && (
-                            <span
-                                className="text-[10px] font-medium text-foreground/60 group-hover:text-foreground transition-opacity duration-150 opacity-70 group-hover:opacity-100 whitespace-nowrap select-none tracking-wide"
-                                style={{writingMode: "vertical-rl", transform: nameRotation}}
-                            >
-                                {shelfName}
-                            </span>
-                        )}
+                    <div
+                        className={`absolute top-0 bottom-0 w-6 ${innerEdgePos} flex flex-col items-center justify-between overflow-hidden`}
+                    >
+                        <span className="shrink-0 pt-2 h-4 flex items-center justify-center">
+                            {isOnline && (
+                                <span
+                                    className="w-1.5 h-1.5 rounded-full"
+                                    style={{
+                                        backgroundColor: "var(--color-greenSecondary)",
+                                        boxShadow: "0 0 4px var(--color-greenSecondary)",
+                                    }}
+                                />
+                            )}
+                        </span>
+                        <div className="flex-1 w-full flex items-center justify-center overflow-hidden">
+                            {shelfName && (
+                                <span
+                                    className="text-[10px] font-medium text-foreground/60 group-hover:text-foreground transition-opacity duration-150 opacity-70 group-hover:opacity-100 whitespace-nowrap select-none tracking-wide"
+                                    style={{writingMode: "vertical-rl", transform: nameRotation}}
+                                >
+                                    {shelfName}
+                                </span>
+                            )}
+                        </div>
+                        <span className="w-full h-10 shrink-0 flex items-center justify-center text-foreground/80 group-hover:text-foreground">
+                            <Icon className="w-5 h-5"/>
+                        </span>
                     </div>
-                    <span className="w-full h-10 shrink-0 flex items-center justify-center text-foreground/80 group-hover:text-foreground">
-                        <Icon className="w-5 h-5"/>
-                    </span>
                 </button>
             )}
         </Card>

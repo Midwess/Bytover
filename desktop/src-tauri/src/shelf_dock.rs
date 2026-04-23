@@ -415,6 +415,7 @@ pub fn begin_expand<R: Runtime>(app: &AppHandle<R>, window: &WebviewWindow<R>) {
     };
 
     release_dock(&label);
+    emit_dock_progress(window, None, 0.0);
 
     let app_clone = app.clone();
     let label_for_emit = label.clone();
