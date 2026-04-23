@@ -37,7 +37,7 @@ export function TransferPasswordField({value, onChange, disabled, className, max
         <button
             type="button"
             onClick={handleClick}
-            className={`${className ?? ""} flex items-center gap-1.5 px-2.5 text-left rounded-md hover:bg-secondary/70 transition-colors`}
+            className={`${className ?? ""} w-full flex items-center gap-1.5 px-2.5 text-left rounded-md hover:bg-secondary/70 transition-colors`}
         >
             <Lock className="h-3.5 w-3.5 text-blue-400 shrink-0" />
             <span className="text-xs font-medium text-blue-400 truncate">
