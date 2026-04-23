@@ -541,3 +541,28 @@ function MediaView(props: {
         </Card>
     );
 }
+
+function LockedShelfNotice({reason, onUpgrade}: {reason: string; onUpgrade: () => void}) {
+    return (
+        <div className="w-full h-full flex flex-col items-center justify-center gap-3 px-4 select-none">
+            <div className="w-9 h-9 rounded-full bg-white/[0.04] border border-white/[0.08] flex items-center justify-center">
+                <Lock className="w-4 h-4 text-white/50" strokeWidth={1.75} />
+            </div>
+            <div className="flex flex-col items-center gap-0.5 text-center">
+                <p className="text-[12px] text-white/85 font-semibold tracking-tight leading-tight">
+                    {reason}
+                </p>
+                <p className="text-[10.5px] text-white/45 font-medium leading-tight">
+                    One shelf at a time on Free
+                </p>
+            </div>
+            <Button
+                size="sm"
+                onClick={onUpgrade}
+                className="h-[24px] px-3 text-[11px] font-semibold bg-[#3b82f6] hover:bg-[#2563eb] text-white border-none rounded-full shadow-none"
+            >
+                Upgrade
+            </Button>
+        </div>
+    );
+}

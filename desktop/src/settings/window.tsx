@@ -27,6 +27,8 @@ import {
 } from "@/lib/updater"
 import {motion, AnimatePresence} from "motion/react"
 import { openUrl } from "@tauri-apps/plugin-opener"
+import core from "@/core.ts"
+import {PlanVariantPaid} from "shared_types/types/shared_types"
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>
@@ -56,6 +58,10 @@ function SettingsWindow() {
     const [installProgress, setInstallProgress] = useState(0)
     const [autoLaunchEnabled, setAutoLaunchEnabled] = useState(false)
     const [isLoadingAutoLaunch, setIsLoadingAutoLaunch] = useState(true)
+
+    useEffect(() => {
+        core.launch()
+    }, [])
 
     useEffect(() => {
         getVersion().then(setVersion)
@@ -456,7 +462,8 @@ function PlanComparison({currentPlan, onUpgrade}: {currentPlan: PlanKind; onUpgr
 }
 
 function AccountContent({onSignOut}: {onSignOut: () => void}) {
-    const currentPlan: PlanKind = "free"
+    const auth = core.useAuthentication()
+    const currentPlan: PlanKind = auth?.capabilities?.plan instanceof PlanVariantPaid ? "paid" : "free"
     const handleUpgrade = () => {}
 
     return (

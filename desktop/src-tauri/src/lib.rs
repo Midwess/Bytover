@@ -424,7 +424,12 @@ fn render(view: AppViewModel, app_handle: AppHandle) {
         app_handle.hide_auth();
 
         if let Some(shelf_view) = &view.shelf {
-            let is_paid = false;
+            let is_paid = view
+                .authentication
+                .as_ref()
+                .and_then(|auth| auth.capabilities.as_ref())
+                .map(|caps| caps.is_paid())
+                .unwrap_or(false);
             update_tray_menu(&app_handle, &shelf_view.shelves, is_paid);
         }
     }
