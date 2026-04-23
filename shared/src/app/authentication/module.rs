@@ -97,8 +97,17 @@ impl AppModule<BitBridge> for AuthenticationModule {
                 Command::all(vec![Command::render(), fetch_caps])
             }
             AuthenticationEvent::CapabilitiesLoaded(caps) => {
+                let limit = caps.shelf_limit();
                 model.authentication.capabilities.replace(caps);
-                Command::render()
+
+                let cleanup = match limit {
+                    Some(limit) => Command::handle_result(move |it| async move {
+                        it.app().enforce_shelf_limit(limit as usize).await
+                    }),
+                    None => Command::done(),
+                };
+
+                Command::all(vec![Command::render(), cleanup])
             }
             AuthenticationEvent::UnAuthorized => Command::render(),
             AuthenticationEvent::Feedback { email, message } => {

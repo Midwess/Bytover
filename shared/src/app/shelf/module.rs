@@ -136,7 +136,7 @@ impl AppModule<BitBridge> for ShelfModule {
             }
             Self::Event::AddResources { shelf_id, selections } => {
                 let Some(shelf) = model.shelf.get_shelf(shelf_id) else {
-                    return Command::operate(DialogOperation::Toast(format!("Shelf not found {shelf_id:?}")));
+                    return Command::operate(DeviceOperation::ShowUpgradeDialog(shelf_id));
                 };
 
                 let mut commands = vec![];
