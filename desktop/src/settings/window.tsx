@@ -397,26 +397,77 @@ function GeneralContent({enabled, isLoading, onToggle}: {
     )
 }
 
-function AccountContent({onSignOut}: {onSignOut: () => void}) {
-    const handleUpgrade = () => {}
+type PlanKind = "free" | "paid"
+
+function PlanComparison({currentPlan, onUpgrade}: {currentPlan: PlanKind; onUpgrade: () => void}) {
+    const rows: {label: string; free: string; paid: string}[] = [
+        {label: "Files per transfer", free: "10", paid: "Unlimited"},
+        {label: "Lifetime transfer", free: "5 GB", paid: "No cap"},
+        {label: "Active shelves", free: "1", paid: "Unlimited"},
+        {label: "Password-protected links", free: "—", paid: "Included"},
+    ]
 
     return (
-        <div className="space-y-6">
-            <SettingsSection title="Subscription">
-                <SettingsRow
-                    label="Bytover Paid"
-                    description="Unlock password-protected transfers, unlimited files, and no lifetime cap."
-                    last={true}
+        <div className="px-4 py-3">
+            <div className="grid grid-cols-[1fr_80px_80px] gap-x-4 pb-2 border-b border-white/5">
+                <div />
+                <div className="flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/40">
+                    Free
+                    {currentPlan === "free" && (
+                        <span className="px-1.5 py-[1px] rounded-full bg-amber-500/15 text-amber-300 text-[9px] font-bold tracking-wide">
+                            YOU
+                        </span>
+                    )}
+                </div>
+                <div className="flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/40">
+                    Paid
+                    {currentPlan === "paid" && (
+                        <span className="px-1.5 py-[1px] rounded-full bg-emerald-500/15 text-emerald-300 text-[9px] font-bold tracking-wide">
+                            YOU
+                        </span>
+                    )}
+                </div>
+            </div>
+            {rows.map((r, i) => (
+                <div
+                    key={i}
+                    className={`grid grid-cols-[1fr_80px_80px] gap-x-4 py-2 text-[12px] items-center ${
+                        i < rows.length - 1 ? "border-b border-white/[0.03]" : ""
+                    }`}
                 >
+                    <div className="text-white/80 font-medium">{r.label}</div>
+                    <div className="text-center text-white/40 tabular-nums">{r.free}</div>
+                    <div className="text-center text-white/95 font-semibold tabular-nums">{r.paid}</div>
+                </div>
+            ))}
+            {currentPlan === "free" && (
+                <div className="pt-3 mt-3 border-t border-white/5 flex items-center justify-between">
+                    <div className="flex flex-col">
+                        <span className="text-[13px] font-semibold text-white">$20 · one-time</span>
+                        <span className="text-[11px] text-white/40">Lifetime access. No subscription.</span>
+                    </div>
                     <Button
                         size="sm"
-                        onClick={handleUpgrade}
+                        onClick={onUpgrade}
                         className="h-[28px] px-4 text-[12px] bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white border-none rounded-full shadow-[0_0_12px_rgba(251,146,60,0.25)]"
                     >
                         <Sparkles className="w-3 h-3 mr-1" />
                         Upgrade
                     </Button>
-                </SettingsRow>
+                </div>
+            )}
+        </div>
+    )
+}
+
+function AccountContent({onSignOut}: {onSignOut: () => void}) {
+    const currentPlan: PlanKind = "free"
+    const handleUpgrade = () => {}
+
+    return (
+        <div className="space-y-6">
+            <SettingsSection title="Subscription">
+                <PlanComparison currentPlan={currentPlan} onUpgrade={handleUpgrade} />
             </SettingsSection>
 
             <SettingsSection title="Current Session">
