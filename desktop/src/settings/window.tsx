@@ -409,9 +409,9 @@ function PlanComparison({currentPlan, onUpgrade}: {currentPlan: PlanKind; onUpgr
 
     return (
         <div className="px-4 py-3">
-            <div className="grid grid-cols-[1fr_80px_80px] gap-x-4 pb-2 border-b border-white/5">
-                <div />
-                <div className="flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/40">
+            <div className="grid grid-cols-[auto_80px_80px] items-center">
+                <div className="pb-2 pr-6" />
+                <div className="pb-2 px-2 flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/40">
                     Free
                     {currentPlan === "free" && (
                         <span className="px-1.5 py-[1px] rounded-full bg-amber-500/15 text-amber-300 text-[9px] font-bold tracking-wide">
@@ -419,7 +419,7 @@ function PlanComparison({currentPlan, onUpgrade}: {currentPlan: PlanKind; onUpgr
                         </span>
                     )}
                 </div>
-                <div className="flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/40">
+                <div className="pb-2 px-2 flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/40">
                     Paid
                     {currentPlan === "paid" && (
                         <span className="px-1.5 py-[1px] rounded-full bg-emerald-500/15 text-emerald-300 text-[9px] font-bold tracking-wide">
@@ -427,19 +427,16 @@ function PlanComparison({currentPlan, onUpgrade}: {currentPlan: PlanKind; onUpgr
                         </span>
                     )}
                 </div>
+                <div className="col-span-full border-t border-white/5" />
+                {rows.map((r, i) => (
+                    <React.Fragment key={i}>
+                        <div className="py-2 pr-6 text-[12px] text-white/80 font-medium">{r.label}</div>
+                        <div className="py-2 px-2 text-[12px] text-center text-white/40 tabular-nums">{r.free}</div>
+                        <div className="py-2 px-2 text-[12px] text-center text-white/95 font-semibold tabular-nums">{r.paid}</div>
+                        {i < rows.length - 1 && <div className="col-span-full border-t border-white/[0.03]" />}
+                    </React.Fragment>
+                ))}
             </div>
-            {rows.map((r, i) => (
-                <div
-                    key={i}
-                    className={`grid grid-cols-[1fr_80px_80px] gap-x-4 py-2 text-[12px] items-center ${
-                        i < rows.length - 1 ? "border-b border-white/[0.03]" : ""
-                    }`}
-                >
-                    <div className="text-white/80 font-medium">{r.label}</div>
-                    <div className="text-center text-white/40 tabular-nums">{r.free}</div>
-                    <div className="text-center text-white/95 font-semibold tabular-nums">{r.paid}</div>
-                </div>
-            ))}
             {currentPlan === "free" && (
                 <div className="pt-3 mt-3 border-t border-white/5 flex items-center justify-between">
                     <div className="flex flex-col">
