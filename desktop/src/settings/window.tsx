@@ -18,7 +18,6 @@ import {
     ExternalLink,
     Shield,
     Search,
-    Sparkles
 } from "lucide-react"
 import {
     checkForUpdate,
@@ -401,10 +400,10 @@ type PlanKind = "free" | "paid"
 
 function PlanComparison({currentPlan, onUpgrade}: {currentPlan: PlanKind; onUpgrade: () => void}) {
     const rows: {label: string; free: string; paid: string}[] = [
-        {label: "Files per transfer", free: "10", paid: "Unlimited"},
-        {label: "Lifetime transfer", free: "5 GB", paid: "No cap"},
-        {label: "Active shelves", free: "1", paid: "Unlimited"},
-        {label: "Password-protected links", free: "—", paid: "Included"},
+        {label: "Files", free: "10", paid: "Unlimited"},
+        {label: "Transfer", free: "5 GB", paid: "No cap"},
+        {label: "Shelves", free: "1", paid: "Unlimited"},
+        {label: "Passwords", free: "—", paid: "Included"},
     ]
 
     return (
@@ -446,9 +445,8 @@ function PlanComparison({currentPlan, onUpgrade}: {currentPlan: PlanKind; onUpgr
                     <Button
                         size="sm"
                         onClick={onUpgrade}
-                        className="h-[28px] px-4 text-[12px] bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white border-none rounded-full shadow-[0_0_12px_rgba(251,146,60,0.25)]"
+                        className="h-[28px] px-4 text-[12px] font-semibold bg-[#3b82f6] hover:bg-[#2563eb] text-white border-none rounded-full shadow-none"
                     >
-                        <Sparkles className="w-3 h-3 mr-1" />
                         Upgrade
                     </Button>
                 </div>
