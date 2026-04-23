@@ -5,7 +5,7 @@ import { Transfer } from "./transfer.tsx";
 import core from "@/core.ts";
 import {useOverlayScrollbars} from "@/hooks/use-overlay-scrollbar.ts";
 import {getCurrentWindow, LogicalSize} from "@tauri-apps/api/window";
-import {ArrowRight, Minus, X} from "lucide-react";
+import {ArrowRight} from "lucide-react";
 import {Button} from "@/components/ui/button.tsx";
 import {invoke} from "@tauri-apps/api/core";
 
@@ -95,35 +95,18 @@ function Window() {
 }
 
 function UpgradeOverlay() {
-    const handleClose = () => getCurrentWindow().close()
     const onUpgrade = () => {
         invoke("show_settings_with_tab", {tab: "account"})
         getCurrentWindow().close()
     }
-    const stopDrag = (e: React.MouseEvent) => e.stopPropagation()
     return (
-        <div
-            data-tauri-drag-region
-            className="absolute inset-0 z-[200] bg-card flex flex-col items-stretch px-4 pt-6 pb-4 select-none cursor-grab active:cursor-grabbing rounded-[inherit]"
-        >
-            <div data-tauri-drag-region className="absolute top-0 left-0 right-0 h-6 flex justify-center items-center pointer-events-none">
-                <Minus className="scale-x-200 scale-y-200 text-primary" />
-            </div>
-            <button
-                onClick={handleClose}
-                onMouseDown={stopDrag}
-                aria-label="Close"
-                className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-muted-foreground/15 hover:bg-muted-foreground/30 flex items-center justify-center cursor-pointer"
-            >
-                <X className="w-3 h-3 text-foreground" />
-            </button>
-            <div className="flex-1 flex items-center justify-center pointer-events-none">
+        <div className="absolute inset-x-0 top-8 bottom-0 z-30 bg-card flex flex-col items-stretch px-4 pb-4 select-none pointer-events-none">
+            <div className="flex-1 flex items-center justify-center">
                 <p className="text-[12px] text-white/70 text-center">You've reached your shelf limit</p>
             </div>
             <Button
                 onClick={onUpgrade}
-                onMouseDown={stopDrag}
-                className="w-full h-[28px] px-4 text-[11px] font-semibold bg-bluePrimary text-white hover:bg-bluePrimary/90 border-none rounded-md shadow-none"
+                className="w-full h-[28px] px-4 text-[11px] font-semibold bg-bluePrimary text-white hover:bg-bluePrimary/90 border-none rounded-md shadow-none pointer-events-auto"
             >
                 Unlock more
             </Button>
