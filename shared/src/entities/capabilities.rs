@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+pub const EXPECTED_CAPABILITIES_VERSION: u32 = 1;
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Plan {
     #[default]
