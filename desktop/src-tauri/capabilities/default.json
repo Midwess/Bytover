@@ -5,6 +5,7 @@
   "windows": [
     "send",
     "send-*",
+    "fake-shelf-*",
     "auth",
     "intro",
     "receive",
