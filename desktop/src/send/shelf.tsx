@@ -110,7 +110,7 @@ function ShelfWrapper({
                     onClick={onExpand}
                     disabled={!isDocked}
                     aria-label="Expand shelf"
-                    className="group fixed inset-0 z-[200] p-0 bg-card cursor-pointer transition-[opacity,background-color] duration-200 ease-out hover:bg-muted disabled:cursor-default"
+                    className="group fixed top-[14px] left-[14px] w-[200px] h-[230px] z-[200] p-0 rounded-[30px] border-2 border-white/20 bg-card overflow-hidden cursor-pointer transition-[opacity,background-color] duration-200 ease-out hover:bg-muted disabled:cursor-default"
                     style={{
                         opacity: state2Opacity,
                         pointerEvents: isDocked ? "auto" : "none",
@@ -131,7 +131,7 @@ function ShelfWrapper({
                             )}
                         </span>
                         <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
-                            <Minus className="pointer-events-none scale-x-200 scale-y-200 text-primary transition-transform duration-200 group-hover:scale-x-[3] group-hover:scale-y-[2.5]"/>
+                            <Minus className="pointer-events-none rotate-90 scale-x-200 scale-y-200 text-primary transition-transform duration-200 group-hover:scale-x-[3] group-hover:scale-y-[2.5]"/>
                         </span>
                         <div className="absolute bottom-3 left-1/2 -translate-x-1/2 max-h-[calc(50%-2rem)] flex items-end justify-center overflow-hidden">
                             {shelfName && (
