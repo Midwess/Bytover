@@ -110,7 +110,7 @@ function ShelfWrapper({
                     onClick={onExpand}
                     disabled={!isDocked}
                     aria-label="Expand shelf"
-                    className={`dark group fixed top-[7.5px] left-0 right-0 h-[230px] z-[200] p-0 ${isDocked ? "rounded-[20px]" : "rounded-[30px]"} border-2 border-white/20 bg-card text-card-foreground overflow-hidden cursor-pointer transition-[opacity,background-color,border-radius] duration-200 ease-out hover:bg-muted disabled:cursor-default`}
+                    className={`dark group fixed top-[7.5px] left-0 right-0 h-[230px] z-[200] p-0 ${isDocked ? "rounded-[26px]" : "rounded-[30px]"} border-2 border-white/20 bg-card text-card-foreground overflow-hidden cursor-pointer transition-[opacity,background-color,border-radius] duration-200 ease-out hover:bg-muted disabled:cursor-default`}
                     style={{
                         opacity: state2Opacity,
                         pointerEvents: isDocked ? "auto" : "none",
