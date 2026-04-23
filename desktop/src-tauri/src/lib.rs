@@ -468,7 +468,7 @@ fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel], is_p
         return;
     };
     let upgrade_item = if !is_paid {
-        MenuItemBuilder::with_id("upgrade", "Upgrade to Paid…").build(app_handle).ok()
+        MenuItemBuilder::with_id("upgrade", "Upgrade").build(app_handle).ok()
     } else {
         None
     };
