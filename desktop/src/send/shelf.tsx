@@ -117,9 +117,9 @@ function ShelfWrapper({
                     }}
                 >
                     <div
-                        className={`absolute top-0 bottom-0 w-[60px] ${innerEdgePos} flex flex-col items-center justify-between overflow-hidden`}
+                        className={`absolute top-0 bottom-0 w-[48px] ${innerEdgePos} overflow-hidden`}
                     >
-                        <span className="shrink-0 pt-3 h-6 flex items-center justify-center">
+                        <span className="absolute top-3 left-1/2 -translate-x-1/2 h-4 flex items-center justify-center">
                             {isOnline && (
                                 <span
                                     className="w-2 h-2 rounded-full"
@@ -130,19 +130,19 @@ function ShelfWrapper({
                                 />
                             )}
                         </span>
-                        <div className="flex-1 w-full flex items-center justify-center overflow-hidden">
+                        <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center text-foreground/80 group-hover:text-foreground">
+                            <Icon className="w-5 h-5"/>
+                        </span>
+                        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 max-h-[calc(50%-2rem)] flex items-end justify-center overflow-hidden">
                             {shelfName && (
                                 <span
-                                    className="text-xs font-medium text-foreground/60 group-hover:text-foreground transition-opacity duration-150 opacity-70 group-hover:opacity-100 whitespace-nowrap select-none tracking-wide"
+                                    className="text-[10px] font-medium text-foreground/60 group-hover:text-foreground transition-opacity duration-150 opacity-70 group-hover:opacity-100 whitespace-nowrap select-none tracking-wide"
                                     style={{writingMode: "vertical-rl", transform: nameRotation}}
                                 >
                                     {shelfName}
                                 </span>
                             )}
                         </div>
-                        <span className="w-full h-16 shrink-0 flex items-center justify-center text-foreground/80 group-hover:text-foreground">
-                            <Icon className="w-[50px] h-[50px]"/>
-                        </span>
                     </div>
                 </button>
             )}
