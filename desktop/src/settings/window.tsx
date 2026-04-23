@@ -37,6 +37,14 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
 
 type SettingsTab = "general" | "about" | "updates" | "account"
 
+const IS_MACOS = typeof navigator !== "undefined" && /Mac/i.test(navigator.userAgent)
+
+function isValidTab(value: string | null): value is SettingsTab {
+    if (value === "general" || value === "about" || value === "account") return true
+    if (value === "updates") return !IS_MACOS
+    return false
+}
+
 interface UpdateStatus {
     available: boolean
     version: string | null
@@ -48,7 +56,7 @@ function SettingsWindow() {
     const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
         const params = new URLSearchParams(window.location.search)
         const tab = params.get("tab")
-        return (tab as SettingsTab) || "general"
+        return isValidTab(tab) ? tab : "general"
     })
     const [version, setVersion] = useState<string>("")
     const [isCheckingUpdate, setIsCheckingUpdate] = useState(false)
@@ -67,6 +75,7 @@ function SettingsWindow() {
     }, [])
 
     useEffect(() => {
+        if (IS_MACOS) return
         checkForUpdate()
             .then(setUpdateStatus)
             .catch(console.error)
@@ -81,9 +90,8 @@ function SettingsWindow() {
 
     useEffect(() => {
         const unlistenPromise = listen<string>("settings-set-tab", (event) => {
-            const next = event.payload as SettingsTab
-            if (next === "general" || next === "about" || next === "updates" || next === "account") {
-                setActiveTab(next)
+            if (isValidTab(event.payload)) {
+                setActiveTab(event.payload)
             }
         })
         return () => {
@@ -158,13 +166,13 @@ function SettingsWindow() {
             icon: <User />,
             color: "bg-[#f39c12]"
         },
-        {
-            id: "updates",
+        ...(IS_MACOS ? [] : [{
+            id: "updates" as const,
             label: "Updates",
             description: "Keep your Bytover application up to date with the latest features.",
             icon: <RefreshCw />,
             color: "bg-[#3498db]"
-        },
+        }]),
         {
             id: "about",
             label: "About",
