@@ -695,18 +695,6 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub async fn run() {
-    // GTK3 on native Wayland ignores set_keep_above, visible_on_all_workspaces,
-    // and absolute window positioning — the shelf UI breaks without them. Route
-    // GTK through XWayland so _NET_WM_STATE_ABOVE etc. work as on X11. Only set
-    // it when DISPLAY is available (XWayland running) and the user hasn't
-    // chosen their own backend.
-    #[cfg(target_os = "linux")]
-    {
-        if std::env::var_os("GDK_BACKEND").is_none() && std::env::var_os("DISPLAY").is_some() {
-            std::env::set_var("GDK_BACKEND", "x11");
-        }
-    }
-
     #[cfg(feature = "log-file")]
     {
         WriteLogger::init(LevelFilter::Trace, Config::default(), File::create("bytover.log").unwrap()).unwrap();
