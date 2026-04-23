@@ -5,7 +5,7 @@ import { Transfer } from "./transfer.tsx";
 import core from "@/core.ts";
 import {useOverlayScrollbars} from "@/hooks/use-overlay-scrollbar.ts";
 import {getCurrentWindow, LogicalSize} from "@tauri-apps/api/window";
-import {ArrowRight, Check} from "lucide-react";
+import {ArrowRight} from "lucide-react";
 import {Button} from "@/components/ui/button.tsx";
 import {invoke} from "@tauri-apps/api/core";
 
@@ -99,40 +99,15 @@ function UpgradeOverlay() {
         invoke("show_settings_with_tab", {tab: "account"})
         getCurrentWindow().close()
     }
-    const onClose = () => getCurrentWindow().close()
-    const features = [
-        "Unlimited shelves",
-        "No transfer size cap",
-        "Password-protected transfers",
-    ]
     return (
-        <div className="absolute inset-0 z-30 bg-black/40 backdrop-blur-[2px] flex flex-col px-4 pt-7 pb-3 select-none">
-            <div className="flex flex-col mb-2">
-                <span className="text-[12.5px] font-semibold text-white tracking-tight">Bytover Pro</span>
-                <span className="text-[10.5px] text-white/40 mt-0.5">One shelf at a time on Free</span>
-            </div>
-            <ul className="flex flex-col gap-1.5 flex-1">
-                {features.map((f) => (
-                    <li key={f} className="flex items-start gap-1.5">
-                        <Check className="w-3 h-3 text-white/70 mt-[3px] shrink-0" strokeWidth={2.5} />
-                        <span className="text-[11px] text-white/85 leading-tight">{f}</span>
-                    </li>
-                ))}
-            </ul>
-            <div className="flex flex-col gap-1.5 mt-2">
-                <Button
-                    onClick={onUpgrade}
-                    className="w-full h-[26px] text-[11px] font-semibold bg-white text-black hover:bg-white/90 border-none rounded-md shadow-none"
-                >
-                    Upgrade · $14.89
-                </Button>
-                <button
-                    onClick={onClose}
-                    className="text-[10.5px] text-white/40 hover:text-white/60 transition-colors"
-                >
-                    Not now
-                </button>
-            </div>
+        <div className="absolute inset-0 z-30 bg-card flex flex-col items-center justify-center gap-3 px-4 select-none">
+            <p className="text-[12px] text-white/70 text-center">You've reached your shelf limit</p>
+            <Button
+                onClick={onUpgrade}
+                className="h-[28px] px-4 text-[11px] font-semibold bg-white text-black hover:bg-white/90 border-none rounded-md shadow-none"
+            >
+                Unlock more
+            </Button>
         </div>
     )
 }
