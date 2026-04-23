@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, Instant};
 
-use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, Runtime, WebviewWindow};
+use tauri::{AppHandle, Emitter, EventTarget, Manager, PhysicalPosition, PhysicalSize, Runtime, WebviewWindow};
 
 pub const SLIVER_WIDTH_LOGICAL: f64 = 24.0;
 pub const EDGE_SNAP_PX: f64 = 40.0;
@@ -320,7 +320,8 @@ fn reconcile_sliver_position<R: Runtime>(
     if let Some(win) = app.get_webview_window(&label) {
         let _ = win.set_size(tauri::Size::Physical(target_size));
         let _ = win.set_position(tauri::Position::Physical(target_pos));
-        let _ = win.emit(
+        let _ = win.emit_to(
+            EventTarget::webview_window(win.label()),
             "shelf-docked",
             serde_json::json!({ "edge": edge.as_str() }),
         );
@@ -417,7 +418,11 @@ pub fn begin_expand<R: Runtime>(app: &AppHandle<R>, window: &WebviewWindow<R>) {
         state.pre_dock_size,
         Some(Box::new(move |_app| {
             if let Some(w) = app_clone.get_webview_window(&label_for_emit) {
-                let _ = w.emit("shelf-expanded", serde_json::json!({}));
+                let _ = w.emit_to(
+                    EventTarget::webview_window(w.label()),
+                    "shelf-expanded",
+                    serde_json::json!({}),
+                );
             }
         })),
     );
