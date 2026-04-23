@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{LazyLock, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, Runtime, WebviewWindow};
 
@@ -9,6 +9,7 @@ pub const EDGE_SNAP_PX: f64 = 40.0;
 pub const UNDOCK_THRESHOLD_PX: f64 = 80.0;
 pub const ANIM_DURATION_MS: u64 = 160;
 pub const ANIM_FRAMES: u32 = 10;
+pub const DOCK_DEBOUNCE_MS: u64 = 80;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum DockEdge {
@@ -40,15 +41,29 @@ pub struct DockState {
     pub pre_dock_pos: PhysicalPosition<i32>,
 }
 
+struct PendingDock {
+    edge: DockEdge,
+    last_update: Instant,
+    task_alive: bool,
+}
+
+enum PendingCheckResult {
+    Commit(DockEdge),
+    Wait(Duration),
+    Empty,
+}
+
 struct DockRegistry {
     docked: HashMap<String, DockState>,
     animating: HashSet<String>,
+    pending: HashMap<String, PendingDock>,
 }
 
 static DOCK_REGISTRY: LazyLock<Mutex<DockRegistry>> = LazyLock::new(|| {
     Mutex::new(DockRegistry {
         docked: HashMap::new(),
         animating: HashSet::new(),
+        pending: HashMap::new(),
     })
 });
 
@@ -77,6 +92,68 @@ pub fn release_dock(label: &str) {
     if let Ok(mut reg) = DOCK_REGISTRY.lock() {
         reg.docked.remove(label);
         reg.animating.remove(label);
+        reg.pending.remove(label);
+    }
+}
+
+fn record_pending_dock(label: &str, edge: DockEdge) -> bool {
+    let Ok(mut reg) = DOCK_REGISTRY.lock() else {
+        return false;
+    };
+    let now = Instant::now();
+    match reg.pending.get_mut(label) {
+        Some(p) => {
+            p.edge = edge;
+            p.last_update = now;
+            if p.task_alive {
+                false
+            } else {
+                p.task_alive = true;
+                true
+            }
+        }
+        None => {
+            reg.pending.insert(
+                label.to_string(),
+                PendingDock {
+                    edge,
+                    last_update: now,
+                    task_alive: true,
+                },
+            );
+            true
+        }
+    }
+}
+
+fn clear_pending_dock(label: &str) {
+    if let Ok(mut reg) = DOCK_REGISTRY.lock() {
+        reg.pending.remove(label);
+    }
+}
+
+fn check_pending_dock(label: &str, debounce: Duration) -> PendingCheckResult {
+    let Ok(mut reg) = DOCK_REGISTRY.lock() else {
+        return PendingCheckResult::Empty;
+    };
+    let Some(p) = reg.pending.get_mut(label) else {
+        return PendingCheckResult::Empty;
+    };
+    let elapsed = p.last_update.elapsed();
+    if elapsed >= debounce {
+        let edge = p.edge;
+        reg.pending.remove(label);
+        PendingCheckResult::Commit(edge)
+    } else {
+        PendingCheckResult::Wait(debounce - elapsed)
+    }
+}
+
+fn mark_pending_task_ended(label: &str) {
+    if let Ok(mut reg) = DOCK_REGISTRY.lock() {
+        if let Some(p) = reg.pending.get_mut(label) {
+            p.task_alive = false;
+        }
     }
 }
 
@@ -329,11 +406,49 @@ pub fn maybe_detect_edge_dock<R: Runtime>(app: &AppHandle<R>, window: &WebviewWi
         return;
     }
 
-    if window_left - screen_left <= snap_phys {
-        begin_dock(app, window, DockEdge::Left);
+    let intent = if window_left - screen_left <= snap_phys {
+        Some(DockEdge::Left)
     } else if screen_right - window_right <= snap_phys {
-        begin_dock(app, window, DockEdge::Right);
+        Some(DockEdge::Right)
+    } else {
+        None
+    };
+
+    let Some(edge) = intent else {
+        clear_pending_dock(&label);
+        return;
+    };
+
+    if record_pending_dock(&label, edge) {
+        spawn_pending_dock_task(app.clone(), label);
     }
+}
+
+fn spawn_pending_dock_task<R: Runtime>(app: AppHandle<R>, label: String) {
+    let debounce = Duration::from_millis(DOCK_DEBOUNCE_MS);
+    tauri::async_runtime::spawn(async move {
+        let mut next_sleep = debounce;
+        loop {
+            tokio::time::sleep(next_sleep).await;
+            match check_pending_dock(&label, debounce) {
+                PendingCheckResult::Commit(edge) => {
+                    if !is_animating(&label) && !is_docked(&label) {
+                        if let Some(win) = app.get_webview_window(&label) {
+                            begin_dock(&app, &win, edge);
+                        }
+                    }
+                    return;
+                }
+                PendingCheckResult::Wait(remaining) => {
+                    next_sleep = remaining;
+                }
+                PendingCheckResult::Empty => {
+                    mark_pending_task_ended(&label);
+                    return;
+                }
+            }
+        }
+    });
 }
 
 #[tauri::command]
