@@ -1,7 +1,7 @@
 use crate::entities::user_capabilities::UserCapabilities;
 use schema::devlog::app_gateway::models::{
-    Capabilities as CapabilitiesMsg, Plan as PlanMsg, PresentationLimits as PresentationLimitsMsg, PricingInfo as PricingInfoMsg,
-    TransferLimits as TransferLimitsMsg, TransferUsage as TransferUsageMsg,
+    Capabilities as CapabilitiesMsg, Plan as PlanMsg, PresentationLimits as PresentationLimitsMsg, TransferLimits as TransferLimitsMsg,
+    TransferUsage as TransferUsageMsg,
 };
 
 pub const CAPABILITIES_VERSION: u32 = 1;
@@ -9,10 +9,6 @@ pub const CAPABILITIES_VERSION: u32 = 1;
 pub const FREE_LIFETIME_BYTES_CAP: u64 = 5 * 1024 * 1024 * 1024;
 pub const FREE_MAX_FILES_PER_TRANSFER: u32 = 10;
 pub const FREE_MAX_VISIBLE_SHELVES: u32 = 1;
-
-pub const PAID_SKU: &str = "bitbridge-onetime-v1";
-pub const PAID_PRICE_CURRENCY: &str = "USD";
-pub const PAID_PRICE_MINOR_UNITS: u64 = 2000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Plan {
@@ -51,13 +47,6 @@ pub struct PlanDefaults {
     pub max_visible_shelves: u32,
 }
 
-#[derive(Debug, Clone)]
-pub struct PricingInfo {
-    pub currency: String,
-    pub amount_minor_units: u64,
-    pub sku: String,
-}
-
 pub fn defaults_for(plan: Plan) -> PlanDefaults {
     match plan {
         Plan::Free => PlanDefaults {
@@ -72,17 +61,6 @@ pub fn defaults_for(plan: Plan) -> PlanDefaults {
             total_transfer_bytes_lifetime_cap: 0,
             max_visible_shelves: 0,
         },
-    }
-}
-
-pub fn pricing_for(plan: Plan) -> Option<PricingInfo> {
-    match plan {
-        Plan::Free => Some(PricingInfo {
-            currency: PAID_PRICE_CURRENCY.to_owned(),
-            amount_minor_units: PAID_PRICE_MINOR_UNITS,
-            sku: PAID_SKU.to_owned(),
-        }),
-        Plan::Paid => None,
     }
 }
 
@@ -101,11 +79,6 @@ pub fn build_capabilities_msg(row: &UserCapabilities) -> CapabilitiesMsg {
         presentation: PresentationLimitsMsg {
             max_visible_shelves: row.max_visible_shelves(),
         },
-        upgrade_pricing: pricing_for(plan).map(|p| PricingInfoMsg {
-            currency: p.currency,
-            amount_minor_units: p.amount_minor_units,
-            sku: p.sku,
-        }),
         capabilities_version: CAPABILITIES_VERSION,
     }
 }
@@ -130,11 +103,5 @@ mod tests {
         assert_eq!(d.max_files_per_transfer, 0);
         assert_eq!(d.total_transfer_bytes_lifetime_cap, 0);
         assert_eq!(d.max_visible_shelves, 0);
-    }
-
-    #[test]
-    fn pricing_present_for_free_only() {
-        assert!(pricing_for(Plan::Free).is_some());
-        assert!(pricing_for(Plan::Paid).is_none());
     }
 }

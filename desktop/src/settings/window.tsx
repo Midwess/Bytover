@@ -443,7 +443,7 @@ function PlanComparison({currentPlan, onUpgrade}: {currentPlan: PlanKind; onUpgr
             {currentPlan === "free" && (
                 <div className="pt-3 mt-3 border-t border-white/5 flex items-center justify-between">
                     <div className="flex flex-col">
-                        <span className="text-[13px] font-semibold text-white">$20 · one-time</span>
+                        <span className="text-[13px] font-semibold text-white">$14.89 · one-time</span>
                         <span className="text-[11px] text-white/40">Lifetime access. No subscription.</span>
                     </div>
                     <Button
