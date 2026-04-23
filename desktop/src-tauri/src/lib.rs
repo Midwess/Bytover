@@ -484,7 +484,7 @@ fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel], is_p
     };
 
     let mut recent_submenu_builder = SubmenuBuilder::with_id(app_handle, "recent_shelves", "Recent Shelves");
-    for shelf in shelves.iter().take(10) {
+    for shelf in shelves.iter().filter(|s| !s.is_locked).take(10) {
         let shelf_id = format!("shelf_{}", shelf.id);
         let online_indicator = if shelf.is_online { "🟢 " } else { "" };
         let menu_text = format!("{}{} - {}", online_indicator, shelf.name, shelf.description);
