@@ -28,7 +28,6 @@ import {
 import {motion, AnimatePresence} from "motion/react"
 import { openUrl } from "@tauri-apps/plugin-opener"
 import core from "@/core.ts"
-import {PlanVariantPaid} from "shared_types/types/shared_types"
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>
@@ -463,7 +462,7 @@ function PlanComparison({currentPlan, onUpgrade}: {currentPlan: PlanKind; onUpgr
 
 function AccountContent({onSignOut}: {onSignOut: () => void}) {
     const auth = core.useAuthentication()
-    const currentPlan: PlanKind = auth?.capabilities?.plan instanceof PlanVariantPaid ? "paid" : "free"
+    const currentPlan: PlanKind = (auth?.capabilities?.plan as unknown) === "Paid" ? "paid" : "free"
     const handleUpgrade = () => {}
 
     return (
