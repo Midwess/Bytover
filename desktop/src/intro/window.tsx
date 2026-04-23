@@ -4,7 +4,7 @@ import core from "@/core.ts"
 import {motion, AnimatePresence} from "motion/react"
 import {Button} from "@/components/ui/button.tsx";
 import {invoke} from "@tauri-apps/api/core";
-import {MousePointer2, Keyboard, Image as ImageIcon, Sparkles, Check} from "lucide-react";
+import {MousePointer2, Keyboard, Image as ImageIcon, Check} from "lucide-react";
 import {startDrag} from "@crabnebula/tauri-plugin-drag";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
@@ -296,10 +296,13 @@ function Window() {
                                 initial={{ opacity: 0, scale: 0.9 }}
                                 animate={{ opacity: 1, scale: 1 }}
                                 transition={{ delay: 0.15, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-                                className="relative w-14 h-14 rounded-[18px] bg-white/[0.04] border border-white/[0.08] flex items-center justify-center backdrop-blur-md"
+                                className="relative"
                             >
-                                <div className="absolute inset-0 rounded-[18px] bg-[radial-gradient(circle_at_30%_20%,rgba(147,197,253,0.12),transparent_70%)]" />
-                                <Sparkles className="relative w-6 h-6 text-blue-200/95" strokeWidth={1.5} />
+                                <img
+                                    src="/icon.png"
+                                    alt="Bytover"
+                                    className="w-16 h-16 rounded-[18px] shadow-[0_12px_40px_-12px_rgba(147,197,253,0.45)]"
+                                />
                             </motion.div>
 
                             <motion.div
@@ -320,7 +323,7 @@ function Window() {
                                 initial={{ opacity: 0, y: 8 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.35, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-                                className="w-full flex flex-col gap-2.5"
+                                className="w-fit mx-auto flex flex-col gap-2.5"
                             >
                                 {[
                                     "Unlimited files per transfer",
