@@ -403,12 +403,31 @@ function GeneralContent({enabled, isLoading, onToggle}: {
 
 type PlanKind = "free" | "paid"
 
-function PlanComparison({currentPlan, onUpgrade}: {currentPlan: PlanKind; onUpgrade: () => void}) {
+type FreeLimits = {
+    maxFilesPerTransfer: number
+    transferLifetimeCapBytes: number
+    maxVisibleShelves: number
+    passwordEncryptionAllowed: boolean
+}
+
+function formatCount(n: number): string {
+    return n === 0 ? "Unlimited" : n.toString()
+}
+
+function formatBytes(n: number): string {
+    if (n === 0) return "No cap"
+    const gib = n / (1024 * 1024 * 1024)
+    if (gib >= 1) return Number.isInteger(gib) ? `${gib} GB` : `${gib.toFixed(1)} GB`
+    const mib = n / (1024 * 1024)
+    return Number.isInteger(mib) ? `${mib} MB` : `${mib.toFixed(1)} MB`
+}
+
+function PlanComparison({limits, onUpgrade}: {limits: FreeLimits; onUpgrade: () => void}) {
     const rows: {label: string; free: string; paid: string}[] = [
-        {label: "Files", free: "10", paid: "Unlimited"},
-        {label: "Transfer", free: "5 GB", paid: "No cap"},
-        {label: "Shelves", free: "1", paid: "Unlimited"},
-        {label: "Password protection", free: "No", paid: "Included"},
+        {label: "Files", free: formatCount(limits.maxFilesPerTransfer), paid: "Unlimited"},
+        {label: "Transfer", free: formatBytes(limits.transferLifetimeCapBytes), paid: "No cap"},
+        {label: "Shelves", free: formatCount(limits.maxVisibleShelves), paid: "Unlimited"},
+        {label: "Password protection", free: limits.passwordEncryptionAllowed ? "Included" : "No", paid: "Included"},
     ]
 
     return (
@@ -417,19 +436,12 @@ function PlanComparison({currentPlan, onUpgrade}: {currentPlan: PlanKind; onUpgr
                 <div className="pb-2 pr-6" />
                 <div className="pb-2 px-2 flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/40">
                     Free
-                    {currentPlan === "free" && (
-                        <span className="px-1.5 py-[1px] rounded-full bg-amber-500/15 text-amber-300 text-[9px] font-bold tracking-wide">
-                            YOU
-                        </span>
-                    )}
+                    <span className="px-1.5 py-[1px] rounded-full bg-amber-500/15 text-amber-300 text-[9px] font-bold tracking-wide">
+                        YOU
+                    </span>
                 </div>
                 <div className="pb-2 px-2 flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/40">
                     Paid
-                    {currentPlan === "paid" && (
-                        <span className="px-1.5 py-[1px] rounded-full bg-emerald-500/15 text-emerald-300 text-[9px] font-bold tracking-wide">
-                            YOU
-                        </span>
-                    )}
                 </div>
                 <div className="col-span-full border-t border-white/5" />
                 {rows.map((r, i) => (
@@ -441,34 +453,63 @@ function PlanComparison({currentPlan, onUpgrade}: {currentPlan: PlanKind; onUpgr
                     </React.Fragment>
                 ))}
             </div>
-            {currentPlan === "free" && (
-                <div className="pt-3 mt-3 border-t border-white/5 flex items-center justify-between">
-                    <div className="flex flex-col">
-                        <span className="text-[13px] font-semibold text-white">$14.89 · one-time</span>
-                        <span className="text-[11px] text-white/40">Lifetime access. No subscription.</span>
-                    </div>
-                    <Button
-                        size="sm"
-                        onClick={onUpgrade}
-                        className="h-[28px] px-4 text-[12px] font-semibold bg-[#3b82f6] hover:bg-[#2563eb] text-white border-none rounded-full shadow-none"
-                    >
-                        Upgrade
-                    </Button>
+            <div className="pt-3 mt-3 border-t border-white/5 flex items-center justify-between">
+                <div className="flex flex-col">
+                    <span className="text-[13px] font-semibold text-white">$14.89 · one-time</span>
+                    <span className="text-[11px] text-white/40">Lifetime access. No subscription.</span>
                 </div>
-            )}
+                <Button
+                    size="sm"
+                    onClick={onUpgrade}
+                    className="h-[28px] px-4 text-[12px] font-semibold bg-[#3b82f6] hover:bg-[#2563eb] text-white border-none rounded-full shadow-none"
+                >
+                    Upgrade
+                </Button>
+            </div>
+        </div>
+    )
+}
+
+function PaidPlanNotice() {
+    return (
+        <div className="px-4 py-5 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-emerald-500/15 flex items-center justify-center">
+                <span className="text-emerald-300 text-[14px] font-bold">✓</span>
+            </div>
+            <div className="flex flex-col">
+                <span className="text-[13px] font-semibold text-white">You're on the Paid plan</span>
+                <span className="text-[11px] text-white/50">Lifetime access. Thanks for supporting Bytover.</span>
+            </div>
         </div>
     )
 }
 
 function AccountContent({onSignOut}: {onSignOut: () => void}) {
     const auth = core.useAuthentication()
-    const currentPlan: PlanKind = (auth?.capabilities?.plan as unknown) === "Paid" ? "paid" : "free"
+    const caps = auth?.capabilities
+    const currentPlan: PlanKind = (caps?.plan as unknown) === "Paid" ? "paid" : "free"
     const handleUpgrade = () => {}
+
+    const subscriptionBody = caps == null ? (
+        <div className="px-4 py-5 text-[12px] text-white/50">Loading plan…</div>
+    ) : currentPlan === "paid" ? (
+        <PaidPlanNotice />
+    ) : (
+        <PlanComparison
+            limits={{
+                maxFilesPerTransfer: Number(caps.transfer_limits.max_files_per_transfer),
+                transferLifetimeCapBytes: Number(caps.transfer_limits.total_transfer_bytes_lifetime_cap),
+                maxVisibleShelves: Number(caps.presentation.max_visible_shelves),
+                passwordEncryptionAllowed: caps.transfer_limits.password_encryption_allowed,
+            }}
+            onUpgrade={handleUpgrade}
+        />
+    )
 
     return (
         <div className="space-y-6">
             <SettingsSection title="Subscription">
-                <PlanComparison currentPlan={currentPlan} onUpgrade={handleUpgrade} />
+                {subscriptionBody}
             </SettingsSection>
 
             <SettingsSection title="Current Session">
