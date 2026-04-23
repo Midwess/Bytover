@@ -392,15 +392,10 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
     }
 
     fn show_fake_shelf(&self, mouse_pos: Option<tauri::PhysicalPosition<f64>>) -> WebviewWindow<R> {
-        let label = "fake-shelf";
-        if let Some(existing) = self.get_webview_window(label) {
-            let _ = existing.set_focus();
-            animate_window(existing.clone());
-            return existing;
-        }
+        let label = format!("fake-shelf-{}", shared::gen_shelf_id());
 
-        let window = WebviewWindowBuilder::new(self, label, WebviewUrl::App("send.html".into()))
-            .title(label)
+        let window = WebviewWindowBuilder::new(self, &label, WebviewUrl::App("send.html".into()))
+            .title(&label)
             .inner_size(WIN_WIDTH, WIN_HEIGHT)
             .resizable(false)
             .decorations(false)
@@ -412,6 +407,13 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
             .devtools(true)
             .build()
             .expect("failed to create fake shelf window");
+
+        let label_clone = label.clone();
+        window.on_window_event(move |event| {
+            if let tauri::WindowEvent::Destroyed = event {
+                release_registry_slot(&label_clone);
+            }
+        });
 
         let monitors = self.available_monitors().unwrap_or_default();
         if monitors.is_empty() {
@@ -435,8 +437,8 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
         }
 
         let primary_hash = self.primary_monitor().ok().flatten().map(|m| monitor_hash(&m));
-        let chosen = if let Ok(reg) = SHELF_REGISTRY.lock() {
-            if let Some(pos) = mouse_pos {
+        let chosen: Option<(u64, usize, usize, f64, f64)> = if let Ok(mut reg) = SHELF_REGISTRY.lock() {
+            let picked = if let Some(pos) = mouse_pos {
                 candidates
                     .iter()
                     .filter(|c| {
@@ -449,7 +451,7 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
                         let db = (pos.x - b.3).powi(2) + (pos.y - b.4).powi(2);
                         da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
                     })
-                    .map(|c| (c.5, c.6))
+                    .map(|c| (c.0, c.1, c.2, c.5, c.6))
             } else {
                 let mut sorted = candidates.clone();
                 sorted.sort_by(|a, b| {
@@ -460,13 +462,20 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
                 sorted
                     .iter()
                     .find(|c| !reg.slots.contains_key(&(c.0, c.1, c.2)))
-                    .map(|c| (c.5, c.6))
+                    .map(|c| (c.0, c.1, c.2, c.5, c.6))
+            };
+
+            if let Some((mh, col, row, _, _)) = picked {
+                reg.slots.insert((mh, col, row), label.clone());
+                reg.creation_order.push_back(label.clone());
             }
+
+            picked
         } else {
             None
         };
 
-        if let Some((wx, wy)) = chosen {
+        if let Some((_, _, _, wx, wy)) = chosen {
             let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition {
                 x: wx as i32,
                 y: wy as i32,

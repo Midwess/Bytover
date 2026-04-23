@@ -329,7 +329,7 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
                                 is_handled_shown = true;
 
                                 let label = win.label().to_string();
-                                if label != "fake-shelf" {
+                                if !label.starts_with("fake-shelf") {
                                     opened_shelf_label = Some(label);
                                 }
                                 let _ = win.set_focus();
@@ -359,7 +359,7 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
                                 is_handled_shown = true;
 
                                 let label = win.label().to_string();
-                                if label != "fake-shelf" {
+                                if !label.starts_with("fake-shelf") {
                                     opened_shelf_label = Some(label);
                                 }
                                 let _ = win.set_focus();

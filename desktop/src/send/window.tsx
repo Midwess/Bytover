@@ -23,7 +23,7 @@ function Window() {
     const [animationSettled, setAnimationSettled] = useState(false)
     const shelfInitializedRef = useRef(false)
     const label = window.label
-    const isFakeShelf = label === "fake-shelf"
+    const isFakeShelf = label.startsWith("fake-shelf")
     const showExpand = !isFakeShelf
     const effectiveExpanded = showExpand && isExpanded
 
