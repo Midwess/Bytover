@@ -618,8 +618,8 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
                 }
                 DeviceOperation::ShowUpgradeDialog(shelf_id) => {
                     let label = format!("send-{}", shelf_id);
-                    if let Some(window) = app_handle.get_webview_window(&label) {
-                        let _ = window.emit("show-upgrade-dialog", ());
+                    if app_handle.get_webview_window(&label).is_some() {
+                        let _ = app_handle.emit_to(label.as_str(), "show-upgrade-dialog", ());
                     } else {
                         log::warn!("ShowUpgradeDialog: no window {label} found");
                     }

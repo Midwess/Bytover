@@ -1,6 +1,6 @@
 import ReactDOM from "react-dom/client";
 import React, {useEffect, useRef, useState} from "react";
-import { Shelf } from "./shelf";
+import { Shelf, ShelfWrapper } from "./shelf";
 import { Transfer } from "./transfer.tsx";
 import core from "@/core.ts";
 import {useOverlayScrollbars} from "@/hooks/use-overlay-scrollbar.ts";
@@ -76,7 +76,7 @@ function Window() {
             <div className={`${effectiveExpanded ? 'w-[412px]' : 'w-[230px]'} h-[255px] flex flex-row rounded-2xl bg-transparent space-x-0 animate-popup transition-all duration-300`}>
                 <div className={`h-[230px] bg-transparent relative min-w-[200px] w-[200px]`}>
                    {isUpgradeDialog ? (
-                       <UpgradeDialogContent />
+                       <UpgradeDialogContent isCollapsed={!effectiveExpanded} />
                    ) : (
                        <Shelf shelfId={shelfId} isCollapsed={!effectiveExpanded} />
                    )}
@@ -99,7 +99,7 @@ function Window() {
     )
 }
 
-function UpgradeDialogContent() {
+function UpgradeDialogContent({isCollapsed}: {isCollapsed: boolean}) {
     const onUpgrade = () => {
         invoke("show_settings_with_tab", {tab: "account"})
         getCurrentWindow().close()
@@ -111,34 +111,36 @@ function UpgradeDialogContent() {
         "Password-protected transfers",
     ]
     return (
-        <div className="w-full h-full rounded-2xl bg-[#1e1e1e] border border-white/5 flex flex-col px-4 py-4 select-none">
-            <div className="flex flex-col mb-3">
-                <span className="text-[12.5px] font-semibold text-white tracking-tight">Bytover Pro</span>
-                <span className="text-[10.5px] text-white/40 mt-0.5">One shelf at a time on Free</span>
+        <ShelfWrapper isCollapsed={isCollapsed}>
+            <div className="w-full h-full flex flex-col px-4 pt-7 pb-3 select-none">
+                <div className="flex flex-col mb-3">
+                    <span className="text-[12.5px] font-semibold text-white tracking-tight">Bytover Pro</span>
+                    <span className="text-[10.5px] text-white/40 mt-0.5">One shelf at a time on Free</span>
+                </div>
+                <ul className="flex flex-col gap-1.5 flex-1">
+                    {features.map((f) => (
+                        <li key={f} className="flex items-start gap-1.5">
+                            <Check className="w-3 h-3 text-white/70 mt-[3px] shrink-0" strokeWidth={2.5} />
+                            <span className="text-[11px] text-white/85 leading-tight">{f}</span>
+                        </li>
+                    ))}
+                </ul>
+                <div className="flex flex-col gap-1.5 mt-3">
+                    <Button
+                        onClick={onUpgrade}
+                        className="w-full h-[26px] text-[11px] font-semibold bg-white text-black hover:bg-white/90 border-none rounded-md shadow-none"
+                    >
+                        Upgrade · $14.89
+                    </Button>
+                    <button
+                        onClick={onClose}
+                        className="text-[10.5px] text-white/40 hover:text-white/60 transition-colors"
+                    >
+                        Not now
+                    </button>
+                </div>
             </div>
-            <ul className="flex flex-col gap-1.5 flex-1">
-                {features.map((f) => (
-                    <li key={f} className="flex items-start gap-1.5">
-                        <Check className="w-3 h-3 text-white/70 mt-[3px] shrink-0" strokeWidth={2.5} />
-                        <span className="text-[11px] text-white/85 leading-tight">{f}</span>
-                    </li>
-                ))}
-            </ul>
-            <div className="flex flex-col gap-1.5 mt-3">
-                <Button
-                    onClick={onUpgrade}
-                    className="w-full h-[26px] text-[11px] font-semibold bg-white text-black hover:bg-white/90 border-none rounded-md shadow-none"
-                >
-                    Upgrade · $14.89
-                </Button>
-                <button
-                    onClick={onClose}
-                    className="text-[10.5px] text-white/40 hover:text-white/60 transition-colors"
-                >
-                    Not now
-                </button>
-            </div>
-        </div>
+        </ShelfWrapper>
     )
 }
 

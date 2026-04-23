@@ -39,7 +39,7 @@ import {throttle} from "lodash";
 import {UnlimitedLineText} from "@/components/ui/unlimited-line-text";
 import {PeerAvatarGroup} from "@/send/peer-avatar-group";
 
-function ShelfWrapper({
+export function ShelfWrapper({
     children,
     isDraggingOver = false,
     shelfName,
