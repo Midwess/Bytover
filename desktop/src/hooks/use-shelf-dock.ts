@@ -20,24 +20,29 @@ export default function useShelfDock(onWindow?: Window): ShelfDockState {
     const [progressEdge, setProgressEdge] = useState<DockEdge | null>(null);
 
     useEffect(() => {
-        let unlistenDocked: (() => void) | undefined;
-        let unlistenExpanded: (() => void) | undefined;
-        let unlistenProgress: (() => void) | undefined;
+        let cancelled = false;
+        const unlisteners: Array<() => void> = [];
 
         const setup = async () => {
-            unlistenDocked = await window.listen<{ edge: DockEdge }>("shelf-docked", (event) => {
+            const d = await window.listen<{ edge: DockEdge }>("shelf-docked", (event) => {
                 setIsDocked(true);
                 setEdge(event.payload.edge);
                 setProgress(1);
                 setProgressEdge(event.payload.edge);
             });
-            unlistenExpanded = await window.listen("shelf-expanded", () => {
+            if (cancelled) return d();
+            unlisteners.push(d);
+
+            const e = await window.listen("shelf-expanded", () => {
                 setIsDocked(false);
                 setEdge(null);
                 setProgress(0);
                 setProgressEdge(null);
             });
-            unlistenProgress = await window.listen<{
+            if (cancelled) return e();
+            unlisteners.push(e);
+
+            const p = await window.listen<{
                 progress: number,
                 edge: DockEdge | null
             }>("dock-progress", (event) => {
@@ -46,14 +51,18 @@ export default function useShelfDock(onWindow?: Window): ShelfDockState {
                     setProgressEdge(event.payload.edge);
                 }
             });
+            if (cancelled) return p();
+            unlisteners.push(p);
         };
 
-        setup();
+        const setupPromise = setup();
 
         return () => {
-            unlistenDocked?.();
-            unlistenExpanded?.();
-            unlistenProgress?.();
+            cancelled = true;
+            setupPromise.finally(() => {
+                unlisteners.forEach((fn) => fn());
+                unlisteners.length = 0;
+            });
         };
     }, [window]);
 

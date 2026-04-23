@@ -186,10 +186,16 @@ fn clear_animating(label: &str) {
     }
 }
 
-fn store_dock(label: &str, state: DockState) {
-    if let Ok(mut reg) = DOCK_REGISTRY.lock() {
-        reg.docked.insert(label.to_string(), state);
+fn try_reserve_dock(label: &str, state: DockState) -> bool {
+    let Ok(mut reg) = DOCK_REGISTRY.lock() else {
+        return false;
+    };
+    if reg.docked.contains_key(label) || reg.animating.contains(label) {
+        return false;
     }
+    reg.animating.insert(label.to_string());
+    reg.docked.insert(label.to_string(), state);
+    true
 }
 
 fn ease_out_cubic(t: f64) -> f64 {
@@ -205,7 +211,7 @@ fn is_shelf_label(label: &str) -> bool {
     label.starts_with("send-") && label != "send"
 }
 
-pub fn animate_geometry<R: Runtime>(
+fn spawn_geometry_animation<R: Runtime>(
     app: AppHandle<R>,
     label: String,
     start_pos: PhysicalPosition<i32>,
@@ -251,12 +257,24 @@ pub fn animate_geometry<R: Runtime>(
     });
 }
 
+pub fn animate_geometry<R: Runtime>(
+    app: AppHandle<R>,
+    label: String,
+    start_pos: PhysicalPosition<i32>,
+    start_size: PhysicalSize<u32>,
+    end_pos: PhysicalPosition<i32>,
+    end_size: PhysicalSize<u32>,
+    on_complete: Option<Box<dyn FnOnce(&AppHandle<R>) + Send>>,
+) {
+    if !mark_animating(&label) {
+        return;
+    }
+    spawn_geometry_animation(app, label, start_pos, start_size, end_pos, end_size, on_complete);
+}
+
 pub fn begin_dock<R: Runtime>(app: &AppHandle<R>, window: &WebviewWindow<R>, edge: DockEdge) {
     let label = window.label().to_string();
     if !is_shelf_label(&label) {
-        return;
-    }
-    if is_docked(&label) || is_animating(&label) {
         return;
     }
 
@@ -292,11 +310,14 @@ pub fn begin_dock<R: Runtime>(app: &AppHandle<R>, window: &WebviewWindow<R>, edg
         pre_dock_size: current_size,
         pre_dock_pos: clamped_pre_dock_pos,
     };
-    store_dock(&label, state);
+
+    if !try_reserve_dock(&label, state) {
+        return;
+    }
 
     let app_for_phase2 = app.clone();
     let label_for_phase2 = label.clone();
-    animate_geometry(
+    spawn_geometry_animation(
         app.clone(),
         label.clone(),
         current_pos,
