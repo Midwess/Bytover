@@ -323,17 +323,6 @@ impl AppModule<BitBridge> for ShelfModule {
     }
 
     fn view(&self, model: &AppModel) -> Self::ViewModel {
-        let shelf_limit = model
-            .authentication
-            .capabilities
-            .as_ref()
-            .and_then(|c| c.shelf_limit())
-            .map(|n| n as usize);
-
-        let unlocked_ids = shelf_limit
-            .map(|limit| compute_unlocked_shelf_ids(&model.shelf.shelves, limit))
-            .unwrap_or_default();
-
         let mut shelves: Vec<ShelfItemViewModel> = model
             .shelf
             .shelves
@@ -343,11 +332,6 @@ impl AppModule<BitBridge> for ShelfModule {
                 let is_online = active_session.is_some();
                 let mut view_model = ShelfItemViewModel::from_shelf(shelf, is_online);
                 view_model.is_resource_remove_allowed = !model.transfer.has_active_send_session(shelf.id);
-
-                if shelf_limit.is_some() && !unlocked_ids.contains(&shelf.id) {
-                    view_model.is_locked = true;
-                    view_model.lock_reason = Some("Upgrade to unlimited plan".to_owned());
-                }
 
                 if let Some(session) = active_session {
                     for resource_vm in &mut view_model.resources {
@@ -393,49 +377,3 @@ pub struct ResourceSelection {
     pub r#type: Option<ResourceType>,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn shelf_with_id(id: u64) -> Shelf {
-        Shelf::with_id(id, format!("shelf-{id}"))
-    }
-
-    #[test]
-    fn free_user_with_two_shelves_locks_the_newer_one() {
-        let old = shelf_with_id(100);
-        let new = shelf_with_id(200);
-        let unlocked = compute_unlocked_shelf_ids(&[old.clone(), new.clone()], 1);
-        assert!(unlocked.contains(&old.id), "older shelf (smaller id) must stay unlocked");
-        assert!(!unlocked.contains(&new.id), "newer shelf (larger id) must be locked");
-    }
-
-    #[test]
-    fn stored_order_does_not_affect_lock_selection() {
-        let older = shelf_with_id(100);
-        let newer = shelf_with_id(200);
-        let unlocked_a = compute_unlocked_shelf_ids(&[older.clone(), newer.clone()], 1);
-        let unlocked_b = compute_unlocked_shelf_ids(&[newer.clone(), older.clone()], 1);
-        assert_eq!(unlocked_a, unlocked_b);
-        assert_eq!(unlocked_a, [100u64].into_iter().collect());
-    }
-
-    #[test]
-    fn limit_larger_than_count_unlocks_everything() {
-        let a = shelf_with_id(10);
-        let b = shelf_with_id(20);
-        let unlocked = compute_unlocked_shelf_ids(&[a, b], 5);
-        assert_eq!(unlocked.len(), 2);
-    }
-
-    #[test]
-    fn limit_of_two_keeps_two_oldest_unlocked() {
-        let s1 = shelf_with_id(1);
-        let s2 = shelf_with_id(2);
-        let s3 = shelf_with_id(3);
-        let unlocked = compute_unlocked_shelf_ids(&[s3.clone(), s1.clone(), s2.clone()], 2);
-        assert!(unlocked.contains(&1));
-        assert!(unlocked.contains(&2));
-        assert!(!unlocked.contains(&3));
-    }
-}
