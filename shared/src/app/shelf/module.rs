@@ -346,7 +346,7 @@ impl AppModule<BitBridge> for ShelfModule {
         let mut unlocked_ids: std::collections::HashSet<u64> = std::collections::HashSet::new();
         if let Some(limit) = shelf_limit {
             let mut sorted: Vec<&Shelf> = model.shelf.shelves.iter().collect();
-            sorted.sort_by(|a, b| b.id.cmp(&a.id));
+            sorted.sort_by(|a, b| a.id.cmp(&b.id));
             for shelf in sorted.into_iter().take(limit) {
                 unlocked_ids.insert(shelf.id);
             }

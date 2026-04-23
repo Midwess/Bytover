@@ -6,7 +6,7 @@ use schema::devlog::bitbridge::{
 
 pub const CAPABILITIES_VERSION: u32 = 1;
 
-pub const FREE_LIFETIME_BYTES_CAP: u64 = 5 * 1024 * 1024 * 1024;
+pub const FREE_LIFETIME_BYTES_CAP: u64 = 8 * 1024 * 1024 * 1024;
 pub const FREE_MAX_FILES_PER_TRANSFER: u32 = 10;
 pub const FREE_MAX_VISIBLE_SHELVES: u32 = 1;
 
@@ -92,7 +92,7 @@ mod tests {
         let d = defaults_for(Plan::Free);
         assert!(!d.password_encryption_allowed);
         assert_eq!(d.max_files_per_transfer, 10);
-        assert_eq!(d.total_transfer_bytes_lifetime_cap, 5 * 1024 * 1024 * 1024);
+        assert_eq!(d.total_transfer_bytes_lifetime_cap, 8 * 1024 * 1024 * 1024);
         assert_eq!(d.max_visible_shelves, 1);
     }
 

@@ -40,7 +40,7 @@ impl UserCapabilities {
             transfer_limits: TransferLimits {
                 password_encryption_allowed: false,
                 max_files_per_transfer: 10,
-                total_transfer_bytes_lifetime_cap: 5 * 1024 * 1024 * 1024,
+                total_transfer_bytes_lifetime_cap: 8 * 1024 * 1024 * 1024,
             },
             transfer_usage: TransferUsage::default(),
             presentation: PresentationLimits { max_visible_shelves: 1 },
