@@ -78,7 +78,7 @@ function Window() {
                    {isUpgradeDialog ? (
                        <UpgradeDialogContent />
                    ) : (
-                       <Shelf shelfId={shelfId} />
+                       <Shelf shelfId={shelfId} isCollapsed={!effectiveExpanded} />
                    )}
                    {showExpand && (
                        <Button

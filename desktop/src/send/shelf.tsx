@@ -49,6 +49,7 @@ function ShelfWrapper({
     progress = 0,
     progressEdge = null,
     isOnline = false,
+    isCollapsed = false,
 }: {
     children: ReactNode,
     isDraggingOver?: boolean,
@@ -59,6 +60,7 @@ function ShelfWrapper({
     progress?: number,
     progressEdge?: DockEdge | null,
     isOnline?: boolean,
+    isCollapsed?: boolean,
 }) {
     const handleClose = () => {
         getCurrentWindow()?.close()
@@ -74,14 +76,14 @@ function ShelfWrapper({
         <>
             <Card
                 className={`
-                    rounded-[30px]
+                    ${isCollapsed ? 'rounded-[27px]' : 'rounded-[30px]'}
                     justify-center
                     items-center
                     px-0
                     w-full h-full
                     relative overflow-hidden
                     animate-in fade-in duration-300
-                    transition-[box-shadow,border-color] duration-200
+                    transition-[border-radius,box-shadow,border-color] duration-200
                     ${isDraggingOver
                     ? 'border-bluePrimary shadow-[0_0_8px_2px_rgb(var(--bluePrimary))_inset]'
                     : 'border-white/20'
@@ -151,7 +153,7 @@ function ShelfWrapper({
     )
 }
 
-export function Shelf({shelfId}: { shelfId: string | undefined }) {
+export function Shelf({shelfId, isCollapsed = false}: { shelfId: string | undefined, isCollapsed?: boolean }) {
     const window = getCurrentWindow()
     const windowInfo = useWindow(window)
     const dock = useShelfDock(window)
@@ -267,6 +269,7 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
         progress: dock.progress,
         progressEdge: dock.progressEdge,
         isOnline,
+        isCollapsed,
     };
 
     if (!shelfId) {
