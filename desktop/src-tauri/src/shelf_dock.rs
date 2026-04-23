@@ -330,7 +330,7 @@ fn reconcile_sliver_position<R: Runtime>(
         let _ = win.set_size(tauri::Size::Physical(target_size));
         let _ = win.set_position(tauri::Position::Physical(target_pos));
         let _ = win.emit_to(
-            EventTarget::webview_window(win.label()),
+            EventTarget::window(win.label()),
             "shelf-docked",
             serde_json::json!({ "edge": edge.as_str() }),
         );
@@ -429,7 +429,7 @@ pub fn begin_expand<R: Runtime>(app: &AppHandle<R>, window: &WebviewWindow<R>) {
         Some(Box::new(move |_app| {
             if let Some(w) = app_clone.get_webview_window(&label_for_emit) {
                 let _ = w.emit_to(
-                    EventTarget::webview_window(w.label()),
+                    EventTarget::window(w.label()),
                     "shelf-expanded",
                     serde_json::json!({}),
                 );
@@ -518,7 +518,7 @@ fn emit_dock_progress<R: Runtime>(
     progress: f64,
 ) {
     let _ = window.emit_to(
-        EventTarget::webview_window(window.label()),
+        EventTarget::window(window.label()),
         "dock-progress",
         serde_json::json!({
             "progress": progress,
