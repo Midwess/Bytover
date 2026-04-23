@@ -18,13 +18,17 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     env:
-      ENVIRONMENT: production
       BYTOVER_WITH_SSL: ${{ vars.BYTOVER_WITH_SSL }}
       BYTOVER_PUBLIC_GATEWAY_HOST: ${{ vars.BYTOVER_PUBLIC_GATEWAY_HOST }}
       BYTOVER_PUBLIC_GATEWAY_PORT: ${{ vars.BYTOVER_PUBLIC_GATEWAY_PORT }}
       BYTOVER_PUBLIC_HTTP1_GATEWAY_HOST: ${{ vars.BYTOVER_PUBLIC_HTTP1_GATEWAY_HOST }}
       BYTOVER_PUBLIC_HTTP1_GATEWAY_PORT: ${{ vars.BYTOVER_PUBLIC_HTTP1_GATEWAY_PORT }}
       RELAY_SERVER_SECRET: ${{ secrets.RELAY_SERVER_SECRET }}
+      TURN_PORT: ${{ vars.TURN_PORT }}
+      TURN_USERNAME: ${{ vars.TURN_USERNAME }}
+      TURN_PASSWORD: ${{ secrets.TURN_PASSWORD }}
+      TURN_AUTH_SECRET: ${{ secrets.TURN_AUTH_SECRET }}
+      RUST_LOG: ${{ vars.RUST_LOG }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -75,7 +79,9 @@ jobs:
             PORTAINER_ENDPOINT_ID \
             PORTAINER_STACK_ID \
             PORTAINER_API_KEY \
-            RELAY_SERVER_SECRET
+            RELAY_SERVER_SECRET \
+            TURN_PASSWORD \
+            TURN_AUTH_SECRET
           do
             if [ -z "${!required_var:-}" ]; then
               echo "::error::Missing required value: $required_var"
@@ -112,22 +118,30 @@ jobs:
             printf '%s' "$stack_response" | jq \
               --arg relay_server_image_tag "${{ steps.image_tag.outputs.value }}" \
               --arg relay_server_secret "$RELAY_SERVER_SECRET" \
-              --arg environment "$ENVIRONMENT" \
               --arg bytover_with_ssl "$BYTOVER_WITH_SSL" \
               --arg bytover_public_gateway_host "$BYTOVER_PUBLIC_GATEWAY_HOST" \
               --arg bytover_public_gateway_port "$BYTOVER_PUBLIC_GATEWAY_PORT" \
               --arg bytover_public_http1_gateway_host "$BYTOVER_PUBLIC_HTTP1_GATEWAY_HOST" \
               --arg bytover_public_http1_gateway_port "$BYTOVER_PUBLIC_HTTP1_GATEWAY_PORT" \
+              --arg turn_port "$TURN_PORT" \
+              --arg turn_username "$TURN_USERNAME" \
+              --arg turn_password "$TURN_PASSWORD" \
+              --arg turn_auth_secret "$TURN_AUTH_SECRET" \
+              --arg rust_log "$RUST_LOG" \
               '
               reduce [
                 {"name":"RELAY_SERVER_IMAGE_TAG","value":$relay_server_image_tag},
                 {"name":"RELAY_SERVER_SECRET","value":$relay_server_secret},
-                {"name":"ENVIRONMENT","value":$environment},
                 {"name":"BYTOVER_WITH_SSL","value":$bytover_with_ssl},
                 {"name":"BYTOVER_PUBLIC_GATEWAY_HOST","value":$bytover_public_gateway_host},
                 {"name":"BYTOVER_PUBLIC_GATEWAY_PORT","value":$bytover_public_gateway_port},
                 {"name":"BYTOVER_PUBLIC_HTTP1_GATEWAY_HOST","value":$bytover_public_http1_gateway_host},
-                {"name":"BYTOVER_PUBLIC_HTTP1_GATEWAY_PORT","value":$bytover_public_http1_gateway_port}
+                {"name":"BYTOVER_PUBLIC_HTTP1_GATEWAY_PORT","value":$bytover_public_http1_gateway_port},
+                {"name":"TURN_PORT","value":$turn_port},
+                {"name":"TURN_USERNAME","value":$turn_username},
+                {"name":"TURN_PASSWORD","value":$turn_password},
+                {"name":"TURN_AUTH_SECRET","value":$turn_auth_secret},
+                {"name":"RUST_LOG","value":$rust_log}
               ][] as $item
               ((.Env // []);
                 if any(.[]?; .name == $item.name) then
