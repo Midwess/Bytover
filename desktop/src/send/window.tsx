@@ -100,7 +100,7 @@ function UpgradeOverlay() {
         getCurrentWindow().close()
     }
     return (
-        <div className="absolute inset-0 z-30 bg-card flex flex-col items-stretch px-4 pt-8 pb-4 select-none pointer-events-none">
+        <div className="absolute inset-x-0 top-6 bottom-0 z-30 bg-card flex flex-col items-stretch px-4 pb-4 select-none pointer-events-none">
             <div className="flex-1 flex items-center justify-center">
                 <p className="text-[12px] text-white/70 text-center">You've reached your shelf limit</p>
             </div>
