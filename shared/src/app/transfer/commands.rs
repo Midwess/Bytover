@@ -199,7 +199,7 @@ impl AppCommand {
 
             let device = self.run(DeviceOperation::get_device_info()).await;
             let user = RpcOperation::get_me().into_future(self.ctx()).await.ok();
-            let current_user = self.gen_peer(user, device.unwrap()).await;
+            let current_user = self.gen_peer(user, device.unwrap()).await?;
 
             log::info!("Connecting to peer with key: {key:?}");
             let mut stream = self.stream_from_shell(
