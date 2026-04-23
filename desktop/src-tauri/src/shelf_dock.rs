@@ -10,6 +10,9 @@ pub const UNDOCK_THRESHOLD_PX: f64 = 80.0;
 pub const ANIM_DURATION_MS: u64 = 160;
 pub const ANIM_FRAMES: u32 = 10;
 pub const DOCK_DEBOUNCE_MS: u64 = 80;
+pub const RECONCILE_DURATION_MS: u64 = 500;
+pub const RECONCILE_INTERVAL_MS: u64 = 40;
+pub const RECONCILE_TOLERANCE_PX: i32 = 2;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum DockEdge {
@@ -282,11 +285,8 @@ pub fn begin_dock<R: Runtime>(app: &AppHandle<R>, window: &WebviewWindow<R>, edg
     };
     store_dock(&label, state);
 
-    let app_clone = app.clone();
-    let label_for_emit = label.clone();
-    let label_for_check = label.clone();
-    let monitor_left = m_pos.x;
-    let monitor_right = m_pos.x + m_size.width as i32;
+    let app_for_phase2 = app.clone();
+    let label_for_phase2 = label.clone();
     animate_geometry(
         app.clone(),
         label.clone(),
@@ -295,19 +295,77 @@ pub fn begin_dock<R: Runtime>(app: &AppHandle<R>, window: &WebviewWindow<R>, edg
         target_pos,
         target_size,
         Some(Box::new(move |_app| {
-            if let Some(w) = app_clone.get_webview_window(&label_for_emit) {
-                if let Ok(final_pos) = w.outer_position() {
-                    if final_pos.x < monitor_left || final_pos.x >= monitor_right {
-                        log::warn!(
-                            "shelf_dock: post-dock position {:?} for {} is outside monitor [{}, {})",
-                            final_pos, label_for_check, monitor_left, monitor_right
-                        );
-                    }
-                }
-                let _ = w.emit("shelf-docked", serde_json::json!({ "edge": edge.as_str() }));
-            }
+            reconcile_sliver_position(
+                app_for_phase2,
+                label_for_phase2,
+                edge,
+                target_pos,
+                target_size,
+            );
         })),
     );
+}
+
+fn reconcile_sliver_position<R: Runtime>(
+    app: AppHandle<R>,
+    label: String,
+    edge: DockEdge,
+    target_pos: PhysicalPosition<i32>,
+    target_size: PhysicalSize<u32>,
+) {
+    if !mark_animating(&label) {
+        return;
+    }
+
+    if let Some(win) = app.get_webview_window(&label) {
+        let _ = win.set_size(tauri::Size::Physical(target_size));
+        let _ = win.set_position(tauri::Position::Physical(target_pos));
+        let _ = win.emit(
+            "shelf-docked",
+            serde_json::json!({ "edge": edge.as_str() }),
+        );
+    }
+
+    tauri::async_runtime::spawn(async move {
+        let duration = Duration::from_millis(RECONCILE_DURATION_MS);
+        let interval = Duration::from_millis(RECONCILE_INTERVAL_MS);
+        let start = Instant::now();
+        let mut clean_ticks = 0u32;
+
+        while start.elapsed() < duration {
+            tokio::time::sleep(interval).await;
+
+            if !is_docked(&label) {
+                break;
+            }
+            let Some(win) = app.get_webview_window(&label) else {
+                break;
+            };
+            let Ok(actual_pos) = win.outer_position() else {
+                continue;
+            };
+            let Ok(actual_size) = win.outer_size() else {
+                continue;
+            };
+
+            let pos_off = (actual_pos.x - target_pos.x).abs() > RECONCILE_TOLERANCE_PX
+                || (actual_pos.y - target_pos.y).abs() > RECONCILE_TOLERANCE_PX;
+            let size_off = actual_size.width != target_size.width;
+
+            if pos_off || size_off {
+                let _ = win.set_size(tauri::Size::Physical(target_size));
+                let _ = win.set_position(tauri::Position::Physical(target_pos));
+                clean_ticks = 0;
+            } else {
+                clean_ticks += 1;
+                if clean_ticks >= 3 {
+                    break;
+                }
+            }
+        }
+
+        clear_animating(&label);
+    });
 }
 
 fn clamp_pos_to_monitor(
