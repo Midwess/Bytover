@@ -5,6 +5,7 @@ import {noop} from "motion";
 import {invoke} from "@tauri-apps/api/core";
 import {convertFileSrc} from "@tauri-apps/api/core";
 import {useEffect, useRef, useState, ReactNode} from "react";
+import {createPortal} from "react-dom";
 import {useShelfClipboard} from "@/hooks/use-shelf-clipboard.ts";
 import core from "@/core.ts";
 import {
@@ -33,56 +34,131 @@ import {
 } from "shared_types/types/shared_types";
 import {formatFileSize} from "@/utils/format-file-size";
 import useWindow from "@/hooks/use-window.ts";
+import useShelfDock, {DockEdge} from "@/hooks/use-shelf-dock.ts";
 import {throttle} from "lodash";
 import {UnlimitedLineText} from "@/components/ui/unlimited-line-text";
 import {PeerAvatarGroup} from "@/send/peer-avatar-group";
 
-function ShelfWrapper({children, isDraggingOver = false, shelfName}: {
+function ShelfWrapper({
+    children,
+    isDraggingOver = false,
+    shelfName,
+    isDocked = false,
+    dockEdge = null,
+    onExpand,
+    progress = 0,
+    progressEdge = null,
+    isOnline = false,
+}: {
     children: ReactNode,
     isDraggingOver?: boolean,
-    shelfName?: string
+    shelfName?: string,
+    isDocked?: boolean,
+    dockEdge?: DockEdge | null,
+    onExpand?: () => void,
+    progress?: number,
+    progressEdge?: DockEdge | null,
+    isOnline?: boolean,
 }) {
     const handleClose = () => {
         getCurrentWindow()?.close()
     }
 
+    const activeEdge = dockEdge ?? progressEdge;
+    const clampedProgress = Math.min(Math.max(progress, 0), 1);
+    const state2Opacity = clampedProgress;
+    const nameRotation = activeEdge === "left" ? "rotate(180deg)" : undefined;
+    const innerEdgePos = activeEdge === "right" ? "left-0" : "right-0";
+
     return (
-        <Card
-            className={`
-                rounded-[30px]
-                justify-center
-                items-center
-                px-0
-                w-full h-full
-                transition-all duration-200 relative overflow-hidden
-                ${isDraggingOver
-                ? 'border-bluePrimary shadow-[0_0_8px_2px_rgb(var(--bluePrimary))_inset]'
-                : 'border-white/20'
-            }
-            `}>
-            <div
-                className="flex flex-col absolute top-0 left-0 right-0 h-5 bg-gradient-to-b from-card to-transparent pointer-events-none z-20"/>
-            <div data-tauri-drag-region
-                 className={"w-full py-1 absolute top-0 flex justify-center items-center z-[60] peer group flex-col cursor-pointer"}>
-               <Minus
-                    className={"pointer-events-none scale-x-200 scale-y-200 text-primary transition-transform duration-200 group-hover:scale-x-[3] group-hover:scale-y-[2.5]"}/>
-            </div>
-            <button
-                onClick={handleClose}
-                className="hover:cursor-pointer absolute -top-0 -right-4.5 w-20 h-4.5 bg-muted-foreground/10 rounded-xl z-100 rotate-45 flex items-center justify-start pl-10 transition-all group z-50 -pb-5.5 opacity-0 peer-hover:opacity-100 hover:opacity-100 rounded-2xl"
-            >
-                <Minus className="w-4 h-4.5 scale-y-180 text-lg font-bold text-foreground -rotate-45"></Minus>
-            </button>
-            {children}
-        </Card>
+        <>
+            <Card
+                className={`
+                    rounded-[30px]
+                    justify-center
+                    items-center
+                    px-0
+                    w-full h-full
+                    relative overflow-hidden
+                    animate-in fade-in duration-300
+                    transition-[box-shadow,border-color] duration-200
+                    ${isDraggingOver
+                    ? 'border-bluePrimary shadow-[0_0_8px_2px_rgb(var(--bluePrimary))_inset]'
+                    : 'border-white/20'
+                }
+                `}>
+                <div className="absolute inset-0">
+                    <div
+                        className="flex flex-col absolute top-0 left-0 right-0 h-5 bg-gradient-to-b from-card to-transparent pointer-events-none z-20"/>
+                    <div data-tauri-drag-region
+                         className={"w-full py-1 absolute top-0 flex justify-center items-center z-[60] peer group flex-col cursor-pointer"}>
+                       <Minus
+                            className={"pointer-events-none scale-x-200 scale-y-200 text-primary transition-transform duration-200 group-hover:scale-x-[3] group-hover:scale-y-[2.5]"}/>
+                    </div>
+                    <button
+                        onClick={handleClose}
+                        className="hover:cursor-pointer absolute -top-0 -right-4.5 w-20 h-4.5 bg-muted-foreground/10 rounded-xl z-100 rotate-45 flex items-center justify-start pl-10 transition-all group z-50 -pb-5.5 opacity-0 peer-hover:opacity-100 hover:opacity-100 rounded-2xl"
+                    >
+                        <Minus className="w-4 h-4.5 scale-y-180 text-lg font-bold text-foreground -rotate-45"></Minus>
+                    </button>
+                    {children}
+                </div>
+            </Card>
+
+            {activeEdge && createPortal(
+                <button
+                    onClick={onExpand}
+                    disabled={!isDocked}
+                    aria-label="Expand shelf"
+                    className={`dark group fixed top-[7.5px] left-0 right-0 h-[230px] z-[200] p-0 ${isDocked ? "rounded-[26px]" : "rounded-[30px]"} border-2 border-white/20 bg-card text-card-foreground overflow-hidden cursor-pointer transition-[opacity,background-color,border-radius] duration-200 ease-out hover:bg-muted disabled:cursor-default`}
+                    style={{
+                        opacity: state2Opacity,
+                        pointerEvents: isDocked ? "auto" : "none",
+                    }}
+                >
+                    <div
+                        className={`absolute top-0 bottom-0 w-[36px] ${innerEdgePos} overflow-hidden`}
+                    >
+                        <span className="absolute top-3 left-1/2 -translate-x-1/2 h-4 flex items-center justify-center">
+                            {isOnline && (
+                                <span
+                                    className="w-2 h-2 rounded-full"
+                                    style={{
+                                        backgroundColor: "var(--color-greenSecondary)",
+                                        boxShadow: "0 0 6px var(--color-greenSecondary)",
+                                    }}
+                                />
+                            )}
+                        </span>
+                        <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
+                            <Minus className="pointer-events-none rotate-90 scale-x-200 scale-y-200 text-primary transition-transform duration-200 group-hover:scale-x-[3] group-hover:scale-y-[2.5]"/>
+                        </span>
+                        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 max-h-[calc(50%-2rem)] flex items-end justify-center overflow-hidden">
+                            {shelfName && (
+                                <span
+                                    className="text-[10px] font-medium text-foreground/60 group-hover:text-foreground transition-opacity duration-150 opacity-70 group-hover:opacity-100 whitespace-nowrap select-none tracking-wide"
+                                    style={{writingMode: "vertical-rl", transform: nameRotation}}
+                                >
+                                    {shelfName}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                </button>,
+                document.body
+            )}
+        </>
     )
 }
 
 export function Shelf({shelfId}: { shelfId: string | undefined }) {
     const window = getCurrentWindow()
     const windowInfo = useWindow(window)
+    const dock = useShelfDock(window)
     const selectedResources = core.useSelectedResourcesForShelf(shelfId)
     const currentShelf = core.useCurrentShelf(shelfId)
+    const p2pSession = core.useP2PSessionForShelf(shelfId)
+    const isOnline = !!p2pSession
     const isResourceRemoveAllowed = currentShelf?.is_resource_remove_allowed ?? true
     const effectRan = useRef(false);
     const [isDraggingOver, setIsDraggingOver] = useState(false);
@@ -184,16 +260,29 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
         };
     }, [shelfId]);
 
+    const wrapperDockProps = {
+        isDocked: dock.isDocked,
+        dockEdge: dock.edge,
+        onExpand: dock.expand,
+        progress: dock.progress,
+        progressEdge: dock.progressEdge,
+        isOnline,
+    };
+
     if (!shelfId) {
         return (
-            <ShelfWrapper>
+            <ShelfWrapper {...wrapperDockProps} shelfName={currentShelf?.name}>
                 <Loader2 className="h-6 w-6 text-foreground animate-spin"/>
             </ShelfWrapper>
         )
     }
 
     return (
-        <ShelfWrapper isDraggingOver={isDraggingOver} shelfName={currentShelf?.name}>
+        <ShelfWrapper
+            isDraggingOver={isDraggingOver}
+            shelfName={currentShelf?.name}
+            {...wrapperDockProps}
+        >
             <div ref={containerRef} tabIndex={0} className="w-full h-full outline-none">
             <div
                 className={`absolute z-40 inset-0 bg-bluePrimary/10 backdrop-blur-[3px] flex items-center justify-center animate-in fade-in duration-200 ${!isDraggingOver && 'hidden'}`}>
