@@ -110,14 +110,14 @@ function ShelfWrapper({
                     onClick={onExpand}
                     disabled={!isDocked}
                     aria-label="Expand shelf"
-                    className="dark group fixed top-[14px] bottom-[14px] left-[14px] w-[200px] z-[200] p-0 rounded-[30px] border-2 border-white/20 bg-card text-card-foreground overflow-hidden cursor-pointer transition-[opacity,background-color] duration-200 ease-out hover:bg-muted disabled:cursor-default"
+                    className="dark group fixed top-[7.5px] left-0 right-0 h-[230px] z-[200] p-0 rounded-[30px] border-2 border-white/20 bg-card text-card-foreground overflow-hidden cursor-pointer transition-[opacity,background-color] duration-200 ease-out hover:bg-muted disabled:cursor-default"
                     style={{
                         opacity: state2Opacity,
                         pointerEvents: isDocked ? "auto" : "none",
                     }}
                 >
                     <div
-                        className={`absolute top-0 bottom-0 w-[32px] ${innerEdgePos} overflow-hidden`}
+                        className={`absolute top-0 bottom-0 w-[48px] ${innerEdgePos} overflow-hidden`}
                     >
                         <span className="absolute top-3 left-1/2 -translate-x-1/2 h-4 flex items-center justify-center">
                             {isOnline && (
