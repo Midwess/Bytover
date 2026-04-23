@@ -452,88 +452,95 @@ fn render(view: AppViewModel, app_handle: AppHandle) {
 }
 
 fn update_tray_menu_signed_out(app_handle: &AppHandle) {
-    let Ok(user_guide_item) = MenuItemBuilder::with_id("user_guide", "User Guide").build(app_handle) else {
-        return;
-    };
-    let Ok(quit_item) = MenuItemBuilder::with_id("quit", "Quit").build(app_handle) else {
-        return;
-    };
+    let app_handle = app_handle.clone();
+    let _ = app_handle.clone().run_on_main_thread(move || {
+        let Ok(user_guide_item) = MenuItemBuilder::with_id("user_guide", "User Guide").build(&app_handle) else {
+            return;
+        };
+        let Ok(quit_item) = MenuItemBuilder::with_id("quit", "Quit").build(&app_handle) else {
+            return;
+        };
 
-    let Ok(menu) = MenuBuilder::new(app_handle).item(&user_guide_item).separator().item(&quit_item).build() else {
-        return;
-    };
+        let Ok(menu) = MenuBuilder::new(&app_handle).item(&user_guide_item).separator().item(&quit_item).build() else {
+            return;
+        };
 
-    if let Ok(guard) = TRAY_ICON.lock() {
-        if let Some(tray) = guard.as_ref() {
-            let _ = tray.set_menu(Some(menu));
+        if let Ok(guard) = TRAY_ICON.lock() {
+            if let Some(tray) = guard.as_ref() {
+                let _ = tray.set_menu(Some(menu));
+            }
         }
-    }
+    });
 }
 
 fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel], is_paid: bool) {
-    let Ok(new_shelf_item) = MenuItemBuilder::with_id("new_shelf", "New Shelf").build(app_handle) else {
-        return;
-    };
-    let Ok(new_shelf_clipboard_item) =
-        MenuItemBuilder::with_id("new_shelf_from_clipboard", "New Shelf from Clipboard").build(app_handle)
-    else {
-        return;
-    };
-    let Ok(close_all_shelves_item) = MenuItemBuilder::with_id("close_all_shelves", "Close all shelves").build(app_handle) else {
-        return;
-    };
-    let Ok(user_guide_item) = MenuItemBuilder::with_id("user_guide", "User Guide").build(app_handle) else {
-        return;
-    };
-    let Ok(settings_item) = MenuItemBuilder::with_id("settings", "Settings").build(app_handle) else {
-        return;
-    };
-    let Ok(quit_item) = MenuItemBuilder::with_id("quit", "Quit").build(app_handle) else {
-        return;
-    };
-    let upgrade_item = if !is_paid {
-        MenuItemBuilder::with_id("upgrade", "Upgrade").build(app_handle).ok()
-    } else {
-        None
-    };
+    let app_handle = app_handle.clone();
+    let shelves: Vec<ShelfItemViewModel> = shelves.to_vec();
+    let _ = app_handle.clone().run_on_main_thread(move || {
+        let Ok(new_shelf_item) = MenuItemBuilder::with_id("new_shelf", "New Shelf").build(&app_handle) else {
+            return;
+        };
+        let Ok(new_shelf_clipboard_item) =
+            MenuItemBuilder::with_id("new_shelf_from_clipboard", "New Shelf from Clipboard").build(&app_handle)
+        else {
+            return;
+        };
+        let Ok(close_all_shelves_item) = MenuItemBuilder::with_id("close_all_shelves", "Close all shelves").build(&app_handle) else {
+            return;
+        };
+        let Ok(user_guide_item) = MenuItemBuilder::with_id("user_guide", "User Guide").build(&app_handle) else {
+            return;
+        };
+        let Ok(settings_item) = MenuItemBuilder::with_id("settings", "Settings").build(&app_handle) else {
+            return;
+        };
+        let Ok(quit_item) = MenuItemBuilder::with_id("quit", "Quit").build(&app_handle) else {
+            return;
+        };
+        let upgrade_item = if !is_paid {
+            MenuItemBuilder::with_id("upgrade", "Upgrade").build(&app_handle).ok()
+        } else {
+            None
+        };
 
-    let mut recent_submenu_builder = SubmenuBuilder::with_id(app_handle, "recent_shelves", "Recent Shelves");
-    for shelf in shelves.iter().take(10) {
-        let shelf_id = format!("shelf_{}", shelf.id);
-        let online_indicator = if shelf.is_online { "🟢 " } else { "" };
-        let menu_text = format!("{}{} - {}", online_indicator, shelf.name, shelf.description);
-        if let Ok(item) = MenuItemBuilder::with_id(&shelf_id, &menu_text).build(app_handle) {
-            recent_submenu_builder = recent_submenu_builder.item(&item);
+        let mut recent_submenu_builder = SubmenuBuilder::with_id(&app_handle, "recent_shelves", "Recent Shelves");
+        for shelf in shelves.iter().take(10) {
+            let shelf_id = format!("shelf_{}", shelf.id);
+            let online_indicator = if shelf.is_online { "🟢 " } else { "" };
+            let menu_text = format!("{}{} - {}", online_indicator, shelf.name, shelf.description);
+            if let Ok(item) = MenuItemBuilder::with_id(&shelf_id, &menu_text).build(&app_handle) {
+                recent_submenu_builder = recent_submenu_builder.item(&item);
+            }
         }
-    }
 
-    let Ok(recent_submenu) = recent_submenu_builder.build() else {
-        return;
-    };
+        let Ok(recent_submenu) = recent_submenu_builder.build() else {
+            return;
+        };
 
-    let mut menu_builder = MenuBuilder::new(app_handle)
-        .item(&new_shelf_item)
-        .item(&new_shelf_clipboard_item)
-        .item(&recent_submenu)
-        .separator();
+        let mut menu_builder = MenuBuilder::new(&app_handle)
+            .item(&new_shelf_item)
+            .item(&new_shelf_clipboard_item)
+            .item(&recent_submenu)
+            .separator();
 
-    if app_handle.is_any_shelf_window_open() {
-        menu_builder = menu_builder.item(&close_all_shelves_item).separator();
-    }
-
-    menu_builder = menu_builder.item(&user_guide_item).item(&settings_item);
-    if let Some(item) = upgrade_item.as_ref() {
-        menu_builder = menu_builder.item(item);
-    }
-    let Ok(menu) = menu_builder.item(&quit_item).build() else {
-        return;
-    };
-
-    if let Ok(guard) = TRAY_ICON.lock() {
-        if let Some(tray) = guard.as_ref() {
-            let _ = tray.set_menu(Some(menu));
+        if app_handle.is_any_shelf_window_open() {
+            menu_builder = menu_builder.item(&close_all_shelves_item).separator();
         }
-    }
+
+        menu_builder = menu_builder.item(&user_guide_item).item(&settings_item);
+        if let Some(item) = upgrade_item.as_ref() {
+            menu_builder = menu_builder.item(item);
+        }
+        let Ok(menu) = menu_builder.item(&quit_item).build() else {
+            return;
+        };
+
+        if let Ok(guard) = TRAY_ICON.lock() {
+            if let Some(tray) = guard.as_ref() {
+                let _ = tray.set_menu(Some(menu));
+            }
+        }
+    });
 }
 
 async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) {
