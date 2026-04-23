@@ -1,6 +1,5 @@
 use crate::app_gateway::app_info::AppInfoService;
 use crate::app_gateway::markov::Markov;
-use crate::app_gateway::plan::PlanSeeder;
 use crate::cloud_storage::storage::CloudStorage;
 use crate::grpc::cloud_service::CloudGrpcService;
 use crate::grpc::middlewares::auth::AuthInterceptor;
@@ -50,7 +49,6 @@ pub struct DiContainer {
     pub devlog_sdk: DevlogSdk,
     db_connection: DatabaseConnection,
     pub pg_pool: PgPool,
-    plan_seeder: Arc<PlanSeeder>,
 }
 
 impl DiContainer {
@@ -97,12 +95,7 @@ impl DiContainer {
             devlog_sdk,
             db_connection,
             pg_pool,
-            plan_seeder: Arc::new(PlanSeeder::from_env()),
         }
-    }
-
-    pub fn get_plan_seeder(&self) -> Arc<PlanSeeder> {
-        self.plan_seeder.clone()
     }
 
     pub async fn get_user_capabilities_repository(&'static self) -> impl UserCapabilitiesRepository {

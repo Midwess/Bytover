@@ -14,7 +14,7 @@ pub struct UserCapabilities {
 
 impl UserCapabilities {
     pub fn seed(user_order_id: u64, plan: Plan) -> Self {
-        let d = crate::app_gateway::plan::PlanSeeder::defaults_for(plan);
+        let d = crate::app_gateway::plan::defaults_for(plan);
         Self::from_defaults(user_order_id, plan, d, 0)
     }
 

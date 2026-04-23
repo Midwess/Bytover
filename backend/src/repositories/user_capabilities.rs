@@ -10,7 +10,7 @@ pub enum IncrementOutcome {
 
 #[async_trait::async_trait]
 pub trait UserCapabilitiesRepository: Send + Sync {
-    async fn find_or_seed(&self, user_order_id: u64, seed_plan: Plan) -> Result<UserCapabilities, RepositoryError>;
+    async fn find_or_create_default(&self, user_order_id: u64) -> Result<UserCapabilities, RepositoryError>;
 
     async fn increment_bytes_used(&self, user_order_id: u64, delta: u64) -> Result<IncrementOutcome, RepositoryError>;
 

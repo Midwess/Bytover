@@ -1,4 +1,4 @@
-use crate::app_gateway::plan::{Plan, PlanSeeder};
+use crate::app_gateway::plan::{defaults_for, Plan};
 use crate::entities::user_capabilities::UserCapabilities;
 use crate::repositories::user_capabilities::{IncrementOutcome, UserCapabilitiesRepository};
 use core_services::db::repository::abstraction::errors::RepositoryError;
@@ -31,7 +31,7 @@ struct BytesUsedRow {
 
 #[async_trait::async_trait]
 impl UserCapabilitiesRepository for UserCapabilitiesPostgresRepository {
-    async fn find_or_seed(&self, user_order_id: u64, seed_plan: Plan) -> Result<UserCapabilities, RepositoryError> {
+    async fn find_or_create_default(&self, user_order_id: u64) -> Result<UserCapabilities, RepositoryError> {
         if let Some(m) = model::Entity::find_by_id(user_order_id as i64)
             .one(&self.db)
             .await
@@ -40,11 +40,12 @@ impl UserCapabilitiesRepository for UserCapabilitiesPostgresRepository {
             return Ok(Self::model_to_entity(m));
         }
 
-        let defaults = PlanSeeder::defaults_for(seed_plan);
+        let plan = Plan::Free;
+        let defaults = defaults_for(plan);
         let now = chrono::Utc::now().into();
         let active = model::ActiveModel {
             user_order_id: Set(user_order_id as i64),
-            plan: Set(seed_plan.as_i16()),
+            plan: Set(plan.as_i16()),
             password_encryption_allowed: Set(defaults.password_encryption_allowed),
             max_files_per_transfer: Set(defaults.max_files_per_transfer as i32),
             total_transfer_bytes_lifetime_cap: Set(defaults.total_transfer_bytes_lifetime_cap as i64),
@@ -110,7 +111,7 @@ impl UserCapabilitiesRepository for UserCapabilitiesPostgresRepository {
     }
 
     async fn set_plan(&self, user_order_id: u64, plan: Plan) -> Result<UserCapabilities, RepositoryError> {
-        let defaults = PlanSeeder::defaults_for(plan);
+        let defaults = defaults_for(plan);
         let existing = model::Entity::find_by_id(user_order_id as i64)
             .one(&self.db)
             .await
