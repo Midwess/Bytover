@@ -431,62 +431,62 @@ function formatBytes(n: number): string {
 }
 
 function PlanComparison({limits, onUpgrade}: {limits: FreeLimits; onUpgrade: () => void}) {
-    const rows: {label: string; free: string; paid: string}[] = [
-        {label: "Files", free: formatCount(limits.maxFilesPerTransfer), paid: "Unlimited"},
-        {label: "Transfer", free: formatBytes(limits.transferLifetimeCapBytes), paid: "No cap"},
-        {label: "Shelves", free: formatCount(limits.maxVisibleShelves), paid: "Unlimited"},
-        {label: "Password protection", free: limits.passwordEncryptionAllowed ? "Included" : "No", paid: "Included"},
+    const features: {label: string; freeNote: string}[] = [
+        {label: "Unlimited files per transfer", freeNote: `Free: ${formatCount(limits.maxFilesPerTransfer)}`},
+        {label: "No transfer size cap", freeNote: `Free: ${formatBytes(limits.transferLifetimeCapBytes)} lifetime`},
+        {label: "Unlimited shelves", freeNote: `Free: ${formatCount(limits.maxVisibleShelves)}`},
+        {
+            label: "Password-protected transfers",
+            freeNote: limits.passwordEncryptionAllowed ? "Included on Free" : "Not available on Free",
+        },
     ]
 
     return (
-        <div className="px-4 py-3">
-            <div className="grid grid-cols-[100px_1fr_1fr] items-center">
-                <div className="pb-2 pr-6" />
-                <div className="pb-2 px-2 flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/40">
-                    Free
-                    <span className="px-1.5 py-[1px] rounded-full bg-amber-500/15 text-amber-300 text-[9px] font-bold tracking-wide">
-                        YOU
-                    </span>
-                </div>
-                <div className="pb-2 px-2 flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/40">
-                    Paid
-                </div>
-                <div className="col-span-full border-t border-white/5" />
-                {rows.map((r, i) => (
-                    <React.Fragment key={i}>
-                        <div className="py-2 pr-6 text-[12px] text-white/80 font-medium">{r.label}</div>
-                        <div className="py-2 px-2 text-[12px] text-center text-white/40 tabular-nums">{r.free}</div>
-                        <div className="py-2 px-2 text-[12px] text-center text-white/95 font-semibold tabular-nums">{r.paid}</div>
-                        {i < rows.length - 1 && <div className="col-span-full border-t border-white/[0.03]" />}
-                    </React.Fragment>
-                ))}
-            </div>
-            <div className="pt-3 mt-3 border-t border-white/5 flex items-center justify-between">
+        <div className="px-5 py-5">
+            <div className="flex items-start justify-between gap-6 mb-4">
                 <div className="flex flex-col">
-                    <span className="text-[13px] font-semibold text-white">$14.89 · one-time</span>
-                    <span className="text-[11px] text-white/40">Lifetime access. No subscription.</span>
+                    <span className="text-[14px] font-semibold text-white tracking-tight">Bytover Pro</span>
+                    <span className="text-[11px] text-white/40 mt-0.5">You're on the Free plan</span>
                 </div>
-                <Button
-                    size="sm"
-                    onClick={onUpgrade}
-                    className="h-[28px] px-4 text-[12px] font-semibold bg-[#3b82f6] hover:bg-[#2563eb] text-white border-none rounded-full shadow-none"
-                >
-                    Upgrade
-                </Button>
+                <div className="flex flex-col items-end shrink-0">
+                    <span className="text-[14px] font-semibold text-white tabular-nums">$14.89</span>
+                    <span className="text-[11px] text-white/40 mt-0.5">One-time · lifetime</span>
+                </div>
             </div>
+
+            <div className="h-px bg-white/5" />
+
+            <ul className="flex flex-col gap-3 py-4">
+                {features.map((f, i) => (
+                    <li key={i} className="flex items-start gap-2.5">
+                        <Check className="w-3.5 h-3.5 text-white/70 mt-[3px] shrink-0" strokeWidth={2.5} />
+                        <div className="flex flex-col min-w-0">
+                            <span className="text-[12.5px] text-white/90 leading-tight">{f.label}</span>
+                            <span className="text-[11px] text-white/35 leading-tight mt-0.5">{f.freeNote}</span>
+                        </div>
+                    </li>
+                ))}
+            </ul>
+
+            <Button
+                onClick={onUpgrade}
+                className="w-full h-[32px] text-[12.5px] font-semibold bg-white text-black hover:bg-white/90 border-none rounded-lg shadow-none"
+            >
+                Upgrade to Pro
+            </Button>
         </div>
     )
 }
 
 function PaidPlanNotice() {
     return (
-        <div className="px-4 py-5 flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-emerald-500/15 flex items-center justify-center">
-                <span className="text-emerald-300 text-[14px] font-bold">✓</span>
+        <div className="px-5 py-5 flex items-center gap-3">
+            <div className="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center shrink-0">
+                <Check className="w-3.5 h-3.5 text-white/80" strokeWidth={2.5} />
             </div>
             <div className="flex flex-col">
-                <span className="text-[13px] font-semibold text-white">You're on the Paid plan</span>
-                <span className="text-[11px] text-white/50">Lifetime access. Thanks for supporting Bytover.</span>
+                <span className="text-[13px] font-semibold text-white tracking-tight">Bytover Pro</span>
+                <span className="text-[11px] text-white/40 mt-0.5">Lifetime access. Thanks for supporting Bytover.</span>
             </div>
         </div>
     )
