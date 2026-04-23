@@ -1,6 +1,6 @@
 import {Button} from "@/components/ui/button"
 import {Card} from "@/components/ui/card"
-import {PasswordInput} from "@/components/ui/password-input"
+import {TransferPasswordField} from "@/send/transfer-password-field"
 import {MultiEmailInput} from "@/components/ui/multi-email-input"
 import core from "@/core.ts"
 import {invoke} from "@tauri-apps/api/core"
@@ -44,13 +44,10 @@ export function EmailTransfer({ shelfId }: { shelfId: string | undefined }) {
             />
         </Card>
         <Card shadowSize={0.5} className="flex flex-col p-1 w-full">
-            <PasswordInput
+            <TransferPasswordField
                 className={"h-9 bg-secondary shadow-background w-full"}
                 value={pwd}
-                onChange={(e) => {
-                    setPwd(e.target.value)
-                }}
-                placeholder={"Password (Optional)"}
+                onChange={setPwd}
                 disabled={!!cloudSession?.is_in_progress && !!cloudSession?.is_email}
             />
         </Card>

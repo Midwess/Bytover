@@ -3,6 +3,7 @@ import React, {useEffect, useState} from "react"
 import {invoke} from "@tauri-apps/api/core"
 import {getVersion} from "@tauri-apps/api/app"
 import {getCurrentWindow} from "@tauri-apps/api/window"
+import {listen} from "@tauri-apps/api/event"
 import {Button} from "@/components/ui/button"
 import {
     Info,
@@ -16,7 +17,7 @@ import {
     ChevronRight,
     ExternalLink,
     Shield,
-    Search
+    Search,
 } from "lucide-react"
 import {
     checkForUpdate,
@@ -26,6 +27,7 @@ import {
 } from "@/lib/updater"
 import {motion, AnimatePresence} from "motion/react"
 import { openUrl } from "@tauri-apps/plugin-opener"
+import core from "@/core.ts"
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>
@@ -34,6 +36,14 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
 )
 
 type SettingsTab = "general" | "about" | "updates" | "account"
+
+const IS_MACOS = typeof navigator !== "undefined" && /Mac/i.test(navigator.userAgent)
+
+function isValidTab(value: string | null): value is SettingsTab {
+    if (value === "general" || value === "about" || value === "account") return true
+    if (value === "updates") return !IS_MACOS
+    return false
+}
 
 interface UpdateStatus {
     available: boolean
@@ -46,7 +56,7 @@ function SettingsWindow() {
     const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
         const params = new URLSearchParams(window.location.search)
         const tab = params.get("tab")
-        return (tab as SettingsTab) || "general"
+        return isValidTab(tab) ? tab : "general"
     })
     const [version, setVersion] = useState<string>("")
     const [isCheckingUpdate, setIsCheckingUpdate] = useState(false)
@@ -57,10 +67,15 @@ function SettingsWindow() {
     const [isLoadingAutoLaunch, setIsLoadingAutoLaunch] = useState(true)
 
     useEffect(() => {
+        core.launch()
+    }, [])
+
+    useEffect(() => {
         getVersion().then(setVersion)
     }, [])
 
     useEffect(() => {
+        if (IS_MACOS) return
         checkForUpdate()
             .then(setUpdateStatus)
             .catch(console.error)
@@ -71,6 +86,17 @@ function SettingsWindow() {
             .then(setAutoLaunchEnabled)
             .catch(console.error)
             .finally(() => setIsLoadingAutoLaunch(false))
+    }, [])
+
+    useEffect(() => {
+        const unlistenPromise = listen<string>("settings-set-tab", (event) => {
+            if (isValidTab(event.payload)) {
+                setActiveTab(event.payload)
+            }
+        })
+        return () => {
+            unlistenPromise.then((unlisten) => unlisten())
+        }
     }, [])
 
     const handleCheckUpdate = async () => {
@@ -140,13 +166,13 @@ function SettingsWindow() {
             icon: <User />,
             color: "bg-[#f39c12]"
         },
-        {
-            id: "updates",
+        ...(IS_MACOS ? [] : [{
+            id: "updates" as const,
             label: "Updates",
             description: "Keep your Bytover application up to date with the latest features.",
             icon: <RefreshCw />,
             color: "bg-[#3498db]"
-        },
+        }]),
         {
             id: "about",
             label: "About",
@@ -383,12 +409,120 @@ function GeneralContent({enabled, isLoading, onToggle}: {
     )
 }
 
+type PlanKind = "free" | "paid"
+
+type FreeLimits = {
+    maxFilesPerTransfer: number
+    transferLifetimeCapBytes: number
+    maxVisibleShelves: number
+    passwordEncryptionAllowed: boolean
+}
+
+function formatCount(n: number): string {
+    return n === 0 ? "Unlimited" : n.toString()
+}
+
+function formatBytes(n: number): string {
+    if (n === 0) return "No cap"
+    const gib = n / (1024 * 1024 * 1024)
+    if (gib >= 1) return Number.isInteger(gib) ? `${gib} GB` : `${gib.toFixed(1)} GB`
+    const mib = n / (1024 * 1024)
+    return Number.isInteger(mib) ? `${mib} MB` : `${mib.toFixed(1)} MB`
+}
+
+function PlanComparison({limits, onUpgrade}: {limits: FreeLimits; onUpgrade: () => void}) {
+    const features: {label: string; freeNote: string}[] = [
+        {label: "Unlimited files per transfer", freeNote: `Free: ${formatCount(limits.maxFilesPerTransfer)}`},
+        {label: "No transfer size cap", freeNote: `Free: ${formatBytes(limits.transferLifetimeCapBytes)} lifetime`},
+        {label: "Unlimited shelves", freeNote: `Free: ${formatCount(limits.maxVisibleShelves)}`},
+        {
+            label: "Password-protected transfers",
+            freeNote: limits.passwordEncryptionAllowed ? "Included on Free" : "Not available on Free",
+        },
+    ]
+
+    return (
+        <div className="px-5 py-5">
+            <div className="flex items-start justify-between gap-6 mb-4">
+                <div className="flex flex-col">
+                    <span className="text-[14px] font-semibold text-white tracking-tight">Bytover Pro</span>
+                    <span className="text-[11px] text-white/40 mt-0.5">You're on the Free plan</span>
+                </div>
+                <div className="flex flex-col items-end shrink-0">
+                    <span className="text-[14px] font-semibold text-white tabular-nums">$14.89</span>
+                    <span className="text-[11px] text-white/40 mt-0.5">One-time · lifetime</span>
+                </div>
+            </div>
+
+            <div className="h-px bg-white/5" />
+
+            <ul className="flex flex-col gap-3 py-4">
+                {features.map((f, i) => (
+                    <li key={i} className="flex items-start gap-2.5">
+                        <Check className="w-3.5 h-3.5 text-white/70 mt-[3px] shrink-0" strokeWidth={2.5} />
+                        <div className="flex flex-col min-w-0">
+                            <span className="text-[12.5px] text-white/90 leading-tight">{f.label}</span>
+                            <span className="text-[11px] text-white/35 leading-tight mt-0.5">{f.freeNote}</span>
+                        </div>
+                    </li>
+                ))}
+            </ul>
+
+            <Button
+                onClick={onUpgrade}
+                className="w-full h-[32px] text-[12.5px] font-semibold bg-white text-black hover:bg-white/90 border-none rounded-lg shadow-none"
+            >
+                Upgrade to Pro
+            </Button>
+        </div>
+    )
+}
+
+function PaidPlanNotice() {
+    return (
+        <div className="px-5 py-5 flex items-center gap-3">
+            <div className="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center shrink-0">
+                <Check className="w-3.5 h-3.5 text-white/80" strokeWidth={2.5} />
+            </div>
+            <div className="flex flex-col">
+                <span className="text-[13px] font-semibold text-white tracking-tight">Bytover Pro</span>
+                <span className="text-[11px] text-white/40 mt-0.5">Lifetime access. Thanks for supporting Bytover.</span>
+            </div>
+        </div>
+    )
+}
+
 function AccountContent({onSignOut}: {onSignOut: () => void}) {
+    const auth = core.useAuthentication()
+    const caps = auth?.capabilities
+    const currentPlan: PlanKind = (caps?.plan as unknown) === "Paid" ? "paid" : "free"
+    const handleUpgrade = () => {}
+
+    const subscriptionBody = caps == null ? (
+        <div className="px-4 py-5 text-[12px] text-white/50">Loading plan…</div>
+    ) : currentPlan === "paid" ? (
+        <PaidPlanNotice />
+    ) : (
+        <PlanComparison
+            limits={{
+                maxFilesPerTransfer: Number(caps.transfer_limits.max_files_per_transfer),
+                transferLifetimeCapBytes: Number(caps.transfer_limits.total_transfer_bytes_lifetime_cap),
+                maxVisibleShelves: Number(caps.presentation.max_visible_shelves),
+                passwordEncryptionAllowed: caps.transfer_limits.password_encryption_allowed,
+            }}
+            onUpgrade={handleUpgrade}
+        />
+    )
+
     return (
         <div className="space-y-6">
+            <SettingsSection title="Subscription">
+                {subscriptionBody}
+            </SettingsSection>
+
             <SettingsSection title="Current Session">
-                <SettingsRow 
-                    label="Sign Out" 
+                <SettingsRow
+                    label="Sign Out"
                     description="Disconnect your account and clear local data."
                     last={true}
                 >
@@ -400,18 +534,6 @@ function AccountContent({onSignOut}: {onSignOut: () => void}) {
                     >
                         Sign Out
                     </Button>
-                </SettingsRow>
-            </SettingsSection>
-
-            <SettingsSection title="Security">
-                <SettingsRow 
-                    label="Encryption" 
-                    description="All transfers are end-to-end encrypted."
-                    last={true}
-                >
-                    <div className="px-3 py-1 bg-green-500/10 text-green-400 text-[11px] font-bold uppercase tracking-wider rounded-md">
-                        Active
-                    </div>
                 </SettingsRow>
             </SettingsSection>
         </div>

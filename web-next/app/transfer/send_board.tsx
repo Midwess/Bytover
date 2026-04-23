@@ -14,6 +14,7 @@ import {
     Play
 } from 'lucide-react';
 import Image from "next/image";
+import Link from "next/link";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -133,7 +134,6 @@ export default function SendBoard() {
     const defaultShelfId = core.useDefaultShelfId()
     const isResourceRemoveAllowed = core.useShelfRemoveResourceAllow()
     const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-    const [password, setPassword] = useState('')
     const [emails, setEmails] = useState<string[]>([])
 
     const cloudSession = core.useCloudSession(defaultShelfId)
@@ -197,8 +197,8 @@ export default function SendBoard() {
     const handleUpload = () => {
         if (defaultShelfId) {
             core.update(new AppEventVariantTransfer(new TransferEventVariantStartPublicTransfer(
-                BigInt(defaultShelfId), 
-                password || null, 
+                BigInt(defaultShelfId),
+                null,
                 emails
             )));
         }
@@ -544,13 +544,13 @@ export default function SendBoard() {
 
                                     <div className="space-y-2">
                                         <Label className="text-xs font-bold uppercase tracking-widest text-white/40 ml-1">Secure Password</Label>
-                                        <Input 
-                                            type="password"
-                                            value={password}
-                                            onChange={(e) => setPassword(e.target.value)}
-                                            placeholder="••••••••"
-                                            className="bg-white/5 border-white/10 rounded-xl h-12 focus:border-white/30"
-                                        />
+                                        <p className="text-sm text-white/60 ml-1">
+                                            We support setting passwords on the{" "}
+                                            <Link href="/#desktop" className="text-white underline underline-offset-2 hover:text-white/80 transition-colors">
+                                                desktop version
+                                            </Link>
+                                            .
+                                        </p>
                                     </div>
                                 </div>
                             </div>

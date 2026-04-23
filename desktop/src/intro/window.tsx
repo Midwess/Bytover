@@ -4,7 +4,7 @@ import core from "@/core.ts"
 import {motion, AnimatePresence} from "motion/react"
 import {Button} from "@/components/ui/button.tsx";
 import {invoke} from "@tauri-apps/api/core";
-import {MousePointer2, Keyboard, Image as ImageIcon} from "lucide-react";
+import {MousePointer2, Keyboard, Image as ImageIcon, Check} from "lucide-react";
 import {startDrag} from "@crabnebula/tauri-plugin-drag";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
@@ -223,12 +223,12 @@ function Window() {
                             </motion.div>
                         </section>
                     </motion.div>
-                ) : (
-                    <motion.div 
+                ) : step === 2 ? (
+                    <motion.div
                         key="video-step-2"
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
                         className="flex flex-col h-full w-full"
                     >
                         {/* Top Part: Video Demo Tray Menu (70%) */}
@@ -270,13 +270,98 @@ function Window() {
                                 className="w-full flex justify-center"
                             >
                                 <Button
-                                    onClick={handleFinish}
+                                    onClick={handleNext}
                                     className="min-w-[160px] h-11 bg-[#3b82f6] hover:bg-[#2563eb] text-white rounded-full text-sm font-semibold transition-all active:scale-[0.97] border-none shadow-none"
                                 >
-                                    Get Started
+                                    Continue
                                 </Button>
                             </motion.div>
                         </section>
+                    </motion.div>
+                ) : (
+                    <motion.div
+                        key="upgrade-step"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.5 }}
+                        data-tauri-drag-region
+                        className="relative flex flex-col h-full w-full bg-[#0f1012] items-center justify-center overflow-hidden cursor-default"
+                    >
+                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[720px] h-[560px] bg-[radial-gradient(ellipse_at_top,rgba(96,165,250,0.10),transparent_65%)] pointer-events-none" />
+                        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[520px] h-[220px] bg-[radial-gradient(ellipse_at_bottom,rgba(255,255,255,0.025),transparent_70%)] pointer-events-none" />
+
+                        <div className="relative z-10 flex flex-col items-center gap-7 max-w-[440px] px-12 no-drag">
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.9 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                transition={{ delay: 0.15, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                                className="relative"
+                            >
+                                <img
+                                    src="/logo.svg"
+                                    alt="Bytover"
+                                    className="w-20 h-20 object-contain brightness-110 drop-shadow-[0_12px_32px_rgba(147,197,253,0.35)]"
+                                />
+                            </motion.div>
+
+                            <motion.div
+                                initial={{ opacity: 0, y: 8 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.25, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                                className="flex flex-col items-center gap-2 text-center"
+                            >
+                                <h1 className="text-white text-[28px] font-semibold tracking-[-0.02em] leading-none">
+                                    Unlock Bytover
+                                </h1>
+                                <p className="text-[13.5px] text-white/50 font-medium tracking-tight">
+                                    One-time purchase. Yours forever.
+                                </p>
+                            </motion.div>
+
+                            <motion.ul
+                                initial={{ opacity: 0, y: 8 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.35, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                                className="w-fit mx-auto flex flex-col gap-2.5"
+                            >
+                                {[
+                                    "Unlimited files per transfer",
+                                    "No lifetime transfer cap",
+                                    "Unlimited active shelves",
+                                    "Password-protected links",
+                                ].map((f) => (
+                                    <li key={f} className="flex items-center gap-3 text-[13.5px] text-white/75 font-medium tracking-tight">
+                                        <span className="flex w-4 h-4 items-center justify-center rounded-full bg-white/[0.06]">
+                                            <Check className="w-2.5 h-2.5 text-blue-200/90" strokeWidth={3} />
+                                        </span>
+                                        {f}
+                                    </li>
+                                ))}
+                            </motion.ul>
+
+                            <motion.div
+                                initial={{ opacity: 0, y: 8 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.5, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                                className="w-full flex flex-col items-center gap-3 mt-1 no-drag"
+                            >
+                                <Button
+                                    onClick={handleFinish}
+                                    className="group relative min-w-[240px] h-11 bg-white hover:bg-white text-black rounded-full text-[13.5px] font-semibold transition-all active:scale-[0.98] border-none shadow-[0_1px_0_0_rgba(255,255,255,0.25)_inset,0_10px_30px_-10px_rgba(147,197,253,0.4)]"
+                                >
+                                    <span className="tracking-tight">Upgrade</span>
+                                    <span className="mx-2 h-3 w-px bg-black/20" />
+                                    <span className="tracking-tight tabular-nums">$14.89</span>
+                                </Button>
+                                <button
+                                    onClick={handleFinish}
+                                    className="text-[12.5px] text-white/35 hover:text-white/65 font-medium tracking-tight transition-colors px-3 py-1.5 bg-transparent"
+                                >
+                                    Continue with limited plan
+                                </button>
+                            </motion.div>
+                        </div>
                     </motion.div>
                 )}
             </AnimatePresence>

@@ -8,7 +8,7 @@ use crate::app::view_models::selected_resource::SelectedResourceViewModel;
 use crate::app::{AppModel, BitBridge};
 use crate::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use crate::entities::shelf::Shelf;
-use crate::entities::transfer_session::TransferType;
+use crate::gen_shelf_id;
 use crate::repository::local_resource::LocalResourceId;
 use core_services::db::repository::abstraction::table::Table;
 use crux_core::{App, Command};
@@ -94,9 +94,8 @@ pub enum ShelfEvent {
     GetOrCreateShelf {
         shelf_id: u64,
     },
-    CreateAndPasteFromClipboard {
-        shelf_id: u64,
-    },
+    OpenNewShelf,
+    OpenNewShelfFromClipboard,
 
     #[serde(skip)]
     ShelfLoaded(Shelf),
@@ -137,7 +136,7 @@ impl AppModule<BitBridge> for ShelfModule {
             }
             Self::Event::AddResources { shelf_id, selections } => {
                 let Some(shelf) = model.shelf.get_shelf(shelf_id) else {
-                    return Command::operate(DialogOperation::Toast(format!("Shelf not found {shelf_id:?}")));
+                    return Command::operate(DeviceOperation::NotifiedShelfLimitReached);
                 };
 
                 let mut commands = vec![];
@@ -260,41 +259,33 @@ impl AppModule<BitBridge> for ShelfModule {
                     return Command::done();
                 }
 
-                let active_sessions: Vec<(u64, Option<u64>)> = model
-                    .transfer
-                    .sessions
-                    .iter()
-                    .filter(|s| !s.is_completed() && s.target.is_peer())
-                    .map(|s| match s.transfer_type {
-                        TransferType::Send { from_shelf_id } => (s.order_id, Some(from_shelf_id)),
-                        _ => (s.order_id, None),
-                    })
-                    .collect();
-
                 Command::handle_result(move |it| async move {
-                    it.app().ensure_shelf_limit(&active_sessions).await?;
                     it.app().create_shelf(shelf_id).await
                 })
             }
-            Self::Event::CreateAndPasteFromClipboard { shelf_id } => {
-                let shelf_exists = model.shelf.get_shelf(shelf_id).is_some();
-
-                let active_sessions: Vec<(u64, Option<u64>)> = model
-                    .transfer
-                    .sessions
-                    .iter()
-                    .filter(|s| !s.is_completed() && s.target.is_peer())
-                    .map(|s| match s.transfer_type {
-                        TransferType::Send { from_shelf_id } => (s.order_id, Some(from_shelf_id)),
-                        _ => (s.order_id, None),
-                    })
-                    .collect();
+            Self::Event::OpenNewShelf => {
+                if is_shelf_limit_reached(model) {
+                    return Command::operate(DeviceOperation::NotifiedShelfLimitReached);
+                }
 
                 Command::new(move |it| async move {
-                    if !shelf_exists {
-                        let _ = it.app().ensure_shelf_limit(&active_sessions).await;
-                        let _ = it.app().create_shelf(shelf_id).await;
+                    let shelf_id = gen_shelf_id();
+                    if it.app().create_shelf(shelf_id).await.is_ok() {
+                        let _ = DeviceOperation::show_shelf(shelf_id).into_future(it.clone()).await;
                     }
+                })
+            }
+            Self::Event::OpenNewShelfFromClipboard => {
+                if is_shelf_limit_reached(model) {
+                    return Command::operate(DeviceOperation::NotifiedShelfLimitReached);
+                }
+
+                Command::new(move |it| async move {
+                    let shelf_id = gen_shelf_id();
+                    if it.app().create_shelf(shelf_id).await.is_err() {
+                        return;
+                    }
+                    let _ = DeviceOperation::show_shelf(shelf_id).into_future(it.clone()).await;
                     let selections = DeviceOperation::paste_clipboard(shelf_id).into_future(it.clone()).await;
                     if !selections.is_empty() {
                         it.app().notify_event(ShelfEvent::AddResources { shelf_id, selections });
@@ -369,9 +360,20 @@ impl AppModule<BitBridge> for ShelfModule {
     }
 }
 
+fn is_shelf_limit_reached(model: &AppModel) -> bool {
+    model
+        .authentication
+        .capabilities
+        .as_ref()
+        .and_then(|c| c.shelf_limit())
+        .map(|limit| model.shelf.shelves.len() >= limit as usize)
+        .unwrap_or(false)
+}
+
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
 pub struct ResourceSelection {
     pub path: LocalResourcePath,
     // This is optional, if it is None, we will detect by Rust code to see if it should be a Folder or a File
     pub r#type: Option<ResourceType>,
 }
+

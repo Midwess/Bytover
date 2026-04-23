@@ -28,6 +28,7 @@ use shared::app::shelf::module::{ResourceSelection, ShelfEvent, ShelfItemViewMod
 use shared::app::transfer::module::{TransferEvent, TransferModel};
 use shared::app::view_models::receive_session::ReceiveResourceViewModel;
 use shared::app::BitBridge;
+use shared::entities::capabilities::{Plan, PresentationLimits, TransferLimits, TransferUsage, UserCapabilities};
 use shared::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use shared::entities::session::{Session, SessionType};
 use shared::entities::target::{P2PConnectionState, TransferTarget};
@@ -67,6 +68,11 @@ fn main() {
     gen.register_type::<Session>().unwrap();
     gen.register_type::<SessionType>().unwrap();
     gen.register_type::<User>().unwrap();
+    gen.register_type::<Plan>().unwrap();
+    gen.register_type::<TransferLimits>().unwrap();
+    gen.register_type::<TransferUsage>().unwrap();
+    gen.register_type::<PresentationLimits>().unwrap();
+    gen.register_type::<UserCapabilities>().unwrap();
     gen.register_type::<Platform>().unwrap();
     gen.register_type::<ResourceType>().unwrap();
     gen.register_type::<LocalResource>().unwrap();

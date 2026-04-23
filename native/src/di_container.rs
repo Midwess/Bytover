@@ -184,6 +184,7 @@ impl DiContainer {
         let executor = NativeExecutor {
             rpc: Box::new(NativeRpcImpl {
                 auth_server: self.get_authentication_server(),
+                cloud_server: self.get_cloud_server(),
             }),
             persistent: Box::new(NativePersistentImpl {
                 auth_session_repository: Box::new(self.get_auth_session_repository()),

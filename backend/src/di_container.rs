@@ -9,11 +9,13 @@ use crate::infrastructure::mail::email_service::EmailServiceImpl;
 use crate::infrastructure::postgres::device_alias::DeviceAliasPostgresRepository;
 use crate::infrastructure::postgres::p2p_session::P2PSessionPostgresRepository;
 use crate::infrastructure::postgres::transfer_session::TransferSessionPostgresRepository;
+use crate::infrastructure::postgres::user_capabilities::UserCapabilitiesPostgresRepository;
 use crate::infrastructure::s3::cloud_storage::S3CloudStorageImpl;
 use crate::mail::service::EmailService;
 use crate::repositories::device_alias::DeviceAliasRepository;
 use crate::repositories::p2p_session::P2PSessionRepository;
 use crate::repositories::transfer_session::TransferSessionRepository;
+use crate::repositories::user_capabilities::UserCapabilitiesRepository;
 use crate::transfer::p2p_transfer_service::P2PTransferService;
 use crate::transfer::transfer_service::TransferService;
 use crate::user::Token;
@@ -96,6 +98,12 @@ impl DiContainer {
         }
     }
 
+    pub async fn get_user_capabilities_repository(&'static self) -> impl UserCapabilitiesRepository {
+        UserCapabilitiesPostgresRepository {
+            db: self.get_db_connection(),
+        }
+    }
+
     pub async fn instance() -> &'static DiContainer {
         let instance = DI_CONTAINER.get_or_init(|| async { Self::new().await }).await;
 
@@ -141,6 +149,7 @@ impl DiContainer {
             markov_generator: Box::new(self.markov_generator()),
             email_service: Box::new(self.get_email_service(token).await.unwrap()),
             app_service: Box::new(self.get_app_service().await),
+            user_capabilities_repository: Arc::new(self.get_user_capabilities_repository().await),
         }
     }
 

@@ -1,3 +1,4 @@
+use crate::entities::capabilities::{Plan, PresentationLimits, TransferLimits, TransferUsage, UserCapabilities};
 use crate::protocol::rpc::auth_provider::AuthProvider;
 use crate::protocol::rpc::connection::RpcNetworkModule;
 use crate::protocol::rpc::errors::RpcErrors;
@@ -6,9 +7,9 @@ use schema::devlog::bitbridge::bit_bridge_cloud_service_client::BitBridgeCloudSe
 use schema::devlog::bitbridge::update_transfer_progress_request::Status;
 use schema::devlog::bitbridge::{
     AddResourcesRequest, AddResourcesResponse, CancelSessionRequest, ClientUploadRequest, CloudResourceMessage,
-    CompleteUploadPartRequest, CreatePublicTransferSessionRequest, FindSessionRequest, FindSessionResponse, MultiPartUpload,
-    PublicSessionId, PublicTransferSessionMessage, SubscribeSessionInfoRequest, SubscribeSessionInfoResponse,
-    UpdateTransferProgressRequest,
+    CompleteUploadPartRequest, CreatePublicTransferSessionRequest, FindSessionRequest, FindSessionResponse,
+    GetCapabilitiesRequest, MultiPartUpload, PublicSessionId, PublicTransferSessionMessage, SubscribeSessionInfoRequest,
+    SubscribeSessionInfoResponse, UpdateTransferProgressRequest,
 };
 use tonic::{Request, Streaming};
 
@@ -160,5 +161,36 @@ where
         let response = client.complete_upload_part(request).await?;
 
         Ok(response.into_inner().part)
+    }
+
+    pub async fn get_capabilities(&self) -> Result<UserCapabilities, RpcErrors> {
+        let channel = self.rpc_module.connect().await?;
+        let mut client = BitBridgeCloudServiceClient::new(channel);
+        let mut request = Request::new(GetCapabilitiesRequest {});
+        self.auth_provider.with_auth(&mut request).await?;
+
+        let response = client.get_capabilities(request).await?.into_inner();
+        let caps = response.capabilities;
+
+        let plan = match caps.plan {
+            x if x == schema::devlog::bitbridge::Plan::Paid as i32 => Plan::Paid,
+            _ => Plan::Free,
+        };
+
+        Ok(UserCapabilities {
+            plan,
+            transfer_limits: TransferLimits {
+                password_encryption_allowed: caps.transfer_limits.password_encryption_allowed,
+                max_files_per_transfer: caps.transfer_limits.max_files_per_transfer,
+                total_transfer_bytes_lifetime_cap: caps.transfer_limits.total_transfer_bytes_lifetime_cap,
+            },
+            transfer_usage: TransferUsage {
+                total_transfer_bytes_used: caps.transfer_usage.total_transfer_bytes_used,
+            },
+            presentation: PresentationLimits {
+                max_visible_shelves: caps.presentation.max_visible_shelves,
+            },
+            capabilities_version: caps.capabilities_version,
+        })
     }
 }

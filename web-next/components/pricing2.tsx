@@ -84,16 +84,15 @@ export function Pricing2() {
                   <span className="text-5xl font-bold text-white">$0</span>
                   <span className="text-zinc-600 font-bold uppercase tracking-widest text-[9px]">USD</span>
                 </div>
-                <p className="text-sm font-medium text-zinc-500">Essential features for everyday sharing.</p>
+                <p className="text-sm font-medium text-zinc-500">Everyday sharing, at a sensible cap.</p>
               </div>
-              
+
               <ul className="space-y-3 border-t border-white/5 pt-8">
                 {[
-                  "Cloud-only transfers",
-                  "Capped network speeds",
-                  "End-to-end encryption",
-                  "Advanced shelf management",
-                  "Manage multiple concurrent shelves"
+                  "Up to 10 files per transfer",
+                  "5 GB lifetime transfer cap",
+                  "1 active shelf at a time",
+                  "Cross-platform desktop & mobile apps"
                 ].map((feature, i) => (
                   <li key={i} className="flex items-center gap-3 text-zinc-400">
                     <Check className="w-4 h-4 text-zinc-800" />
@@ -119,23 +118,23 @@ export function Pricing2() {
             <div className="space-y-8">
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                    <h3 className="text-xl font-bold text-white tracking-tight">Full</h3>
+                    <h3 className="text-xl font-bold text-white tracking-tight">Paid</h3>
                     <span className="px-1.5 py-0.5 rounded-full text-xs font-bold bg-blue-600 text-white uppercase tracking-widest">Recommended</span>
                 </div>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-5xl font-bold text-white">$12.99</span>
+                  <span className="text-5xl font-bold text-white">$14.89</span>
                   <span className="text-zinc-600 font-bold uppercase tracking-widest text-[9px]">USD</span>
                 </div>
                 <p className="text-sm font-medium text-blue-600/60">One-time payment. Own it forever.</p>
               </div>
-              
+
               <ul className="space-y-3 border-t border-white/5 pt-8">
                 {[
                     "Everything in Free, plus:",
-                    "Direct P2P: Files stay on your local machine",
-                    "Zero upload time: Shareable URLs ready instantly",
-                    "Native folder sharing without zipping",
-                    "Uncapped network transfer speeds"
+                    "Unlimited files per transfer",
+                    "No lifetime transfer cap",
+                    "Unlimited active shelves",
+                    "Password-protected transfer links"
                 ].map((feature, i) => (
                   <li key={i} className="flex items-center gap-3 text-zinc-100">
                     <Plus className="w-4 h-4 text-blue-600" />

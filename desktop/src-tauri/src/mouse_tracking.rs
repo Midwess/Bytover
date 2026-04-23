@@ -325,10 +325,13 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
                             if shift_pressed && !is_handled_shown {
                                 log::info!("Shift+drag detected, creating new shelf window");
                                 let start_pos = start_mouse_position.clone();
-                                let win = app_handle.open_new_shelf_window(Some(start_pos));
+                                let win = app_handle.open_new_shelf_gated(Some(start_pos));
                                 is_handled_shown = true;
 
-                                opened_shelf_label = Some(win.label().to_string());
+                                let label = win.label().to_string();
+                                if !label.starts_with("fake-shelf") {
+                                    opened_shelf_label = Some(label);
+                                }
                                 let _ = win.set_focus();
                                 return;
                             }
@@ -352,11 +355,13 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
                             if shake_count >= config.required_shakes {
                                 log::info!("Shaking detected, creating new shelf window");
                                 let start_pos = start_mouse_position.clone();
-                                let win = app_handle.open_new_shelf_window(Some(start_pos));
+                                let win = app_handle.open_new_shelf_gated(Some(start_pos));
                                 is_handled_shown = true;
 
-                                // Store the label of the opened shelf
-                                opened_shelf_label = Some(win.label().to_string());
+                                let label = win.label().to_string();
+                                if !label.starts_with("fake-shelf") {
+                                    opened_shelf_label = Some(label);
+                                }
                                 let _ = win.set_focus();
 
                                 shake_count = 0;

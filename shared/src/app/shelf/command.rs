@@ -12,11 +12,9 @@ use crate::errors::CoreError;
 use crate::repository::local_resource::LocalResourceId;
 use crate::{gen_shelf_id, CoreOperation};
 
-pub const MAX_SHELVES: usize = 10;
-
 impl AppCommand {
     pub async fn load_shelves(&self) -> Result<(), CoreError> {
-        let shelves = ShelfPersistentOperation::find_all(Some(10)).into_future(self.ctx()).await?;
+        let shelves = ShelfPersistentOperation::find_all(None).into_future(self.ctx()).await?;
         log::info!("Loaded {} shelves", shelves.len());
 
         // Ensure there's always at least one shelf
@@ -129,7 +127,7 @@ impl AppCommand {
             }
         }
 
-        let shelves = ShelfPersistentOperation::find_all(Some(MAX_SHELVES))
+        let shelves = ShelfPersistentOperation::find_all(None)
             .into_future(self.ctx())
             .await
             .unwrap_or_default();
@@ -144,28 +142,27 @@ impl AppCommand {
         uuid::Uuid::new_v4().to_string()
     }
 
-    pub async fn ensure_shelf_limit(&self, sessions: &[(u64, Option<u64>)]) -> Result<(), CoreError> {
-        let shelves = ShelfPersistentOperation::find_all(Some(MAX_SHELVES + 1)).into_future(self.ctx()).await?;
-
-        if shelves.len() < MAX_SHELVES {
+    pub async fn enforce_shelf_limit(&self, limit: usize) -> Result<(), CoreError> {
+        let mut shelves = ShelfPersistentOperation::find_all(None).into_future(self.ctx()).await?;
+        if shelves.len() <= limit {
             return Ok(());
         }
 
-        let active_shelf_ids: Vec<u64> = sessions.iter().filter_map(|(_, shelf_id)| *shelf_id).collect();
+        shelves.sort_by_key(|s| s.id);
+        let excess_ids: Vec<u64> = shelves.iter().skip(limit).map(|s| s.id).collect();
+        log::info!("Enforcing shelf limit {}: deleting {} excess shelves", limit, excess_ids.len());
 
-        let mut sorted_shelves = shelves;
-        sorted_shelves.sort_by_key(|s| s.id);
-
-        for shelf in sorted_shelves {
-            if !active_shelf_ids.contains(&shelf.id) {
-                log::info!("Auto-removing shelf {} to make room for new shelf", shelf.id);
-                self.delete_shelf(shelf.id).await?;
-                self.notify_event(ShelfEvent::ShelfDeleted(shelf.id));
-                DeviceOperation::close_shelf(shelf.id).into_future(self.ctx()).await;
-                return Ok(());
+        for shelf_id in excess_ids {
+            match self.delete_shelf(shelf_id).await {
+                Ok(_) => {
+                    self.update_model(ShelfEvent::ShelfDeleted(shelf_id));
+                    let _ = DeviceOperation::close_shelf(shelf_id).into_future(self.ctx()).await;
+                }
+                Err(e) => log::warn!("Failed to delete excess shelf {}: {:?}", shelf_id, e),
             }
         }
 
+        self.notify_shell(CoreOperation::Render);
         Ok(())
     }
 

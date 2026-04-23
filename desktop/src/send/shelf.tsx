@@ -39,7 +39,7 @@ import {throttle} from "lodash";
 import {UnlimitedLineText} from "@/components/ui/unlimited-line-text";
 import {PeerAvatarGroup} from "@/send/peer-avatar-group";
 
-function ShelfWrapper({
+export function ShelfWrapper({
     children,
     isDraggingOver = false,
     shelfName,
@@ -49,6 +49,7 @@ function ShelfWrapper({
     progress = 0,
     progressEdge = null,
     isOnline = false,
+    isCollapsed = false,
 }: {
     children: ReactNode,
     isDraggingOver?: boolean,
@@ -59,6 +60,7 @@ function ShelfWrapper({
     progress?: number,
     progressEdge?: DockEdge | null,
     isOnline?: boolean,
+    isCollapsed?: boolean,
 }) {
     const handleClose = () => {
         getCurrentWindow()?.close()
@@ -74,14 +76,14 @@ function ShelfWrapper({
         <>
             <Card
                 className={`
-                    rounded-[30px]
+                    ${isCollapsed ? 'rounded-[27px]' : 'rounded-[30px]'}
                     justify-center
                     items-center
                     px-0
                     w-full h-full
                     relative overflow-hidden
                     animate-in fade-in duration-300
-                    transition-[box-shadow,border-color] duration-200
+                    transition-[border-radius,box-shadow,border-color] duration-200
                     ${isDraggingOver
                     ? 'border-bluePrimary shadow-[0_0_8px_2px_rgb(var(--bluePrimary))_inset]'
                     : 'border-white/20'
@@ -151,7 +153,17 @@ function ShelfWrapper({
     )
 }
 
-export function Shelf({shelfId}: { shelfId: string | undefined }) {
+export function Shelf({
+    shelfId,
+    isCollapsed = false,
+    disabled = false,
+    overlay,
+}: {
+    shelfId: string | undefined,
+    isCollapsed?: boolean,
+    disabled?: boolean,
+    overlay?: ReactNode,
+}) {
     const window = getCurrentWindow()
     const windowInfo = useWindow(window)
     const dock = useShelfDock(window)
@@ -164,7 +176,7 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
     const [isDraggingOver, setIsDraggingOver] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
 
-    useShelfClipboard({shelfId});
+    useShelfClipboard({shelfId, enabled: !disabled});
 
     useEffect(() => {
         if (shelfId && containerRef.current) {
@@ -267,9 +279,10 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
         progress: dock.progress,
         progressEdge: dock.progressEdge,
         isOnline,
+        isCollapsed,
     };
 
-    if (!shelfId) {
+    if (!shelfId && !disabled) {
         return (
             <ShelfWrapper {...wrapperDockProps} shelfName={currentShelf?.name}>
                 <Loader2 className="h-6 w-6 text-foreground animate-spin"/>
@@ -283,7 +296,7 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
             shelfName={currentShelf?.name}
             {...wrapperDockProps}
         >
-            <div ref={containerRef} tabIndex={0} className="w-full h-full outline-none">
+            <div ref={containerRef} tabIndex={0} className={`w-full h-full outline-none ${disabled ? 'pointer-events-none opacity-30' : ''}`}>
             <div
                 className={`absolute z-40 inset-0 bg-bluePrimary/10 backdrop-blur-[3px] flex items-center justify-center animate-in fade-in duration-200 ${!isDraggingOver && 'hidden'}`}>
                 <div className="flex flex-col items-center w-full gap-2 text-primary">
@@ -347,6 +360,7 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
                 </div>
             </div>
             </div>
+            {overlay}
         </ShelfWrapper>
     )
 }
@@ -530,3 +544,4 @@ function MediaView(props: {
         </Card>
     );
 }
+

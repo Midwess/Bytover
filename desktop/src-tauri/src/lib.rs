@@ -213,6 +213,11 @@ async fn open_shelf(app_handle: AppHandle) {
 }
 
 #[tauri::command]
+async fn show_settings_with_tab(tab: String, app_handle: AppHandle) {
+    app_handle.show_settings_with_tab(&tab);
+}
+
+#[tauri::command]
 async fn get_or_create_shelf(shelf_id: String, app_handle: AppHandle) {
     log::info!("get_or_create_shelf called with shelf_id: {}", shelf_id);
     let shelf_id = shelf_id.parse::<u64>().unwrap_or_default();
@@ -385,6 +390,20 @@ pub(crate) async fn process_event(event: impl Into<AppEvent> + Send + Sync + 'st
     process_effects(effects, app_handle).await;
 }
 
+pub(crate) fn is_shelf_limit_reached() -> bool {
+    let view = CORE.view();
+    let Some(limit) = view
+        .authentication
+        .as_ref()
+        .and_then(|a| a.capabilities.as_ref())
+        .and_then(|c| c.shelf_limit())
+    else {
+        return false;
+    };
+    let current = view.shelf.as_ref().map(|s| s.shelves.len()).unwrap_or(0);
+    current >= limit as usize
+}
+
 fn render(view: AppViewModel, app_handle: AppHandle) {
     let is_authorized = view.authentication.as_ref().map(|auth| auth.user.is_some()).unwrap_or(false);
 
@@ -419,7 +438,13 @@ fn render(view: AppViewModel, app_handle: AppHandle) {
         app_handle.hide_auth();
 
         if let Some(shelf_view) = &view.shelf {
-            update_tray_menu(&app_handle, &shelf_view.shelves);
+            let is_paid = view
+                .authentication
+                .as_ref()
+                .and_then(|auth| auth.capabilities.as_ref())
+                .map(|caps| caps.is_paid())
+                .unwrap_or(false);
+            update_tray_menu(&app_handle, &shelf_view.shelves, is_paid);
         }
     }
 
@@ -445,7 +470,7 @@ fn update_tray_menu_signed_out(app_handle: &AppHandle) {
     }
 }
 
-fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel]) {
+fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel], is_paid: bool) {
     let Ok(new_shelf_item) = MenuItemBuilder::with_id("new_shelf", "New Shelf").build(app_handle) else {
         return;
     };
@@ -465,6 +490,11 @@ fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel]) {
     };
     let Ok(quit_item) = MenuItemBuilder::with_id("quit", "Quit").build(app_handle) else {
         return;
+    };
+    let upgrade_item = if !is_paid {
+        MenuItemBuilder::with_id("upgrade", "Upgrade").build(app_handle).ok()
+    } else {
+        None
     };
 
     let mut recent_submenu_builder = SubmenuBuilder::with_id(app_handle, "recent_shelves", "Recent Shelves");
@@ -491,7 +521,11 @@ fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel]) {
         menu_builder = menu_builder.item(&close_all_shelves_item).separator();
     }
 
-    let Ok(menu) = menu_builder.item(&user_guide_item).item(&settings_item).item(&quit_item).build() else {
+    menu_builder = menu_builder.item(&user_guide_item).item(&settings_item);
+    if let Some(item) = upgrade_item.as_ref() {
+        menu_builder = menu_builder.item(item);
+    }
+    let Ok(menu) = menu_builder.item(&quit_item).build() else {
         return;
     };
 
@@ -596,6 +630,14 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
                     let selections = content_handlers::read_clipboard_selections(&app_handle).await.unwrap_or_default();
                     CORE.resolve(&mut handle, CoreOperationOutput::ResourceSelections(selections)).unwrap_or_default()
                 }
+                DeviceOperation::ShowShelf(shelf_id) => {
+                    app_handle.show_shelf(shelf_id, None);
+                    CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
+                }
+                DeviceOperation::NotifiedShelfLimitReached => {
+                    app_handle.show_fake_shelf(None);
+                    CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
+                }
             },
             CoreOperation::WebView(WebViewOperation::OpenUrl(url)) => {
                 let _ = app_handle.opener().open_url(url, Option::<&str>::None);
@@ -690,6 +732,7 @@ pub async fn run() {
             open_shelf,
             open_shelf_resource,
             open_settings,
+            show_settings_with_tab,
             check_for_update,
             install_update,
             clear_shelf,
@@ -778,15 +821,16 @@ pub async fn run() {
                         }
                         "new_shelf" => {
                             notify_user_did_drop();
-                            app.open_new_shelf_window(None);
+                            let app_handle = app.clone();
+                            spawn(async move {
+                                process_event(ShelfEvent::OpenNewShelf, app_handle).await;
+                            });
                         }
                         "new_shelf_from_clipboard" => {
                             notify_user_did_drop();
-                            let shelf_id = shared::gen_shelf_id();
-                            app.show_shelf(shelf_id, None);
                             let app_handle = app.clone();
                             spawn(async move {
-                                process_event(ShelfEvent::CreateAndPasteFromClipboard { shelf_id }, app_handle).await;
+                                process_event(ShelfEvent::OpenNewShelfFromClipboard, app_handle).await;
                             });
                         }
                         "close_all_shelves" => {
@@ -795,6 +839,9 @@ pub async fn run() {
                         }
                         "settings" => {
                             app.show_settings();
+                        }
+                        "upgrade" => {
+                            app.show_settings_with_tab("account");
                         }
                         "quit" => {
                             app.close_all_windows(vec![]);

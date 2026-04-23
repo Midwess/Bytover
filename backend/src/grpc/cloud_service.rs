@@ -1,6 +1,7 @@
 use crate::app_gateway::app_info::AppInfoService;
 use crate::cloud_storage::storage::CloudStorage;
 use crate::di_container::DiContainer;
+use crate::entities::user_capabilities::UserCapabilities;
 
 use crate::repositories::transfer_session::{TransferSessionId, TransferSessionRepository};
 use crate::transfer::transfer_service::TransferResourceRequest;
@@ -12,8 +13,8 @@ use schema::devlog::bitbridge::subscribe_session_info_response::{Event, SessionU
 use schema::devlog::bitbridge::{
     AddResourcesRequest, AddResourcesResponse, CancelSessionRequest, CancelSessionResponse, ClientUploadRequest,
     CompleteUploadPartRequest, CompleteUploadPartResponse, CreatePublicTransferSessionRequest, CreatePublicTransferSessionResponse,
-    FindSessionRequest, FindSessionResponse, PublicSessionId, SubscribeSessionInfoRequest, SubscribeSessionInfoResponse,
-    UpdateTransferProgressRequest, UpdateTransferProgressResponse,
+    FindSessionRequest, FindSessionResponse, GetCapabilitiesRequest, GetCapabilitiesResponse, PublicSessionId,
+    SubscribeSessionInfoRequest, SubscribeSessionInfoResponse, UpdateTransferProgressRequest, UpdateTransferProgressResponse,
 };
 use std::pin::Pin;
 use std::sync::Arc;
@@ -200,10 +201,14 @@ impl BitBridgeCloudService for CloudGrpcService {
             return Err(Status::unauthenticated("Unauthenticated".to_owned()));
         };
 
+        let Some(capabilities) = request.extensions().get::<UserCapabilities>() else {
+            return Err(Status::unauthenticated("Unauthenticated".to_owned()));
+        };
+
         let transfer_service = DiContainer::instance().await.get_transfer_service(token.clone()).await;
         let request_body = request.get_ref();
         let new_session = transfer_service
-            .create_public_transfer_session(user, request_body.password.clone(), request_body.to_emails.clone())
+            .create_public_transfer_session(user, capabilities, request_body.password.clone(), request_body.to_emails.clone())
             .await?;
 
         let response_body = CreatePublicTransferSessionResponse {
@@ -231,6 +236,10 @@ impl BitBridgeCloudService for CloudGrpcService {
             return Err(Status::unauthenticated("Unauthenticated".to_owned()));
         };
 
+        let Some(capabilities) = request.extensions().get::<UserCapabilities>() else {
+            return Err(Status::unauthenticated("Unauthenticated".to_owned()));
+        };
+
         let transfer_service = DiContainer::instance().await.get_transfer_service(token.clone()).await;
         let request_body = request.get_ref();
         let requests = request_body
@@ -251,7 +260,9 @@ impl BitBridgeCloudService for CloudGrpcService {
             })
             .collect::<Vec<_>>();
 
-        let response = transfer_service.add_resources(user, device, app, request_body.session_order_id, requests).await?;
+        let response = transfer_service
+            .add_resources(user, device, app, capabilities, request_body.session_order_id, requests)
+            .await?;
 
         let response_body = AddResourcesResponse {
             first_resource_upload_request: ClientUploadRequest {
@@ -345,5 +356,17 @@ impl BitBridgeCloudService for CloudGrpcService {
         let response = Response::new(CompleteUploadPartResponse { part: upload });
 
         Ok(response)
+    }
+
+    async fn get_capabilities(
+        &self,
+        request: Request<GetCapabilitiesRequest>,
+    ) -> Result<Response<GetCapabilitiesResponse>, Status> {
+        let Some(capabilities) = request.extensions().get::<UserCapabilities>() else {
+            return Err(Status::unauthenticated("Unauthenticated".to_owned()));
+        };
+
+        let msg = crate::app_gateway::plan::build_capabilities_msg(capabilities);
+        Ok(Response::new(GetCapabilitiesResponse { capabilities: msg }))
     }
 }

@@ -220,10 +220,6 @@ fn spawn_geometry_animation<R: Runtime>(
     end_size: PhysicalSize<u32>,
     on_complete: Option<Box<dyn FnOnce(&AppHandle<R>) + Send>>,
 ) {
-    if !mark_animating(&label) {
-        return;
-    }
-
     tauri::async_runtime::spawn(async move {
         let frame_delay = Duration::from_millis(ANIM_DURATION_MS / ANIM_FRAMES as u64);
 

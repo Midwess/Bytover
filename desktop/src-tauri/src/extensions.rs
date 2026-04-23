@@ -14,15 +14,12 @@ use crate::shelf_dock;
 // the mouse always lands near a slot.  Slots are keyed by
 // (monitor_hash, col, row); col 0 is the rightmost column, row 0 the top.
 //
-// At most MAX_SHELVES windows are open globally.  When a new shelf would exceed
-// that limit the oldest one is closed first (front of `creation_order`).
-
-const MAX_SHELVES: usize = 8;
+// The registry tracks which slot each open shelf occupies so placement can pick
+// a free slot.  It does NOT cap the number of open shelves — the capability
+// system in the core is the authoritative limit.
 
 struct ShelfRegistry {
-    /// (monitor_hash, col, row) → window label
     slots: HashMap<(u64, usize, usize), String>,
-    /// Labels in creation order; front = oldest, back = newest
     creation_order: VecDeque<String>,
 }
 
@@ -109,6 +106,8 @@ pub trait AppHandleExt<R: Runtime> {
     fn show_send(&self) -> WebviewWindow<R>;
     fn show_shelf(&self, shelf_id: u64, mouse_pos: Option<tauri::PhysicalPosition<f64>>) -> WebviewWindow<R>;
     fn open_new_shelf_window(&self, mouse_pos: Option<tauri::PhysicalPosition<f64>>) -> WebviewWindow<R>;
+    fn open_new_shelf_gated(&self, mouse_pos: Option<tauri::PhysicalPosition<f64>>) -> WebviewWindow<R>;
+    fn show_fake_shelf(&self, mouse_pos: Option<tauri::PhysicalPosition<f64>>) -> WebviewWindow<R>;
     fn show_settings(&self) -> WebviewWindow<R>;
     fn show_settings_with_tab(&self, tab: &str) -> WebviewWindow<R>;
     fn hide_auth(&self);
@@ -307,36 +306,16 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
             }
         }
 
-        // ── Phase 1: evict oldest shelves until there is room (lock held briefly) ──
-        let to_evict: Vec<String> = {
+        {
             let Ok(mut reg) = SHELF_REGISTRY.lock() else {
                 animate_window(window.clone());
                 return window;
             };
-            // Re-showing an existing shelf: remove it first so it gets a fresh slot.
             reg.slots.retain(|_, v| v != &label);
             reg.creation_order.retain(|l| l != &label);
-
-            let mut evicted = Vec::new();
-            while reg.creation_order.len() >= MAX_SHELVES {
-                if let Some(oldest) = reg.creation_order.pop_front() {
-                    reg.slots.retain(|_, v| v != &oldest);
-                    evicted.push(oldest);
-                } else {
-                    break;
-                }
-            }
-            evicted
-        };
-
-        // ── Phase 2: close evicted windows (outside lock) ─────────────────────────
-        for evict_label in &to_evict {
-            if let Some(w) = self.get_webview_window(evict_label) {
-                let _ = w.close();
-            }
         }
 
-        // ── Phase 3: pick the best free slot and record it ────────────────────────
+        // ── Pick the best free slot and record it ─────────────────────────────────
         let primary_hash = self.primary_monitor().ok().flatten().map(|m| monitor_hash(&m));
 
         let chosen_pos: Option<(f64, f64)> = {
@@ -404,13 +383,119 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
         self.show_shelf(shelf_id, mouse_pos)
     }
 
+    fn open_new_shelf_gated(&self, mouse_pos: Option<tauri::PhysicalPosition<f64>>) -> WebviewWindow<R> {
+        if crate::is_shelf_limit_reached() {
+            self.show_fake_shelf(mouse_pos)
+        } else {
+            self.open_new_shelf_window(mouse_pos)
+        }
+    }
+
+    fn show_fake_shelf(&self, mouse_pos: Option<tauri::PhysicalPosition<f64>>) -> WebviewWindow<R> {
+        let label = format!("fake-shelf-{}", shared::gen_shelf_id());
+
+        let window = WebviewWindowBuilder::new(self, &label, WebviewUrl::App("send.html".into()))
+            .title(&label)
+            .inner_size(WIN_WIDTH, WIN_HEIGHT)
+            .resizable(false)
+            .decorations(false)
+            .transparent(true)
+            .visible_on_all_workspaces(true)
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .shadow(false)
+            .devtools(true)
+            .build()
+            .expect("failed to create fake shelf window");
+
+        let label_clone = label.clone();
+        window.on_window_event(move |event| {
+            if let tauri::WindowEvent::Destroyed = event {
+                release_registry_slot(&label_clone);
+            }
+        });
+
+        let monitors = self.available_monitors().unwrap_or_default();
+        if monitors.is_empty() {
+            animate_window(window.clone());
+            return window;
+        }
+
+        let mut candidates: Vec<(u64, usize, usize, f64, f64, f64, f64, f64, f64)> = Vec::new();
+        for monitor in &monitors {
+            let mh = monitor_hash(monitor);
+            let scale = monitor.scale_factor();
+            let win_w = WIN_WIDTH * scale;
+            let win_h = WIN_HEIGHT * scale;
+            let (num_cols, num_rows) = grid_dimensions(monitor);
+            for col in 0..num_cols {
+                for row in 0..num_rows {
+                    let (cx, cy, wx, wy) = slot_physics(monitor, col, row);
+                    candidates.push((mh, col, row, cx, cy, wx, wy, wx + win_w, wy + win_h));
+                }
+            }
+        }
+
+        let primary_hash = self.primary_monitor().ok().flatten().map(|m| monitor_hash(&m));
+        let chosen: Option<(u64, usize, usize, f64, f64)> = if let Ok(mut reg) = SHELF_REGISTRY.lock() {
+            let picked = if let Some(pos) = mouse_pos {
+                candidates
+                    .iter()
+                    .filter(|c| {
+                        let free = !reg.slots.contains_key(&(c.0, c.1, c.2));
+                        let under_mouse = pos.x >= c.5 && pos.x < c.7 && pos.y >= c.6 && pos.y < c.8;
+                        free && !under_mouse
+                    })
+                    .min_by(|a, b| {
+                        let da = (pos.x - a.3).powi(2) + (pos.y - a.4).powi(2);
+                        let db = (pos.x - b.3).powi(2) + (pos.y - b.4).powi(2);
+                        da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+                    })
+                    .map(|c| (c.0, c.1, c.2, c.5, c.6))
+            } else {
+                let mut sorted = candidates.clone();
+                sorted.sort_by(|a, b| {
+                    let a_primary = primary_hash.map_or(false, |ph| ph == a.0);
+                    let b_primary = primary_hash.map_or(false, |ph| ph == b.0);
+                    b_primary.cmp(&a_primary).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2))
+                });
+                sorted
+                    .iter()
+                    .find(|c| !reg.slots.contains_key(&(c.0, c.1, c.2)))
+                    .map(|c| (c.0, c.1, c.2, c.5, c.6))
+            };
+
+            if let Some((mh, col, row, _, _)) = picked {
+                reg.slots.insert((mh, col, row), label.clone());
+                reg.creation_order.push_back(label.clone());
+            }
+
+            picked
+        } else {
+            None
+        };
+
+        if let Some((_, _, _, wx, wy)) = chosen {
+            let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition {
+                x: wx as i32,
+                y: wy as i32,
+            }));
+        }
+
+        animate_window(window.clone());
+        window
+    }
+
     fn show_settings_with_tab(&self, tab: &str) -> WebviewWindow<R> {
         let window = match self.get_webview_window("settings") {
-            Some(window) => window,
+            Some(window) => {
+                let _ = window.emit("settings-set-tab", tab.to_owned());
+                window
+            }
             None => {
                 let window = WebviewWindowBuilder::new(self, "settings", WebviewUrl::App(format!("settings.html?tab={}", tab).into()))
                     .title("Settings")
-                    .inner_size(560.0, 373.0)
+                    .inner_size(728.0, 485.0)
                     .decorations(true)
                     .transparent(true)
                     .resizable(false)
@@ -443,7 +528,7 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
             None => {
                 let window = WebviewWindowBuilder::new(self, "settings", WebviewUrl::App("settings.html".into()))
                     .title("Settings")
-                    .inner_size(560.0, 373.0)
+                    .inner_size(728.0, 485.0)
                     .decorations(true)
                     .transparent(true)
                     .resizable(false)

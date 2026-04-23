@@ -220,6 +220,15 @@ export class Core {
         return state
     }
 
+    useAuthentication() {
+        const [state, setState] = useState(this.authenticationState.get());
+        useEffect(() => {
+            return this.authenticationState.subscribe(setState)
+        }, []);
+
+        return state
+    }
+
     constructor() {}
 
     async launch() {
