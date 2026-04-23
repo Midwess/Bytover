@@ -8,6 +8,7 @@ use crate::app::view_models::selected_resource::SelectedResourceViewModel;
 use crate::app::{AppModel, BitBridge};
 use crate::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use crate::entities::shelf::Shelf;
+use crate::gen_shelf_id;
 use crate::repository::local_resource::LocalResourceId;
 use core_services::db::repository::abstraction::table::Table;
 use crux_core::{App, Command};
@@ -93,9 +94,8 @@ pub enum ShelfEvent {
     GetOrCreateShelf {
         shelf_id: u64,
     },
-    CreateAndPasteFromClipboard {
-        shelf_id: u64,
-    },
+    OpenNewShelf,
+    OpenNewShelfFromClipboard,
 
     #[serde(skip)]
     ShelfLoaded(Shelf),
@@ -136,7 +136,7 @@ impl AppModule<BitBridge> for ShelfModule {
             }
             Self::Event::AddResources { shelf_id, selections } => {
                 let Some(shelf) = model.shelf.get_shelf(shelf_id) else {
-                    return Command::operate(DeviceOperation::ShowUpgradeDialog(shelf_id));
+                    return Command::operate(DeviceOperation::NotifiedShelfLimitReached);
                 };
 
                 let mut commands = vec![];
@@ -259,25 +259,33 @@ impl AppModule<BitBridge> for ShelfModule {
                     return Command::done();
                 }
 
-                if is_shelf_limit_reached(model) {
-                    return Command::operate(DeviceOperation::ShowUpgradeDialog(shelf_id));
-                }
-
                 Command::handle_result(move |it| async move {
                     it.app().create_shelf(shelf_id).await
                 })
             }
-            Self::Event::CreateAndPasteFromClipboard { shelf_id } => {
-                let shelf_exists = model.shelf.get_shelf(shelf_id).is_some();
-
-                if !shelf_exists && is_shelf_limit_reached(model) {
-                    return Command::operate(DeviceOperation::ShowUpgradeDialog(shelf_id));
+            Self::Event::OpenNewShelf => {
+                if is_shelf_limit_reached(model) {
+                    return Command::operate(DeviceOperation::NotifiedShelfLimitReached);
                 }
 
                 Command::new(move |it| async move {
-                    if !shelf_exists {
-                        let _ = it.app().create_shelf(shelf_id).await;
+                    let shelf_id = gen_shelf_id();
+                    if it.app().create_shelf(shelf_id).await.is_ok() {
+                        let _ = DeviceOperation::show_shelf(shelf_id).into_future(it.clone()).await;
                     }
+                })
+            }
+            Self::Event::OpenNewShelfFromClipboard => {
+                if is_shelf_limit_reached(model) {
+                    return Command::operate(DeviceOperation::NotifiedShelfLimitReached);
+                }
+
+                Command::new(move |it| async move {
+                    let shelf_id = gen_shelf_id();
+                    if it.app().create_shelf(shelf_id).await.is_err() {
+                        return;
+                    }
+                    let _ = DeviceOperation::show_shelf(shelf_id).into_future(it.clone()).await;
                     let selections = DeviceOperation::paste_clipboard(shelf_id).into_future(it.clone()).await;
                     if !selections.is_empty() {
                         it.app().notify_event(ShelfEvent::AddResources { shelf_id, selections });

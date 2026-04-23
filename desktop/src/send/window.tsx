@@ -8,7 +8,6 @@ import {getCurrentWindow, LogicalSize} from "@tauri-apps/api/window";
 import {ArrowRight, Check} from "lucide-react";
 import {Button} from "@/components/ui/button.tsx";
 import {invoke} from "@tauri-apps/api/core";
-import {listen} from "@tauri-apps/api/event";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>
@@ -22,13 +21,14 @@ function Window() {
     const [isExpanded, setIsExpanded] = useState(false)
     const [shelfId, setShelfId] = useState<string | undefined>(undefined)
     const [animationSettled, setAnimationSettled] = useState(false)
-    const [isUpgradeDialog, setIsUpgradeDialog] = useState(false)
     const shelfInitializedRef = useRef(false)
-    const showExpand = !isUpgradeDialog
+    const label = window.label
+    const isFakeShelf = label === "fake-shelf"
+    const showExpand = !isFakeShelf
     const effectiveExpanded = showExpand && isExpanded
 
-    const label = window.label
     useEffect(() => {
+        if (isFakeShelf) return
         if (label.startsWith("send-") && !shelfInitializedRef.current) {
             shelfInitializedRef.current = true
             const id = label.substring(5)
@@ -37,17 +37,7 @@ function Window() {
                 .then(() => console.log('get_or_create_shelf success'))
                 .catch((err) => console.error('get_or_create_shelf error:', err))
         }
-    }, [label]);
-
-    useEffect(() => {
-        const unlistenPromise = listen("show-upgrade-dialog", () => {
-            setIsUpgradeDialog(true)
-            setIsExpanded(false)
-        })
-        return () => {
-            unlistenPromise.then((unlisten) => unlisten())
-        }
-    }, [])
+    }, [label, isFakeShelf]);
 
     useEffect(() => {
         core.launch()
@@ -75,7 +65,7 @@ function Window() {
         <main className={`w-screen h-screen dark bg-transparent flex items-center justify-start p-3.5 overflow-clip`} data-no-scrollbar>
             <div className={`${effectiveExpanded ? 'w-[412px]' : 'w-[230px]'} h-[255px] flex flex-row rounded-2xl bg-transparent space-x-0 animate-popup transition-all duration-300`}>
                 <div className={`h-[230px] bg-transparent relative min-w-[200px] w-[200px]`}>
-                   {isUpgradeDialog ? (
+                   {isFakeShelf ? (
                        <UpgradeDialogContent isCollapsed={!effectiveExpanded} />
                    ) : (
                        <Shelf shelfId={shelfId} isCollapsed={!effectiveExpanded} />

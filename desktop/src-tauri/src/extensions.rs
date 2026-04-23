@@ -106,6 +106,7 @@ pub trait AppHandleExt<R: Runtime> {
     fn show_send(&self) -> WebviewWindow<R>;
     fn show_shelf(&self, shelf_id: u64, mouse_pos: Option<tauri::PhysicalPosition<f64>>) -> WebviewWindow<R>;
     fn open_new_shelf_window(&self, mouse_pos: Option<tauri::PhysicalPosition<f64>>) -> WebviewWindow<R>;
+    fn show_fake_shelf(&self) -> WebviewWindow<R>;
     fn show_settings(&self) -> WebviewWindow<R>;
     fn show_settings_with_tab(&self, tab: &str) -> WebviewWindow<R>;
     fn hide_auth(&self);
@@ -379,6 +380,70 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
     fn open_new_shelf_window(&self, mouse_pos: Option<tauri::PhysicalPosition<f64>>) -> WebviewWindow<R> {
         let shelf_id = shared::gen_shelf_id();
         self.show_shelf(shelf_id, mouse_pos)
+    }
+
+    fn show_fake_shelf(&self) -> WebviewWindow<R> {
+        let label = "fake-shelf";
+        if let Some(existing) = self.get_webview_window(label) {
+            let _ = existing.set_focus();
+            animate_window(existing.clone());
+            return existing;
+        }
+
+        let window = WebviewWindowBuilder::new(self, label, WebviewUrl::App("send.html".into()))
+            .title(label)
+            .inner_size(WIN_WIDTH, WIN_HEIGHT)
+            .resizable(false)
+            .decorations(false)
+            .transparent(true)
+            .visible_on_all_workspaces(true)
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .shadow(false)
+            .devtools(true)
+            .build()
+            .expect("failed to create fake shelf window");
+
+        let monitors = self.available_monitors().unwrap_or_default();
+        if !monitors.is_empty() {
+            let primary_hash = self.primary_monitor().ok().flatten().map(|m| monitor_hash(&m));
+            let mut candidates: Vec<(u64, usize, usize, f64, f64, f64, f64)> = Vec::new();
+            for monitor in &monitors {
+                let mh = monitor_hash(monitor);
+                let (num_cols, num_rows) = grid_dimensions(monitor);
+                for col in 0..num_cols {
+                    for row in 0..num_rows {
+                        let (cx, cy, wx, wy) = slot_physics(monitor, col, row);
+                        candidates.push((mh, col, row, cx, cy, wx, wy));
+                    }
+                }
+            }
+
+            let chosen = if let Ok(reg) = SHELF_REGISTRY.lock() {
+                let mut sorted = candidates.clone();
+                sorted.sort_by(|a, b| {
+                    let a_primary = primary_hash.map_or(false, |ph| ph == a.0);
+                    let b_primary = primary_hash.map_or(false, |ph| ph == b.0);
+                    b_primary.cmp(&a_primary).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2))
+                });
+                sorted
+                    .iter()
+                    .find(|c| !reg.slots.contains_key(&(c.0, c.1, c.2)))
+                    .map(|c| (c.5, c.6))
+            } else {
+                None
+            };
+
+            if let Some((wx, wy)) = chosen {
+                let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition {
+                    x: wx as i32,
+                    y: wy as i32,
+                }));
+            }
+        }
+
+        animate_window(window.clone());
+        window
     }
 
     fn show_settings_with_tab(&self, tab: &str) -> WebviewWindow<R> {

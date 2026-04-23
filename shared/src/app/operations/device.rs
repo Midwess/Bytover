@@ -28,7 +28,8 @@ pub enum DeviceOperation {
     },
     CloseShelf(u64),
     PasteClipboard(u64),
-    ShowUpgradeDialog(u64),
+    ShowShelf(u64),
+    NotifiedShelfLimitReached,
 }
 
 impl DeviceOperation {
@@ -65,8 +66,12 @@ impl DeviceOperation {
         AppCommand::request_from_shell(DeviceOperation::CloseShelf(shelf_id)).map(|_it| ())
     }
 
-    pub fn show_upgrade_dialog(shelf_id: u64) -> AppRequestBuilder<impl Future<Output = ()>> {
-        AppCommand::request_from_shell(DeviceOperation::ShowUpgradeDialog(shelf_id)).map(|_it| ())
+    pub fn show_shelf(shelf_id: u64) -> AppRequestBuilder<impl Future<Output = ()>> {
+        AppCommand::request_from_shell(DeviceOperation::ShowShelf(shelf_id)).map(|_it| ())
+    }
+
+    pub fn notified_shelf_limit_reached() -> AppRequestBuilder<impl Future<Output = ()>> {
+        AppCommand::request_from_shell(DeviceOperation::NotifiedShelfLimitReached).map(|_it| ())
     }
 
     pub fn paste_clipboard(

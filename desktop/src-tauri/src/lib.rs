@@ -616,13 +616,12 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
                     let selections = content_handlers::read_clipboard_selections(&app_handle).await.unwrap_or_default();
                     CORE.resolve(&mut handle, CoreOperationOutput::ResourceSelections(selections)).unwrap_or_default()
                 }
-                DeviceOperation::ShowUpgradeDialog(shelf_id) => {
-                    let label = format!("send-{}", shelf_id);
-                    if app_handle.get_webview_window(&label).is_some() {
-                        let _ = app_handle.emit_to(label.as_str(), "show-upgrade-dialog", ());
-                    } else {
-                        log::warn!("ShowUpgradeDialog: no window {label} found");
-                    }
+                DeviceOperation::ShowShelf(shelf_id) => {
+                    app_handle.show_shelf(shelf_id, None);
+                    CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
+                }
+                DeviceOperation::NotifiedShelfLimitReached => {
+                    app_handle.show_fake_shelf();
                     CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
                 }
             },
@@ -808,15 +807,16 @@ pub async fn run() {
                         }
                         "new_shelf" => {
                             notify_user_did_drop();
-                            app.open_new_shelf_window(None);
+                            let app_handle = app.clone();
+                            spawn(async move {
+                                process_event(ShelfEvent::OpenNewShelf, app_handle).await;
+                            });
                         }
                         "new_shelf_from_clipboard" => {
                             notify_user_did_drop();
-                            let shelf_id = shared::gen_shelf_id();
-                            app.show_shelf(shelf_id, None);
                             let app_handle = app.clone();
                             spawn(async move {
-                                process_event(ShelfEvent::CreateAndPasteFromClipboard { shelf_id }, app_handle).await;
+                                process_event(ShelfEvent::OpenNewShelfFromClipboard, app_handle).await;
                             });
                         }
                         "close_all_shelves" => {
