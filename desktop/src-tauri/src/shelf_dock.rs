@@ -274,18 +274,18 @@ pub fn begin_dock<R: Runtime>(app: &AppHandle<R>, window: &WebviewWindow<R>, edg
     let m_pos = monitor.position();
     let m_size = monitor.size();
 
-    let sliver_width_phys = (SLIVER_WIDTH_LOGICAL * scale).round().max(20.0) as u32;
+    let sliver_width_phys = (SLIVER_WIDTH_LOGICAL * scale).round().max(20.0) as i32;
 
     let clamped_pre_dock_pos = clamp_pos_to_monitor(current_pos, current_size, *m_pos, *m_size);
 
     let target_x = match edge {
-        DockEdge::Left => m_pos.x,
-        DockEdge::Right => m_pos.x + m_size.width as i32 - sliver_width_phys as i32,
+        DockEdge::Left => m_pos.x + sliver_width_phys - current_size.width as i32,
+        DockEdge::Right => m_pos.x + m_size.width as i32 - sliver_width_phys,
     };
     let target_y = clamped_pre_dock_pos.y;
 
     let target_pos = PhysicalPosition { x: target_x, y: target_y };
-    let target_size = PhysicalSize { width: sliver_width_phys, height: current_size.height };
+    let target_size = current_size;
 
     let state = DockState {
         edge,
@@ -467,11 +467,13 @@ pub fn maybe_detect_edge_dock<R: Runtime>(app: &AppHandle<R>, window: &WebviewWi
     let undock_phys = UNDOCK_THRESHOLD_PX * scale;
 
     if let Some(state) = dock_state(&label) {
-        let distance_from_edge = match state.edge {
-            DockEdge::Left => window_left - screen_left,
-            DockEdge::Right => screen_right - window_right,
+        let sliver_width_phys = (SLIVER_WIDTH_LOGICAL * scale).round().max(20.0);
+        let target_x = match state.edge {
+            DockEdge::Left => screen_left + sliver_width_phys - size.width as f64,
+            DockEdge::Right => screen_right - sliver_width_phys,
         };
-        if distance_from_edge > undock_phys {
+        let distance_from_dock = (pos.x as f64 - target_x).abs();
+        if distance_from_dock > undock_phys {
             begin_expand(app, window);
         }
         return;
