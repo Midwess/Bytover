@@ -99,12 +99,17 @@ function UpgradeOverlay() {
         invoke("show_settings_with_tab", {tab: "account"})
         getCurrentWindow().close()
     }
+    const stopDrag = (e: React.MouseEvent) => e.stopPropagation()
     return (
-        <div className="absolute inset-0 z-30 bg-card flex flex-col items-center justify-center gap-3 px-4 select-none">
+        <div
+            className="absolute inset-0 z-40 bg-card flex flex-col items-center justify-center gap-3 px-4 select-none pointer-events-auto"
+            onMouseDown={stopDrag}
+        >
             <p className="text-[12px] text-white/70 text-center">You've reached your shelf limit</p>
             <Button
                 onClick={onUpgrade}
-                className="h-[28px] px-4 text-[11px] font-semibold bg-white text-black hover:bg-white/90 border-none rounded-md shadow-none"
+                onMouseDown={stopDrag}
+                className="h-[28px] px-4 text-[11px] font-semibold bg-bluePrimary text-white hover:bg-bluePrimary/90 border-none rounded-md shadow-none"
             >
                 Unlock more
             </Button>
