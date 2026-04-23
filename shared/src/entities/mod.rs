@@ -1,3 +1,4 @@
+pub mod capabilities;
 pub mod device;
 pub mod local_resource;
 pub mod peer;

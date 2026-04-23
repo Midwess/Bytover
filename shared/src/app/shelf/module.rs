@@ -37,6 +37,8 @@ pub struct ShelfItemViewModel {
     pub description: String,
     pub is_online: bool,
     pub is_resource_remove_allowed: bool,
+    pub is_locked: bool,
+    pub lock_reason: Option<String>,
     pub resources: Vec<SelectedResourceViewModel>,
 }
 
@@ -52,6 +54,8 @@ impl ShelfItemViewModel {
             description,
             is_online,
             is_resource_remove_allowed: true,
+            is_locked: false,
+            lock_reason: None,
             resources: shelf.resources.iter().map(SelectedResourceViewModel::from).collect(),
         }
     }
@@ -332,6 +336,22 @@ impl AppModule<BitBridge> for ShelfModule {
     }
 
     fn view(&self, model: &AppModel) -> Self::ViewModel {
+        let shelf_limit = model
+            .authentication
+            .capabilities
+            .as_ref()
+            .and_then(|c| c.shelf_limit())
+            .map(|n| n as usize);
+
+        let mut unlocked_ids: std::collections::HashSet<u64> = std::collections::HashSet::new();
+        if let Some(limit) = shelf_limit {
+            let mut sorted: Vec<&Shelf> = model.shelf.shelves.iter().collect();
+            sorted.sort_by(|a, b| b.id.cmp(&a.id));
+            for shelf in sorted.into_iter().take(limit) {
+                unlocked_ids.insert(shelf.id);
+            }
+        }
+
         let mut shelves: Vec<ShelfItemViewModel> = model
             .shelf
             .shelves
@@ -341,6 +361,11 @@ impl AppModule<BitBridge> for ShelfModule {
                 let is_online = active_session.is_some();
                 let mut view_model = ShelfItemViewModel::from_shelf(shelf, is_online);
                 view_model.is_resource_remove_allowed = !model.transfer.has_active_send_session(shelf.id);
+
+                if shelf_limit.is_some() && !unlocked_ids.contains(&shelf.id) {
+                    view_model.is_locked = true;
+                    view_model.lock_reason = Some("Upgrade to unlimited plan".to_owned());
+                }
 
                 if let Some(session) = active_session {
                     for resource_vm in &mut view_model.resources {

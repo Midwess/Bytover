@@ -213,6 +213,11 @@ async fn open_shelf(app_handle: AppHandle) {
 }
 
 #[tauri::command]
+async fn show_settings_with_tab(tab: String, app_handle: AppHandle) {
+    app_handle.show_settings_with_tab(&tab);
+}
+
+#[tauri::command]
 async fn get_or_create_shelf(shelf_id: String, app_handle: AppHandle) {
     log::info!("get_or_create_shelf called with shelf_id: {}", shelf_id);
     let shelf_id = shelf_id.parse::<u64>().unwrap_or_default();
@@ -700,6 +705,7 @@ pub async fn run() {
             open_shelf,
             open_shelf_resource,
             open_settings,
+            show_settings_with_tab,
             check_for_update,
             install_update,
             clear_shelf,

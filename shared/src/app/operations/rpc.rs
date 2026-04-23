@@ -5,6 +5,7 @@ use crux_core::Command;
 use serde::{Deserialize, Serialize};
 
 use crate::app::AppRequestBuilder;
+use crate::entities::capabilities::UserCapabilities;
 use crate::entities::device::DeviceInfo;
 use crate::entities::user::User;
 use crate::errors::CoreError;
@@ -29,6 +30,7 @@ pub enum RpcOperation {
     GenPeer {
         device: DeviceInfo,
     },
+    GetCapabilities,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -36,6 +38,7 @@ pub enum RpcOperationOutput {
     GetMe(User),
     GetUserById(User),
     GenPeer(crate::entities::peer::Peer),
+    GetCapabilities(UserCapabilities),
 }
 
 impl Operation for RpcOperation {
@@ -105,6 +108,14 @@ impl RpcOperation {
             CoreOperationOutput::Rpc(RpcOperationOutput::GenPeer(peer)) => Ok(peer),
             CoreOperationOutput::Error(error) => Err(error),
             _ => panic!("Invalid output for RpcOperation::GenPeer"),
+        })
+    }
+
+    pub fn get_capabilities() -> AppRequestBuilder<impl Future<Output = Result<UserCapabilities, CoreError>>> {
+        Command::request_from_shell(CoreOperation::Rpc(RpcOperation::GetCapabilities)).map(|res| match res {
+            CoreOperationOutput::Rpc(RpcOperationOutput::GetCapabilities(caps)) => Ok(caps),
+            CoreOperationOutput::Error(error) => Err(error),
+            e => panic!("Invalid output for RpcOperation::GetCapabilities got {e:?}"),
         })
     }
 }

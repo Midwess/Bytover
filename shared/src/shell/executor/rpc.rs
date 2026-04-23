@@ -52,6 +52,10 @@ where
                 let peer = self.app_server().gen_peer(device).await?;
                 Ok(CoreOperationOutput::Rpc(RpcOperationOutput::GenPeer(peer)))
             }
+            RpcOperation::GetCapabilities => {
+                let caps = self.app_server().get_capabilities().await?;
+                Ok(CoreOperationOutput::Rpc(RpcOperationOutput::GetCapabilities(caps)))
+            }
         }
     }
 }

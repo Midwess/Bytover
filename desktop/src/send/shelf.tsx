@@ -20,6 +20,7 @@ import {
     Loader2,
     ClipboardPaste,
     ExternalLink,
+    Lock,
 } from "lucide-react";
 import {Button} from "@/components/ui/button.tsx";
 import {
@@ -160,6 +161,8 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
     const p2pSession = core.useP2PSessionForShelf(shelfId)
     const isOnline = !!p2pSession
     const isResourceRemoveAllowed = currentShelf?.is_resource_remove_allowed ?? true
+    const isLocked = currentShelf?.is_locked ?? false
+    const lockReason = currentShelf?.lock_reason ?? "Upgrade to unlimited plan"
     const effectRan = useRef(false);
     const [isDraggingOver, setIsDraggingOver] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -273,6 +276,14 @@ export function Shelf({shelfId}: { shelfId: string | undefined }) {
         return (
             <ShelfWrapper {...wrapperDockProps} shelfName={currentShelf?.name}>
                 <Loader2 className="h-6 w-6 text-foreground animate-spin"/>
+            </ShelfWrapper>
+        )
+    }
+
+    if (isLocked) {
+        return (
+            <ShelfWrapper {...wrapperDockProps} shelfName={currentShelf?.name}>
+                <LockedShelfNotice reason={lockReason} onUpgrade={() => invoke("show_settings_with_tab", {tab: "account"})} />
             </ShelfWrapper>
         )
     }
