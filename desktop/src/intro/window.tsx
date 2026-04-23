@@ -299,9 +299,9 @@ function Window() {
                                 className="relative"
                             >
                                 <img
-                                    src="/icon.png"
+                                    src="/logo.svg"
                                     alt="Bytover"
-                                    className="w-16 h-16 rounded-[18px] shadow-[0_12px_40px_-12px_rgba(147,197,253,0.45)]"
+                                    className="w-20 h-20 object-contain brightness-110 drop-shadow-[0_12px_32px_rgba(147,197,253,0.35)]"
                                 />
                             </motion.div>
 
