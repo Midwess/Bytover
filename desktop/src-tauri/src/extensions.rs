@@ -14,15 +14,12 @@ use crate::shelf_dock;
 // the mouse always lands near a slot.  Slots are keyed by
 // (monitor_hash, col, row); col 0 is the rightmost column, row 0 the top.
 //
-// At most MAX_SHELVES windows are open globally.  When a new shelf would exceed
-// that limit the oldest one is closed first (front of `creation_order`).
-
-const MAX_SHELVES: usize = 8;
+// The registry tracks which slot each open shelf occupies so placement can pick
+// a free slot.  It does NOT cap the number of open shelves — the capability
+// system in the core is the authoritative limit.
 
 struct ShelfRegistry {
-    /// (monitor_hash, col, row) → window label
     slots: HashMap<(u64, usize, usize), String>,
-    /// Labels in creation order; front = oldest, back = newest
     creation_order: VecDeque<String>,
 }
 
@@ -307,36 +304,16 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
             }
         }
 
-        // ── Phase 1: evict oldest shelves until there is room (lock held briefly) ──
-        let to_evict: Vec<String> = {
+        {
             let Ok(mut reg) = SHELF_REGISTRY.lock() else {
                 animate_window(window.clone());
                 return window;
             };
-            // Re-showing an existing shelf: remove it first so it gets a fresh slot.
             reg.slots.retain(|_, v| v != &label);
             reg.creation_order.retain(|l| l != &label);
-
-            let mut evicted = Vec::new();
-            while reg.creation_order.len() >= MAX_SHELVES {
-                if let Some(oldest) = reg.creation_order.pop_front() {
-                    reg.slots.retain(|_, v| v != &oldest);
-                    evicted.push(oldest);
-                } else {
-                    break;
-                }
-            }
-            evicted
-        };
-
-        // ── Phase 2: close evicted windows (outside lock) ─────────────────────────
-        for evict_label in &to_evict {
-            if let Some(w) = self.get_webview_window(evict_label) {
-                let _ = w.close();
-            }
         }
 
-        // ── Phase 3: pick the best free slot and record it ────────────────────────
+        // ── Pick the best free slot and record it ─────────────────────────────────
         let primary_hash = self.primary_monitor().ok().flatten().map(|m| monitor_hash(&m));
 
         let chosen_pos: Option<(f64, f64)> = {

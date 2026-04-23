@@ -112,8 +112,11 @@ function UpgradeDialogContent({isCollapsed}: {isCollapsed: boolean}) {
     ]
     return (
         <ShelfWrapper isCollapsed={isCollapsed}>
-            <div className="w-full h-full flex flex-col px-4 pt-7 pb-3 select-none">
-                <div className="flex flex-col mb-3">
+            <div className="absolute inset-0 pt-9 flex items-center justify-center pointer-events-none select-none opacity-30">
+                <p className="text-md text-muted-foreground">Drop or paste files here</p>
+            </div>
+            <div className="absolute inset-0 z-30 bg-black/40 backdrop-blur-[2px] flex flex-col px-4 pt-7 pb-3 select-none">
+                <div className="flex flex-col mb-2">
                     <span className="text-[12.5px] font-semibold text-white tracking-tight">Bytover Pro</span>
                     <span className="text-[10.5px] text-white/40 mt-0.5">One shelf at a time on Free</span>
                 </div>
@@ -125,7 +128,7 @@ function UpgradeDialogContent({isCollapsed}: {isCollapsed: boolean}) {
                         </li>
                     ))}
                 </ul>
-                <div className="flex flex-col gap-1.5 mt-3">
+                <div className="flex flex-col gap-1.5 mt-2">
                     <Button
                         onClick={onUpgrade}
                         className="w-full h-[26px] text-[11px] font-semibold bg-white text-black hover:bg-white/90 border-none rounded-md shadow-none"
