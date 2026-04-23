@@ -1,4 +1,4 @@
-use schema::devlog::app_gateway::models::Capabilities as CapabilitiesMsg;
+use schema::devlog::bitbridge::Capabilities as CapabilitiesMsg;
 use schema::devlog::app_gateway::rpc::MeRequest;
 use tonic::body::Body;
 use tonic::codegen::http::Request;

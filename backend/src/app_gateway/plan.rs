@@ -1,5 +1,5 @@
 use crate::entities::user_capabilities::UserCapabilities;
-use schema::devlog::app_gateway::models::{
+use schema::devlog::bitbridge::{
     Capabilities as CapabilitiesMsg, Plan as PlanMsg, PresentationLimits as PresentationLimitsMsg, TransferLimits as TransferLimitsMsg,
     TransferUsage as TransferUsageMsg,
 };

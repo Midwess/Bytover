@@ -173,7 +173,7 @@ where
         let caps = response.capabilities;
 
         let plan = match caps.plan {
-            x if x == schema::devlog::app_gateway::models::Plan::Paid as i32 => Plan::Paid,
+            x if x == schema::devlog::bitbridge::Plan::Paid as i32 => Plan::Paid,
             _ => Plan::Free,
         };
 
