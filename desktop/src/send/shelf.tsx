@@ -117,7 +117,7 @@ function ShelfWrapper({
                     }}
                 >
                     <div
-                        className={`absolute top-0 bottom-0 w-[48px] ${innerEdgePos} overflow-hidden`}
+                        className={`absolute top-0 bottom-0 w-[36px] ${innerEdgePos} overflow-hidden`}
                     >
                         <span className="absolute top-3 left-1/2 -translate-x-1/2 h-4 flex items-center justify-center">
                             {isOnline && (
