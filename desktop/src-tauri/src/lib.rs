@@ -404,6 +404,11 @@ pub(crate) fn is_shelf_limit_reached() -> bool {
     current >= limit as usize
 }
 
+pub(crate) fn most_recent_shelf_id() -> Option<u64> {
+    let view = CORE.view();
+    view.shelf.as_ref().and_then(|s| s.shelves.first()).and_then(|s| s.id.parse::<u64>().ok())
+}
+
 fn render(view: AppViewModel, app_handle: AppHandle) {
     let is_authorized = view.authentication.as_ref().map(|auth| auth.user.is_some()).unwrap_or(false);
 

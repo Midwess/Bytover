@@ -99,6 +99,26 @@ fn release_registry_slot(label: &str) {
 
 // ── Trait definition ──────────────────────────────────────────────────────────
 
+pub enum OpenedShelf<R: Runtime> {
+    Created(WebviewWindow<R>),
+    Reopened(WebviewWindow<R>),
+    Paywall(WebviewWindow<R>),
+}
+
+impl<R: Runtime> OpenedShelf<R> {
+    pub fn window(&self) -> &WebviewWindow<R> {
+        match self {
+            OpenedShelf::Created(w) | OpenedShelf::Reopened(w) | OpenedShelf::Paywall(w) => w,
+        }
+    }
+
+    pub fn into_window(self) -> WebviewWindow<R> {
+        match self {
+            OpenedShelf::Created(w) | OpenedShelf::Reopened(w) | OpenedShelf::Paywall(w) => w,
+        }
+    }
+}
+
 pub trait AppHandleExt<R: Runtime> {
     fn close_all_windows(&self, whitelist: Vec<&str>);
     fn show_auth(&self) -> WebviewWindow<R>;
@@ -106,7 +126,7 @@ pub trait AppHandleExt<R: Runtime> {
     fn show_send(&self) -> WebviewWindow<R>;
     fn show_shelf(&self, shelf_id: u64, mouse_pos: Option<tauri::PhysicalPosition<f64>>) -> WebviewWindow<R>;
     fn open_new_shelf_window(&self, mouse_pos: Option<tauri::PhysicalPosition<f64>>) -> WebviewWindow<R>;
-    fn open_new_shelf_gated(&self, mouse_pos: Option<tauri::PhysicalPosition<f64>>) -> WebviewWindow<R>;
+    fn open_new_shelf_gated(&self, mouse_pos: Option<tauri::PhysicalPosition<f64>>) -> OpenedShelf<R>;
     fn show_fake_shelf(&self, mouse_pos: Option<tauri::PhysicalPosition<f64>>) -> WebviewWindow<R>;
     fn show_settings(&self) -> WebviewWindow<R>;
     fn show_settings_with_tab(&self, tab: &str) -> WebviewWindow<R>;
@@ -383,12 +403,21 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
         self.show_shelf(shelf_id, mouse_pos)
     }
 
-    fn open_new_shelf_gated(&self, mouse_pos: Option<tauri::PhysicalPosition<f64>>) -> WebviewWindow<R> {
-        if crate::is_shelf_limit_reached() {
-            self.show_fake_shelf(mouse_pos)
-        } else {
-            self.open_new_shelf_window(mouse_pos)
+    fn open_new_shelf_gated(&self, mouse_pos: Option<tauri::PhysicalPosition<f64>>) -> OpenedShelf<R> {
+        if !crate::is_shelf_limit_reached() {
+            log::info!("Shelf limit not reached, creating new shelf window");
+            return OpenedShelf::Created(self.open_new_shelf_window(mouse_pos));
         }
+
+        if !self.is_any_shelf_window_open() {
+            if let Some(id) = crate::most_recent_shelf_id() {
+                log::info!("Shelf limit reached but no shelf visible, reopening shelf {}", id);
+                return OpenedShelf::Reopened(self.show_shelf(id, mouse_pos));
+            }
+        }
+
+        log::info!("Shelf limit reached and a shelf window is visible, showing fake-shelf paywall");
+        OpenedShelf::Paywall(self.show_fake_shelf(mouse_pos))
     }
 
     fn show_fake_shelf(&self, mouse_pos: Option<tauri::PhysicalPosition<f64>>) -> WebviewWindow<R> {
