@@ -13,8 +13,8 @@ use schema::devlog::bitbridge::subscribe_session_info_response::{Event, SessionU
 use schema::devlog::bitbridge::{
     AddResourcesRequest, AddResourcesResponse, CancelSessionRequest, CancelSessionResponse, ClientUploadRequest,
     CompleteUploadPartRequest, CompleteUploadPartResponse, CreatePublicTransferSessionRequest, CreatePublicTransferSessionResponse,
-    FindSessionRequest, FindSessionResponse, PublicSessionId, SubscribeSessionInfoRequest, SubscribeSessionInfoResponse,
-    UpdateTransferProgressRequest, UpdateTransferProgressResponse,
+    FindSessionRequest, FindSessionResponse, GetCapabilitiesRequest, GetCapabilitiesResponse, PublicSessionId,
+    SubscribeSessionInfoRequest, SubscribeSessionInfoResponse, UpdateTransferProgressRequest, UpdateTransferProgressResponse,
 };
 use std::pin::Pin;
 use std::sync::Arc;
@@ -356,5 +356,17 @@ impl BitBridgeCloudService for CloudGrpcService {
         let response = Response::new(CompleteUploadPartResponse { part: upload });
 
         Ok(response)
+    }
+
+    async fn get_capabilities(
+        &self,
+        request: Request<GetCapabilitiesRequest>,
+    ) -> Result<Response<GetCapabilitiesResponse>, Status> {
+        let Some(capabilities) = request.extensions().get::<UserCapabilities>() else {
+            return Err(Status::unauthenticated("Unauthenticated".to_owned()));
+        };
+
+        let msg = crate::app_gateway::plan::build_capabilities_msg(capabilities);
+        Ok(Response::new(GetCapabilitiesResponse { capabilities: msg }))
     }
 }

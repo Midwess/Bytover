@@ -1,4 +1,3 @@
-use crate::entities::capabilities::{Plan, PresentationLimits, TransferLimits, TransferUsage, UserCapabilities};
 use crate::entities::device::DeviceInfo;
 use crate::entities::user::User;
 use crate::protocol::rpc::auth_provider::AuthProvider;
@@ -10,7 +9,7 @@ use schema::devlog::app_gateway::rpc::authenticate_response::Action;
 use schema::devlog::app_gateway::rpc::feedback_service_client::FeedbackServiceClient;
 use schema::devlog::app_gateway::rpc::people_service_client::PeopleServiceClient;
 use schema::devlog::app_gateway::rpc::user_service_client::UserServiceClient;
-use schema::devlog::app_gateway::rpc::{AppFeedbackRequest, AuthenticateRequest, FindUserRequest, GetCapabilitiesRequest, MeRequest};
+use schema::devlog::app_gateway::rpc::{AppFeedbackRequest, AuthenticateRequest, FindUserRequest, MeRequest};
 use schema::devlog::bitbridge::p2p_orchestration_service_client::P2pOrchestrationServiceClient;
 use schema::devlog::bitbridge::{CreateDeviceSessionRequest, FindP2pSessionRequest, GenPeerRequest, GetDeviceAliasesRequest};
 use schema::value::auth_method::AuthMethod;
@@ -89,37 +88,6 @@ where
             email: response.user.email.clone(),
             name: response.user.display_name.clone(),
             avatar: response.user.avatar_url.clone().unwrap_or_default(),
-        })
-    }
-
-    pub async fn get_capabilities(&self) -> Result<UserCapabilities, RpcErrors> {
-        let channel = self.rpc_module.connect().await?;
-        let mut request = Request::new(GetCapabilitiesRequest {});
-        self.auth_provider.with_auth(&mut request).await?;
-
-        let user_client = UserServiceClient::new(channel);
-        let response = user_client.clone().get_capabilities(request).await.map(|it| it.into_inner())?;
-        let caps = response.capabilities;
-
-        let plan = match caps.plan {
-            x if x == schema::devlog::app_gateway::models::Plan::Paid as i32 => Plan::Paid,
-            _ => Plan::Free,
-        };
-
-        Ok(UserCapabilities {
-            plan,
-            transfer_limits: TransferLimits {
-                password_encryption_allowed: caps.transfer_limits.password_encryption_allowed,
-                max_files_per_transfer: caps.transfer_limits.max_files_per_transfer,
-                total_transfer_bytes_lifetime_cap: caps.transfer_limits.total_transfer_bytes_lifetime_cap,
-            },
-            transfer_usage: TransferUsage {
-                total_transfer_bytes_used: caps.transfer_usage.total_transfer_bytes_used,
-            },
-            presentation: PresentationLimits {
-                max_visible_shelves: caps.presentation.max_visible_shelves,
-            },
-            capabilities_version: caps.capabilities_version,
         })
     }
 

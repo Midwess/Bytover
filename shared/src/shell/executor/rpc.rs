@@ -2,6 +2,7 @@ use crate::app::operations::rpc::{RpcOperation, RpcOperationOutput};
 use crate::app::operations::CoreOperationOutput;
 use crate::errors::CoreError;
 use crate::protocol::rpc::app_server::AppServer;
+use crate::protocol::rpc::cloud_server::CloudServer;
 use core_services::utils::maybe::MaybeSend;
 
 #[cfg_attr(not(target_family = "wasm"), async_trait::async_trait)]
@@ -17,6 +18,7 @@ where
     <T::ResponseBody as http_body::Body>::Error: Into<tonic::codegen::StdError> + Send,
 {
     fn app_server(&self) -> &AppServer<T>;
+    fn cloud_server(&self) -> &CloudServer<T>;
 
     async fn handle(&self, effect: RpcOperation) -> Result<CoreOperationOutput, CoreError> {
         match effect {
@@ -53,7 +55,7 @@ where
                 Ok(CoreOperationOutput::Rpc(RpcOperationOutput::GenPeer(peer)))
             }
             RpcOperation::GetCapabilities => {
-                let caps = self.app_server().get_capabilities().await?;
+                let caps = self.cloud_server().get_capabilities().await?;
                 Ok(CoreOperationOutput::Rpc(RpcOperationOutput::GetCapabilities(caps)))
             }
         }
