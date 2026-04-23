@@ -419,7 +419,8 @@ fn render(view: AppViewModel, app_handle: AppHandle) {
         app_handle.hide_auth();
 
         if let Some(shelf_view) = &view.shelf {
-            update_tray_menu(&app_handle, &shelf_view.shelves);
+            let is_paid = false;
+            update_tray_menu(&app_handle, &shelf_view.shelves, is_paid);
         }
     }
 
@@ -445,7 +446,7 @@ fn update_tray_menu_signed_out(app_handle: &AppHandle) {
     }
 }
 
-fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel]) {
+fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel], is_paid: bool) {
     let Ok(new_shelf_item) = MenuItemBuilder::with_id("new_shelf", "New Shelf").build(app_handle) else {
         return;
     };
@@ -465,6 +466,11 @@ fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel]) {
     };
     let Ok(quit_item) = MenuItemBuilder::with_id("quit", "Quit").build(app_handle) else {
         return;
+    };
+    let upgrade_item = if !is_paid {
+        MenuItemBuilder::with_id("upgrade", "Upgrade to Paid…").build(app_handle).ok()
+    } else {
+        None
     };
 
     let mut recent_submenu_builder = SubmenuBuilder::with_id(app_handle, "recent_shelves", "Recent Shelves");
@@ -491,7 +497,11 @@ fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel]) {
         menu_builder = menu_builder.item(&close_all_shelves_item).separator();
     }
 
-    let Ok(menu) = menu_builder.item(&user_guide_item).item(&settings_item).item(&quit_item).build() else {
+    menu_builder = menu_builder.item(&user_guide_item).item(&settings_item);
+    if let Some(item) = upgrade_item.as_ref() {
+        menu_builder = menu_builder.item(item);
+    }
+    let Ok(menu) = menu_builder.item(&quit_item).build() else {
         return;
     };
 
@@ -795,6 +805,9 @@ pub async fn run() {
                         }
                         "settings" => {
                             app.show_settings();
+                        }
+                        "upgrade" => {
+                            app.show_settings_with_tab("account");
                         }
                         "quit" => {
                             app.close_all_windows(vec![]);

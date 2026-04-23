@@ -3,6 +3,7 @@ import React, {useEffect, useState} from "react"
 import {invoke} from "@tauri-apps/api/core"
 import {getVersion} from "@tauri-apps/api/app"
 import {getCurrentWindow} from "@tauri-apps/api/window"
+import {listen} from "@tauri-apps/api/event"
 import {Button} from "@/components/ui/button"
 import {
     Info,
@@ -16,7 +17,8 @@ import {
     ChevronRight,
     ExternalLink,
     Shield,
-    Search
+    Search,
+    Sparkles
 } from "lucide-react"
 import {
     checkForUpdate,
@@ -71,6 +73,18 @@ function SettingsWindow() {
             .then(setAutoLaunchEnabled)
             .catch(console.error)
             .finally(() => setIsLoadingAutoLaunch(false))
+    }, [])
+
+    useEffect(() => {
+        const unlistenPromise = listen<string>("settings-set-tab", (event) => {
+            const next = event.payload as SettingsTab
+            if (next === "general" || next === "about" || next === "updates" || next === "account") {
+                setActiveTab(next)
+            }
+        })
+        return () => {
+            unlistenPromise.then((unlisten) => unlisten())
+        }
     }, [])
 
     const handleCheckUpdate = async () => {
@@ -384,11 +398,30 @@ function GeneralContent({enabled, isLoading, onToggle}: {
 }
 
 function AccountContent({onSignOut}: {onSignOut: () => void}) {
+    const handleUpgrade = () => {}
+
     return (
         <div className="space-y-6">
+            <SettingsSection title="Subscription">
+                <SettingsRow
+                    label="Bytover Paid"
+                    description="Unlock password-protected transfers, unlimited files, and no lifetime cap."
+                    last={true}
+                >
+                    <Button
+                        size="sm"
+                        onClick={handleUpgrade}
+                        className="h-[28px] px-4 text-[12px] bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white border-none rounded-full shadow-[0_0_12px_rgba(251,146,60,0.25)]"
+                    >
+                        <Sparkles className="w-3 h-3 mr-1" />
+                        Upgrade
+                    </Button>
+                </SettingsRow>
+            </SettingsSection>
+
             <SettingsSection title="Current Session">
-                <SettingsRow 
-                    label="Sign Out" 
+                <SettingsRow
+                    label="Sign Out"
                     description="Disconnect your account and clear local data."
                     last={true}
                 >
@@ -400,18 +433,6 @@ function AccountContent({onSignOut}: {onSignOut: () => void}) {
                     >
                         Sign Out
                     </Button>
-                </SettingsRow>
-            </SettingsSection>
-
-            <SettingsSection title="Security">
-                <SettingsRow 
-                    label="Encryption" 
-                    description="All transfers are end-to-end encrypted."
-                    last={true}
-                >
-                    <div className="px-3 py-1 bg-green-500/10 text-green-400 text-[11px] font-bold uppercase tracking-wider rounded-md">
-                        Active
-                    </div>
                 </SettingsRow>
             </SettingsSection>
         </div>

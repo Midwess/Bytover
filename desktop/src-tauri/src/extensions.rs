@@ -406,7 +406,10 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
 
     fn show_settings_with_tab(&self, tab: &str) -> WebviewWindow<R> {
         let window = match self.get_webview_window("settings") {
-            Some(window) => window,
+            Some(window) => {
+                let _ = window.emit("settings-set-tab", tab.to_owned());
+                window
+            }
             None => {
                 let window = WebviewWindowBuilder::new(self, "settings", WebviewUrl::App(format!("settings.html?tab={}", tab).into()))
                     .title("Settings")
