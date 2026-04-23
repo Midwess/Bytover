@@ -111,7 +111,7 @@ function P2PSend({ shelfId }: { shelfId: string | undefined }) {
         <Card shadowSize={0.5} className="flex flex-col px-2 py-1 justify-center items-center w-full">
             <MyPeerInfo/>
         </Card>
-        <Card shadowSize={0.5} className="flex flex-col p-1">
+        <Card shadowSize={0.5} className="flex flex-col p-1 w-full">
             <TransferPasswordField
                 className={"bg-secondary shadow-background h-9"}
                 value={password}
@@ -171,9 +171,6 @@ function MyPeerInfo() {
             <div className="flex flex-row rounded-2xl items-center w-full">
                 <div className="flex flex-row items-center gap-3 justify-between flex-1 rounded-xl">
                     <div className="flex flex-col gap-[0.5] items-start justify-center h-full">
-                        <p className="text-start w-full text-primaryText/70 text-xs">
-                            You're online as
-                        </p>
                         <p className="text-primaryText font-bold text-sm">{myPeer.display_name}</p>
                     </div>
                     <div
@@ -214,7 +211,7 @@ function PublicTransfer({ shelfId }: { shelfId: string | undefined }) {
                 Create a sharable link. Files are stored for 7 days.
             </p>
         </Card>
-        <Card shadowSize={0.5} className="flex flex-col p-1">
+        <Card shadowSize={0.5} className="flex flex-col p-1 w-full">
             <TransferPasswordField
                 className={"h-9 bg-secondary shadow-background"}
                 value={pwd}
