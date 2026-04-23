@@ -4,8 +4,8 @@ use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Emitter, EventTarget, Manager, PhysicalPosition, PhysicalSize, Runtime, WebviewWindow};
 
-pub const SLIVER_WIDTH_LOGICAL: f64 = 48.0;
-pub const DOCK_COMMIT_RATIO: f64 = 0.30;
+pub const SLIVER_WIDTH_LOGICAL: f64 = 72.0;
+pub const DOCK_COMMIT_RATIO: f64 = 0.15;
 pub const UNDOCK_THRESHOLD_PX: f64 = 80.0;
 pub const ANIM_DURATION_MS: u64 = 160;
 pub const ANIM_FRAMES: u32 = 10;

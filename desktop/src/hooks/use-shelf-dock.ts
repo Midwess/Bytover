@@ -42,7 +42,9 @@ export default function useShelfDock(onWindow?: Window): ShelfDockState {
                 edge: DockEdge | null
             }>("dock-progress", (event) => {
                 setProgress(event.payload.progress);
-                setProgressEdge(event.payload.edge);
+                if (event.payload.edge !== null) {
+                    setProgressEdge(event.payload.edge);
+                }
             });
         };
 
