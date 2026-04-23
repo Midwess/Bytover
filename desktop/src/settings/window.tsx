@@ -403,7 +403,7 @@ function PlanComparison({currentPlan, onUpgrade}: {currentPlan: PlanKind; onUpgr
         {label: "Files", free: "10", paid: "Unlimited"},
         {label: "Transfer", free: "5 GB", paid: "No cap"},
         {label: "Shelves", free: "1", paid: "Unlimited"},
-        {label: "Passwords", free: "—", paid: "Included"},
+        {label: "Password protection", free: "No", paid: "Included"},
     ]
 
     return (
