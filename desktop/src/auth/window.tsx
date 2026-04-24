@@ -6,6 +6,7 @@ import {Button} from "@/components/ui/button.tsx";
 import {Input} from "@/components/ui/input.tsx";
 import Iridescence from "@/components/iridescene.tsx";
 import {invoke} from "@tauri-apps/api/core";
+import {listen} from "@tauri-apps/api/event";
 import {openUrl} from "@tauri-apps/plugin-opener";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
@@ -19,9 +20,20 @@ type AuthPhase = 'google-signin' | 'token-input' | 'loading';
 function Window() {
     const [authPhase, setAuthPhase] = useState<AuthPhase>('google-signin')
     const [tokenInput, setTokenInput] = useState('')
+    const [authUrl, setAuthUrl] = useState<string | null>(null)
+    const [copied, setCopied] = useState(false)
 
     useEffect(() => {
         core.launch()
+    }, [])
+
+    useEffect(() => {
+        const unlistenPromise = listen<string>('auth-url', (event) => {
+            setAuthUrl(event.payload)
+        })
+        return () => {
+            unlistenPromise.then((unlisten) => unlisten())
+        }
     }, [])
 
     const handleLogin = () => {
@@ -42,7 +54,25 @@ function Window() {
     const handleBack = () => {
         if (authPhase !== 'token-input') return
         setTokenInput('')
+        setAuthUrl(null)
+        setCopied(false)
         setAuthPhase('google-signin')
+    }
+
+    const handleCopyUrl = async () => {
+        if (!authUrl) return
+        try {
+            await navigator.clipboard.writeText(authUrl)
+            setCopied(true)
+            setTimeout(() => setCopied(false), 2000)
+        } catch {
+            setCopied(false)
+        }
+    }
+
+    const handleOpenUrl = async () => {
+        if (!authUrl) return
+        await openUrl(authUrl).catch(() => {})
     }
 
     return (
@@ -122,10 +152,33 @@ function Window() {
                     )}
 
                     {authPhase === 'token-input' && (
-                        <div className="w-full max-w-[300px] flex flex-col items-center gap-4">
+                        <div className="w-full max-w-[320px] flex flex-col items-center gap-4">
                             <p className="text-[14px] text-[#9ca3af] text-center">
-                                If the browser doesn&apos;t open automatically, enter the access token from the web sign-in page.
+                                If the browser didn&apos;t open, copy the sign-in URL or open it manually. You can also paste the access token from the web page.
                             </p>
+
+                            {authUrl && (
+                                <div className="w-full flex flex-col gap-2">
+                                    <div className="w-full px-3 py-2 rounded-lg bg-zinc-800/50 border border-zinc-700 text-zinc-300 text-[11px] font-mono break-all max-h-[72px] overflow-y-auto">
+                                        {authUrl}
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Button
+                                            onClick={handleCopyUrl}
+                                            className="flex-1 h-10 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-[13px] font-medium border border-zinc-700 active:scale-[0.98]"
+                                        >
+                                            {copied ? 'Copied' : 'Copy URL'}
+                                        </Button>
+                                        <Button
+                                            onClick={handleOpenUrl}
+                                            className="flex-1 h-10 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-[13px] font-medium border border-zinc-700 active:scale-[0.98]"
+                                        >
+                                            Open in Browser
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+
                             <Input
                                 type="text"
                                 placeholder="Enter access token"

@@ -815,7 +815,13 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
                 }
             },
             CoreOperation::WebView(WebViewOperation::OpenUrl(url)) => {
-                let _ = app_handle.opener().open_url(url, Option::<&str>::None);
+                if let Err(e) = app_handle.emit("auth-url", url.clone()) {
+                    log::warn!("[auth] failed to emit auth-url event: {e}");
+                }
+                match app_handle.opener().open_url(url, Option::<&str>::None) {
+                    Ok(_) => log::info!("[auth] browser open requested for url"),
+                    Err(e) => log::warn!("[auth] failed to open browser: {e}"),
+                }
                 CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
             }
             CoreOperation::Dialog(dialog) => match dialog {
