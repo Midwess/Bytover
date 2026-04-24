@@ -198,19 +198,51 @@ fn process_updated_transactions(
     }
 }
 
+fn sk_error_code_name(code: isize) -> &'static str {
+    if code == SKErrorCode::Unknown.0 {
+        "Unknown"
+    } else if code == SKErrorCode::ClientInvalid.0 {
+        "ClientInvalid"
+    } else if code == SKErrorCode::PaymentCancelled.0 {
+        "PaymentCancelled"
+    } else if code == SKErrorCode::PaymentInvalid.0 {
+        "PaymentInvalid"
+    } else if code == SKErrorCode::PaymentNotAllowed.0 {
+        "PaymentNotAllowed"
+    } else if code == SKErrorCode::StoreProductNotAvailable.0 {
+        "StoreProductNotAvailable"
+    } else if code == SKErrorCode::CloudServicePermissionDenied.0 {
+        "CloudServicePermissionDenied"
+    } else if code == SKErrorCode::CloudServiceNetworkConnectionFailed.0 {
+        "CloudServiceNetworkConnectionFailed"
+    } else if code == SKErrorCode::CloudServiceRevoked.0 {
+        "CloudServiceRevoked"
+    } else {
+        "Unhandled"
+    }
+}
+
 fn extract_transaction_error(tx: &SKPaymentTransaction) -> StoreKitError {
     let error = unsafe { tx.error() };
     match error {
         Some(err) => {
             let code = err.code();
+            let name = sk_error_code_name(code);
+            let domain = err.domain().to_string();
             let msg = err.localizedDescription().to_string();
+            log::warn!(
+                "[storekit] NSError domain={domain} code={code} ({name}) localizedDescription={msg:?}"
+            );
             if code == SKErrorCode::PaymentCancelled.0 {
                 StoreKitError::UserCancelled
             } else {
-                StoreKitError::Failed(msg)
+                StoreKitError::Failed(format!("code={code} ({name}) domain={domain}: {msg}"))
             }
         }
-        None => StoreKitError::Failed("StoreKit transaction failed with no error info".to_owned()),
+        None => {
+            log::warn!("[storekit] transaction Failed state with no NSError attached");
+            StoreKitError::Failed("StoreKit transaction failed with no error info".to_owned())
+        }
     }
 }
 
