@@ -141,15 +141,40 @@ impl BytoverTxObserver {
     }
 }
 
+fn state_name(state: SKPaymentTransactionState) -> &'static str {
+    let raw = state.0;
+    if raw == SKPaymentTransactionState::Purchasing.0 {
+        "Purchasing"
+    } else if raw == SKPaymentTransactionState::Purchased.0 {
+        "Purchased"
+    } else if raw == SKPaymentTransactionState::Failed.0 {
+        "Failed"
+    } else if raw == SKPaymentTransactionState::Restored.0 {
+        "Restored"
+    } else if raw == SKPaymentTransactionState::Deferred.0 {
+        "Deferred"
+    } else {
+        "Unknown"
+    }
+}
+
 fn process_updated_transactions(
     state: Arc<Mutex<ObserverState>>,
     queue: &SKPaymentQueue,
     transactions: &NSArray<SKPaymentTransaction>,
 ) {
     let len = transactions.count();
+    log::info!("[storekit] observer updatedTransactions: {len} transaction(s)");
     for i in 0..len {
         let tx = unsafe { transactions.objectAtIndex_unchecked(i) };
         let tx_state = unsafe { tx.transactionState() };
+        let payment = unsafe { tx.payment() };
+        let product_id = unsafe { payment.productIdentifier() }.to_string();
+        let tx_id = unsafe { tx.transactionIdentifier() }.map(|s| s.to_string());
+        log::info!(
+            "[storekit] observer tx[{i}]: product={product_id} state={} tx_id={tx_id:?}",
+            state_name(tx_state),
+        );
         let raw = tx_state.0;
         if raw == SKPaymentTransactionState::Purchased.0 {
             if let Some(mapped) = map_transaction(tx) {
@@ -162,9 +187,8 @@ fn process_updated_transactions(
                 guard.route_success(mapped, true);
             }
         } else if raw == SKPaymentTransactionState::Failed.0 {
-            let payment = unsafe { tx.payment() };
-            let product_id = unsafe { payment.productIdentifier() }.to_string();
             let err = extract_transaction_error(tx);
+            log::warn!("[storekit] observer failed: product={product_id} err={err}");
             {
                 let mut guard = state.lock().expect("observer state poisoned");
                 guard.route_failure(&product_id, err);
@@ -369,11 +393,18 @@ impl MacStoreKitClient {
     }
 
     fn enqueue_payment(product_id: String) {
-        Queue::main().exec_sync(move || unsafe {
-            let payment = SKMutablePayment::new();
-            let ns_id = NSString::from_str(&product_id);
-            payment.setProductIdentifier(&ns_id);
-            SKPaymentQueue::defaultQueue().addPayment(&payment);
+        Queue::main().exec_sync(move || {
+            log::info!("[storekit] enqueue_payment on main thread: product={product_id}");
+            unsafe {
+                let payment = SKMutablePayment::new();
+                let ns_id = NSString::from_str(&product_id);
+                payment.setProductIdentifier(&ns_id);
+                log::info!(
+                    "[storekit] enqueue_payment: built SKMutablePayment, calling addPayment"
+                );
+                SKPaymentQueue::defaultQueue().addPayment(&payment);
+                log::info!("[storekit] enqueue_payment: addPayment returned");
+            }
         });
     }
 
@@ -434,21 +465,26 @@ fn map_transaction(tx: &SKPaymentTransaction) -> Option<StoreKitTransaction> {
 #[async_trait]
 impl StoreKitClient for MacStoreKitClient {
     async fn purchase(&self, product_id: &str) -> Result<StoreKitTransaction, StoreKitError> {
+        log::info!("[storekit] purchase() entered for product={product_id}");
         if !Self::can_make_payments() {
+            log::warn!("[storekit] purchase({product_id}): canMakePayments returned false");
             return Err(StoreKitError::Failed(
                 "canMakePayments returned false — in-app purchases are disabled on this device"
                     .to_owned(),
             ));
         }
+        log::info!("[storekit] purchase({product_id}): canMakePayments=true");
         let handle = ObserverHandle::shared();
         let (tx, rx) = oneshot::channel();
         handle.register_purchase_waiter(product_id, tx);
+        log::info!("[storekit] purchase({product_id}): waiter registered, dispatching enqueue_payment");
 
         let product_id_owned = product_id.to_owned();
         tokio::task::spawn_blocking(move || Self::enqueue_payment(product_id_owned))
             .await
             .map_err(|e| StoreKitError::Failed(e.to_string()))?;
 
+        log::info!("[storekit] purchase({product_id}): enqueue dispatched, awaiting observer callback");
         rx.await.map_err(|_| StoreKitError::ChannelClosed)?
     }
 

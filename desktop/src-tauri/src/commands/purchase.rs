@@ -14,12 +14,20 @@ pub struct PurchaseOutcome {
 
 #[tauri::command]
 pub async fn purchase_premium(app_handle: AppHandle) -> Result<PurchaseOutcome, String> {
+    log::info!("[storekit] purchase_premium command invoked for {PREMIUM_PRODUCT_ID}");
     let client = storekit::default_client();
     let transaction = client
         .purchase(PREMIUM_PRODUCT_ID)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| {
+            log::error!("[storekit] purchase_premium client.purchase failed: {e}");
+            e.to_string()
+        })?;
 
+    log::info!(
+        "[storekit] purchase_premium got transaction {} for {}, submitting to backend",
+        transaction.transaction_id, transaction.product_id,
+    );
     submit_and_finish(app_handle, client.as_ref(), &transaction).await
 }
 
