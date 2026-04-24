@@ -6,6 +6,7 @@ services:
     networks:
       - host
     environment:
+      ENVIRONMENT: ${ENVIRONMENT:?set ENVIRONMENT (e.g. production)}
       RELAY_SERVER_SECRET: ${RELAY_SERVER_SECRET:?set RELAY_SERVER_SECRET}
       BYTOVER_WITH_SSL: ${BYTOVER_WITH_SSL:-0}
       BYTOVER_PUBLIC_GATEWAY_HOST: ${BYTOVER_PUBLIC_GATEWAY_HOST:-localhost}

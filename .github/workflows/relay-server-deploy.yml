@@ -18,6 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     env:
+      ENVIRONMENT: ${{ vars.ENVIRONMENT }}
       BYTOVER_WITH_SSL: ${{ vars.BYTOVER_WITH_SSL }}
       BYTOVER_PUBLIC_GATEWAY_HOST: ${{ vars.BYTOVER_PUBLIC_GATEWAY_HOST }}
       BYTOVER_PUBLIC_GATEWAY_PORT: ${{ vars.BYTOVER_PUBLIC_GATEWAY_PORT }}
@@ -79,6 +80,7 @@ jobs:
             PORTAINER_ENDPOINT_ID \
             PORTAINER_STACK_ID \
             PORTAINER_API_KEY \
+            ENVIRONMENT \
             RELAY_SERVER_SECRET \
             TURN_PASSWORD \
             TURN_AUTH_SECRET
@@ -117,6 +119,7 @@ jobs:
           updated_env="$(
             printf '%s' "$stack_response" | jq \
               --arg relay_server_image_tag "${{ steps.image_tag.outputs.value }}" \
+              --arg environment "$ENVIRONMENT" \
               --arg relay_server_secret "$RELAY_SERVER_SECRET" \
               --arg bytover_with_ssl "$BYTOVER_WITH_SSL" \
               --arg bytover_public_gateway_host "$BYTOVER_PUBLIC_GATEWAY_HOST" \
@@ -131,6 +134,7 @@ jobs:
               '
               reduce [
                 {"name":"RELAY_SERVER_IMAGE_TAG","value":$relay_server_image_tag},
+                {"name":"ENVIRONMENT","value":$environment},
                 {"name":"RELAY_SERVER_SECRET","value":$relay_server_secret},
                 {"name":"BYTOVER_WITH_SSL","value":$bytover_with_ssl},
                 {"name":"BYTOVER_PUBLIC_GATEWAY_HOST","value":$bytover_public_gateway_host},
