@@ -1,6 +1,6 @@
 use serde::Serialize;
 use shared::entities::capabilities::Plan;
-use shared::protocol::rpc::payment::PayResult;
+use shared::protocol::rpc::cloud_server::{SubmitStoreKitRejectionCode, SubmitStoreKitResult};
 use tauri::{AppHandle, Emitter};
 
 use crate::storekit::{self, ProductAvailabilityReport, PREMIUM_PRODUCT_ID};
@@ -80,42 +80,43 @@ async fn submit_and_finish(
     tx: &storekit::StoreKitTransaction,
 ) -> Result<PurchaseOutcome, String> {
     let di = native::di_container::DiContainer::get_instance();
-    let app_server = di.get_authentication_server();
+    let cloud_server = di.get_cloud_server();
 
-    let pay_result = app_server
-        .pay_storekit(tx.transaction_id.clone(), tx.product_id.clone())
+    let result = cloud_server
+        .submit_storekit_transaction(tx.transaction_id.clone(), tx.product_id.clone())
         .await
         .map_err(|e| {
-            log::error!("[payment] pay_storekit failed: {e}");
+            log::error!("[payment] submit_storekit_transaction failed: {e}");
             e.to_string()
         })?;
 
-    match pay_result {
-        PayResult::Completed {
+    match result {
+        SubmitStoreKitResult::Completed {
             payment_statement_id,
             product_id,
-            transaction_id,
+            duplicate,
+            upgraded_to_paid,
+            capabilities,
         } => {
-            client.finish(&transaction_id).await.map_err(|e| e.to_string())?;
-
-            let caps = di
-                .get_cloud_server()
-                .get_capabilities()
-                .await
-                .map_err(|e| {
-                    log::warn!("[payment] capabilities refresh after pay failed: {e}");
-                    e.to_string()
-                })?;
+            client.finish(&tx.transaction_id).await.map_err(|e| e.to_string())?;
 
             let _ = app_handle.emit("capabilities-changed", ());
 
             Ok(PurchaseOutcome {
-                upgraded: caps.plan == Plan::Paid,
-                duplicate: false,
+                upgraded: upgraded_to_paid && capabilities.plan == Plan::Paid,
+                duplicate,
                 product_id,
                 payment_statement_id: Some(payment_statement_id),
             })
         }
-        PayResult::Rejected { message } => Err(format!("payment rejected: {message}")),
+        SubmitStoreKitResult::Rejected { code, message } => {
+            log::warn!("[payment] submit_storekit_transaction rejected: {code:?} {message:?}");
+            Err(format_rejection(code, message))
+        }
     }
+}
+
+fn format_rejection(code: SubmitStoreKitRejectionCode, message: Option<String>) -> String {
+    let suffix = message.filter(|m| !m.is_empty()).map(|m| format!(": {m}")).unwrap_or_default();
+    format!("payment rejected ({code:?}){suffix}")
 }
