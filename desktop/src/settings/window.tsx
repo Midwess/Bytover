@@ -569,7 +569,14 @@ function AccountContent({onSignOut}: {onSignOut: () => void}) {
     const caps = auth?.capabilities
     const user = auth?.user
     const currentPlan: PlanKind = (caps?.plan as unknown) === "Paid" ? "paid" : "free"
-    const handleUpgrade = () => {}
+    const handleUpgrade = async () => {
+        try {
+            const result = await invoke("purchase_premium")
+            console.log("[storekit] purchase_premium result:", result)
+        } catch (error) {
+            console.error("[storekit] purchase_premium failed:", error)
+        }
+    }
 
     const subscriptionBody = caps == null ? (
         <div className="px-4 py-5 text-[12px] text-white/50">Loading plan…</div>
