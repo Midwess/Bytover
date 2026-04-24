@@ -79,6 +79,9 @@ async fn run(kong_admin_url: &str, remote_gateway_url: &str) -> Result<(), Box<d
 
     wait_for_kong(&client).await?;
 
+    client.delete_service("app-gateway").await?;
+    info!("Removed legacy app-gateway service");
+
     client.register(grpc_service).await?;
     info!("Registered app-gateway-grpc-server");
 
