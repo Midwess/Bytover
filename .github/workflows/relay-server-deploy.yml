@@ -106,15 +106,7 @@ jobs:
               "$PORTAINER_URL/api/stacks/$PORTAINER_STACK_ID"
           )"
 
-          stack_file_response="$(
-            curl --fail --show-error --silent \
-              --retry 3 \
-              --retry-all-errors \
-              --connect-timeout 10 \
-              --max-time 60 \
-              "${portainer_headers[@]}" \
-              "$PORTAINER_URL/api/stacks/$PORTAINER_STACK_ID/file"
-          )"
+          stack_file_content="$(cat relay-server/docker-compose.swarm.yml)"
 
           updated_env="$(
             printf '%s' "$stack_response" | jq \
@@ -159,7 +151,7 @@ jobs:
 
           payload="$(
             jq -n \
-              --arg stack_file_content "$(printf '%s' "$stack_file_response" | jq -r '.StackFileContent')" \
+              --arg stack_file_content "$stack_file_content" \
               --argjson env "$updated_env" \
               --argjson webhook "$(printf '%s' "$stack_response" | jq '.Webhook // null')" \
               '{
