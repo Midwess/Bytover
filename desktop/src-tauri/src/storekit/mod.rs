@@ -6,6 +6,7 @@ mod macos;
 pub use error::StoreKitError;
 
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
 pub const PREMIUM_PRODUCT_ID: &str = "com.midwess.bytover.premium";
 
@@ -17,12 +18,23 @@ pub struct StoreKitTransaction {
     pub original_transaction_id: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProductAvailabilityReport {
+    pub available: Vec<String>,
+    pub invalid: Vec<String>,
+    pub error: Option<String>,
+}
+
 #[async_trait]
 pub trait StoreKitClient: Send + Sync {
     async fn purchase(&self, product_id: &str) -> Result<StoreKitTransaction, StoreKitError>;
     async fn unfinished_transactions(&self) -> Result<Vec<StoreKitTransaction>, StoreKitError>;
     async fn finish(&self, transaction_id: &str) -> Result<(), StoreKitError>;
     async fn restore(&self) -> Result<Vec<StoreKitTransaction>, StoreKitError>;
+    async fn products_available(
+        &self,
+        product_ids: &[&str],
+    ) -> Result<ProductAvailabilityReport, StoreKitError>;
 }
 
 #[cfg(target_os = "macos")]
@@ -51,6 +63,12 @@ impl StoreKitClient for StubStoreKitClient {
         Err(StoreKitError::Unsupported)
     }
     async fn restore(&self) -> Result<Vec<StoreKitTransaction>, StoreKitError> {
+        Err(StoreKitError::Unsupported)
+    }
+    async fn products_available(
+        &self,
+        _product_ids: &[&str],
+    ) -> Result<ProductAvailabilityReport, StoreKitError> {
         Err(StoreKitError::Unsupported)
     }
 }

@@ -62,7 +62,7 @@ windows = { version = "0.62.2", features = ["Win32_UI_Input_KeyboardAndMouse", "
 [target.'cfg(target_os = "macos")'.dependencies]
 cacao = { version = "0.4.0-beta2", features = ["appkit"] }
 objc2 = "0.6"
-objc2-foundation = { version = "0.3", features = ["NSArray", "NSString", "NSError", "NSDictionary", "NSLocale", "NSNotification", "NSObject", "NSThread"] }
+objc2-foundation = { version = "0.3", features = ["NSArray", "NSString", "NSError", "NSDictionary", "NSLocale", "NSNotification", "NSObject", "NSThread", "NSSet"] }
 objc2-store-kit = { version = "0.3", features = ["SKPayment", "SKPaymentQueue", "SKPaymentTransaction", "SKProduct", "SKProductsRequest", "SKRequest", "SKError"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]

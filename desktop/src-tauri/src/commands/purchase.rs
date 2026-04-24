@@ -2,7 +2,7 @@ use serde::Serialize;
 use shared::protocol::rpc::cloud_server::{SubmitStoreKitRejectionCode, SubmitStoreKitResult};
 use tauri::{AppHandle, Emitter};
 
-use crate::storekit::{self, PREMIUM_PRODUCT_ID};
+use crate::storekit::{self, ProductAvailabilityReport, PREMIUM_PRODUCT_ID};
 
 #[derive(Debug, Serialize)]
 pub struct PurchaseOutcome {
@@ -34,6 +34,15 @@ pub async fn restore_purchases(app_handle: AppHandle) -> Result<Vec<PurchaseOutc
         outcomes.push(outcome);
     }
     Ok(outcomes)
+}
+
+#[tauri::command]
+pub async fn check_storekit_product_availability() -> Result<ProductAvailabilityReport, String> {
+    let client = storekit::default_client();
+    client
+        .products_available(&[PREMIUM_PRODUCT_ID])
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]

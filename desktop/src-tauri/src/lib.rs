@@ -956,7 +956,8 @@ pub async fn run() {
             shelf_dock::expand_shelf,
             commands::purchase::purchase_premium,
             commands::purchase::restore_purchases,
-            commands::purchase::resume_pending_transactions
+            commands::purchase::resume_pending_transactions,
+            commands::purchase::check_storekit_product_availability
         ])
         .setup(|app| {
             #[cfg(target_os = "macos")]
