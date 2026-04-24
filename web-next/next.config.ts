@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-const VERSION = process.env.VERSION || process.env.GIT_COMMIT_SHA || process.env.RAILWAY_GIT_COMMIT_SHA
+const VERSION = process.env.VERSION || process.env.GIT_COMMIT_SHA
 const nextConfig: NextConfig = {
     transpilePackages: ["shared_types"],
     assetPrefix: process.env.S3_CDN_PREFIX && VERSION ? `${process.env.S3_CDN_PREFIX}/commit-${VERSION}` : undefined,
