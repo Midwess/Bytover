@@ -8,7 +8,7 @@ import Iridescence from "@/components/iridescene.tsx";
 import {invoke} from "@tauri-apps/api/core";
 import {listen} from "@tauri-apps/api/event";
 import {openUrl} from "@tauri-apps/plugin-opener";
-import {ArrowUpRight, Check, Copy} from "lucide-react";
+import {Check, Copy} from "lucide-react";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>
@@ -69,11 +69,6 @@ function Window() {
         } catch {
             setCopied(false)
         }
-    }
-
-    const handleOpenUrl = async () => {
-        if (!authUrl) return
-        await openUrl(authUrl).catch(() => {})
     }
 
     return (
@@ -164,26 +159,17 @@ function Window() {
                             </div>
 
                             {authUrl && (
-                                <div className="w-full flex flex-col gap-2">
-                                    <div className="w-full px-3.5 py-2.5 rounded-xl bg-white/[0.06] text-zinc-200 text-[12px] font-mono truncate">
+                                <div className="w-full flex items-center gap-2 pl-3.5 pr-1.5 py-1.5 rounded-xl bg-white/[0.06]">
+                                    <span className="flex-1 text-zinc-200 text-[12px] font-mono truncate">
                                         {authUrl}
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={handleCopyUrl}
-                                            className="flex-1 h-10 bg-white/[0.06] hover:bg-white/[0.1] text-white rounded-xl text-[13px] font-medium flex items-center justify-center gap-1.5 transition-colors active:scale-[0.97]"
-                                        >
-                                            {copied ? <Check className="w-[14px] h-[14px]" /> : <Copy className="w-[14px] h-[14px]" />}
-                                            {copied ? 'Copied' : 'Copy'}
-                                        </button>
-                                        <button
-                                            onClick={handleOpenUrl}
-                                            className="flex-1 h-10 bg-white/[0.06] hover:bg-white/[0.1] text-white rounded-xl text-[13px] font-medium flex items-center justify-center gap-1.5 transition-colors active:scale-[0.97]"
-                                        >
-                                            <ArrowUpRight className="w-[14px] h-[14px]" />
-                                            Open
-                                        </button>
-                                    </div>
+                                    </span>
+                                    <button
+                                        onClick={handleCopyUrl}
+                                        className="shrink-0 h-7 px-2.5 rounded-md bg-white/10 hover:bg-white/15 text-white text-[11px] font-medium flex items-center gap-1 transition-colors active:scale-[0.96]"
+                                    >
+                                        {copied ? <Check className="w-[12px] h-[12px]" /> : <Copy className="w-[12px] h-[12px]" />}
+                                        {copied ? 'Copied' : 'Copy'}
+                                    </button>
                                 </div>
                             )}
 
