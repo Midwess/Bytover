@@ -1,6 +1,6 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::extensions::AppHandleExt;
+use crate::extensions::{AppHandleExt, OpenedShelf};
 #[cfg(target_os = "macos")]
 use rdev::{set_is_main_thread, Button, EventType, Key};
 #[cfg(not(target_os = "macos"))]
@@ -323,16 +323,15 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
 
                         if detect_drag(&start_mouse_position, &current_mouse_position) {
                             if shift_pressed && !is_handled_shown {
-                                log::info!("Shift+drag detected, creating new shelf window");
+                                log::info!("Shift+drag detected, opening shelf via gated path");
                                 let start_pos = start_mouse_position.clone();
-                                let win = app_handle.open_new_shelf_gated(Some(start_pos));
+                                let opened = app_handle.open_new_shelf_gated(Some(start_pos));
                                 is_handled_shown = true;
 
-                                let label = win.label().to_string();
-                                if !label.starts_with("fake-shelf") {
-                                    opened_shelf_label = Some(label);
+                                if let OpenedShelf::Created(w) = &opened {
+                                    opened_shelf_label = Some(w.label().to_string());
                                 }
-                                let _ = win.set_focus();
+                                let _ = opened.window().set_focus();
                                 return;
                             }
 
@@ -353,16 +352,15 @@ pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
                             }
 
                             if shake_count >= config.required_shakes {
-                                log::info!("Shaking detected, creating new shelf window");
+                                log::info!("Shaking detected, opening shelf via gated path");
                                 let start_pos = start_mouse_position.clone();
-                                let win = app_handle.open_new_shelf_gated(Some(start_pos));
+                                let opened = app_handle.open_new_shelf_gated(Some(start_pos));
                                 is_handled_shown = true;
 
-                                let label = win.label().to_string();
-                                if !label.starts_with("fake-shelf") {
-                                    opened_shelf_label = Some(label);
+                                if let OpenedShelf::Created(w) = &opened {
+                                    opened_shelf_label = Some(w.label().to_string());
                                 }
-                                let _ = win.set_focus();
+                                let _ = opened.window().set_focus();
 
                                 shake_count = 0;
                             }
