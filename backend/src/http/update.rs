@@ -10,6 +10,7 @@ pub struct UpdateManifest {
     pub pubdate: String,
     pub is_critical: bool,
     pub platforms: std::collections::HashMap<String, PlatformInfo>,
+    pub store_url: Option<String>,
 }
 
 #[derive(serde::Serialize)]
@@ -24,6 +25,8 @@ pub struct UpdatePath {
     arch: String,
     current_version: String,
 }
+
+const UNIVERSAL_ARCH: &str = "universal";
 
 #[get("/update/{target}/{arch}/{current_version}")]
 pub async fn get_update_manifest(path: web::Path<UpdatePath>) -> Result<HttpResponse> {
@@ -57,7 +60,7 @@ pub async fn get_update_manifest(path: web::Path<UpdatePath>) -> Result<HttpResp
 
     let latest = releases
         .into_iter()
-        .filter(|r| r.platform == *target && r.architecture == *arch)
+        .filter(|r| r.platform == *target && (r.architecture == *arch || r.architecture == UNIVERSAL_ARCH))
         .filter_map(|r| Version::parse(&r.version).ok().map(|v| (r, v)))
         .filter(|(_, v)| *v > current_semver)
         .max_by_key(|(_, v)| v.clone());
@@ -65,13 +68,15 @@ pub async fn get_update_manifest(path: web::Path<UpdatePath>) -> Result<HttpResp
     match latest {
         Some((release, _)) => {
             let mut platforms = std::collections::HashMap::new();
-            platforms.insert(
-                target.clone(),
-                PlatformInfo {
-                    signature: release.signature,
-                    url: release.download_url,
-                },
-            );
+            if let Some(url) = release.download_url.clone() {
+                platforms.insert(
+                    target.clone(),
+                    PlatformInfo {
+                        signature: release.signature.clone(),
+                        url,
+                    },
+                );
+            }
 
             let manifest = UpdateManifest {
                 version: release.version,
@@ -79,6 +84,7 @@ pub async fn get_update_manifest(path: web::Path<UpdatePath>) -> Result<HttpResp
                 pubdate: release.created_at.format("%Y-%m-%d").to_string(),
                 is_critical: release.is_critical,
                 platforms,
+                store_url: release.store_url,
             };
 
             log::info!("Update available: v{}", manifest.version);

@@ -9,9 +9,10 @@ pub struct Model {
     pub platform: String,
     pub architecture: String,
     pub signature: String,
-    pub download_url: String,
+    pub download_url: Option<String>,
     pub release_notes: Option<String>,
     pub is_critical: bool,
+    pub store_url: Option<String>,
     pub created_at: DateTimeUtc,
 }
 
