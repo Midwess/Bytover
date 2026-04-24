@@ -352,7 +352,7 @@ function Window() {
                                 >
                                     <span className="tracking-tight">Upgrade</span>
                                     <span className="mx-2 h-3 w-px bg-black/20" />
-                                    <span className="tracking-tight tabular-nums">$14.89</span>
+                                    <span className="tracking-tight tabular-nums">$14.99</span>
                                 </Button>
                                 <button
                                     onClick={handleFinish}

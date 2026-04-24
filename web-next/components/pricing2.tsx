@@ -122,7 +122,7 @@ export function Pricing2() {
                     <span className="px-1.5 py-0.5 rounded-full text-xs font-bold bg-blue-600 text-white uppercase tracking-widest">Recommended</span>
                 </div>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-5xl font-bold text-white">$14.89</span>
+                  <span className="text-5xl font-bold text-white">$14.99</span>
                   <span className="text-zinc-600 font-bold uppercase tracking-widest text-[9px]">USD</span>
                 </div>
                 <p className="text-sm font-medium text-blue-600/60">One-time payment. Own it forever.</p>

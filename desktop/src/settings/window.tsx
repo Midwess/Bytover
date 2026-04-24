@@ -479,7 +479,7 @@ function PlanComparison({limits, onUpgrade}: {limits: FreeLimits; onUpgrade: () 
                     <span className="text-[11px] text-white/40 mt-0.5">You're on the Free plan</span>
                 </div>
                 <div className="flex flex-col items-end shrink-0">
-                    <span className="text-[14px] font-semibold text-white tabular-nums">$14.89</span>
+                    <span className="text-[14px] font-semibold text-white tabular-nums">$14.99</span>
                     <span className="text-[11px] text-white/40 mt-0.5">One-time · lifetime</span>
                 </div>
             </div>
