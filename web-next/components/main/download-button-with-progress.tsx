@@ -43,6 +43,11 @@ export default function DownloadButtonWithProgress({
         }
 
         if (isCompleted && wasInProgressRef.current) {
+            if (isCloud) {
+                wasInProgressRef.current = false
+                requestAnimationFrame(() => setShowCompleted(false))
+                return
+            }
             requestAnimationFrame(() => setShowCompleted(true))
             const timer = setTimeout(() => {
                 setShowCompleted(false)
@@ -53,7 +58,7 @@ export default function DownloadButtonWithProgress({
             wasInProgressRef.current = false
             requestAnimationFrame(() => setShowCompleted(false))
         }
-    }, [isCompleted, isInProgress])
+    }, [isCompleted, isInProgress, isCloud])
 
     const getButtonState = () => {
         if (showCompleted) return 'completed'
