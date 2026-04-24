@@ -27,30 +27,50 @@ async fn main() {
 async fn run(kong_admin_url: &str, remote_gateway_url: &str) -> Result<(), Box<dyn std::error::Error>> {
     let parsed_url = Url::parse(remote_gateway_url)?;
     let host = parsed_url.host_str().ok_or("Invalid host")?;
-    let port = parsed_url.port().unwrap_or(443);
     let scheme = parsed_url.scheme();
 
-    let url = match scheme {
-        "https" => format!("https://{}:{}", host, port),
-        "grpcs" => format!("grpcs://{}:{}", host, port),
-        "grpc" => format!("grpc://{}:{}", host, port),
-        _ => format!("http://{}:{}", host, port)
+    let (http_url, grpc_url) = match scheme {
+        "https" | "grpcs" => {
+            let port = parsed_url.port().unwrap_or(443);
+            (format!("https://{host}:{port}"), format!("grpcs://{host}:{port}"))
+        }
+        _ => {
+            let port = parsed_url.port().unwrap_or(80);
+            (format!("http://{host}:{port}"), format!("grpc://{host}:{port}"))
+        }
     };
 
-    let service = GatewayServiceBuilder::new()
-        .name("app-gateway")
-        .url(url)
+    let grpc_service = GatewayServiceBuilder::new()
+        .name("app-gateway-grpc-server")
+        .url(grpc_url)
         .enable_cors(true)
         .routes(vec![
             GatewayRouteBuilder::new()
-                .name("app-gateway-proto".to_string())
                 .grpc()
-                .priority(10)
                 .grpc_web()
                 .path(GatewayRouteExpression::proto_namespace("devlog.app_gateway.rpc"))
-                .preserve_host(false)
+                .priority(10)
                 .strip_path(false)
                 .public(true)
+                .preserve_host(false)
+                .name("app-gateway-grpc-server-path")
+                .build(),
+        ])
+        .build();
+
+    let http_service = GatewayServiceBuilder::new()
+        .name("app-gateway-http-server")
+        .url(http_url)
+        .enable_cors(true)
+        .routes(vec![
+            GatewayRouteBuilder::new()
+                .http()
+                .path(GatewayRouteExpression::start_with("/app-gateway"))
+                .priority(10)
+                .strip_path(true)
+                .public(true)
+                .preserve_host(false)
+                .name("app-gateway-http-server-path")
                 .build(),
         ])
         .build();
@@ -59,7 +79,14 @@ async fn run(kong_admin_url: &str, remote_gateway_url: &str) -> Result<(), Box<d
 
     wait_for_kong(&client).await?;
 
-    client.register(service).await?;
+    client.delete_service("app-gateway").await?;
+    info!("Removed legacy app-gateway service");
+
+    client.register(grpc_service).await?;
+    info!("Registered app-gateway-grpc-server");
+
+    client.register(http_service).await?;
+    info!("Registered app-gateway-http-server");
 
     Ok(())
 }
