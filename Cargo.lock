@@ -21,6 +21,9 @@ dependencies = [
  "md5",
  "n0-future 0.3.1",
  "native",
+ "objc2 0.6.3",
+ "objc2-foundation 0.3.2",
+ "objc2-store-kit",
  "rdev",
  "reqwest 0.13.2",
  "schema",
@@ -6336,6 +6339,20 @@ dependencies = [
  "bitflags 2.10.0",
  "objc2 0.6.3",
  "objc2-core-foundation",
+]
+
+[[package]]
+name = "objc2-store-kit"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29a1cef520f802b637e2cca72d7dfd2f17cfff947fb5f802dd2d8c68e6c63072"
+dependencies = [
+ "bitflags 2.10.0",
+ "block2 0.6.2",
+ "objc2 0.6.3",
+ "objc2-app-kit 0.3.2",
+ "objc2-core-foundation",
+ "objc2-foundation 0.3.2",
 ]
 
 [[package]]
