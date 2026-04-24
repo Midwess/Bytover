@@ -8,6 +8,7 @@ import Iridescence from "@/components/iridescene.tsx";
 import {invoke} from "@tauri-apps/api/core";
 import {listen} from "@tauri-apps/api/event";
 import {openUrl} from "@tauri-apps/plugin-opener";
+import {ArrowUpRight, Check, Copy} from "lucide-react";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>
@@ -152,52 +153,65 @@ function Window() {
                     )}
 
                     {authPhase === 'token-input' && (
-                        <div className="w-full max-w-[320px] flex flex-col items-center gap-4">
-                            <p className="text-[14px] text-[#9ca3af] text-center">
-                                If the browser didn&apos;t open, copy the sign-in URL or open it manually. You can also paste the access token from the web page.
-                            </p>
+                        <div className="w-full max-w-[320px] flex flex-col items-center gap-5">
+                            <div className="text-center">
+                                <h2 className="text-white text-[17px] font-semibold tracking-tight">
+                                    Continue in your browser
+                                </h2>
+                                <p className="text-[13px] text-zinc-400 mt-1">
+                                    Open the sign-in link, or paste the access token below.
+                                </p>
+                            </div>
 
                             {authUrl && (
                                 <div className="w-full flex flex-col gap-2">
-                                    <div className="w-full px-3 py-2 rounded-lg bg-zinc-800/50 border border-zinc-700 text-zinc-300 text-[11px] font-mono break-all max-h-[72px] overflow-y-auto">
+                                    <div className="w-full px-3.5 py-2.5 rounded-xl bg-white/[0.06] text-zinc-200 text-[12px] font-mono truncate">
                                         {authUrl}
                                     </div>
                                     <div className="flex gap-2">
-                                        <Button
+                                        <button
                                             onClick={handleCopyUrl}
-                                            className="flex-1 h-10 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-[13px] font-medium border border-zinc-700 active:scale-[0.98]"
+                                            className="flex-1 h-10 bg-white/[0.06] hover:bg-white/[0.1] text-white rounded-xl text-[13px] font-medium flex items-center justify-center gap-1.5 transition-colors active:scale-[0.97]"
                                         >
-                                            {copied ? 'Copied' : 'Copy URL'}
-                                        </Button>
-                                        <Button
+                                            {copied ? <Check className="w-[14px] h-[14px]" /> : <Copy className="w-[14px] h-[14px]" />}
+                                            {copied ? 'Copied' : 'Copy'}
+                                        </button>
+                                        <button
                                             onClick={handleOpenUrl}
-                                            className="flex-1 h-10 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-[13px] font-medium border border-zinc-700 active:scale-[0.98]"
+                                            className="flex-1 h-10 bg-white/[0.06] hover:bg-white/[0.1] text-white rounded-xl text-[13px] font-medium flex items-center justify-center gap-1.5 transition-colors active:scale-[0.97]"
                                         >
-                                            Open in Browser
-                                        </Button>
+                                            <ArrowUpRight className="w-[14px] h-[14px]" />
+                                            Open
+                                        </button>
                                     </div>
                                 </div>
                             )}
 
+                            <div className="w-full flex items-center gap-3">
+                                <div className="flex-1 h-px bg-white/10" />
+                                <span className="text-[10px] text-zinc-500 uppercase tracking-[0.15em] font-medium">or</span>
+                                <div className="flex-1 h-px bg-white/10" />
+                            </div>
+
                             <Input
                                 type="text"
-                                placeholder="Enter access token"
+                                placeholder="Paste access token"
                                 value={tokenInput}
                                 onChange={(e) => setTokenInput(e.target.value)}
-                                className="w-full h-11 bg-zinc-800/50 border-zinc-700 text-white placeholder:text-zinc-500 rounded-lg"
+                                className="w-full h-11 bg-white/[0.06] border-none text-white placeholder:text-zinc-500 rounded-xl text-[13px] px-3.5 focus-visible:ring-1 focus-visible:ring-white/20"
                             />
                             <Button
                                 onClick={handleSubmitToken}
                                 disabled={!tokenInput.trim()}
-                                className="w-full h-11 bg-white hover:bg-white/90 text-blackBase rounded-full text-[15px] font-semibold transition-all active:scale-[0.98] border-none shadow-lg flex items-center justify-center"
+                                className="w-full h-11 bg-white hover:bg-white/90 text-blackBase rounded-full text-[14px] font-semibold transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed border-none"
                             >
                                 Continue
                             </Button>
                             <button
                                 onClick={handleBack}
-                                className="text-[13px] text-[#9ca3af] hover:text-white transition-colors"
+                                className="text-[12px] text-zinc-500 hover:text-zinc-300 transition-colors"
                             >
-                                Back to sign in
+                                Back
                             </button>
                         </div>
                     )}
