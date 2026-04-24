@@ -3,18 +3,24 @@ use crate::entities::user::User;
 use crate::protocol::rpc::auth_provider::AuthProvider;
 use crate::protocol::rpc::connection::RpcNetworkModule;
 use crate::protocol::rpc::errors::RpcErrors;
+use crate::protocol::rpc::payment::PayResult;
 use core_services::utils::maybe::MaybeSend;
 use schema::devlog::app_gateway::rpc::auth_service_client::AuthServiceClient;
 use schema::devlog::app_gateway::rpc::authenticate_response::Action;
 use schema::devlog::app_gateway::rpc::feedback_service_client::FeedbackServiceClient;
+use schema::devlog::app_gateway::rpc::payment_request::Item as PaymentItem;
+use schema::devlog::app_gateway::rpc::payment_response::ResponseItem;
+use schema::devlog::app_gateway::rpc::payment_service_client::PaymentServiceClient;
 use schema::devlog::app_gateway::rpc::people_service_client::PeopleServiceClient;
 use schema::devlog::app_gateway::rpc::user_service_client::UserServiceClient;
-use schema::devlog::app_gateway::rpc::{AppFeedbackRequest, AuthenticateRequest, FindUserRequest, MeRequest};
+use schema::devlog::app_gateway::rpc::{
+    AppFeedbackRequest, AuthenticateRequest, FindUserRequest, MeRequest, PaymentRequest, PaymentResponse, StoreKitPayment,
+};
 use schema::devlog::bitbridge::p2p_orchestration_service_client::P2pOrchestrationServiceClient;
 use schema::devlog::bitbridge::{CreateDeviceSessionRequest, FindP2pSessionRequest, GenPeerRequest, GetDeviceAliasesRequest};
 use schema::value::auth_method::AuthMethod;
 use schema::value::device::RegisteringDevice;
-use tonic::Request;
+use tonic::{Request, Streaming};
 
 pub struct AppServer<T>
 where
@@ -182,6 +188,29 @@ where
         Ok(response.into_inner().session)
     }
 
+    pub async fn pay_storekit(&self, transaction_id: String, product_id: String) -> Result<PayResult, RpcErrors> {
+        log::info!("[payment] pay_storekit entered transaction_id={transaction_id} product_id={product_id}");
+
+        let channel = self.rpc_module.connect().await?;
+        let request_body = PaymentRequest {
+            idempotency_key: format!("storekit:{transaction_id}"),
+            item: Some(PaymentItem::StorekitPayment(StoreKitPayment {
+                transaction_id: transaction_id.clone(),
+                product_id: product_id.clone(),
+            })),
+        };
+        let mut request = Request::new(request_body);
+
+        self.auth_provider.with_auth(&mut request).await?;
+        self.auth_provider.with_app_auth(&mut request).await?;
+
+        let mut client = PaymentServiceClient::new(channel);
+        log::info!("[payment] pay_storekit opening stream");
+        let mut stream = client.pay(request).await?.into_inner();
+
+        consume_pay_stream(&mut stream, transaction_id, product_id).await
+    }
+
     pub async fn gen_peer(&self, device: crate::entities::device::DeviceInfo) -> Result<crate::entities::peer::Peer, RpcErrors> {
         let channel = self.rpc_module.connect().await?;
         let req = GenPeerRequest {
@@ -206,5 +235,60 @@ where
         peer.signalling_route = Some(response.signalling_route);
 
         Ok(peer)
+    }
+}
+
+async fn consume_pay_stream(
+    stream: &mut Streaming<PaymentResponse>,
+    transaction_id: String,
+    product_id: String,
+) -> Result<PayResult, RpcErrors> {
+    let mut terminal: Option<PayResult> = None;
+
+    loop {
+        match stream.message().await? {
+            Some(message) => match message.response_item {
+                Some(ResponseItem::CompletedStatement(payment_statement_id)) => {
+                    log::info!("[payment] pay_storekit completed statement_id={payment_statement_id}");
+                    if terminal.is_none() {
+                        terminal = Some(PayResult::Completed {
+                            payment_statement_id,
+                            product_id: product_id.clone(),
+                            transaction_id: transaction_id.clone(),
+                        });
+                    } else {
+                        log::warn!("[payment] pay_storekit extra completed_statement after terminal, ignoring");
+                    }
+                }
+                Some(ResponseItem::Error(reason)) => {
+                    log::warn!("[payment] pay_storekit rejected: {reason}");
+                    if terminal.is_none() {
+                        terminal = Some(PayResult::Rejected { message: reason });
+                    } else {
+                        log::warn!("[payment] pay_storekit extra error after terminal, ignoring");
+                    }
+                }
+                Some(ResponseItem::Redirect(url)) => {
+                    log::error!("[payment] pay_storekit unexpected redirect url={url}");
+                    return Err(RpcErrors::InternalServerError(format!(
+                        "unexpected redirect on storekit pay: {url}"
+                    )));
+                }
+                None => {
+                    log::debug!("[payment] pay_storekit received empty response_item, continuing");
+                }
+            },
+            None => {
+                return match terminal {
+                    Some(result) => Ok(result),
+                    None => {
+                        log::error!("[payment] pay_storekit stream ended with no terminal response");
+                        Err(RpcErrors::InternalServerError(
+                            "pay stream ended with no terminal response".to_owned(),
+                        ))
+                    }
+                };
+            }
+        }
     }
 }

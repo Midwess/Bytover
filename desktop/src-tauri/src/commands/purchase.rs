@@ -1,5 +1,6 @@
 use serde::Serialize;
-use shared::protocol::rpc::cloud_server::{SubmitStoreKitRejectionCode, SubmitStoreKitResult};
+use shared::entities::capabilities::Plan;
+use shared::protocol::rpc::payment::PayResult;
 use tauri::{AppHandle, Emitter};
 
 use crate::storekit::{self, ProductAvailabilityReport, PREMIUM_PRODUCT_ID};
@@ -78,45 +79,43 @@ async fn submit_and_finish(
     client: &dyn storekit::StoreKitClient,
     tx: &storekit::StoreKitTransaction,
 ) -> Result<PurchaseOutcome, String> {
-    let cloud_server = native::di_container::DiContainer::get_instance().get_cloud_server();
-    let result = cloud_server
-        .submit_storekit_transaction(tx.transaction_id.clone(), tx.product_id.clone())
-        .await
-        .map_err(|e| e.to_string())?;
+    let di = native::di_container::DiContainer::get_instance();
+    let app_server = di.get_authentication_server();
 
-    match result {
-        SubmitStoreKitResult::Success {
+    let pay_result = app_server
+        .pay_storekit(tx.transaction_id.clone(), tx.product_id.clone())
+        .await
+        .map_err(|e| {
+            log::error!("[payment] pay_storekit failed: {e}");
+            e.to_string()
+        })?;
+
+    match pay_result {
+        PayResult::Completed {
             payment_statement_id,
             product_id,
-            duplicate,
-            upgraded_to_paid,
-            capabilities: _,
+            transaction_id,
         } => {
-            client.finish(&tx.transaction_id).await.map_err(|e| e.to_string())?;
+            client.finish(&transaction_id).await.map_err(|e| e.to_string())?;
+
+            let caps = di
+                .get_cloud_server()
+                .get_capabilities()
+                .await
+                .map_err(|e| {
+                    log::warn!("[payment] capabilities refresh after pay failed: {e}");
+                    e.to_string()
+                })?;
+
             let _ = app_handle.emit("capabilities-changed", ());
+
             Ok(PurchaseOutcome {
-                upgraded: upgraded_to_paid,
-                duplicate,
+                upgraded: caps.plan == Plan::Paid,
+                duplicate: false,
                 product_id,
                 payment_statement_id: Some(payment_statement_id),
             })
         }
-        SubmitStoreKitResult::Rejected { code, message } => {
-            let code_label = match code {
-                SubmitStoreKitRejectionCode::Unknown => "unknown",
-                SubmitStoreKitRejectionCode::NotFound => "not_found",
-                SubmitStoreKitRejectionCode::BundleMismatch => "bundle_mismatch",
-                SubmitStoreKitRejectionCode::InvalidSignature => "invalid_signature",
-                SubmitStoreKitRejectionCode::EnvMismatch => "env_mismatch",
-                SubmitStoreKitRejectionCode::AppleApiError => "apple_api_error",
-                SubmitStoreKitRejectionCode::ProductUnknown => "product_unknown",
-                SubmitStoreKitRejectionCode::ConfigMissing => "config_missing",
-                SubmitStoreKitRejectionCode::Internal => "internal",
-            };
-            Err(format!(
-                "storekit rejected ({code_label}): {}",
-                message.unwrap_or_else(|| "no message".to_owned())
-            ))
-        }
+        PayResult::Rejected { message } => Err(format!("payment rejected: {message}")),
     }
 }

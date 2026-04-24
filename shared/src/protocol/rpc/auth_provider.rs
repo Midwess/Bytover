@@ -1,4 +1,5 @@
 use anyhow::anyhow;
+use async_trait::async_trait;
 use std::str::FromStr;
 use tonic::metadata::MetadataValue;
 use tonic::Request;
@@ -7,8 +8,32 @@ use crate::entities::session::SessionType;
 use crate::protocol::rpc::errors::RpcErrors;
 use crate::repository::auth_session::{AuthSessionId, AuthSessionRepository};
 
+pub const APP_AUTHORIZATION_METADATA_KEY: &str = "x-app-authorization";
+
+#[async_trait]
+pub trait AppAuthTokenProvider: Send + Sync {
+    async fn token(&self) -> Result<String, RpcErrors>;
+}
+
+pub struct EnvAppAuthTokenProvider;
+
+const COMPILE_TIME_APP_AUTH_TOKEN: Option<&str> = option_env!("APP_AUTH_TOKEN");
+
+#[async_trait]
+impl AppAuthTokenProvider for EnvAppAuthTokenProvider {
+    async fn token(&self) -> Result<String, RpcErrors> {
+        match COMPILE_TIME_APP_AUTH_TOKEN {
+            Some(value) if !value.is_empty() => Ok(value.to_owned()),
+            _ => Err(RpcErrors::AuthError(anyhow!(
+                "APP_AUTH_TOKEN was not set at build time; the desktop cannot authorize app-gateway payment calls"
+            ))),
+        }
+    }
+}
+
 pub struct AuthProvider {
     pub session_repository: Box<dyn AuthSessionRepository>,
+    pub app_auth_token: Box<dyn AppAuthTokenProvider>,
 }
 
 impl AuthProvider {

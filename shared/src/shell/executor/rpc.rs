@@ -58,16 +58,6 @@ where
                 let caps = self.cloud_server().get_capabilities().await?;
                 Ok(CoreOperationOutput::Rpc(RpcOperationOutput::GetCapabilities(caps)))
             }
-            RpcOperation::SubmitStoreKitTransaction {
-                transaction_id,
-                product_id,
-            } => {
-                let outcome = self
-                    .cloud_server()
-                    .submit_storekit_transaction(transaction_id, product_id)
-                    .await?;
-                Ok(CoreOperationOutput::Rpc(RpcOperationOutput::SubmitStoreKitTransaction(outcome)))
-            }
         }
     }
 }
