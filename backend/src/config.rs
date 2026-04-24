@@ -4,6 +4,43 @@ pub struct PublicEndpointConfig {
     pub port: u16,
 }
 
+#[derive(Debug, Clone)]
+pub struct AppStoreConfig {
+    pub webhook_secret: Option<Vec<u8>>,
+    pub webhook_max_skew: std::time::Duration,
+    pub force_update_enabled: bool,
+    pub default_store_url_darwin: Option<String>,
+    pub default_store_url_ios: Option<String>,
+}
+
+impl AppStoreConfig {
+    pub fn default_store_url_for(&self, platform: &str) -> Option<&str> {
+        match platform {
+            "darwin" => self.default_store_url_darwin.as_deref(),
+            "ios" => self.default_store_url_ios.as_deref(),
+            _ => None,
+        }
+    }
+}
+
+const DEFAULT_WEBHOOK_MAX_SKEW_SECS: u64 = 300;
+
+pub fn load_app_store_config() -> AppStoreConfig {
+    let webhook_secret = read_string("APP_STORE_WEBHOOK_SECRET").map(|s| s.into_bytes());
+    let webhook_max_skew_secs = read_u64("WEBHOOK_MAX_SKEW_SECS").unwrap_or(DEFAULT_WEBHOOK_MAX_SKEW_SECS);
+    let force_update_enabled = read_bool("APP_STORE_FORCE_UPDATE_ENABLED").unwrap_or(false);
+    let default_store_url_darwin = read_string("APP_STORE_DEFAULT_URL_DARWIN");
+    let default_store_url_ios = read_string("APP_STORE_DEFAULT_URL_IOS");
+
+    AppStoreConfig {
+        webhook_secret,
+        webhook_max_skew: std::time::Duration::from_secs(webhook_max_skew_secs),
+        force_update_enabled,
+        default_store_url_darwin,
+        default_store_url_ios,
+    }
+}
+
 pub fn resolve_public_grpc_endpoint(default_host: &str, default_port: u16) -> PublicEndpointConfig {
     resolve_public_endpoint(default_host, default_port)
 }

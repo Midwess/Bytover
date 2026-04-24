@@ -26,3 +26,7 @@ chrono = { workspace = true }
 rand = "0.8"
 actix-web = "4"
 semver = "1"
+hmac = { workspace = true }
+sha2 = { workspace = true }
+subtle = { workspace = true }
+hex = "0.4"

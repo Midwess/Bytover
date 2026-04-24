@@ -6,6 +6,7 @@ export interface UpdateStatus {
   version: string | null;
   release_notes: string | null;
   is_critical: boolean;
+  store_url: string | null;
 }
 
 export interface UpdateProgress {

@@ -306,35 +306,118 @@ async fn open_settings(app_handle: AppHandle) {
     app_handle.show_settings();
 }
 
-#[derive(serde::Serialize, Deserialize, Debug)]
+#[derive(serde::Serialize, Deserialize, Debug, Clone)]
 struct UpdateStatus {
     available: bool,
     version: Option<String>,
     release_notes: Option<String>,
     is_critical: bool,
+    store_url: Option<String>,
+}
+
+#[derive(serde::Deserialize, Debug)]
+struct BackendUpdateManifest {
+    version: String,
+    notes: Option<String>,
+    is_critical: bool,
+    store_url: Option<String>,
+}
+
+const DEFAULT_BACKEND_API_BASE: &str = "https://api.bytover.com";
+
+fn backend_api_base() -> String {
+    var("BYTOVER_API_BASE_URL").unwrap_or_else(|_| DEFAULT_BACKEND_API_BASE.to_string())
+}
+
+fn backend_target_name() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "darwin"
+    } else if cfg!(target_os = "linux") {
+        "linux"
+    } else if cfg!(target_os = "windows") {
+        "windows"
+    } else {
+        "unknown"
+    }
+}
+
+fn backend_arch_name() -> &'static str {
+    if cfg!(target_arch = "aarch64") {
+        "aarch64"
+    } else if cfg!(target_arch = "x86_64") {
+        "x86_64"
+    } else {
+        "unknown"
+    }
+}
+
+async fn fetch_backend_manifest(current_version: &str) -> Option<BackendUpdateManifest> {
+    let url = format!(
+        "{}/bitbridge/api/v1/update/{}/{}/{}",
+        backend_api_base(),
+        backend_target_name(),
+        backend_arch_name(),
+        current_version,
+    );
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(10)).build().ok()?;
+    let resp = match client.get(&url).send().await {
+        Ok(r) => r,
+        Err(e) => {
+            log::warn!("Backend update check failed: {}", e);
+            return None;
+        }
+    };
+    if resp.status() == reqwest::StatusCode::NO_CONTENT {
+        return None;
+    }
+    if !resp.status().is_success() {
+        log::warn!("Backend update check returned HTTP {}", resp.status());
+        return None;
+    }
+    match resp.json::<BackendUpdateManifest>().await {
+        Ok(m) => Some(m),
+        Err(e) => {
+            log::warn!("Backend update manifest deserialization failed: {}", e);
+            None
+        }
+    }
 }
 
 #[tauri::command]
 async fn check_for_update(app_handle: AppHandle) -> Result<UpdateStatus, String> {
+    let current_version = app_handle.package_info().version.to_string();
+
+    if let Some(manifest) = fetch_backend_manifest(&current_version).await {
+        if manifest.is_critical || manifest.store_url.is_some() {
+            let status = UpdateStatus {
+                available: true,
+                version: Some(manifest.version),
+                release_notes: manifest.notes,
+                is_critical: manifest.is_critical,
+                store_url: manifest.store_url,
+            };
+            log::info!("Update check result (backend): {:?}", status);
+            return Ok(status);
+        }
+    }
+
     let updater = app_handle.updater().map_err(|e| e.to_string())?;
     let update = updater.check().await.map_err(|e| e.to_string())?;
 
     if let Some(update) = update {
-        let current_version = &app_handle.package_info().version;
-        // Parse semver from new version string, stripping 'v' prefix if present
+        let current_semver = &app_handle.package_info().version;
         let new_version_str = update.version.trim_start_matches('v');
         let new_version = semver::Version::parse(new_version_str).map_err(|e| e.to_string())?;
-
-        // Force update if major version is available
-        let is_major_update = new_version.major > current_version.major;
+        let is_major_update = new_version.major > current_semver.major;
 
         let status = UpdateStatus {
             available: true,
             version: Some(update.version.clone()),
             release_notes: update.body.clone(),
             is_critical: is_major_update,
+            store_url: None,
         };
-        log::info!("Update check result: {:?}", status);
+        log::info!("Update check result (tauri): {:?}", status);
         Ok(status)
     } else {
         let status = UpdateStatus {
@@ -342,8 +425,9 @@ async fn check_for_update(app_handle: AppHandle) -> Result<UpdateStatus, String>
             version: None,
             release_notes: None,
             is_critical: false,
+            store_url: None,
         };
-        log::info!("Update check result: {:?}", status);
+        log::info!("Update check result: no update available");
         Ok(status)
     }
 }

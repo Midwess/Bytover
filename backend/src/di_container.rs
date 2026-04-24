@@ -1,17 +1,21 @@
 use crate::app_gateway::app_info::AppInfoService;
 use crate::app_gateway::markov::Markov;
 use crate::cloud_storage::storage::CloudStorage;
+use crate::config::{load_app_store_config, AppStoreConfig};
 use crate::grpc::cloud_service::CloudGrpcService;
 use crate::grpc::middlewares::auth::AuthInterceptor;
 use crate::grpc::p2p_service::P2PGrpcService;
+use crate::http::webhooks::verify::WebhookSecretVerifier;
 use crate::infrastructure::app_gateway::AppGatewayImpl;
 use crate::infrastructure::mail::email_service::EmailServiceImpl;
+use crate::infrastructure::postgres::app_release::AppReleasePostgresRepository;
 use crate::infrastructure::postgres::device_alias::DeviceAliasPostgresRepository;
 use crate::infrastructure::postgres::p2p_session::P2PSessionPostgresRepository;
 use crate::infrastructure::postgres::transfer_session::TransferSessionPostgresRepository;
 use crate::infrastructure::postgres::user_capabilities::UserCapabilitiesPostgresRepository;
 use crate::infrastructure::s3::cloud_storage::S3CloudStorageImpl;
 use crate::mail::service::EmailService;
+use crate::repositories::app_release::AppReleaseRepository;
 use crate::repositories::device_alias::DeviceAliasRepository;
 use crate::repositories::p2p_session::P2PSessionRepository;
 use crate::repositories::transfer_session::TransferSessionRepository;
@@ -49,6 +53,7 @@ pub struct DiContainer {
     pub devlog_sdk: DevlogSdk,
     db_connection: DatabaseConnection,
     pub pg_pool: PgPool,
+    app_store_config: AppStoreConfig,
 }
 
 impl DiContainer {
@@ -90,11 +95,31 @@ impl DiContainer {
             .await
             .unwrap_or_else(|e| panic!("Failed to run DB migration: {e}"));
 
+        let app_store_config = load_app_store_config();
+
         Self {
             grpc_gateway_channel: GrpcGatewayChannel::new(),
             devlog_sdk,
             db_connection,
             pg_pool,
+            app_store_config,
+        }
+    }
+
+    pub fn get_app_store_config(&self) -> &AppStoreConfig {
+        &self.app_store_config
+    }
+
+    pub fn get_webhook_verifier(&self) -> Option<WebhookSecretVerifier> {
+        self.app_store_config
+            .webhook_secret
+            .as_ref()
+            .map(|secret| WebhookSecretVerifier::new(secret.clone(), self.app_store_config.webhook_max_skew))
+    }
+
+    pub async fn get_app_release_repository(&'static self) -> impl AppReleaseRepository {
+        AppReleasePostgresRepository {
+            db: self.get_db_connection(),
         }
     }
 

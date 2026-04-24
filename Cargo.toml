@@ -81,6 +81,8 @@ stun-proto = { version = "2.0.0", features = ["std"] }
 if-addrs = "0.15.0"
 mdns-sd = "0.18.2"
 hmac = "0.12.1"
+sha2 = { version = "0.10.8", default-features = false }
+subtle = { version = "2.5.0", default-features = false }
 actix-web = "4.11.0"
 jsonwebtoken = "9.3"
 turn-server = { git = "https://github.com/Midwess/turn-rs.git", branch = "production" }
