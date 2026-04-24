@@ -23,6 +23,7 @@ function Window() {
     const [tokenInput, setTokenInput] = useState('')
     const [authUrl, setAuthUrl] = useState<string | null>(null)
     const [copied, setCopied] = useState(false)
+    const [showUrl, setShowUrl] = useState(false)
 
     useEffect(() => {
         core.launch()
@@ -57,6 +58,7 @@ function Window() {
         setTokenInput('')
         setAuthUrl(null)
         setCopied(false)
+        setShowUrl(false)
         setAuthPhase('google-signin')
     }
 
@@ -148,37 +150,7 @@ function Window() {
                     )}
 
                     {authPhase === 'token-input' && (
-                        <div className="w-full max-w-[320px] flex flex-col items-center gap-5">
-                            <div className="text-center">
-                                <h2 className="text-white text-[17px] font-semibold tracking-tight">
-                                    Continue in your browser
-                                </h2>
-                                <p className="text-[13px] text-zinc-400 mt-1">
-                                    Open the sign-in link, or paste the access token below.
-                                </p>
-                            </div>
-
-                            {authUrl && (
-                                <div className="w-full flex items-center gap-2 pl-3.5 pr-1.5 py-1.5 rounded-xl bg-white/[0.06]">
-                                    <span className="flex-1 text-zinc-200 text-[12px] font-mono truncate">
-                                        {authUrl}
-                                    </span>
-                                    <button
-                                        onClick={handleCopyUrl}
-                                        className="shrink-0 h-7 px-2.5 rounded-md bg-white/10 hover:bg-white/15 text-white text-[11px] font-medium flex items-center gap-1 transition-colors active:scale-[0.96]"
-                                    >
-                                        {copied ? <Check className="w-[12px] h-[12px]" /> : <Copy className="w-[12px] h-[12px]" />}
-                                        {copied ? 'Copied' : 'Copy'}
-                                    </button>
-                                </div>
-                            )}
-
-                            <div className="w-full flex items-center gap-3">
-                                <div className="flex-1 h-px bg-white/10" />
-                                <span className="text-[10px] text-zinc-500 uppercase tracking-[0.15em] font-medium">or</span>
-                                <div className="flex-1 h-px bg-white/10" />
-                            </div>
-
+                        <div className="w-full max-w-[320px] flex flex-col items-center gap-3">
                             <Input
                                 type="text"
                                 placeholder="Paste access token"
@@ -186,6 +158,21 @@ function Window() {
                                 onChange={(e) => setTokenInput(e.target.value)}
                                 className="w-full h-11 bg-white/[0.06] border-none text-white placeholder:text-zinc-500 rounded-xl text-[13px] px-3.5 focus-visible:ring-1 focus-visible:ring-white/20"
                             />
+
+                            {showUrl && authUrl && (
+                                <div className="w-full flex items-center gap-2 pl-3.5 pr-1.5 py-1.5 rounded-xl bg-white/[0.06]">
+                                    <span className="flex-1 text-zinc-300 text-[12px] font-mono truncate">
+                                        {authUrl}
+                                    </span>
+                                    <button
+                                        onClick={handleCopyUrl}
+                                        className="shrink-0 h-7 w-7 rounded-md bg-white/10 hover:bg-white/15 text-white flex items-center justify-center transition-colors active:scale-[0.96]"
+                                    >
+                                        {copied ? <Check className="w-[13px] h-[13px]" /> : <Copy className="w-[13px] h-[13px]" />}
+                                    </button>
+                                </div>
+                            )}
+
                             <Button
                                 onClick={handleSubmitToken}
                                 disabled={!tokenInput.trim()}
@@ -193,6 +180,16 @@ function Window() {
                             >
                                 Continue
                             </Button>
+
+                            {!showUrl && (
+                                <button
+                                    onClick={() => setShowUrl(true)}
+                                    className="text-[12px] text-zinc-500 hover:text-zinc-300 transition-colors"
+                                >
+                                    Your browser didn&apos;t open?
+                                </button>
+                            )}
+
                             <button
                                 onClick={handleBack}
                                 className="text-[12px] text-zinc-500 hover:text-zinc-300 transition-colors"
