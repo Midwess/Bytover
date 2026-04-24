@@ -394,7 +394,7 @@ impl BitBridgeCloudService for CloudGrpcService {
         let di = DiContainer::instance().await;
         let gateway = di.get_payment_gateway().await;
         let outcome = gateway
-            .verify_storekit_transaction(user_order_id, &body.transaction_id)
+            .verify_storekit_transaction(user_order_id, &body.transaction_id, &body.product_id)
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
 

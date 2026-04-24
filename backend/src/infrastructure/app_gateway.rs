@@ -8,10 +8,11 @@ use devlog_sdk::grpc_gateway::channel::GrpcGatewayChannel;
 use schema::devlog::app_gateway::models::Application;
 use schema::devlog::app_gateway::rpc::application_service_client::ApplicationServiceClient;
 use schema::devlog::app_gateway::rpc::markov_generator_service_client::MarkovGeneratorServiceClient;
+use schema::devlog::app_gateway::rpc::payment_request::Item as PaymentItem;
+use schema::devlog::app_gateway::rpc::payment_response::ResponseItem;
 use schema::devlog::app_gateway::rpc::payment_service_client::PaymentServiceClient;
-use schema::devlog::app_gateway::rpc::verify_store_kit_transaction_response::Outcome as VerifyStoreKitOutcomeMsg;
 use schema::devlog::app_gateway::rpc::{
-    GenerateNameRequest, GenerateRandomAvatarRequest, GetApplicationInfoRequest, VerifyStoreKitErrorCode, VerifyStoreKitTransactionRequest,
+    GenerateNameRequest, GenerateRandomAvatarRequest, GetApplicationInfoRequest, PaymentRequest, StoreKitPayment,
 };
 
 pub struct AppGatewayImpl {
@@ -57,46 +58,56 @@ impl AppInfoService for AppGatewayImpl {
 impl PaymentGateway for AppGatewayImpl {
     async fn verify_storekit_transaction(
         &self,
-        user_order_id: u64,
+        _user_order_id: u64,
         transaction_id: &str,
+        product_id: &str,
     ) -> Result<StoreKitVerifyOutcome, PaymentGatewayError> {
         let channel = self.channel.connect().await?;
         let mut client = PaymentServiceClient::new(channel);
-        let request = VerifyStoreKitTransactionRequest {
-            transaction_id: transaction_id.to_owned(),
-            user_id: Some(user_order_id),
+
+        let request = PaymentRequest {
+            idempotency_key: format!("storekit:{transaction_id}"),
+            item: Some(PaymentItem::StorekitPayment(StoreKitPayment {
+                transaction_id: transaction_id.to_owned(),
+                product_id: product_id.to_owned(),
+            })),
         };
 
-        let response = client.verify_storekit_transaction(request).await?;
-        let outcome = response.into_inner().outcome.ok_or(PaymentGatewayError::MalformedResponse)?;
+        let mut stream = client.pay(request).await?.into_inner();
+        let mut terminal: Option<StoreKitVerifyOutcome> = None;
 
-        match outcome {
-            VerifyStoreKitOutcomeMsg::Completed(c) => Ok(StoreKitVerifyOutcome::Completed {
-                payment_statement_id: c.payment_statement_id,
-                transaction_id: c.transaction_id,
-                original_transaction_id: c.original_transaction_id,
-                product_id: c.product_id,
-                amount: c.amount,
-                currency: c.currency,
-                duplicate: c.duplicate,
-            }),
-            VerifyStoreKitOutcomeMsg::Error(e) => {
-                let parsed = VerifyStoreKitErrorCode::try_from(e.code).unwrap_or(VerifyStoreKitErrorCode::VerifyStorekitErrorCodeUnknown);
-                let code = match parsed {
-                    VerifyStoreKitErrorCode::VerifyStorekitErrorCodeUnknown => StoreKitVerifyRejectionCode::Unknown,
-                    VerifyStoreKitErrorCode::VerifyStorekitErrorCodeNotFound => StoreKitVerifyRejectionCode::NotFound,
-                    VerifyStoreKitErrorCode::VerifyStorekitErrorCodeBundleMismatch => StoreKitVerifyRejectionCode::BundleMismatch,
-                    VerifyStoreKitErrorCode::VerifyStorekitErrorCodeInvalidSignature => StoreKitVerifyRejectionCode::InvalidSignature,
-                    VerifyStoreKitErrorCode::VerifyStorekitErrorCodeEnvMismatch => StoreKitVerifyRejectionCode::EnvMismatch,
-                    VerifyStoreKitErrorCode::VerifyStorekitErrorCodeAppleApiError => StoreKitVerifyRejectionCode::AppleApiError,
-                    VerifyStoreKitErrorCode::VerifyStorekitErrorCodeProductUnknown => StoreKitVerifyRejectionCode::ProductUnknown,
-                    VerifyStoreKitErrorCode::VerifyStorekitErrorCodeConfigMissing => StoreKitVerifyRejectionCode::ConfigMissing,
-                    VerifyStoreKitErrorCode::VerifyStorekitErrorCodeAlreadyConsumed => StoreKitVerifyRejectionCode::AlreadyConsumed,
-                };
-                Ok(StoreKitVerifyOutcome::Rejected(StoreKitVerifyRejection {
-                    code,
-                    message: e.message,
-                }))
+        loop {
+            match stream.message().await? {
+                Some(message) => match message.response_item {
+                    Some(ResponseItem::CompletedStatement(payment_statement_id)) => {
+                        if terminal.is_none() {
+                            terminal = Some(StoreKitVerifyOutcome::Completed {
+                                payment_statement_id,
+                                transaction_id: transaction_id.to_owned(),
+                                original_transaction_id: String::new(),
+                                product_id: product_id.to_owned(),
+                                amount: 0,
+                                currency: String::new(),
+                                duplicate: false,
+                            });
+                        }
+                    }
+                    Some(ResponseItem::Error(reason)) => {
+                        if terminal.is_none() {
+                            terminal = Some(StoreKitVerifyOutcome::Rejected(StoreKitVerifyRejection {
+                                code: StoreKitVerifyRejectionCode::Unknown,
+                                message: reason,
+                            }));
+                        }
+                    }
+                    Some(ResponseItem::Redirect(_)) => {
+                        return Err(PaymentGatewayError::MalformedResponse);
+                    }
+                    None => continue,
+                },
+                None => {
+                    return terminal.ok_or(PaymentGatewayError::MalformedResponse);
+                }
             }
         }
     }

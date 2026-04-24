@@ -51,5 +51,6 @@ pub trait PaymentGateway: Send + Sync {
         &self,
         user_order_id: u64,
         transaction_id: &str,
+        product_id: &str,
     ) -> Result<StoreKitVerifyOutcome, PaymentGatewayError>;
 }
