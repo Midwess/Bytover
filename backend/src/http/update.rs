@@ -61,7 +61,9 @@ pub async fn get_update_manifest(path: web::Path<UpdatePath>) -> Result<HttpResp
         }
     };
 
-    let db = crate::di_container::DiContainer::instance().await.get_db_connection();
+    let di = crate::di_container::DiContainer::instance().await;
+    let db = di.get_db_connection();
+    let force_update_enabled = di.get_app_store_config().force_update_enabled;
 
     use crate::entities::app_release::Entity as AppReleaseEntity;
 
@@ -78,7 +80,7 @@ pub async fn get_update_manifest(path: web::Path<UpdatePath>) -> Result<HttpResp
         .max_by_key(|(_, v)| v.clone());
 
     match latest {
-        Some((release, _)) => {
+        Some((release, latest_version)) => {
             let mut platforms = std::collections::HashMap::new();
             if let Some(url) = release.download_url.clone() {
                 platforms.insert(

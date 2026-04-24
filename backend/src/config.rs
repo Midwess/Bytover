@@ -60,6 +60,16 @@ fn read_port(key: &str) -> Option<u16> {
     std::env::var(key).ok().and_then(|value| value.trim().parse::<u16>().ok())
 }
 
+fn read_u64(key: &str) -> Option<u64> {
+    std::env::var(key).ok().and_then(|value| value.trim().parse::<u64>().ok())
+}
+
+fn read_bool(key: &str) -> Option<bool> {
+    std::env::var(key).ok().map(|value| {
+        matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on")
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::resolve_public_grpc_endpoint;
