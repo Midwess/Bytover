@@ -502,7 +502,7 @@ function PlanComparison({limits, onUpgrade}: {limits: FreeLimits; onUpgrade: () 
                 onClick={onUpgrade}
                 className="w-full h-[32px] text-[12.5px] font-semibold bg-white text-black hover:bg-white/90 border-none rounded-lg shadow-none"
             >
-                Upgrade to Pro
+                Get life time access
             </Button>
         </div>
     )

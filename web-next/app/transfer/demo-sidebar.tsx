@@ -419,7 +419,7 @@ export const RadixSidebarDemo = () => {
                   <DropdownMenuGroup>
                     <DropdownMenuItem>
                       <Sparkles />
-                      Upgrade to Pro
+                      Get life time access
                     </DropdownMenuItem>
                   </DropdownMenuGroup>
                   <DropdownMenuSeparator />
