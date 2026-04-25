@@ -9,7 +9,7 @@ import {useState} from "react"
 import {Progress} from "@/components/animate-ui/components/radix/progress"
 import {ProgressIndicator} from "@/components/animate-ui/primitives/radix/progress"
 import {Send} from "lucide-react"
-import {openForceUpdate} from "@/components/force-update-overlay"
+import {formatUpdateLabel, openForceUpdate} from "@/components/force-update-overlay"
 import {UpdateStatus} from "@/lib/updater"
 
 export function EmailTransfer({ shelfId, forceUpdate }: { shelfId: string | undefined; forceUpdate: UpdateStatus | null }) {
@@ -58,7 +58,7 @@ export function EmailTransfer({ shelfId, forceUpdate }: { shelfId: string | unde
                 forceUpdate ? (
                     <Button onClick={() => openForceUpdate(forceUpdate)}
                             className={"bg-bluePrimary text-foreground shadow-lg hover:bg-bluePrimary/60 px-3 w-auto"}>
-                        Update to continue
+                        {formatUpdateLabel(forceUpdate)}
                     </Button>
                 ) : cloudSession?.is_in_progress ? (
                     <Button onClick={() => {

@@ -23,6 +23,13 @@ export function useForceUpdateStatus() {
   return status
 }
 
+export function formatUpdateLabel(status: UpdateStatus): string {
+  const version = status.version
+  if (!version) return "Update to continue"
+  const normalized = version.startsWith("v") ? version : `v${version}`
+  return `Update to ${normalized}`
+}
+
 export async function openForceUpdate(status: UpdateStatus) {
   try {
     if (status.store_url) {

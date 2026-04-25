@@ -30,7 +30,7 @@ import {Progress} from "@/components/animate-ui/components/radix/progress"
 import {ProgressIndicator} from "@/components/animate-ui/primitives/radix/progress"
 import {UnlimitedLineText} from "@/components/ui/unlimited-line-text"
 import {EmailTransfer} from "@/send/email-transfer"
-import {openForceUpdate} from "@/components/force-update-overlay"
+import {formatUpdateLabel, openForceUpdate} from "@/components/force-update-overlay"
 import {UpdateStatus} from "@/lib/updater"
 
 export function Transfer({ shelfId, forceUpdate }: { shelfId: string | undefined; forceUpdate: UpdateStatus | null }) {
@@ -134,7 +134,7 @@ function P2PSend({ shelfId, forceUpdate }: { shelfId: string | undefined; forceU
                 forceUpdate ? (
                     <Button onClick={() => openForceUpdate(forceUpdate)}
                             className={"bg-bluePrimary text-foreground shadow-lg hover:bg-bluePrimary/60 px-3 w-auto"}>
-                        Update to continue
+                        {formatUpdateLabel(forceUpdate)}
                     </Button>
                 ) : isInProgress ? (
                     <Button onClick={handleStopTransfer}
@@ -237,7 +237,7 @@ function PublicTransfer({ shelfId, forceUpdate }: { shelfId: string | undefined;
                 forceUpdate ? (
                     <Button onClick={() => openForceUpdate(forceUpdate)}
                             className={"bg-bluePrimary text-foreground shadow-lg hover:bg-bluePrimary/60 px-3 w-auto"}>
-                        Update to continue
+                        {formatUpdateLabel(forceUpdate)}
                     </Button>
                 ) : cloudSession?.is_in_progress ? (
                     <Button onClick={() => {
