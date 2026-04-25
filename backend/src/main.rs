@@ -101,20 +101,20 @@ async fn setup_grpc_gateway(public_host: String, port: u16) -> Result<(), MainEr
 
     log::info!(
         "Register gRPC service {service:?} using upstream {}:{}",
-        endpoint.host,
-        endpoint.port
+        public_host,
+        port
     );
     api_gateway.register(service).await?;
 
     Ok(())
 }
 
-async fn setup_http_gateway(tcp: &TcpConnection) -> Result<(), MainErrors> {
+async fn setup_http_gateway(public_host: String, port: u16) -> Result<(), MainErrors> {
     log::info!("Registering HTTP gateway");
     let api_gateway = KongGatewayAdminClient::new(devlog_sdk::config::CONFIGS.kong.admin_url.clone());
 
     let service = GatewayServiceBuilder::new()
-        .http(tcp.public_host.clone(), tcp.port)
+        .http(public_host.clone(), port)
         .name("bitbridge-http-server")
         .enable_cors(true)
         .routes(vec![
@@ -132,8 +132,8 @@ async fn setup_http_gateway(tcp: &TcpConnection) -> Result<(), MainErrors> {
 
     log::info!(
         "Register HTTP service {service:?} using upstream {}:{}",
-        tcp.public_host,
-        tcp.port
+        public_host,
+        port
     );
     api_gateway.register(service).await?;
 
