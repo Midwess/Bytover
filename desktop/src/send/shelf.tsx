@@ -417,7 +417,7 @@ function ResourceView(props: {
     </div>
 }
 
-function FileView(props: {
+export function FileView(props: {
     model: SelectedResourceViewModel,
     isRemoveAllowed: boolean,
     onRemove: (resourceId: string) => void,
@@ -491,7 +491,7 @@ function FileView(props: {
     );
 }
 
-function MediaView(props: {
+export function MediaView(props: {
     model: SelectedResourceViewModel,
     isRemoveAllowed: boolean,
     onRemove: (resourceId: string) => void,
