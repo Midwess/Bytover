@@ -4,7 +4,7 @@ import {
     CloudSession,
     DialogOperationVariantMessage,
     EnvironmentViewModel,
-    P2PViewModel, PeerViewModel,
+    P2PViewModel, PaymentViewModel, PeerViewModel,
     ReceiveSessionViewModel, ReceiveResourceViewModel, SelectedResourceViewModel,
     ShelfViewModel, ShelfItemViewModel,
     TransferViewModel
@@ -21,6 +21,7 @@ export class Core {
     p2pState: Observable<P2PViewModel> = new Observable()
     transferState: Observable<TransferViewModel> = new Observable()
     shelfState: Observable<ShelfViewModel> = new Observable()
+    paymentState: Observable<PaymentViewModel> = new Observable()
     alertMessageState: Observable<DialogOperationVariantMessage[]> = new Observable()
     selectedSession: Observable<ReceiveSessionViewModel> = new Observable()
 
@@ -229,6 +230,15 @@ export class Core {
         return state
     }
 
+    usePayment() {
+        const [state, setState] = useState(this.paymentState.get());
+        useEffect(() => {
+            return this.paymentState.subscribe(setState)
+        }, []);
+
+        return state
+    }
+
     constructor() {}
 
     async launch() {
@@ -241,6 +251,7 @@ export class Core {
             this.p2pState.set(viewModel.payload.p2p!)
             this.transferState.set(viewModel.payload.transfer!)
             this.shelfState.set(viewModel.payload.shelf!)
+            this.paymentState.set(viewModel.payload.payment!)
         })
 
         await invoke("ui_launched")

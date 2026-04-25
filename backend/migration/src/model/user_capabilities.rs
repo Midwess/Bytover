@@ -11,6 +11,7 @@ pub struct Model {
     pub total_transfer_bytes_lifetime_cap: i64,
     pub total_transfer_bytes_used: i64,
     pub max_visible_shelves: i32,
+    pub device_unique_key: Option<String>,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
 }

@@ -4,14 +4,84 @@ use crate::protocol::rpc::connection::RpcNetworkModule;
 use crate::protocol::rpc::errors::RpcErrors;
 use core_services::utils::maybe::MaybeSend;
 use schema::devlog::bitbridge::bit_bridge_cloud_service_client::BitBridgeCloudServiceClient;
+use schema::devlog::bitbridge::submit_store_kit_transaction_response::Outcome as SubmitStoreKitOutcome;
 use schema::devlog::bitbridge::update_transfer_progress_request::Status;
 use schema::devlog::bitbridge::{
-    AddResourcesRequest, AddResourcesResponse, CancelSessionRequest, ClientUploadRequest, CloudResourceMessage,
-    CompleteUploadPartRequest, CreatePublicTransferSessionRequest, FindSessionRequest, FindSessionResponse,
-    GetCapabilitiesRequest, MultiPartUpload, PublicSessionId, PublicTransferSessionMessage, SubscribeSessionInfoRequest,
+    AddResourcesRequest, AddResourcesResponse, Capabilities as CapabilitiesMsg, CancelSessionRequest, ClientUploadRequest,
+    CloudResourceMessage, CompleteUploadPartRequest, CreatePublicTransferSessionRequest, FindSessionRequest,
+    FindSessionResponse, GetCapabilitiesRequest, MultiPartUpload, PublicSessionId, PublicTransferSessionMessage,
+    ReportP2pBytesUsedRequest, SubmitStoreKitErrorCode, SubmitStoreKitTransactionRequest, SubscribeSessionInfoRequest,
     SubscribeSessionInfoResponse, UpdateTransferProgressRequest,
 };
+use serde::{Deserialize, Serialize};
 use tonic::{Request, Streaming};
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum SubmitStoreKitResult {
+    Completed {
+        payment_statement_id: u64,
+        product_id: String,
+        duplicate: bool,
+        upgraded_to_paid: bool,
+        capabilities: UserCapabilities,
+    },
+    Rejected {
+        code: SubmitStoreKitRejectionCode,
+        message: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum SubmitStoreKitRejectionCode {
+    Unknown,
+    NotFound,
+    BundleMismatch,
+    InvalidSignature,
+    EnvMismatch,
+    AppleApiError,
+    ProductUnknown,
+    ConfigMissing,
+    Internal,
+}
+
+impl From<SubmitStoreKitErrorCode> for SubmitStoreKitRejectionCode {
+    fn from(code: SubmitStoreKitErrorCode) -> Self {
+        match code {
+            SubmitStoreKitErrorCode::Unknown => Self::Unknown,
+            SubmitStoreKitErrorCode::NotFound => Self::NotFound,
+            SubmitStoreKitErrorCode::BundleMismatch => Self::BundleMismatch,
+            SubmitStoreKitErrorCode::InvalidSignature => Self::InvalidSignature,
+            SubmitStoreKitErrorCode::EnvMismatch => Self::EnvMismatch,
+            SubmitStoreKitErrorCode::AppleApiError => Self::AppleApiError,
+            SubmitStoreKitErrorCode::ProductUnknown => Self::ProductUnknown,
+            SubmitStoreKitErrorCode::ConfigMissing => Self::ConfigMissing,
+            SubmitStoreKitErrorCode::Internal => Self::Internal,
+        }
+    }
+}
+
+fn map_capabilities(caps: CapabilitiesMsg) -> UserCapabilities {
+    let plan = match caps.plan {
+        x if x == schema::devlog::bitbridge::Plan::Paid as i32 => Plan::Paid,
+        _ => Plan::Free,
+    };
+
+    UserCapabilities {
+        plan,
+        transfer_limits: TransferLimits {
+            password_encryption_allowed: caps.transfer_limits.password_encryption_allowed,
+            max_files_per_transfer: caps.transfer_limits.max_files_per_transfer,
+            total_transfer_bytes_lifetime_cap: caps.transfer_limits.total_transfer_bytes_lifetime_cap,
+        },
+        transfer_usage: TransferUsage {
+            total_transfer_bytes_used: caps.transfer_usage.total_transfer_bytes_used,
+        },
+        presentation: PresentationLimits {
+            max_visible_shelves: caps.presentation.max_visible_shelves,
+        },
+        capabilities_version: caps.capabilities_version,
+    }
+}
 
 pub struct CloudServer<T>
 where
@@ -170,27 +240,53 @@ where
         self.auth_provider.with_auth(&mut request).await?;
 
         let response = client.get_capabilities(request).await?.into_inner();
-        let caps = response.capabilities;
+        Ok(map_capabilities(response.capabilities))
+    }
 
-        let plan = match caps.plan {
-            x if x == schema::devlog::bitbridge::Plan::Paid as i32 => Plan::Paid,
-            _ => Plan::Free,
-        };
+    pub async fn report_p2p_bytes_used(&self, delta: u64) -> Result<UserCapabilities, RpcErrors> {
+        let channel = self.rpc_module.connect().await?;
+        let mut client = BitBridgeCloudServiceClient::new(channel);
+        let mut request = Request::new(ReportP2pBytesUsedRequest { delta });
+        self.auth_provider.with_auth(&mut request).await?;
 
-        Ok(UserCapabilities {
-            plan,
-            transfer_limits: TransferLimits {
-                password_encryption_allowed: caps.transfer_limits.password_encryption_allowed,
-                max_files_per_transfer: caps.transfer_limits.max_files_per_transfer,
-                total_transfer_bytes_lifetime_cap: caps.transfer_limits.total_transfer_bytes_lifetime_cap,
-            },
-            transfer_usage: TransferUsage {
-                total_transfer_bytes_used: caps.transfer_usage.total_transfer_bytes_used,
-            },
-            presentation: PresentationLimits {
-                max_visible_shelves: caps.presentation.max_visible_shelves,
-            },
-            capabilities_version: caps.capabilities_version,
-        })
+        let response = client.report_p2p_bytes_used(request).await?.into_inner();
+        Ok(map_capabilities(response.capabilities))
+    }
+
+    pub async fn submit_storekit_transaction(
+        &self,
+        transaction_id: String,
+        product_id: String,
+    ) -> Result<SubmitStoreKitResult, RpcErrors> {
+        let channel = self.rpc_module.connect().await?;
+        let mut request = Request::new(SubmitStoreKitTransactionRequest {
+            transaction_id,
+            product_id,
+        });
+        self.auth_provider.with_auth(&mut request).await?;
+
+        let mut client = BitBridgeCloudServiceClient::new(channel);
+        let response = client.submit_storekit_transaction(request).await?.into_inner();
+
+        let outcome = response
+            .outcome
+            .ok_or_else(|| RpcErrors::InternalServerError("submit_storekit_transaction response missing outcome".to_owned()))?;
+
+        match outcome {
+            SubmitStoreKitOutcome::Success(success) => Ok(SubmitStoreKitResult::Completed {
+                payment_statement_id: success.payment_statement_id,
+                product_id: success.product_id,
+                duplicate: success.duplicate,
+                upgraded_to_paid: success.upgraded_to_paid,
+                capabilities: map_capabilities(success.capabilities),
+            }),
+            SubmitStoreKitOutcome::Error(error) => {
+                let code = SubmitStoreKitErrorCode::try_from(error.code).unwrap_or(SubmitStoreKitErrorCode::Unknown);
+                Ok(SubmitStoreKitResult::Rejected {
+                    code: code.into(),
+                    message: error.message,
+                })
+            }
+        }
     }
 }

@@ -1,20 +1,25 @@
 use crate::app_gateway::app_info::AppInfoService;
+use crate::app_gateway::payment_gateway::{PaymentGateway, StoreKitVerifyOutcome, StoreKitVerifyRejectionCode};
 use crate::cloud_storage::storage::CloudStorage;
 use crate::di_container::DiContainer;
 use crate::entities::user_capabilities::UserCapabilities;
 
 use crate::repositories::transfer_session::{TransferSessionId, TransferSessionRepository};
+use crate::repositories::user_capabilities::UserCapabilitiesRepository;
 use crate::transfer::transfer_service::TransferResourceRequest;
 use crate::user::Token;
 use schema::devlog::app_gateway::models::{Application, Device, User};
 use schema::devlog::bitbridge::bit_bridge_cloud_service_server::BitBridgeCloudService;
 use schema::devlog::bitbridge::cloud_resource_message::ResourceType as CloudResourceType;
+use schema::devlog::bitbridge::submit_store_kit_transaction_response::Outcome as SubmitStoreKitOutcome;
 use schema::devlog::bitbridge::subscribe_session_info_response::{Event, SessionUpdated};
 use schema::devlog::bitbridge::{
     AddResourcesRequest, AddResourcesResponse, CancelSessionRequest, CancelSessionResponse, ClientUploadRequest,
     CompleteUploadPartRequest, CompleteUploadPartResponse, CreatePublicTransferSessionRequest, CreatePublicTransferSessionResponse,
     FindSessionRequest, FindSessionResponse, GetCapabilitiesRequest, GetCapabilitiesResponse, PublicSessionId,
-    SubscribeSessionInfoRequest, SubscribeSessionInfoResponse, UpdateTransferProgressRequest, UpdateTransferProgressResponse,
+    ReportP2pBytesUsedRequest, ReportP2pBytesUsedResponse, SubmitStoreKitError, SubmitStoreKitErrorCode, SubmitStoreKitSuccess,
+    SubmitStoreKitTransactionRequest, SubmitStoreKitTransactionResponse, SubscribeSessionInfoRequest, SubscribeSessionInfoResponse,
+    UpdateTransferProgressRequest, UpdateTransferProgressResponse,
 };
 use std::pin::Pin;
 use std::sync::Arc;
@@ -368,5 +373,181 @@ impl BitBridgeCloudService for CloudGrpcService {
 
         let msg = crate::app_gateway::plan::build_capabilities_msg(capabilities);
         Ok(Response::new(GetCapabilitiesResponse { capabilities: msg }))
+    }
+
+    async fn report_p2p_bytes_used(
+        &self,
+        request: Request<ReportP2pBytesUsedRequest>,
+    ) -> Result<Response<ReportP2pBytesUsedResponse>, Status> {
+        let Some(user) = request.extensions().get::<User>() else {
+            return Err(Status::unauthenticated("Unauthenticated".to_owned()));
+        };
+        let user_order_id = user.order_id;
+        let delta = request.get_ref().delta;
+
+        let di = DiContainer::instance().await;
+        let caps_repo = di.get_user_capabilities_repository().await;
+
+        let outcome = caps_repo
+            .increment_bytes_used(user_order_id, delta)
+            .await
+            .map_err(|e| {
+                log::warn!(
+                    "[payment] report_p2p_bytes_used increment failed: user_order_id={user_order_id} delta={delta} err={e}"
+                );
+                Status::internal(e.to_string())
+            })?;
+
+        if outcome.cap_crossed {
+            log::info!(
+                "[payment] user crossed lifetime cap: user_order_id={user_order_id} new_used={} lifetime_cap={}",
+                outcome.new_bytes_used, outcome.lifetime_cap
+            );
+        }
+
+        let caps_row = caps_repo
+            .find_or_create_default(user_order_id, "")
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?;
+        let caps_msg = crate::app_gateway::plan::build_capabilities_msg(&caps_row);
+
+        Ok(Response::new(ReportP2pBytesUsedResponse { capabilities: caps_msg }))
+    }
+
+    async fn submit_storekit_transaction(
+        &self,
+        request: Request<SubmitStoreKitTransactionRequest>,
+    ) -> Result<Response<SubmitStoreKitTransactionResponse>, Status> {
+        let Some(user) = request.extensions().get::<User>() else {
+            log::warn!("[payment] submit_storekit_transaction rejected: no User in extensions (missing/invalid authorization header)");
+            return Err(Status::unauthenticated("Unauthenticated".to_owned()));
+        };
+        let user_order_id = user.order_id;
+
+        let Some(token) = request.extensions().get::<Token>() else {
+            log::warn!("[payment] submit_storekit_transaction rejected: no Token in extensions (user_order_id={user_order_id})");
+            return Err(Status::unauthenticated("Unauthenticated".to_owned()));
+        };
+        let auth_token = token.0.clone();
+
+        let body = request.get_ref();
+        log::info!(
+            "[payment] submit_storekit_transaction entered: user_order_id={user_order_id} transaction_id={} product_id={}",
+            body.transaction_id, body.product_id
+        );
+        if body.transaction_id.trim().is_empty() {
+            log::warn!("[payment] submit_storekit_transaction rejected: empty transaction_id (user_order_id={user_order_id})");
+            return Err(Status::invalid_argument("transaction_id must be non-empty"));
+        }
+        if body.product_id.trim().is_empty() {
+            log::warn!("[payment] submit_storekit_transaction rejected: empty product_id (user_order_id={user_order_id})");
+            return Err(Status::invalid_argument("product_id must be non-empty"));
+        }
+
+        let di = DiContainer::instance().await;
+        let gateway = di.get_payment_gateway().await;
+        log::info!(
+            "[payment] forwarding to app-gateway: user_order_id={user_order_id} transaction_id={} product_id={}",
+            body.transaction_id, body.product_id
+        );
+        let outcome = gateway
+            .verify_storekit_transaction(user_order_id, &auth_token, &body.transaction_id, &body.product_id)
+            .await
+            .map_err(|e| {
+                log::warn!(
+                    "[payment] app-gateway verify_storekit_transaction returned error: user_order_id={user_order_id} transaction_id={} err={e}",
+                    body.transaction_id
+                );
+                Status::internal(e.to_string())
+            })?;
+
+        match outcome {
+            StoreKitVerifyOutcome::Completed {
+                payment_statement_id,
+                product_id,
+                duplicate,
+                ..
+            } => {
+                log::info!(
+                    "[payment] gateway outcome=Completed: user_order_id={user_order_id} payment_statement_id={payment_statement_id} product_id={product_id} duplicate={duplicate}"
+                );
+                let caps_repo = di.get_user_capabilities_repository().await;
+                let caps_row = caps_repo
+                    .upgrade_to_paid(user_order_id)
+                    .await
+                    .map_err(|e| {
+                        log::warn!(
+                            "[payment] upgrade_to_paid failed after Completed outcome: user_order_id={user_order_id} payment_statement_id={payment_statement_id} err={e}"
+                        );
+                        Status::internal(e.to_string())
+                    })?;
+                let caps_msg = crate::app_gateway::plan::build_capabilities_msg(&caps_row);
+                log::info!(
+                    "[payment] submit_storekit_transaction success: user_order_id={user_order_id} payment_statement_id={payment_statement_id} product_id={product_id} duplicate={duplicate}"
+                );
+
+                Ok(Response::new(SubmitStoreKitTransactionResponse {
+                    outcome: Some(SubmitStoreKitOutcome::Success(SubmitStoreKitSuccess {
+                        payment_statement_id,
+                        product_id,
+                        duplicate,
+                        upgraded_to_paid: true,
+                        capabilities: caps_msg,
+                    })),
+                }))
+            }
+            StoreKitVerifyOutcome::Rejected(rej) => {
+                log::warn!(
+                    "[payment] gateway outcome=Rejected: user_order_id={user_order_id} transaction_id={} product_id={} code={:?} message={}",
+                    body.transaction_id, body.product_id, rej.code, rej.message
+                );
+                if rej.code == StoreKitVerifyRejectionCode::AlreadyConsumed {
+                    log::info!(
+                        "[payment] AlreadyConsumed treated as success: user_order_id={user_order_id} transaction_id={} product_id={}",
+                        body.transaction_id, body.product_id
+                    );
+                    let caps_repo = di.get_user_capabilities_repository().await;
+                    let caps_row = caps_repo
+                        .upgrade_to_paid(user_order_id)
+                        .await
+                        .map_err(|e| {
+                            log::warn!(
+                                "[payment] upgrade_to_paid failed after AlreadyConsumed: user_order_id={user_order_id} err={e}"
+                            );
+                            Status::internal(e.to_string())
+                        })?;
+                    let caps_msg = crate::app_gateway::plan::build_capabilities_msg(&caps_row);
+
+                    return Ok(Response::new(SubmitStoreKitTransactionResponse {
+                        outcome: Some(SubmitStoreKitOutcome::Success(SubmitStoreKitSuccess {
+                            payment_statement_id: 0,
+                            product_id: body.product_id.clone(),
+                            duplicate: true,
+                            upgraded_to_paid: true,
+                            capabilities: caps_msg,
+                        })),
+                    }));
+                }
+
+                let code = match rej.code {
+                    StoreKitVerifyRejectionCode::Unknown => SubmitStoreKitErrorCode::Unknown,
+                    StoreKitVerifyRejectionCode::NotFound => SubmitStoreKitErrorCode::NotFound,
+                    StoreKitVerifyRejectionCode::BundleMismatch => SubmitStoreKitErrorCode::BundleMismatch,
+                    StoreKitVerifyRejectionCode::InvalidSignature => SubmitStoreKitErrorCode::InvalidSignature,
+                    StoreKitVerifyRejectionCode::EnvMismatch => SubmitStoreKitErrorCode::EnvMismatch,
+                    StoreKitVerifyRejectionCode::AppleApiError => SubmitStoreKitErrorCode::AppleApiError,
+                    StoreKitVerifyRejectionCode::ProductUnknown => SubmitStoreKitErrorCode::ProductUnknown,
+                    StoreKitVerifyRejectionCode::ConfigMissing => SubmitStoreKitErrorCode::ConfigMissing,
+                    StoreKitVerifyRejectionCode::AlreadyConsumed => SubmitStoreKitErrorCode::Unknown,
+                };
+
+                Ok(Response::new(SubmitStoreKitTransactionResponse {
+                    outcome: Some(SubmitStoreKitOutcome::Error(SubmitStoreKitError {
+                        code: code as i32,
+                        message: Some(rej.message),
+                    })),
+                }))
+            }
+        }
     }
 }

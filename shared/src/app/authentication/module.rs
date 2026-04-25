@@ -1,6 +1,6 @@
 use crate::app::core::extensions::{CoreCommandContextUtils, CoreCommandUtils};
+use crate::app::payment::module::PaymentEvent;
 use crate::app::{AppModel, BitBridge};
-use crate::entities::capabilities::{UserCapabilities, EXPECTED_CAPABILITIES_VERSION};
 use crate::entities::user::User;
 use core_services::utils::string::StringExt;
 use crux_core::{App, Command};
@@ -18,14 +18,12 @@ pub struct AuthenticationModule;
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct AuthenticationModel {
     pub user: Option<User>,
-    pub capabilities: Option<UserCapabilities>,
     pub is_already_feedback: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct AuthenticationViewModel {
     pub user: Option<User>,
-    pub capabilities: Option<UserCapabilities>,
     pub is_already_feedback: bool,
 }
 
@@ -37,8 +35,6 @@ pub enum AuthenticationEvent {
     Authorized { user: User },
     UnAuthorized,
     Feedback { message: Option<String>, email: String },
-    #[serde(skip)]
-    CapabilitiesLoaded(UserCapabilities),
 }
 
 impl AppModule<BitBridge> for AuthenticationModule {
@@ -58,11 +54,13 @@ impl AppModule<BitBridge> for AuthenticationModule {
             }),
             AuthenticationEvent::SignOut => {
                 model.authentication.user.take();
-                model.authentication.capabilities.take();
-                Command::new(|it| async move {
+                let stop_p2p = Command::new(|it| async move {
                     let _ = it.app().run(P2POperation::stop()).await;
-                })
-                .then_render()
+                });
+                let clear_payment = Command::new(|it| async move {
+                    it.app().notify_event(AppEvent::Payment(PaymentEvent::ClearCapabilities));
+                });
+                Command::all(vec![Command::render(), stop_p2p, clear_payment])
             }
             AuthenticationEvent::OnRedirected { url } => {
                 if model.authentication.user.is_some() {
@@ -76,54 +74,13 @@ impl AppModule<BitBridge> for AuthenticationModule {
                 })
             }
             AuthenticationEvent::Authorized { user } => {
-                let is_authorized = model.authentication.user.is_some();
-
                 model.authentication.user.replace(user);
-                if is_authorized {
-                    return Command::done();
-                }
 
-                let fetch_caps = Command::new(|it| async move {
-                    match RpcOperation::get_capabilities().into_future(it.clone()).await {
-                        Ok(caps) => {
-                            it.app().notify_event(AppEvent::Authentication(AuthenticationEvent::CapabilitiesLoaded(caps)));
-                        }
-                        Err(err) => {
-                            log::warn!("Failed to load user capabilities: {:?}", err);
-                        }
-                    }
+                let request_refresh = Command::new(|it| async move {
+                    it.app().notify_event(AppEvent::Payment(PaymentEvent::RefreshCapabilities));
                 });
 
-                Command::all(vec![Command::render(), fetch_caps])
-            }
-            AuthenticationEvent::CapabilitiesLoaded(caps) => {
-                if caps.capabilities_version > EXPECTED_CAPABILITIES_VERSION {
-                    log::error!(
-                        "Server sent capabilities_version={} but client expects <= {}; refusing to apply. Update the client.",
-                        caps.capabilities_version,
-                        EXPECTED_CAPABILITIES_VERSION
-                    );
-                    return Command::done();
-                }
-                if caps.capabilities_version < EXPECTED_CAPABILITIES_VERSION {
-                    log::warn!(
-                        "Server sent capabilities_version={} older than client expects ({}); applying with defaults where missing.",
-                        caps.capabilities_version,
-                        EXPECTED_CAPABILITIES_VERSION
-                    );
-                }
-
-                let limit = caps.shelf_limit();
-                model.authentication.capabilities.replace(caps);
-
-                let cleanup = match limit {
-                    Some(limit) => Command::handle_result(move |it| async move {
-                        it.app().enforce_shelf_limit(limit as usize).await
-                    }),
-                    None => Command::done(),
-                };
-
-                Command::all(vec![Command::render(), cleanup])
+                Command::all(vec![Command::render(), request_refresh])
             }
             AuthenticationEvent::UnAuthorized => Command::render(),
             AuthenticationEvent::Feedback { email, message } => {
@@ -153,8 +110,89 @@ impl AppModule<BitBridge> for AuthenticationModule {
     fn view(&self, model: &AppModel) -> Self::ViewModel {
         AuthenticationViewModel {
             user: model.authentication.user.clone(),
-            capabilities: model.authentication.capabilities.clone(),
             is_already_feedback: model.authentication.is_already_feedback,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::{AppEvent, BitBridge};
+    use crate::entities::capabilities::{Plan, PresentationLimits, UserCapabilities};
+    use crux_core::App;
+
+    fn signed_in_model() -> AppModel {
+        let mut model = AppModel::default();
+        model.authentication.user = Some(User {
+            id: 1,
+            email: "test@example.com".to_owned(),
+            name: "Test".to_owned(),
+            avatar: String::new(),
+        });
+        model
+    }
+
+    fn paid_capabilities() -> UserCapabilities {
+        UserCapabilities {
+            plan: Plan::Paid,
+            presentation: PresentationLimits { max_visible_shelves: 0 },
+            ..UserCapabilities::free_defaults()
+        }
+    }
+
+    #[test]
+    fn sign_out_clears_user() {
+        let app = BitBridge::default();
+        let mut model = signed_in_model();
+
+        let _command = app.update(AppEvent::Authentication(AuthenticationEvent::SignOut), &mut model, &());
+
+        assert!(model.authentication.user.is_none());
+    }
+
+    #[test]
+    fn shelf_view_model_can_create_shelf_reflects_capability_change() {
+        let app = BitBridge::default();
+        let mut model = signed_in_model();
+        let mut free_with_one_shelf = UserCapabilities::free_defaults();
+        free_with_one_shelf.presentation.max_visible_shelves = 1;
+        model.payment.capabilities = Some(free_with_one_shelf);
+        model.shelf.shelves.push(crate::entities::shelf::Shelf::default());
+
+        let view_free = app.view(&model);
+        assert_eq!(view_free.shelf.as_ref().map(|s| s.can_create_shelf), Some(false));
+        assert_eq!(view_free.shelf.as_ref().and_then(|s| s.max_shelves), Some(1));
+
+        let _ = app.update(
+            AppEvent::Payment(PaymentEvent::CapabilitiesLoaded(paid_capabilities())),
+            &mut model,
+            &(),
+        );
+
+        let view_paid = app.view(&model);
+        assert_eq!(view_paid.shelf.as_ref().map(|s| s.can_create_shelf), Some(true));
+        assert_eq!(view_paid.shelf.as_ref().and_then(|s| s.max_shelves), None);
+    }
+
+    #[test]
+    fn transfer_view_model_password_encryption_reflects_capability_change() {
+        let app = BitBridge::default();
+        let mut model = signed_in_model();
+        model.payment.capabilities = Some(UserCapabilities::free_defaults());
+
+        let view_free = app.view(&model);
+        assert_eq!(view_free.transfer.as_ref().map(|t| t.password_encryption_allowed), Some(false));
+
+        let mut paid = paid_capabilities();
+        paid.transfer_limits.password_encryption_allowed = true;
+        let _ = app.update(
+            AppEvent::Payment(PaymentEvent::CapabilitiesLoaded(paid)),
+            &mut model,
+            &(),
+        );
+
+        let view_paid = app.view(&model);
+        assert_eq!(view_paid.transfer.as_ref().map(|t| t.password_encryption_allowed), Some(true));
     }
 }

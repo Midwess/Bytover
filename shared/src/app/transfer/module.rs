@@ -6,10 +6,11 @@ use crate::app::operations::dialog::{AlertDialog, DialogOperation};
 use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::persistent::TransferSessionPersistentOperation;
 use crate::app::operations::CoreOperation;
+use crate::app::payment::module::{PaymentEvent, TransferSource};
 use crate::app::view_models::cloud_session::CloudSession;
 use crate::app::view_models::receive_session::{ReceiveResourceViewModel, ReceiveSessionViewModel};
 use crate::app::view_models::selected_resource::SelectedResourceViewModel;
-use crate::app::{AppModel, BitBridge};
+use crate::app::{AppEvent, AppModel, BitBridge};
 use crate::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use crate::entities::peer::Peer;
 use crate::entities::target::{P2PConnectionState, TransferTarget};
@@ -66,6 +67,10 @@ pub struct TransferViewModel {
     p2p_sessions: Vec<CloudSession>,
     pub total_p2p_receive_progress: Option<f64>,
     pub is_loading: bool,
+    pub password_encryption_allowed: bool,
+    pub max_files_per_transfer: Option<u32>,
+    pub transfer_lifetime_cap_bytes: Option<u64>,
+    pub transfer_bytes_used: u64,
 }
 
 pub struct TransferModule;
@@ -392,9 +397,27 @@ impl AppModule<BitBridge> for TransferModule {
                 Command::render()
             }
             TransferEvent::ModelEvent(event) => {
+                let mut p2p_first_receive_size: Option<(u64, u64)> = None;
                 match event {
-                    TransferSessionModelEvent::Update(session_id, action) => {
+                    TransferSessionModelEvent::Update(session_id, mut action) => {
                         if let Some(session) = model.transfer.sessions.lookup_mut(&session_id) {
+                            if let TransferSessionUpdateEvent::PeerReceived(ref mut peer_event) = action {
+                                let is_first = session
+                                    .resource_progress(peer_event.resource_order_id)
+                                    .map(|p| p.received_by_peers.is_empty())
+                                    .unwrap_or(false);
+                                peer_event.is_first_receiver = is_first;
+                                if is_first {
+                                    if let Some(size) = session
+                                        .resources
+                                        .iter()
+                                        .find(|r| r.order_id == peer_event.resource_order_id)
+                                        .map(|r| r.size)
+                                    {
+                                        p2p_first_receive_size = Some((peer_event.resource_order_id, size));
+                                    }
+                                }
+                            }
                             action.update(session);
                         }
                     }
@@ -411,6 +434,18 @@ impl AppModule<BitBridge> for TransferModule {
                 }
 
                 model.transfer.sessions.sort_by(|a, b| b.order_id.cmp(&a.order_id));
+
+                if let Some((resource_order_id, size)) = p2p_first_receive_size {
+                    log::info!("report_p2p_bytes_used: delta={size} resource={resource_order_id}");
+                    let render = Command::render();
+                    let notify = Command::new(move |it| async move {
+                        it.app().notify_event(AppEvent::Payment(PaymentEvent::ReportTransferBytesDelta {
+                            delta: size,
+                            source: TransferSource::P2P,
+                        }));
+                    });
+                    return Command::all(vec![render, notify]);
+                }
 
                 Command::render()
             }
@@ -832,11 +867,25 @@ impl AppModule<BitBridge> for TransferModule {
 
         let total_p2p_receive_progress = received_session.as_ref().filter(|s| s.progress > 0.0 && !s.is_completed).map(|s| s.progress);
 
+        let caps = model.payment.capabilities.as_ref();
+        let password_encryption_allowed = caps.map(|c| c.transfer_limits.password_encryption_allowed).unwrap_or(false);
+        let max_files_per_transfer = caps
+            .map(|c| c.transfer_limits.max_files_per_transfer)
+            .and_then(|n| if n == 0 { None } else { Some(n) });
+        let transfer_lifetime_cap_bytes = caps
+            .map(|c| c.transfer_limits.total_transfer_bytes_lifetime_cap)
+            .and_then(|n| if n == 0 { None } else { Some(n) });
+        let transfer_bytes_used = caps.map(|c| c.transfer_usage.total_transfer_bytes_used).unwrap_or(0);
+
         Self::ViewModel {
             transfer_method: model.transfer.selected_method.clone(),
             received_session,
             received_cloud_session,
             is_loading,
+            password_encryption_allowed,
+            max_files_per_transfer,
+            transfer_lifetime_cap_bytes,
+            transfer_bytes_used,
             cloud_sessions: model
                 .transfer
                 .sessions

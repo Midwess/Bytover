@@ -30,6 +30,8 @@ function imageToBase64DataUrl(src: string): Promise<string> {
 
 function Window() {
     const [step, setStep] = useState(0);
+    const payment = core.usePayment()
+    const isPaid = (payment?.capabilities?.plan as unknown) === "Paid"
 
     useEffect(() => {
         core.launch()
@@ -305,62 +307,117 @@ function Window() {
                                 />
                             </motion.div>
 
-                            <motion.div
-                                initial={{ opacity: 0, y: 8 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.25, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-                                className="flex flex-col items-center gap-2 text-center"
-                            >
-                                <h1 className="text-white text-[28px] font-semibold tracking-[-0.02em] leading-none">
-                                    Unlock Bytover
-                                </h1>
-                                <p className="text-[13.5px] text-white/50 font-medium tracking-tight">
-                                    One-time purchase. Yours forever.
-                                </p>
-                            </motion.div>
+                            {isPaid ? (
+                                <>
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 8 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: 0.25, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                                        className="flex flex-col items-center gap-2 text-center"
+                                    >
+                                        <h1 className="text-white text-[28px] font-semibold tracking-[-0.02em] leading-none">
+                                            Thank you
+                                        </h1>
+                                        <p className="text-[13.5px] text-white/50 font-medium tracking-tight">
+                                            You're on the Pro plan. Everything's unlocked.
+                                        </p>
+                                    </motion.div>
 
-                            <motion.ul
-                                initial={{ opacity: 0, y: 8 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.35, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-                                className="w-fit mx-auto flex flex-col gap-2.5"
-                            >
-                                {[
-                                    "Unlimited files per transfer",
-                                    "No lifetime transfer cap",
-                                    "Unlimited active shelves",
-                                    "Password-protected links",
-                                ].map((f) => (
-                                    <li key={f} className="flex items-center gap-3 text-[13.5px] text-white/75 font-medium tracking-tight">
-                                        <span className="flex w-4 h-4 items-center justify-center rounded-full bg-white/[0.06]">
-                                            <Check className="w-2.5 h-2.5 text-blue-200/90" strokeWidth={3} />
-                                        </span>
-                                        {f}
-                                    </li>
-                                ))}
-                            </motion.ul>
+                                    <motion.ul
+                                        initial={{ opacity: 0, y: 8 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: 0.35, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                                        className="w-fit mx-auto flex flex-col gap-2.5"
+                                    >
+                                        {[
+                                            "Unlimited files per transfer",
+                                            "No lifetime transfer cap",
+                                            "Unlimited active shelves",
+                                            "Password-protected links",
+                                        ].map((f) => (
+                                            <li key={f} className="flex items-center gap-3 text-[13.5px] text-white/75 font-medium tracking-tight">
+                                                <span className="flex w-4 h-4 items-center justify-center rounded-full bg-white/[0.06]">
+                                                    <Check className="w-2.5 h-2.5 text-blue-200/90" strokeWidth={3} />
+                                                </span>
+                                                {f}
+                                            </li>
+                                        ))}
+                                    </motion.ul>
 
-                            <motion.div
-                                initial={{ opacity: 0, y: 8 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.5, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-                                className="w-full flex flex-col items-center gap-3 mt-1 no-drag"
-                            >
-                                <Button
-                                    onClick={handleFinish}
-                                    className="group relative min-w-[240px] h-11 bg-white hover:bg-white text-black rounded-full text-[13.5px] font-semibold transition-all active:scale-[0.98] border-none shadow-[0_1px_0_0_rgba(255,255,255,0.25)_inset,0_10px_30px_-10px_rgba(147,197,253,0.4)]"
-                                >
-                                    <span className="tracking-tight">Upgrade</span>
-                                    <span className="mx-2 h-3 w-px bg-black/20" />
-                                    <span className="tracking-tight tabular-nums">$14.89</span>
-                                </Button>
-                                <button
-                                    onClick={handleFinish}
-                                    className="text-[12.5px] text-white/35 hover:text-white/65 font-medium tracking-tight transition-colors px-3 py-1.5 bg-transparent"
-                                >
-                                    Continue with limited plan
-                                </button>
-                            </motion.div>
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 8 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: 0.5, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                                        className="w-full flex flex-col items-center gap-3 mt-1 no-drag"
+                                    >
+                                        <Button
+                                            onClick={handleFinish}
+                                            className="group relative min-w-[240px] h-11 bg-white hover:bg-white text-black rounded-full text-[13.5px] font-semibold transition-all active:scale-[0.98] border-none shadow-[0_1px_0_0_rgba(255,255,255,0.25)_inset,0_10px_30px_-10px_rgba(147,197,253,0.4)]"
+                                        >
+                                            <span className="tracking-tight">Get started</span>
+                                        </Button>
+                                    </motion.div>
+                                </>
+                            ) : (
+                                <>
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 8 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: 0.25, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                                        className="flex flex-col items-center gap-2 text-center"
+                                    >
+                                        <h1 className="text-white text-[28px] font-semibold tracking-[-0.02em] leading-none">
+                                            Unlock Bytover
+                                        </h1>
+                                        <p className="text-[13.5px] text-white/50 font-medium tracking-tight">
+                                            One-time purchase. Yours forever.
+                                        </p>
+                                    </motion.div>
+
+                                    <motion.ul
+                                        initial={{ opacity: 0, y: 8 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: 0.35, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                                        className="w-fit mx-auto flex flex-col gap-2.5"
+                                    >
+                                        {[
+                                            "Unlimited files per transfer",
+                                            "No lifetime transfer cap",
+                                            "Unlimited active shelves",
+                                            "Password-protected links",
+                                        ].map((f) => (
+                                            <li key={f} className="flex items-center gap-3 text-[13.5px] text-white/75 font-medium tracking-tight">
+                                                <span className="flex w-4 h-4 items-center justify-center rounded-full bg-white/[0.06]">
+                                                    <Check className="w-2.5 h-2.5 text-blue-200/90" strokeWidth={3} />
+                                                </span>
+                                                {f}
+                                            </li>
+                                        ))}
+                                    </motion.ul>
+
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 8 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: 0.5, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                                        className="w-full flex flex-col items-center gap-3 mt-1 no-drag"
+                                    >
+                                        <Button
+                                            onClick={handleFinish}
+                                            className="group relative min-w-[240px] h-11 bg-white hover:bg-white text-black rounded-full text-[13.5px] font-semibold transition-all active:scale-[0.98] border-none shadow-[0_1px_0_0_rgba(255,255,255,0.25)_inset,0_10px_30px_-10px_rgba(147,197,253,0.4)]"
+                                        >
+                                            <span className="tracking-tight">Upgrade</span>
+                                            <span className="mx-2 h-3 w-px bg-black/20" />
+                                            <span className="tracking-tight tabular-nums">$14.99</span>
+                                        </Button>
+                                        <button
+                                            onClick={handleFinish}
+                                            className="text-[12.5px] text-white/35 hover:text-white/65 font-medium tracking-tight transition-colors px-3 py-1.5 bg-transparent"
+                                        >
+                                            Continue with limited plan
+                                        </button>
+                                    </motion.div>
+                                </>
+                            )}
                         </div>
                     </motion.div>
                 )}

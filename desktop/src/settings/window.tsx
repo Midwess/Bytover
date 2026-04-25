@@ -21,9 +21,6 @@ import {
 } from "lucide-react"
 import {
     checkForUpdate,
-    installUpdate,
-    onUpdateProgress,
-    onUpdateFinished
 } from "@/lib/updater"
 import {motion, AnimatePresence} from "motion/react"
 import { openUrl } from "@tauri-apps/plugin-opener"
@@ -62,8 +59,6 @@ function SettingsWindow() {
     const [version, setVersion] = useState<string>("")
     const [isCheckingUpdate, setIsCheckingUpdate] = useState(false)
     const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null)
-    const [isInstalling, setIsInstalling] = useState(false)
-    const [installProgress, setInstallProgress] = useState(0)
     const [autoLaunchEnabled, setAutoLaunchEnabled] = useState(false)
     const [isLoadingAutoLaunch, setIsLoadingAutoLaunch] = useState(true)
 
@@ -124,23 +119,12 @@ function SettingsWindow() {
     }
 
     const handleInstallUpdate = async () => {
-        setIsInstalling(true)
-        setInstallProgress(0)
-        try {
-            const unlistenProgress = await onUpdateProgress((progress) => {
-                if (progress.total > 0) {
-                    setInstallProgress(Math.round((progress.downloaded / progress.total) * 100))
-                }
-            })
-            const unlistenFinished = await onUpdateFinished(() => {
-                setIsInstalling(false)
-            })
-            await installUpdate()
-            unlistenProgress()
-            unlistenFinished()
-        } catch (error) {
-            console.error("Failed to install update:", error)
-            setIsInstalling(false)
+        if (updateStatus?.store_url) {
+            try {
+                await openUrl(updateStatus.store_url)
+            } catch (error) {
+                console.error("Failed to open store URL:", error)
+            }
         }
     }
 
@@ -255,8 +239,6 @@ function SettingsWindow() {
                                         isChecking={isCheckingUpdate}
                                         status={updateStatus}
                                         onCheck={handleCheckUpdate}
-                                        isInstalling={isInstalling}
-                                        installProgress={installProgress}
                                         onInstall={handleInstallUpdate}
                                     />
                                 )}
@@ -460,63 +442,101 @@ function formatBytes(n: number): string {
     return Number.isInteger(mib) ? `${mib} MB` : `${mib.toFixed(1)} MB`
 }
 
-function PlanComparison({limits, onUpgrade}: {limits: FreeLimits; onUpgrade: () => void}) {
+function ProBadge({size = "md"}: {size?: "sm" | "md"}) {
+    const dim = size === "sm" ? "w-9 h-9 rounded-[7px] text-[9px]" : "w-11 h-11 rounded-[9px] text-[10px]"
+    return (
+        <div
+            className={`${dim} bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_2px_10px_rgba(59,130,246,0.3)]`}
+        >
+            <span className="font-bold tracking-[0.1em] text-white">PRO</span>
+        </div>
+    )
+}
+
+function PlanComparison({limits, onUpgrade}: {limits: FreeLimits; onUpgrade: () => Promise<unknown>}) {
+    const payment = core.usePayment()
+    const isPurchasing = payment?.is_loading ?? false
+    const handlePurchaseClick = async () => {
+        if (isPurchasing) return
+        await onUpgrade()
+    }
     const features: {label: string; freeNote: string}[] = [
-        {label: "Unlimited files per transfer", freeNote: `Free: ${formatCount(limits.maxFilesPerTransfer)}`},
-        {label: "No transfer size cap", freeNote: `Free: ${formatBytes(limits.transferLifetimeCapBytes)} lifetime`},
-        {label: "Unlimited shelves", freeNote: `Free: ${formatCount(limits.maxVisibleShelves)}`},
+        {label: "Unlimited files per transfer", freeNote: `${formatCount(limits.maxFilesPerTransfer)} on Free`},
+        {label: "No transfer size cap", freeNote: `${formatBytes(limits.transferLifetimeCapBytes)} on Free`},
+        {label: "Unlimited shelves", freeNote: `${formatCount(limits.maxVisibleShelves)} on Free`},
         {
             label: "Password-protected transfers",
-            freeNote: limits.passwordEncryptionAllowed ? "Included on Free" : "Not available on Free",
+            freeNote: limits.passwordEncryptionAllowed ? "Included" : "Not on Free",
         },
     ]
 
     return (
-        <div className="px-5 py-5">
-            <div className="flex items-start justify-between gap-6 mb-4">
-                <div className="flex flex-col">
-                    <span className="text-[14px] font-semibold text-white tracking-tight">Bytover Pro</span>
-                    <span className="text-[11px] text-white/40 mt-0.5">You're on the Free plan</span>
+        <div
+            className="relative overflow-hidden rounded-xl border border-white/[0.14]"
+            style={{
+                background: "rgba(255,255,255,0.10)",
+                backdropFilter: "blur(24px) saturate(140%)",
+                WebkitBackdropFilter: "blur(24px) saturate(140%)",
+            }}
+        >
+            <div className="relative px-5 pt-6 pb-5">
+                <div className="flex flex-col items-center mb-5">
+                    <span className="text-[32px] font-bold text-white tabular-nums tracking-tight leading-none">$14.99</span>
+                    <span className="text-[10.5px] text-white/70 mt-1.5 uppercase tracking-wider">Lifetime</span>
                 </div>
-                <div className="flex flex-col items-end shrink-0">
-                    <span className="text-[14px] font-semibold text-white tabular-nums">$14.89</span>
-                    <span className="text-[11px] text-white/40 mt-0.5">One-time · lifetime</span>
-                </div>
+
+                <div className="h-px bg-white/[0.12]" />
+
+                <ul className="flex flex-col gap-2.5 py-4">
+                    {features.map((f, i) => (
+                        <li key={i} className="flex items-center gap-3">
+                            <div className="w-[18px] h-[18px] rounded-full bg-blue-500/20 flex items-center justify-center shrink-0">
+                                <Check className="w-[11px] h-[11px] text-blue-300" strokeWidth={3} />
+                            </div>
+                            <div className="flex items-center justify-between flex-1 min-w-0 gap-3">
+                                <span className="text-[12.5px] text-white/90 leading-tight truncate">{f.label}</span>
+                                <span className="text-[10.5px] text-white/35 leading-tight shrink-0 tabular-nums">{f.freeNote}</span>
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+
+                <Button
+                    onClick={handlePurchaseClick}
+                    disabled={isPurchasing}
+                    className="w-full h-9 text-[13px] font-semibold bg-gradient-to-b from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white border-none rounded-lg shadow-[0_4px_16px_rgba(59,130,246,0.35),inset_0_1px_0_rgba(255,255,255,0.2)] transition-all disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                    {isPurchasing ? (
+                        <span className="flex items-center justify-center gap-2">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Connecting to Apple…
+                        </span>
+                    ) : (
+                        "Get lifetime access"
+                    )}
+                </Button>
             </div>
-
-            <div className="h-px bg-white/5" />
-
-            <ul className="flex flex-col gap-3 py-4">
-                {features.map((f, i) => (
-                    <li key={i} className="flex items-start gap-2.5">
-                        <Check className="w-3.5 h-3.5 text-white/70 mt-[3px] shrink-0" strokeWidth={2.5} />
-                        <div className="flex flex-col min-w-0">
-                            <span className="text-[12.5px] text-white/90 leading-tight">{f.label}</span>
-                            <span className="text-[11px] text-white/35 leading-tight mt-0.5">{f.freeNote}</span>
-                        </div>
-                    </li>
-                ))}
-            </ul>
-
-            <Button
-                onClick={onUpgrade}
-                className="w-full h-[32px] text-[12.5px] font-semibold bg-white text-black hover:bg-white/90 border-none rounded-lg shadow-none"
-            >
-                Upgrade to Pro
-            </Button>
         </div>
     )
 }
 
 function PaidPlanNotice() {
     return (
-        <div className="px-5 py-5 flex items-center gap-3">
-            <div className="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center shrink-0">
-                <Check className="w-3.5 h-3.5 text-white/80" strokeWidth={2.5} />
-            </div>
-            <div className="flex flex-col">
-                <span className="text-[13px] font-semibold text-white tracking-tight">Bytover Pro</span>
-                <span className="text-[11px] text-white/40 mt-0.5">Lifetime access. Thanks for supporting Bytover.</span>
+        <div className="relative overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.02]">
+            <div className="absolute inset-0 bg-gradient-to-b from-blue-500/[0.08] via-transparent to-transparent pointer-events-none" />
+            <div className="relative px-4 py-4 flex items-center gap-3">
+                <ProBadge size="sm" />
+                <div className="flex flex-col flex-1 min-w-0">
+                    <span className="text-[13.5px] font-semibold text-white tracking-tight">Bytover Pro</span>
+                    <span className="text-[11px] text-white/45 mt-0.5">Lifetime · Thanks for supporting Bytover</span>
+                </div>
+                <Button
+                    variant="secondary"
+                    size="sm"
+                    className="h-[28px] px-3 text-[11.5px] bg-white/[0.06] hover:bg-white/[0.1] text-white/85 border border-white/[0.08] rounded-full shrink-0"
+                >
+                    Manage plan
+                </Button>
             </div>
         </div>
     )
@@ -524,10 +544,17 @@ function PaidPlanNotice() {
 
 function AccountContent({onSignOut}: {onSignOut: () => void}) {
     const auth = core.useAuthentication()
-    const caps = auth?.capabilities
+    const payment = core.usePayment()
+    const caps = payment?.capabilities
     const user = auth?.user
     const currentPlan: PlanKind = (caps?.plan as unknown) === "Paid" ? "paid" : "free"
-    const handleUpgrade = () => {}
+    const handleUpgrade = async () => {
+        try {
+            await invoke("purchase_premium")
+        } catch (error) {
+            console.error("[payment] purchase_premium dispatch failed:", error)
+        }
+    }
 
     const subscriptionBody = caps == null ? (
         <div className="px-4 py-5 text-[12px] text-white/50">Loading plan…</div>
@@ -579,44 +606,36 @@ function AccountContent({onSignOut}: {onSignOut: () => void}) {
     )
 }
 
-function UpdatesContent({isChecking, status, onCheck, isInstalling, installProgress, onInstall}: {
+function UpdatesContent({isChecking, status, onCheck, onInstall}: {
     isChecking: boolean
     status: UpdateStatus | null
     onCheck: () => void
-    isInstalling: boolean
-    installProgress: number
     onInstall: () => void
 }) {
     return (
         <div className="space-y-6">
             <SettingsSection title="Software Update">
-                <SettingsRow 
-                    label="Automatic Updates" 
+                <SettingsRow
+                    label="Automatic Updates"
                     description="Keep Bytover up to date automatically."
                     last={!status?.available}
                 >
                     <Switch enabled={true} onToggle={() => {}} disabled={true} />
                 </SettingsRow>
-                
-                {status?.available && (
-                    <SettingsRow 
-                        label="New Version Available" 
+
+                {status?.available && status?.store_url && (
+                    <SettingsRow
+                        label="New Version Available"
                         description={`Version ${status.version} is ready.`}
                         last={true}
                     >
-                        {!isInstalling ? (
-                            <Button
-                                size="sm"
-                                onClick={onInstall}
-                                className="h-[28px] px-4 text-[12px] bg-blue-600 hover:bg-blue-500 text-white border-none rounded-full"
-                            >
-                                Update Now
-                            </Button>
-                        ) : (
-                            <div className="text-[12px] font-medium text-blue-400">
-                                {installProgress}%
-                            </div>
-                        )}
+                        <Button
+                            size="sm"
+                            onClick={onInstall}
+                            className="h-[28px] px-4 text-[12px] bg-blue-600 hover:bg-blue-500 text-white border-none rounded-full"
+                        >
+                            Open in App Store
+                        </Button>
                     </SettingsRow>
                 )}
             </SettingsSection>

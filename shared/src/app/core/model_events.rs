@@ -33,6 +33,7 @@ pub trait UpdateAction<Data> {
 pub struct PeerReceivedEvent {
     pub resource_order_id: u64,
     pub peer: ResourceReceivedPeer,
+    pub is_first_receiver: bool,
 }
 
 impl UpdateAction<TransferSession> for PeerReceivedEvent {

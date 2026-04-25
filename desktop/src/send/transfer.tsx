@@ -32,6 +32,7 @@ import {UnlimitedLineText} from "@/components/ui/unlimited-line-text"
 import {EmailTransfer} from "@/send/email-transfer"
 import {formatUpdateLabel, openForceUpdate} from "@/components/force-update-overlay"
 import {UpdateStatus} from "@/lib/updater"
+import {UpgradeButton} from "@/send/upgrade-button"
 
 export function Transfer({ shelfId, forceUpdate }: { shelfId: string | undefined; forceUpdate: UpdateStatus | null }) {
     const isUpdateBlocked = forceUpdate?.is_critical === true
@@ -77,6 +78,14 @@ export function Transfer({ shelfId, forceUpdate }: { shelfId: string | undefined
 function P2PSend({ shelfId, forceUpdate }: { shelfId: string | undefined; forceUpdate: UpdateStatus | null }) {
     const p2pSession = core.useP2PSessionForShelf(shelfId)
     const selectedResources = core.useSelectedResourcesForShelf(shelfId)
+    const payment = core.usePayment()
+    const transfer = core.useTransferState()
+    const capExceeded = payment?.cap_exceeded ?? false
+    const fileLimit = Number(transfer?.max_files_per_transfer ?? 0)
+    const fileCountExceeded = fileLimit > 0 && selectedResources.length > fileLimit
+    const upgradeTooltip = fileCountExceeded
+        ? `Only allow ${fileLimit} files per transfer\nfor free plan`
+        : "You have exceeded the free limit"
     const [password, setPassword] = useState(p2pSession?.password || '')
     const [isLoading, setIsLoading] = useState(false)
     const isInProgress = p2pSession?.is_in_progress ?? false
@@ -129,7 +138,7 @@ function P2PSend({ shelfId, forceUpdate }: { shelfId: string | undefined; forceU
                 <UrlInputWithCopy url={p2pSession?.access_url ?? ''}/>
             </Card>
         }
-        <Card shadowSize={0.5} className={`flex flex-row gap-2 p-1 items-center ${forceUpdate ? "w-auto" : "w-[100px]"}`}>
+        <Card shadowSize={0.5} className={`flex flex-row gap-2 p-1 items-center ${forceUpdate ? "w-auto" : "min-w-[100px] w-fit"}`}>
             {
                 forceUpdate ? (
                     <Button onClick={() => openForceUpdate(forceUpdate)}
@@ -139,6 +148,8 @@ function P2PSend({ shelfId, forceUpdate }: { shelfId: string | undefined; forceU
                 ) : isInProgress ? (
                     <Button onClick={handleStopTransfer}
                             className={"bg-muted-foreground/30 text-primary h-full shadow-lg w-full"}>Cancel</Button>
+                ) : (capExceeded || fileCountExceeded) ? (
+                    <UpgradeButton tooltipText={upgradeTooltip}/>
                 ) : (
                     <Button onClick={handleStartTransfer}
                             disabled={isLoading}
@@ -201,6 +212,14 @@ function PublicTransfer({ shelfId, forceUpdate }: { shelfId: string | undefined;
     const [isLoading, setIsLoading] = useState(false)
     const selectedResources = core.useSelectedResourcesForShelf(shelfId)
     const cloudSession = core.useCloudSessionForShelf(shelfId)
+    const payment = core.usePayment()
+    const transfer = core.useTransferState()
+    const capExceeded = payment?.cap_exceeded ?? false
+    const fileLimit = Number(transfer?.max_files_per_transfer ?? 0)
+    const fileCountExceeded = fileLimit > 0 && selectedResources.length > fileLimit
+    const upgradeTooltip = fileCountExceeded
+        ? `Only allow ${fileLimit} files per transfer\nfor free plan`
+        : "You have exceeded the free limit"
     const progress = (cloudSession?.progress ?? 0) * 100
 
     const handleUpload = () => {
@@ -248,6 +267,8 @@ function PublicTransfer({ shelfId, forceUpdate }: { shelfId: string | undefined;
                         invoke("cancel_send", {sessionId: cloudSession?.session_id}).then(noop)
                     }}
                             className={"bg-greenSecondary/40 text-primary flex-2/5 shadow-lg hover:bg-greenSecondary/50"}>Continue</Button>
+                ) : (capExceeded || fileCountExceeded) ? (
+                    <UpgradeButton tooltipText={upgradeTooltip}/>
                 ) : (
                     <Button onClick={handleUpload}
                             disabled={isLoading}

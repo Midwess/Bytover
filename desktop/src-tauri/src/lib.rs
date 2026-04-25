@@ -13,8 +13,10 @@ use schema::value::platform::Platform;
 use serde::Deserialize;
 use shared::app::authentication::module::AuthenticationEvent;
 use shared::app::environment::module::EnvironmentEvent;
+use shared::app::payment::module::PaymentEvent;
 use shared::app::operations::device::DeviceOperation;
 use shared::app::operations::dialog::{AlertDialog, DialogOperation};
+use shared::app::operations::storekit::{StoreKitOperation, StoreKitOperationOutput};
 use shared::app::operations::webview::WebViewOperation;
 use shared::app::operations::CoreOperationOutput;
 use shared::app::p2p::module::P2PEvent;
@@ -41,19 +43,22 @@ use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_opener::{open_path, OpenerExt};
-use tauri_plugin_updater::UpdaterExt;
 use tokio::{fs, spawn};
 use uuid::Uuid;
 use {hostname, machine_uid};
 
 pub mod api;
+mod commands;
 mod content_handlers;
 pub mod extensions;
 pub(crate) mod mouse_tracking;
 mod pasteboard;
 mod shelf_dock;
+mod storekit;
 mod theme;
 mod thumbnail;
+
+const CAPABILITIES_POLL_INTERVAL_SECS: u64 = 60;
 
 static CORE: LazyLock<Arc<Core<BitBridge>>> = LazyLock::new(|| Arc::new(Core::new()));
 static TRAY_ICON: LazyLock<Mutex<Option<TrayIcon>>> = LazyLock::new(|| Mutex::new(None));
@@ -404,37 +409,16 @@ async fn check_for_update(app_handle: AppHandle) -> Result<UpdateStatus, String>
         }
     }
 
-    let updater = app_handle.updater().map_err(|e| e.to_string())?;
-    let update = updater.check().await.map_err(|e| e.to_string())?;
-
-    if let Some(update) = update {
-        let current_semver = &app_handle.package_info().version;
-        let new_version_str = update.version.trim_start_matches('v');
-        let new_version = semver::Version::parse(new_version_str).map_err(|e| e.to_string())?;
-        let is_major_update = new_version.major > current_semver.major;
-
-        let status = UpdateStatus {
-            available: true,
-            version: Some(update.version.clone()),
-            release_notes: update.body.clone(),
-            is_critical: is_major_update,
-            store_url: None,
-        };
-        log::info!("Update check result (tauri): {:?}", status);
-        apply_pending_update(&app_handle, &status);
-        Ok(status)
-    } else {
-        let status = UpdateStatus {
-            available: false,
-            version: None,
-            release_notes: None,
-            is_critical: false,
-            store_url: None,
-        };
-        log::info!("Update check result: no update available");
-        apply_pending_update(&app_handle, &status);
-        Ok(status)
-    }
+    let status = UpdateStatus {
+        available: false,
+        version: None,
+        release_notes: None,
+        is_critical: false,
+        store_url: None,
+    };
+    log::info!("Update check result: no update available");
+    apply_pending_update(&app_handle, &status);
+    Ok(status)
 }
 
 fn apply_pending_update(app_handle: &AppHandle, status: &UpdateStatus) {
@@ -480,50 +464,13 @@ fn refresh_tray_menu(app_handle: &AppHandle) {
 
     if let Some(shelf_view) = &view.shelf {
         let is_paid = view
-            .authentication
+            .payment
             .as_ref()
-            .and_then(|auth| auth.capabilities.as_ref())
+            .and_then(|payment| payment.capabilities.as_ref())
             .map(|caps| caps.is_paid())
             .unwrap_or(false);
         update_tray_menu(app_handle, &shelf_view.shelves, is_paid);
     }
-}
-
-#[derive(serde::Serialize, Clone)]
-struct UpdateProgress {
-    downloaded: u64,
-    total: u64,
-}
-
-#[tauri::command]
-async fn install_update(app_handle: AppHandle) -> Result<(), String> {
-    let updater = app_handle.updater().map_err(|e| e.to_string())?;
-    let update = updater.check().await.map_err(|e| e.to_string())?.ok_or("No update available")?;
-
-    // Emit that update is starting
-    let _ = app_handle.emit("update-started", ());
-
-    let app_handle_progress = app_handle.clone();
-    let app_handle_finished = app_handle.clone();
-
-    // Download and install the update with callbacks
-    update
-        .download_and_install(
-            move |downloaded: usize, total: Option<u64>| {
-                let progress = UpdateProgress {
-                    downloaded: downloaded as u64,
-                    total: total.unwrap_or(0) as u64,
-                };
-                let _ = app_handle_progress.emit("update-progress", progress);
-            },
-            move || {
-                let _ = app_handle_finished.emit("update-finished", ());
-            },
-        )
-        .await
-        .map_err(|e| e.to_string())?;
-
-    Ok(())
 }
 
 pub(crate) async fn process_event(event: impl Into<AppEvent> + Send + Sync + 'static, app_handle: AppHandle) {
@@ -532,17 +479,7 @@ pub(crate) async fn process_event(event: impl Into<AppEvent> + Send + Sync + 'st
 }
 
 pub(crate) fn is_shelf_limit_reached() -> bool {
-    let view = CORE.view();
-    let Some(limit) = view
-        .authentication
-        .as_ref()
-        .and_then(|a| a.capabilities.as_ref())
-        .and_then(|c| c.shelf_limit())
-    else {
-        return false;
-    };
-    let current = view.shelf.as_ref().map(|s| s.shelves.len()).unwrap_or(0);
-    current >= limit as usize
+    !CORE.view().shelf.as_ref().map(|s| s.can_create_shelf).unwrap_or(true)
 }
 
 pub(crate) fn most_recent_shelf_id() -> Option<u64> {
@@ -585,9 +522,9 @@ fn render(view: AppViewModel, app_handle: AppHandle) {
 
         if let Some(shelf_view) = &view.shelf {
             let is_paid = view
-                .authentication
+                .payment
                 .as_ref()
-                .and_then(|auth| auth.capabilities.as_ref())
+                .and_then(|payment| payment.capabilities.as_ref())
                 .map(|caps| caps.is_paid())
                 .unwrap_or(false);
             update_tray_menu(&app_handle, &shelf_view.shelves, is_paid);
@@ -813,7 +750,13 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
                 }
             },
             CoreOperation::WebView(WebViewOperation::OpenUrl(url)) => {
-                let _ = app_handle.opener().open_url(url, Option::<&str>::None);
+                if let Err(e) = app_handle.emit("auth-url", url.clone()) {
+                    log::warn!("[auth] failed to emit auth-url event: {e}");
+                }
+                match app_handle.opener().open_url(url, Option::<&str>::None) {
+                    Ok(_) => log::info!("[auth] browser open requested for url"),
+                    Err(e) => log::warn!("[auth] failed to open browser: {e}"),
+                }
                 CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
             }
             CoreOperation::Dialog(dialog) => match dialog {
@@ -869,6 +812,63 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
                 });
                 CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
             }
+            CoreOperation::StoreKit(op) => {
+                let bridge = DiContainer::get_instance().core_bridge();
+                let request = CoreRequest::new(CruxRequest::RequestHandle(handle), bridge);
+                spawn(async move {
+                    let client = storekit::default_client();
+                    let output: StoreKitOperationOutput = match op {
+                        StoreKitOperation::Purchase { product_id } => {
+                            log::info!("[storekit] shell: Purchase product_id={product_id}");
+                            match client.purchase(&product_id).await {
+                                Ok(tx) => StoreKitOperationOutput::Transaction(tx.to_dto()),
+                                Err(e) => {
+                                    log::warn!("[storekit] shell: Purchase failed: {e}");
+                                    StoreKitOperationOutput::Failed(e.to_string())
+                                }
+                            }
+                        }
+                        StoreKitOperation::RestoreAll => {
+                            log::info!("[storekit] shell: RestoreAll");
+                            match client.restore().await {
+                                Ok(list) => {
+                                    let dtos = list.iter().map(|tx| tx.to_dto()).collect();
+                                    StoreKitOperationOutput::Transactions(dtos)
+                                }
+                                Err(e) => {
+                                    log::warn!("[storekit] shell: RestoreAll failed: {e}");
+                                    StoreKitOperationOutput::Failed(e.to_string())
+                                }
+                            }
+                        }
+                        StoreKitOperation::FetchUnfinished => {
+                            log::info!("[storekit] shell: FetchUnfinished");
+                            match client.unfinished_transactions().await {
+                                Ok(list) => {
+                                    let dtos = list.iter().map(|tx| tx.to_dto()).collect();
+                                    StoreKitOperationOutput::Transactions(dtos)
+                                }
+                                Err(e) => {
+                                    log::warn!("[storekit] shell: FetchUnfinished failed: {e}");
+                                    StoreKitOperationOutput::Failed(e.to_string())
+                                }
+                            }
+                        }
+                        StoreKitOperation::FinishTransaction { transaction_id } => {
+                            log::info!("[storekit] shell: FinishTransaction transaction_id={transaction_id}");
+                            match client.finish(&transaction_id).await {
+                                Ok(()) => StoreKitOperationOutput::Finished,
+                                Err(e) => {
+                                    log::warn!("[storekit] shell: FinishTransaction failed: {e}");
+                                    StoreKitOperationOutput::Failed(e.to_string())
+                                }
+                            }
+                        }
+                    };
+                    request.response(CoreOperationOutput::StoreKit(output)).await;
+                });
+                continue;
+            }
             operation => {
                 spawn(async move {
                     let bridge = DiContainer::get_instance().core_bridge();
@@ -912,7 +912,6 @@ pub async fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
-        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
@@ -935,7 +934,6 @@ pub async fn run() {
             open_settings,
             show_settings_with_tab,
             check_for_update,
-            install_update,
             clear_shelf,
             sign_out,
             quit,
@@ -951,8 +949,23 @@ pub async fn run() {
             content_handlers::add_html_resource,
             content_handlers::paste_from_clipboard,
             shelf_dock::dock_shelf_edge,
-            shelf_dock::expand_shelf
+            shelf_dock::expand_shelf,
+            commands::purchase::purchase_premium,
+            commands::purchase::restore_purchases,
+            commands::purchase::resume_pending_transactions,
+            commands::purchase::check_storekit_product_availability
         ])
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Focused(true) = event {
+                if CORE.view().authentication.as_ref().and_then(|a| a.user.as_ref()).is_none() {
+                    return;
+                }
+                let app_handle = window.app_handle().clone();
+                spawn(async move {
+                    process_event(PaymentEvent::RefreshCapabilities, app_handle).await;
+                });
+            }
+        })
         .setup(|app| {
             #[cfg(target_os = "macos")]
             {
@@ -1127,6 +1140,19 @@ pub async fn run() {
                     let handle = handle.clone();
                     log::info!("Received redirect url: {}", url);
                     process_event(AuthenticationEvent::OnRedirected { url: url.to_string() }, handle).await;
+                }
+            });
+
+            let poll_handle = handle.clone();
+            spawn(async move {
+                let mut interval = tokio::time::interval(std::time::Duration::from_secs(CAPABILITIES_POLL_INTERVAL_SECS));
+                interval.tick().await;
+                loop {
+                    interval.tick().await;
+                    if CORE.view().authentication.as_ref().and_then(|a| a.user.as_ref()).is_none() {
+                        continue;
+                    }
+                    process_event(PaymentEvent::RefreshCapabilities, poll_handle.clone()).await;
                 }
             });
 

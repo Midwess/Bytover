@@ -4,6 +4,7 @@ pub mod environment;
 pub mod modules;
 pub mod operations;
 pub mod p2p;
+pub mod payment;
 pub mod shelf;
 pub mod transfer;
 pub mod view_models;
@@ -11,6 +12,7 @@ pub mod view_models;
 pub use crate::app::operations::CoreOperation;
 
 use crate::app::environment::module::EnvironmentModel;
+use crate::app::payment::module::{PaymentEvent, PaymentModel, PaymentModule, PaymentViewModel};
 use crate::app::shelf::module::{ShelfEvent, ShelfModel, ShelfModule, ShelfViewModel};
 use authentication::module::{AuthenticationEvent, AuthenticationModel, AuthenticationModule, AuthenticationViewModel};
 use crux_core::command::{CommandContext, RequestBuilder};
@@ -33,6 +35,7 @@ pub struct BitBridge {
     transfer: TransferModule,
     p2p: P2PModule,
     shelf: ShelfModule,
+    payment: PaymentModule,
 }
 
 impl Default for BitBridge {
@@ -43,17 +46,19 @@ impl Default for BitBridge {
             shelf: ShelfModule,
             transfer: TransferModule,
             p2p: P2PModule,
+            payment: PaymentModule,
         }
     }
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct AppModel {
-    authentication: AuthenticationModel,
-    transfer: TransferModel,
+    pub authentication: AuthenticationModel,
+    pub transfer: TransferModel,
     pub p2p: P2PModel,
-    shelf: ShelfModel,
-    environment: EnvironmentModel,
+    pub shelf: ShelfModel,
+    pub environment: EnvironmentModel,
+    pub payment: PaymentModel,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -63,6 +68,7 @@ pub struct AppViewModel {
     pub transfer: Option<TransferViewModel>,
     pub p2p: Option<P2PViewModel>,
     pub shelf: Option<ShelfViewModel>,
+    pub payment: Option<PaymentViewModel>,
 }
 
 /// The effects that shell need to handle
@@ -80,6 +86,7 @@ pub enum AppEvent {
     Transfer(TransferEvent),
     P2P(P2PEvent),
     Shelf(ShelfEvent),
+    Payment(PaymentEvent),
     Void,
 }
 
@@ -97,6 +104,7 @@ impl App for BitBridge {
             AppEvent::Transfer(event) => self.transfer.update(event, model, caps),
             AppEvent::P2P(event) => self.p2p.update(event, model, caps),
             AppEvent::Shelf(event) => self.shelf.update(event, model, caps),
+            AppEvent::Payment(event) => self.payment.update(event, model, caps),
             AppEvent::Void => Command::done(),
         }
     }
@@ -108,6 +116,7 @@ impl App for BitBridge {
             transfer: Some(self.transfer.view(model)),
             p2p: Some(self.p2p.view(model)),
             shelf: Some(self.shelf.view(model)),
+            payment: Some(self.payment.view(model)),
         }
     }
 }

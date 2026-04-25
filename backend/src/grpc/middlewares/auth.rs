@@ -48,7 +48,7 @@ impl RequestInterceptor for AuthInterceptor {
 
                 let caps_repo = di_container.get_user_capabilities_repository().await;
                 let caps_row = caps_repo
-                    .find_or_create_default(user.order_id)
+                    .find_or_create_default(user.order_id, &device.unique_key)
                     .await
                     .map_err(|e| Status::internal(e.to_string()))?;
                 let caps_msg = build_capabilities_msg(&caps_row);

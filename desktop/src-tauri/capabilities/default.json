@@ -30,7 +30,6 @@
     "core:webview:allow-webview-close",
     "deep-link:default",
     "drag:default",
-    "clipboard:default",
-    "updater:default"
+    "clipboard:default"
   ]
 }

@@ -58,6 +58,17 @@ where
                 let caps = self.cloud_server().get_capabilities().await?;
                 Ok(CoreOperationOutput::Rpc(RpcOperationOutput::GetCapabilities(caps)))
             }
+            RpcOperation::ReportP2PBytesUsed { delta } => {
+                let caps = self.cloud_server().report_p2p_bytes_used(delta).await?;
+                Ok(CoreOperationOutput::Rpc(RpcOperationOutput::GetCapabilities(caps)))
+            }
+            RpcOperation::SubmitStoreKitTransaction {
+                transaction_id,
+                product_id,
+            } => {
+                let result = self.cloud_server().submit_storekit_transaction(transaction_id, product_id).await?;
+                Ok(CoreOperationOutput::Rpc(RpcOperationOutput::SubmitStoreKit(result)))
+            }
         }
     }
 }

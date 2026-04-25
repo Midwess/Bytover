@@ -11,6 +11,7 @@ import {ProgressIndicator} from "@/components/animate-ui/primitives/radix/progre
 import {Send} from "lucide-react"
 import {formatUpdateLabel, openForceUpdate} from "@/components/force-update-overlay"
 import {UpdateStatus} from "@/lib/updater"
+import {UpgradeButton} from "@/send/upgrade-button"
 
 export function EmailTransfer({ shelfId, forceUpdate }: { shelfId: string | undefined; forceUpdate: UpdateStatus | null }) {
     const [pwd, setPwd] = useState("");
@@ -18,6 +19,14 @@ export function EmailTransfer({ shelfId, forceUpdate }: { shelfId: string | unde
     const [isLoading, setIsLoading] = useState(false)
     const selectedResources = core.useSelectedResourcesForShelf(shelfId)
     const cloudSession = core.useCloudSessionForShelf(shelfId, true)
+    const payment = core.usePayment()
+    const transfer = core.useTransferState()
+    const capExceeded = payment?.cap_exceeded ?? false
+    const fileLimit = Number(transfer?.max_files_per_transfer ?? 0)
+    const fileCountExceeded = fileLimit > 0 && selectedResources.length > fileLimit
+    const upgradeTooltip = fileCountExceeded
+        ? `Only allow ${fileLimit} files per transfer\nfor free plan`
+        : "You have exceeded the free limit"
     const progress = (cloudSession?.progress ?? 0) * 100
 
     const handleEmailTransfer = () => {
@@ -69,6 +78,8 @@ export function EmailTransfer({ shelfId, forceUpdate }: { shelfId: string | unde
                         invoke("cancel_send", {sessionId: cloudSession?.session_id}).then(noop)
                     }}
                             className={"bg-greenSecondary/40 text-primary flex-2/5 shadow-lg hover:bg-greenSecondary/50"}>Continue</Button>
+                ) : (capExceeded || fileCountExceeded) ? (
+                    <UpgradeButton tooltipText={upgradeTooltip}/>
                 ) : (
                     <Button
                         onClick={handleEmailTransfer}

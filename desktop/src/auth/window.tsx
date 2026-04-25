@@ -6,7 +6,9 @@ import {Button} from "@/components/ui/button.tsx";
 import {Input} from "@/components/ui/input.tsx";
 import Iridescence from "@/components/iridescene.tsx";
 import {invoke} from "@tauri-apps/api/core";
+import {listen} from "@tauri-apps/api/event";
 import {openUrl} from "@tauri-apps/plugin-opener";
+import {Check, Copy} from "lucide-react";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>
@@ -19,9 +21,21 @@ type AuthPhase = 'google-signin' | 'token-input' | 'loading';
 function Window() {
     const [authPhase, setAuthPhase] = useState<AuthPhase>('google-signin')
     const [tokenInput, setTokenInput] = useState('')
+    const [authUrl, setAuthUrl] = useState<string | null>(null)
+    const [copied, setCopied] = useState(false)
+    const [showUrl, setShowUrl] = useState(false)
 
     useEffect(() => {
         core.launch()
+    }, [])
+
+    useEffect(() => {
+        const unlistenPromise = listen<string>('auth-url', (event) => {
+            setAuthUrl(event.payload)
+        })
+        return () => {
+            unlistenPromise.then((unlisten) => unlisten())
+        }
     }, [])
 
     const handleLogin = () => {
@@ -42,7 +56,21 @@ function Window() {
     const handleBack = () => {
         if (authPhase !== 'token-input') return
         setTokenInput('')
+        setAuthUrl(null)
+        setCopied(false)
+        setShowUrl(false)
         setAuthPhase('google-signin')
+    }
+
+    const handleCopyUrl = async () => {
+        if (!authUrl) return
+        try {
+            await navigator.clipboard.writeText(authUrl)
+            setCopied(true)
+            setTimeout(() => setCopied(false), 2000)
+        } catch {
+            setCopied(false)
+        }
     }
 
     return (
@@ -122,29 +150,51 @@ function Window() {
                     )}
 
                     {authPhase === 'token-input' && (
-                        <div className="w-full max-w-[300px] flex flex-col items-center gap-4">
-                            <p className="text-[14px] text-[#9ca3af] text-center">
-                                If the browser doesn&apos;t open automatically, enter the access token from the web sign-in page.
-                            </p>
+                        <div className="w-full max-w-[320px] flex flex-col items-center gap-3">
                             <Input
                                 type="text"
-                                placeholder="Enter access token"
+                                placeholder="Paste access token"
                                 value={tokenInput}
                                 onChange={(e) => setTokenInput(e.target.value)}
-                                className="w-full h-11 bg-zinc-800/50 border-zinc-700 text-white placeholder:text-zinc-500 rounded-lg"
+                                className="w-full h-11 bg-white/[0.06] border-none text-white placeholder:text-zinc-500 rounded-xl text-[13px] px-3.5 focus-visible:ring-1 focus-visible:ring-white/20"
                             />
+
+                            {showUrl && authUrl && (
+                                <div className="w-full flex items-center gap-2 pl-3.5 pr-1.5 py-1.5 rounded-xl bg-white/[0.06]">
+                                    <span className="flex-1 text-zinc-300 text-[12px] font-mono truncate">
+                                        {authUrl}
+                                    </span>
+                                    <button
+                                        onClick={handleCopyUrl}
+                                        className="shrink-0 h-7 w-7 rounded-md bg-white/10 hover:bg-white/15 text-white flex items-center justify-center transition-colors active:scale-[0.96]"
+                                    >
+                                        {copied ? <Check className="w-[13px] h-[13px]" /> : <Copy className="w-[13px] h-[13px]" />}
+                                    </button>
+                                </div>
+                            )}
+
                             <Button
                                 onClick={handleSubmitToken}
                                 disabled={!tokenInput.trim()}
-                                className="w-full h-11 bg-white hover:bg-white/90 text-blackBase rounded-full text-[15px] font-semibold transition-all active:scale-[0.98] border-none shadow-lg flex items-center justify-center"
+                                className="w-full h-11 bg-white hover:bg-white/90 text-blackBase rounded-full text-[14px] font-semibold transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed border-none"
                             >
                                 Continue
                             </Button>
+
+                            {!showUrl && (
+                                <button
+                                    onClick={() => setShowUrl(true)}
+                                    className="text-[12px] text-zinc-500 hover:text-zinc-300 transition-colors"
+                                >
+                                    Your browser didn&apos;t open?
+                                </button>
+                            )}
+
                             <button
                                 onClick={handleBack}
-                                className="text-[13px] text-[#9ca3af] hover:text-white transition-colors"
+                                className="text-[12px] text-zinc-500 hover:text-zinc-300 transition-colors"
                             >
-                                Back to sign in
+                                Back
                             </button>
                         </div>
                     )}
