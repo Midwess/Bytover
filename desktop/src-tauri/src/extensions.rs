@@ -522,14 +522,19 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
                 window
             }
             None => {
-                let window = WebviewWindowBuilder::new(self, "settings", WebviewUrl::App(format!("settings.html?tab={}", tab).into()))
-                    .title("Settings")
+                let builder = WebviewWindowBuilder::new(self, "settings", WebviewUrl::App(format!("settings.html?tab={}", tab).into()))
+                    .title("")
                     .inner_size(728.0, 485.0)
                     .decorations(true)
                     .transparent(true)
                     .resizable(false)
                     .shadow(true)
-                    .devtools(true)
+                    .devtools(true);
+
+                #[cfg(target_os = "macos")]
+                let builder = builder.title_bar_style(tauri::TitleBarStyle::Overlay);
+
+                let window = builder
                     .build()
                     .expect("failed to create settings window");
 
@@ -555,14 +560,19 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
         let window = match self.get_webview_window("settings") {
             Some(window) => window,
             None => {
-                let window = WebviewWindowBuilder::new(self, "settings", WebviewUrl::App("settings.html".into()))
-                    .title("Settings")
+                let builder = WebviewWindowBuilder::new(self, "settings", WebviewUrl::App("settings.html".into()))
+                    .title("")
                     .inner_size(728.0, 485.0)
                     .decorations(true)
                     .transparent(true)
                     .resizable(false)
                     .shadow(true)
-                    .devtools(true)
+                    .devtools(true);
+
+                #[cfg(target_os = "macos")]
+                let builder = builder.title_bar_style(tauri::TitleBarStyle::Overlay);
+
+                let window = builder
                     .build()
                     .expect("failed to create settings window");
 
