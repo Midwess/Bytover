@@ -323,15 +323,15 @@ function SettingsSection({title, children, description}: {
     return (
         <div>
             {title && (
-                <h3 className="text-[10px] font-semibold text-white/35 px-1 mb-2 uppercase tracking-[0.1em]">
+                <h3 className="text-[10px] font-semibold text-white/40 mb-3 uppercase tracking-[0.14em]">
                     {title}
                 </h3>
             )}
-            <div className="bg-[#202020] border border-white/[0.06] rounded-xl overflow-hidden">
+            <div>
                 {children}
             </div>
             {description && (
-                <p className="mt-2 text-[11px] text-white/30 px-1 leading-relaxed">
+                <p className="mt-2 text-[11px] text-white/30 leading-relaxed">
                     {description}
                 </p>
             )}
