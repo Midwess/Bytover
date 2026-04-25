@@ -9,8 +9,10 @@ import {useState} from "react"
 import {Progress} from "@/components/animate-ui/components/radix/progress"
 import {ProgressIndicator} from "@/components/animate-ui/primitives/radix/progress"
 import {Send} from "lucide-react"
+import {openForceUpdate} from "@/components/force-update-overlay"
+import {UpdateStatus} from "@/lib/updater"
 
-export function EmailTransfer({ shelfId }: { shelfId: string | undefined }) {
+export function EmailTransfer({ shelfId, forceUpdate }: { shelfId: string | undefined; forceUpdate: UpdateStatus | null }) {
     const [pwd, setPwd] = useState("");
     const [emails, setEmails] = useState<string[]>([]);
     const [isLoading, setIsLoading] = useState(false)
@@ -53,7 +55,12 @@ export function EmailTransfer({ shelfId }: { shelfId: string | undefined }) {
         </Card>
         <Card shadowSize={0.5} className={`flex flex-row gap-2 p-1 items-center ${cloudSession?.progress ? "w-full" : "w-fit"}`}>
             {
-                cloudSession?.is_in_progress ? (
+                forceUpdate ? (
+                    <Button onClick={() => openForceUpdate(forceUpdate)}
+                            className={"bg-bluePrimary text-foreground shadow-lg hover:bg-bluePrimary/60 px-3 w-auto"}>
+                        Update to continue
+                    </Button>
+                ) : cloudSession?.is_in_progress ? (
                     <Button onClick={() => {
                         invoke("cancel_send", {sessionId: cloudSession?.session_id}).then(noop)
                     }} className={"bg-muted-foreground/30 text-primary w-[100px] h-full shadow-lg"}>Cancel</Button>
