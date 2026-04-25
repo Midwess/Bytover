@@ -67,6 +67,8 @@ impl From<&Shelf> for ShelfItemViewModel {
 pub struct ShelfViewModel {
     pub shelves: Vec<ShelfItemViewModel>,
     pub is_loading: bool,
+    pub max_shelves: Option<u32>,
+    pub can_create_shelf: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -264,7 +266,7 @@ impl AppModule<BitBridge> for ShelfModule {
                 })
             }
             Self::Event::OpenNewShelf => {
-                if is_shelf_limit_reached(model) {
+                if shelf_limit_reached(model) {
                     return Command::operate(DeviceOperation::NotifiedShelfLimitReached);
                 }
 
@@ -276,7 +278,7 @@ impl AppModule<BitBridge> for ShelfModule {
                 })
             }
             Self::Event::OpenNewShelfFromClipboard => {
-                if is_shelf_limit_reached(model) {
+                if shelf_limit_reached(model) {
                     return Command::operate(DeviceOperation::NotifiedShelfLimitReached);
                 }
 
@@ -353,14 +355,22 @@ impl AppModule<BitBridge> for ShelfModule {
 
         shelves.sort_by(|a, b| b.id.cmp(&a.id));
 
+        let max_shelves = model.authentication.capabilities.as_ref().and_then(|c| c.shelf_limit());
+        let can_create_shelf = match max_shelves {
+            Some(limit) => (model.shelf.shelves.len() as u32) < limit,
+            None => true,
+        };
+
         ShelfViewModel {
             shelves,
             is_loading: model.shelf.is_loading,
+            max_shelves,
+            can_create_shelf,
         }
     }
 }
 
-fn is_shelf_limit_reached(model: &AppModel) -> bool {
+fn shelf_limit_reached(model: &AppModel) -> bool {
     model
         .authentication
         .capabilities

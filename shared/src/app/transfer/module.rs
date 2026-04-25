@@ -66,6 +66,10 @@ pub struct TransferViewModel {
     p2p_sessions: Vec<CloudSession>,
     pub total_p2p_receive_progress: Option<f64>,
     pub is_loading: bool,
+    pub password_encryption_allowed: bool,
+    pub max_files_per_transfer: Option<u32>,
+    pub transfer_lifetime_cap_bytes: Option<u64>,
+    pub transfer_bytes_used: u64,
 }
 
 pub struct TransferModule;
@@ -832,11 +836,25 @@ impl AppModule<BitBridge> for TransferModule {
 
         let total_p2p_receive_progress = received_session.as_ref().filter(|s| s.progress > 0.0 && !s.is_completed).map(|s| s.progress);
 
+        let caps = model.authentication.capabilities.as_ref();
+        let password_encryption_allowed = caps.map(|c| c.transfer_limits.password_encryption_allowed).unwrap_or(false);
+        let max_files_per_transfer = caps
+            .map(|c| c.transfer_limits.max_files_per_transfer)
+            .and_then(|n| if n == 0 { None } else { Some(n) });
+        let transfer_lifetime_cap_bytes = caps
+            .map(|c| c.transfer_limits.total_transfer_bytes_lifetime_cap)
+            .and_then(|n| if n == 0 { None } else { Some(n) });
+        let transfer_bytes_used = caps.map(|c| c.transfer_usage.total_transfer_bytes_used).unwrap_or(0);
+
         Self::ViewModel {
             transfer_method: model.transfer.selected_method.clone(),
             received_session,
             received_cloud_session,
             is_loading,
+            password_encryption_allowed,
+            max_files_per_transfer,
+            transfer_lifetime_cap_bytes,
+            transfer_bytes_used,
             cloud_sessions: model
                 .transfer
                 .sessions

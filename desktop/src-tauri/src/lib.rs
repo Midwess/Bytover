@@ -58,6 +58,8 @@ mod storekit;
 mod theme;
 mod thumbnail;
 
+const CAPABILITIES_POLL_INTERVAL_SECS: u64 = 300;
+
 static CORE: LazyLock<Arc<Core<BitBridge>>> = LazyLock::new(|| Arc::new(Core::new()));
 static TRAY_ICON: LazyLock<Mutex<Option<TrayIcon>>> = LazyLock::new(|| Mutex::new(None));
 static TOAST_MESSAGE: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::new(None));
@@ -535,17 +537,7 @@ pub(crate) async fn process_event(event: impl Into<AppEvent> + Send + Sync + 'st
 }
 
 pub(crate) fn is_shelf_limit_reached() -> bool {
-    let view = CORE.view();
-    let Some(limit) = view
-        .authentication
-        .as_ref()
-        .and_then(|a| a.capabilities.as_ref())
-        .and_then(|c| c.shelf_limit())
-    else {
-        return false;
-    };
-    let current = view.shelf.as_ref().map(|s| s.shelves.len()).unwrap_or(0);
-    current >= limit as usize
+    !CORE.view().shelf.as_ref().map(|s| s.can_create_shelf).unwrap_or(true)
 }
 
 pub(crate) fn most_recent_shelf_id() -> Option<u64> {
@@ -1023,6 +1015,17 @@ pub async fn run() {
             commands::purchase::resume_pending_transactions,
             commands::purchase::check_storekit_product_availability
         ])
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Focused(true) = event {
+                if CORE.view().authentication.as_ref().and_then(|a| a.user.as_ref()).is_none() {
+                    return;
+                }
+                let app_handle = window.app_handle().clone();
+                spawn(async move {
+                    process_event(AuthenticationEvent::RefreshCapabilities, app_handle).await;
+                });
+            }
+        })
         .setup(|app| {
             #[cfg(target_os = "macos")]
             {
@@ -1197,6 +1200,19 @@ pub async fn run() {
                     let handle = handle.clone();
                     log::info!("Received redirect url: {}", url);
                     process_event(AuthenticationEvent::OnRedirected { url: url.to_string() }, handle).await;
+                }
+            });
+
+            let poll_handle = handle.clone();
+            spawn(async move {
+                let mut interval = tokio::time::interval(std::time::Duration::from_secs(CAPABILITIES_POLL_INTERVAL_SECS));
+                interval.tick().await;
+                loop {
+                    interval.tick().await;
+                    if CORE.view().authentication.as_ref().and_then(|a| a.user.as_ref()).is_none() {
+                        continue;
+                    }
+                    process_event(AuthenticationEvent::RefreshCapabilities, poll_handle.clone()).await;
                 }
             });
 

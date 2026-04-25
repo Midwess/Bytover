@@ -46,6 +46,17 @@ impl AppCommand {
         Ok(())
     }
 
+    pub async fn refresh_capabilities(&self) {
+        match RpcOperation::get_capabilities().into_future(self.ctx()).await {
+            Ok(caps) => {
+                self.notify_event(AppEvent::Authentication(AuthenticationEvent::CapabilitiesLoaded(caps)));
+            }
+            Err(err) => {
+                self.notify_event(AppEvent::Authentication(AuthenticationEvent::RefreshCapabilitiesFailed(format!("{err:?}"))));
+            }
+        }
+    }
+
     pub async fn re_authorize(&self) -> Result<(), CoreError> {
         let Ok((user, device_unique_key)) = RpcOperation::get_me().into_future(self.ctx()).await else {
             self.notify_event(AuthenticationEvent::UnAuthorized);

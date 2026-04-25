@@ -155,14 +155,7 @@ impl AppCommand {
         // We do not remove the public transfer since the user needs to see the information
         // after transfer completed.
         if transfer_session.is_success() && transfer_session.target.is_public() {
-            match self.run(RpcOperation::get_capabilities()).await {
-                Ok(caps) => {
-                    self.notify_event(AppEvent::Authentication(AuthenticationEvent::CapabilitiesLoaded(caps)));
-                }
-                Err(e) => {
-                    log::warn!("Failed to refresh capabilities after transfer: {e:?}");
-                }
-            }
+            self.notify_event(AppEvent::Authentication(AuthenticationEvent::RefreshCapabilities));
             return Ok(());
         }
 
