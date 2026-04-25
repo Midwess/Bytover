@@ -7,7 +7,8 @@ import {
 } from "shared_types/types/shared_types";
 
 const MAX_VISIBLE_PEEKS = 2;
-const THUMBNAIL_SIZE = 96;
+const THUMBNAIL_WIDTH = 144;
+const THUMBNAIL_HEIGHT = 81;
 const MAX_ROTATION_DEG = 15;
 
 type StackViewProps = {
@@ -46,7 +47,7 @@ function Thumbnail({model}: {model: SelectedResourceViewModel}) {
     return (
         <div
             className="overflow-hidden flex items-center justify-center"
-            style={{width: THUMBNAIL_SIZE, height: THUMBNAIL_SIZE}}
+            style={{width: THUMBNAIL_WIDTH, height: THUMBNAIL_HEIGHT}}
         >
             {thumbnailUrl ? (
                 <img
@@ -91,7 +92,7 @@ export function StackView({resources, onOpen}: StackViewProps) {
                 onDragStart={onDragStart}
                 onDoubleClick={() => onOpen(top.order_id)}
                 className="relative select-none overflow-visible"
-                style={{width: THUMBNAIL_SIZE, height: THUMBNAIL_SIZE}}
+                style={{width: THUMBNAIL_WIDTH, height: THUMBNAIL_HEIGHT}}
             >
                 {peeks.map((resource, index) => (
                     <div
