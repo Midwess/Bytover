@@ -202,7 +202,7 @@ function SettingsWindow() {
             </div>
 
             {/* Content Area */}
-            <div className="flex-1 flex flex-col bg-[#171717] overflow-y-auto" data-tauri-drag-region>
+            <div className="flex-1 flex flex-col bg-[#0d1322] overflow-y-auto" data-tauri-drag-region>
                 <div className="w-full max-w-[480px] mx-auto px-7 pt-10 pb-12 flex flex-col gap-7">
                     <div data-tauri-drag-region>
                         <h2 className="text-[20px] font-semibold tracking-tight text-white">
