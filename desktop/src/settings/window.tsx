@@ -6,12 +6,9 @@ import {getCurrentWindow} from "@tauri-apps/api/window"
 import {listen} from "@tauri-apps/api/event"
 import {Button} from "@/components/ui/button"
 import {
-    Info,
     RefreshCw,
     Loader2,
     Check,
-    Settings,
-    User,
     ChevronRight,
     ExternalLink,
     Shield,
