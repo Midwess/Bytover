@@ -383,7 +383,11 @@ export function Shelf({
                         <DropdownMenuItem
                             variant="destructive"
                             disabled={!selectedResources.length || !isResourceRemoveAllowed}
-                            onClick={() => invoke('clear_shelf', {shelfId})}>
+                            onClick={() => {
+                                setTimeout(() => {
+                                    invoke('clear_shelf', {shelfId});
+                                }, 0);
+                            }}>
                             <Trash2 className="w-4 h-4 mr-2"/>
                             Clear all
                         </DropdownMenuItem>
