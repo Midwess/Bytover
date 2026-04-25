@@ -12,6 +12,7 @@ import {
     ChevronRight,
     ExternalLink,
     Shield,
+    MessageSquare,
 } from "lucide-react"
 import {
     checkForUpdate,
@@ -653,24 +654,36 @@ function AboutContent({version}: {version: string}) {
     return (
         <div className="space-y-6">
             <SettingsSection>
-                <button 
+                <button
                     onClick={() => openUrl("https://bytover.com")}
                     className="w-full text-left"
                 >
-                    <SettingsRow 
-                        label="Website" 
+                    <SettingsRow
+                        label="Website"
                         description="Visit bytover.com for more information."
                         icon={<ExternalLink className="w-4 h-4" />}
                     >
                         <ChevronRight className="w-4 h-4 text-white/20" />
                     </SettingsRow>
                 </button>
-                <button 
+                <button
+                    onClick={() => openUrl("https://bytover.com/feedback")}
+                    className="w-full text-left"
+                >
+                    <SettingsRow
+                        label="Feedback"
+                        description="Share your thoughts to help us improve."
+                        icon={<MessageSquare className="w-4 h-4" />}
+                    >
+                        <ChevronRight className="w-4 h-4 text-white/20" />
+                    </SettingsRow>
+                </button>
+                <button
                     onClick={() => openUrl("https://bytover.com/policy")}
                     className="w-full text-left"
                 >
-                    <SettingsRow 
-                        label="Privacy Policy" 
+                    <SettingsRow
+                        label="Privacy Policy"
                         description="How we handle your data."
                         icon={<Shield className="w-4 h-4" />}
                         last={true}
