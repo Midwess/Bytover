@@ -46,7 +46,7 @@ function Thumbnail({model}: {model: SelectedResourceViewModel}) {
 
     return (
         <div
-            className="overflow-hidden flex items-center justify-center rounded"
+            className="overflow-hidden flex items-center justify-center rounded shadow-md bg-white"
             style={{width: THUMBNAIL_WIDTH, height: THUMBNAIL_HEIGHT}}
         >
             {thumbnailUrl ? (
@@ -86,7 +86,7 @@ export function StackView({resources, onOpen}: StackViewProps) {
     };
 
     return (
-        <div className="w-full h-full flex items-center justify-center overflow-visible">
+        <div className="w-full h-full flex items-center justify-center overflow-visible pb-10">
             <div
                 draggable
                 onDragStart={onDragStart}
