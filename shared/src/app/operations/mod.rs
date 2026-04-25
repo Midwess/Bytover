@@ -3,6 +3,7 @@ pub mod dialog;
 pub mod p2p;
 pub mod persistent;
 pub mod rpc;
+pub mod storekit;
 pub mod transfer;
 pub mod webview;
 
@@ -29,6 +30,7 @@ use p2p::{P2POperation, P2POperationOutput};
 use persistent::PersistentOperation;
 use rpc::{RpcOperation, RpcOperationOutput};
 use serde::{Deserialize, Serialize};
+use storekit::{StoreKitOperation, StoreKitOperationOutput};
 use transfer::{TransferOperation, TransferOperationOutput};
 use webview::WebViewOperation;
 
@@ -42,6 +44,7 @@ pub enum CoreOperation {
     Persistent(PersistentOperation),
     Transfer(TransferOperation),
     P2P(P2POperation),
+    StoreKit(StoreKitOperation),
     Render,
     InitNativeExecutor,
     Notified(AppEvent),
@@ -55,6 +58,7 @@ pub enum CoreOperationOutput {
     Rpc(RpcOperationOutput),
     Transfer(TransferOperationOutput),
     P2P(P2POperationOutput),
+    StoreKit(StoreKitOperationOutput),
 
     // ==== Entities ====
     String(String),

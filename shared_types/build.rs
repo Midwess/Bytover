@@ -21,14 +21,17 @@ use shared::app::operations::persistent::{
     ShelfPersistentOperation, TransferSessionPersistentOperation,
 };
 use shared::app::operations::rpc::{RpcOperation, RpcOperationOutput};
+use shared::app::operations::storekit::{StoreKitOperation, StoreKitOperationOutput, StoreKitTransactionDto};
 use shared::app::operations::transfer::{TransferOperation, TransferOperationOutput};
 use shared::app::operations::CoreOperationOutput;
 use shared::app::p2p::module::P2PEvent;
+use shared::app::payment::{InFlight, PaymentEvent, PaymentViewModel};
 use shared::app::shelf::module::{ResourceSelection, ShelfEvent, ShelfItemViewModel, ShelfViewModel};
 use shared::app::transfer::module::{TransferEvent, TransferModel};
 use shared::app::view_models::receive_session::ReceiveResourceViewModel;
 use shared::app::BitBridge;
 use shared::entities::capabilities::{Plan, PresentationLimits, TransferLimits, TransferUsage, UserCapabilities};
+use shared::protocol::rpc::cloud_server::{SubmitStoreKitRejectionCode, SubmitStoreKitResult};
 use shared::entities::local_resource::{LocalResource, LocalResourcePath, ResourceType};
 use shared::entities::session::{Session, SessionType};
 use shared::entities::target::{P2PConnectionState, TransferTarget};
@@ -99,6 +102,14 @@ fn main() {
     gen.register_type::<P2POperation>().unwrap();
     gen.register_type::<P2POperationOutput>().unwrap();
     gen.register_type::<P2PEvent>().unwrap();
+    gen.register_type::<StoreKitOperation>().unwrap();
+    gen.register_type::<StoreKitOperationOutput>().unwrap();
+    gen.register_type::<StoreKitTransactionDto>().unwrap();
+    gen.register_type::<SubmitStoreKitResult>().unwrap();
+    gen.register_type::<SubmitStoreKitRejectionCode>().unwrap();
+    gen.register_type::<InFlight>().unwrap();
+    gen.register_type::<PaymentEvent>().unwrap();
+    gen.register_type::<PaymentViewModel>().unwrap();
     #[cfg(any(feature = "swift", feature = "java"))]
     gen.register_type::<PathResolverMessage>().unwrap();
     #[cfg(any(feature = "swift", feature = "java"))]

@@ -472,15 +472,11 @@ function ProBadge({size = "md"}: {size?: "sm" | "md"}) {
 }
 
 function PlanComparison({limits, onUpgrade}: {limits: FreeLimits; onUpgrade: () => Promise<unknown>}) {
-    const [isPurchasing, setIsPurchasing] = useState(false)
+    const payment = core.usePayment()
+    const isPurchasing = payment?.is_loading ?? false
     const handlePurchaseClick = async () => {
         if (isPurchasing) return
-        setIsPurchasing(true)
-        try {
-            await onUpgrade()
-        } finally {
-            setIsPurchasing(false)
-        }
+        await onUpgrade()
     }
     const features: {label: string; freeNote: string}[] = [
         {label: "Unlimited files per transfer", freeNote: `${formatCount(limits.maxFilesPerTransfer)} on Free`},
@@ -571,10 +567,9 @@ function AccountContent({onSignOut}: {onSignOut: () => void}) {
     const currentPlan: PlanKind = (caps?.plan as unknown) === "Paid" ? "paid" : "free"
     const handleUpgrade = async () => {
         try {
-            const result = await invoke("purchase_premium")
-            console.log("[storekit] purchase_premium result:", result)
+            await invoke("purchase_premium")
         } catch (error) {
-            console.error("[storekit] purchase_premium failed:", error)
+            console.error("[payment] purchase_premium dispatch failed:", error)
         }
     }
 

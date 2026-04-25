@@ -7,15 +7,23 @@ pub use error::StoreKitError;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-
-pub const PREMIUM_PRODUCT_ID: &str = "com.midwess.bytover.premium";
+use shared::app::operations::storekit::StoreKitTransactionDto;
 
 #[derive(Debug, Clone)]
 pub struct StoreKitTransaction {
     pub transaction_id: String,
     pub product_id: String,
-    #[allow(dead_code)]
     pub original_transaction_id: Option<String>,
+}
+
+impl StoreKitTransaction {
+    pub fn to_dto(&self) -> StoreKitTransactionDto {
+        StoreKitTransactionDto {
+            transaction_id: self.transaction_id.clone(),
+            product_id: self.product_id.clone(),
+            original_transaction_id: self.original_transaction_id.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

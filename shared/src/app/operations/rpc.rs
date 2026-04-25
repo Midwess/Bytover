@@ -9,6 +9,7 @@ use crate::entities::capabilities::UserCapabilities;
 use crate::entities::device::DeviceInfo;
 use crate::entities::user::User;
 use crate::errors::CoreError;
+use crate::protocol::rpc::cloud_server::SubmitStoreKitResult;
 
 use super::{CoreOperation, CoreOperationOutput};
 
@@ -31,6 +32,10 @@ pub enum RpcOperation {
         device: DeviceInfo,
     },
     GetCapabilities,
+    SubmitStoreKitTransaction {
+        transaction_id: String,
+        product_id: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -39,6 +44,7 @@ pub enum RpcOperationOutput {
     GetUserById(User),
     GenPeer(crate::entities::peer::Peer),
     GetCapabilities(UserCapabilities),
+    SubmitStoreKit(SubmitStoreKitResult),
 }
 
 impl Operation for RpcOperation {
@@ -116,6 +122,21 @@ impl RpcOperation {
             CoreOperationOutput::Rpc(RpcOperationOutput::GetCapabilities(caps)) => Ok(caps),
             CoreOperationOutput::Error(error) => Err(error),
             e => panic!("Invalid output for RpcOperation::GetCapabilities got {e:?}"),
+        })
+    }
+
+    pub fn submit_storekit_transaction(
+        transaction_id: String,
+        product_id: String,
+    ) -> AppRequestBuilder<impl Future<Output = Result<SubmitStoreKitResult, CoreError>>> {
+        Command::request_from_shell(CoreOperation::Rpc(RpcOperation::SubmitStoreKitTransaction {
+            transaction_id,
+            product_id,
+        }))
+        .map(|res| match res {
+            CoreOperationOutput::Rpc(RpcOperationOutput::SubmitStoreKit(result)) => Ok(result),
+            CoreOperationOutput::Error(error) => Err(error),
+            e => panic!("Invalid output for RpcOperation::SubmitStoreKitTransaction got {e:?}"),
         })
     }
 }

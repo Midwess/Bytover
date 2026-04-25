@@ -15,6 +15,7 @@ use shared::app::authentication::module::AuthenticationEvent;
 use shared::app::environment::module::EnvironmentEvent;
 use shared::app::operations::device::DeviceOperation;
 use shared::app::operations::dialog::{AlertDialog, DialogOperation};
+use shared::app::operations::storekit::{StoreKitOperation, StoreKitOperationOutput};
 use shared::app::operations::webview::WebViewOperation;
 use shared::app::operations::CoreOperationOutput;
 use shared::app::p2p::module::P2PEvent;
@@ -876,6 +877,63 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
                     bridge.notify(AppEvent::P2P(P2PEvent::Launch)).await;
                 });
                 CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
+            }
+            CoreOperation::StoreKit(op) => {
+                let bridge = DiContainer::get_instance().core_bridge();
+                let request = CoreRequest::new(CruxRequest::RequestHandle(handle), bridge);
+                spawn(async move {
+                    let client = storekit::default_client();
+                    let output: StoreKitOperationOutput = match op {
+                        StoreKitOperation::Purchase { product_id } => {
+                            log::info!("[storekit] shell: Purchase product_id={product_id}");
+                            match client.purchase(&product_id).await {
+                                Ok(tx) => StoreKitOperationOutput::Transaction(tx.to_dto()),
+                                Err(e) => {
+                                    log::warn!("[storekit] shell: Purchase failed: {e}");
+                                    StoreKitOperationOutput::Failed(e.to_string())
+                                }
+                            }
+                        }
+                        StoreKitOperation::RestoreAll => {
+                            log::info!("[storekit] shell: RestoreAll");
+                            match client.restore().await {
+                                Ok(list) => {
+                                    let dtos = list.iter().map(|tx| tx.to_dto()).collect();
+                                    StoreKitOperationOutput::Transactions(dtos)
+                                }
+                                Err(e) => {
+                                    log::warn!("[storekit] shell: RestoreAll failed: {e}");
+                                    StoreKitOperationOutput::Failed(e.to_string())
+                                }
+                            }
+                        }
+                        StoreKitOperation::FetchUnfinished => {
+                            log::info!("[storekit] shell: FetchUnfinished");
+                            match client.unfinished_transactions().await {
+                                Ok(list) => {
+                                    let dtos = list.iter().map(|tx| tx.to_dto()).collect();
+                                    StoreKitOperationOutput::Transactions(dtos)
+                                }
+                                Err(e) => {
+                                    log::warn!("[storekit] shell: FetchUnfinished failed: {e}");
+                                    StoreKitOperationOutput::Failed(e.to_string())
+                                }
+                            }
+                        }
+                        StoreKitOperation::FinishTransaction { transaction_id } => {
+                            log::info!("[storekit] shell: FinishTransaction transaction_id={transaction_id}");
+                            match client.finish(&transaction_id).await {
+                                Ok(()) => StoreKitOperationOutput::Finished,
+                                Err(e) => {
+                                    log::warn!("[storekit] shell: FinishTransaction failed: {e}");
+                                    StoreKitOperationOutput::Failed(e.to_string())
+                                }
+                            }
+                        }
+                    };
+                    request.response(CoreOperationOutput::StoreKit(output)).await;
+                });
+                continue;
             }
             operation => {
                 spawn(async move {

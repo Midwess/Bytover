@@ -1,48 +1,26 @@
-use serde::Serialize;
-use shared::entities::capabilities::Plan;
-use shared::protocol::rpc::cloud_server::{SubmitStoreKitRejectionCode, SubmitStoreKitResult};
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 
-use crate::storekit::{self, ProductAvailabilityReport, PREMIUM_PRODUCT_ID};
+use shared::app::payment::{PaymentEvent, PREMIUM_PRODUCT_ID};
 
-#[derive(Debug, Serialize)]
-pub struct PurchaseOutcome {
-    pub upgraded: bool,
-    pub duplicate: bool,
-    pub product_id: String,
-    pub payment_statement_id: Option<u64>,
+use crate::process_event;
+use crate::storekit::{self, ProductAvailabilityReport};
+
+#[tauri::command]
+pub async fn purchase_premium(app_handle: AppHandle) {
+    log::info!("[payment] purchase_premium command invoked for {PREMIUM_PRODUCT_ID}");
+    process_event(PaymentEvent::Purchase(PREMIUM_PRODUCT_ID.to_owned()), app_handle).await;
 }
 
 #[tauri::command]
-pub async fn purchase_premium(app_handle: AppHandle) -> Result<PurchaseOutcome, String> {
-    log::info!("[storekit] purchase_premium command invoked for {PREMIUM_PRODUCT_ID}");
-    let client = storekit::default_client();
-    let transaction = client
-        .purchase(PREMIUM_PRODUCT_ID)
-        .await
-        .map_err(|e| {
-            log::error!("[storekit] purchase_premium client.purchase failed: {e}");
-            e.to_string()
-        })?;
-
-    log::info!(
-        "[storekit] purchase_premium got transaction {} for {}, submitting to backend",
-        transaction.transaction_id, transaction.product_id,
-    );
-    submit_and_finish(app_handle, client.as_ref(), &transaction).await
+pub async fn restore_purchases(app_handle: AppHandle) {
+    log::info!("[payment] restore_purchases command invoked");
+    process_event(PaymentEvent::Restore, app_handle).await;
 }
 
 #[tauri::command]
-pub async fn restore_purchases(app_handle: AppHandle) -> Result<Vec<PurchaseOutcome>, String> {
-    let client = storekit::default_client();
-    let transactions = client.restore().await.map_err(|e| e.to_string())?;
-
-    let mut outcomes = Vec::with_capacity(transactions.len());
-    for tx in transactions {
-        let outcome = submit_and_finish(app_handle.clone(), client.as_ref(), &tx).await?;
-        outcomes.push(outcome);
-    }
-    Ok(outcomes)
+pub async fn resume_pending_transactions(app_handle: AppHandle) {
+    log::info!("[payment] resume_pending_transactions command invoked");
+    process_event(PaymentEvent::ResumePending, app_handle).await;
 }
 
 #[tauri::command]
@@ -52,71 +30,4 @@ pub async fn check_storekit_product_availability() -> Result<ProductAvailability
         .products_available(&[PREMIUM_PRODUCT_ID])
         .await
         .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub async fn resume_pending_transactions(app_handle: AppHandle) -> Result<usize, String> {
-    let client = storekit::default_client();
-    let pending = client
-        .unfinished_transactions()
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let mut resumed = 0usize;
-    for tx in pending {
-        match submit_and_finish(app_handle.clone(), client.as_ref(), &tx).await {
-            Ok(_) => resumed += 1,
-            Err(err) => {
-                log::warn!("[storekit] failed to resume transaction {}: {err}", tx.transaction_id);
-            }
-        }
-    }
-    Ok(resumed)
-}
-
-async fn submit_and_finish(
-    app_handle: AppHandle,
-    client: &dyn storekit::StoreKitClient,
-    tx: &storekit::StoreKitTransaction,
-) -> Result<PurchaseOutcome, String> {
-    let di = native::di_container::DiContainer::get_instance();
-    let cloud_server = di.get_cloud_server();
-
-    let result = cloud_server
-        .submit_storekit_transaction(tx.transaction_id.clone(), tx.product_id.clone())
-        .await
-        .map_err(|e| {
-            log::error!("[payment] submit_storekit_transaction failed: {e}");
-            e.to_string()
-        })?;
-
-    match result {
-        SubmitStoreKitResult::Completed {
-            payment_statement_id,
-            product_id,
-            duplicate,
-            upgraded_to_paid,
-            capabilities,
-        } => {
-            client.finish(&tx.transaction_id).await.map_err(|e| e.to_string())?;
-
-            let _ = app_handle.emit("capabilities-changed", ());
-
-            Ok(PurchaseOutcome {
-                upgraded: upgraded_to_paid && capabilities.plan == Plan::Paid,
-                duplicate,
-                product_id,
-                payment_statement_id: Some(payment_statement_id),
-            })
-        }
-        SubmitStoreKitResult::Rejected { code, message } => {
-            log::warn!("[payment] submit_storekit_transaction rejected: {code:?} {message:?}");
-            Err(format_rejection(code, message))
-        }
-    }
-}
-
-fn format_rejection(code: SubmitStoreKitRejectionCode, message: Option<String>) -> String {
-    let suffix = message.filter(|m| !m.is_empty()).map(|m| format!(": {m}")).unwrap_or_default();
-    format!("payment rejected ({code:?}){suffix}")
 }
