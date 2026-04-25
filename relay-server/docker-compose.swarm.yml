@@ -21,7 +21,7 @@ services:
     deploy:
       mode: global
       restart_policy:
-        condition: on-failure
+        condition: any
       placement:
         constraints:
           - node.platform.os == linux

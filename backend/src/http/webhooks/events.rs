@@ -4,6 +4,8 @@ pub const APP_STORE_RELEASE_UPDATED: &str = "APP_STORE_RELEASE_UPDATED";
 pub const EXTERNAL_TESTFLIGHT_RELEASE_UPDATED: &str = "EXTERNAL_TESTFLIGHT_RELEASE_UPDATED";
 pub const INTERNAL_TESTFLIGHT_RELEASE_CREATED: &str = "INTERNAL_TESTFLIGHT_RELEASE_CREATED";
 pub const ASSET_PACK_VERSION_UPDATED: &str = "ASSET_PACK_VERSION_UPDATED";
+pub const WEBHOOK_TEST: &str = "TEST";
+pub const WEBHOOK_PING: &str = "PING";
 
 #[derive(Debug, Deserialize)]
 pub struct WebhookEnvelope {
@@ -30,6 +32,7 @@ pub enum AppStoreConnectEvent {
     TestFlightExternalUpdated,
     TestFlightInternalCreated,
     AssetPackVersionUpdated,
+    WebhookPing,
     Unknown(String),
 }
 
@@ -54,6 +57,7 @@ pub fn classify(envelope: &WebhookEnvelope) -> Result<AppStoreConnectEvent, Even
         EXTERNAL_TESTFLIGHT_RELEASE_UPDATED => Ok(AppStoreConnectEvent::TestFlightExternalUpdated),
         INTERNAL_TESTFLIGHT_RELEASE_CREATED => Ok(AppStoreConnectEvent::TestFlightInternalCreated),
         ASSET_PACK_VERSION_UPDATED => Ok(AppStoreConnectEvent::AssetPackVersionUpdated),
+        WEBHOOK_TEST | WEBHOOK_PING => Ok(AppStoreConnectEvent::WebhookPing),
         other => Ok(AppStoreConnectEvent::Unknown(other.to_string())),
     }
 }
@@ -109,6 +113,19 @@ mod tests {
                     | AppStoreConnectEvent::TestFlightInternalCreated
                     | AppStoreConnectEvent::AssetPackVersionUpdated
             ));
+        }
+    }
+
+    #[test]
+    fn classifies_test_and_ping_as_webhook_ping() {
+        for nt in [WEBHOOK_TEST, WEBHOOK_PING] {
+            let envelope = WebhookEnvelope {
+                notification_type: nt.to_string(),
+                notification_id: None,
+                data: None,
+            };
+            let evt = classify(&envelope).unwrap();
+            assert!(matches!(evt, AppStoreConnectEvent::WebhookPing), "{nt} should classify as WebhookPing");
         }
     }
 

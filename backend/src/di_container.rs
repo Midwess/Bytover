@@ -115,7 +115,7 @@ impl DiContainer {
         self.app_store_config
             .webhook_secret
             .as_ref()
-            .map(|secret| WebhookSecretVerifier::new(secret.clone(), self.app_store_config.webhook_max_skew))
+            .map(|secret| WebhookSecretVerifier::new(secret.clone()))
     }
 
     pub async fn get_app_release_repository(&'static self) -> impl AppReleaseRepository {
