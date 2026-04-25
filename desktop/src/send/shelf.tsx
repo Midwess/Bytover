@@ -320,23 +320,25 @@ export function Shelf({
                 ) : (
                     <>
                         <div
-                            className="flex flex-col gap-2"
+                            className="min-h-full flex-col"
                             style={{display: viewMode === 'list' ? 'flex' : 'none'}}
                         >
-                            {selectedResources.map((resource) => (
-                                <ResourceView
-                                    key={resource.order_id}
-                                    model={resource}
-                                    isRemoveAllowed={isResourceRemoveAllowed}
-                                    onRemove={(resourceId) => {
-                                        invoke("remove_resource", {shelfId, resourceId})
-                                    }}
-                                    onOpen={(resourceId) => {
-                                        invoke("open_shelf_resource", {shelfId, resourceId})
-                                    }}
-                                />
-                            ))}
-                            <div className={"h-5"}></div>
+                            <div className="flex flex-col gap-2 my-auto">
+                                {selectedResources.map((resource) => (
+                                    <ResourceView
+                                        key={resource.order_id}
+                                        model={resource}
+                                        isRemoveAllowed={isResourceRemoveAllowed}
+                                        onRemove={(resourceId) => {
+                                            invoke("remove_resource", {shelfId, resourceId})
+                                        }}
+                                        onOpen={(resourceId) => {
+                                            invoke("open_shelf_resource", {shelfId, resourceId})
+                                        }}
+                                    />
+                                ))}
+                                <div className={"h-5"}></div>
+                            </div>
                         </div>
                         <div className="h-full" style={{display: viewMode === 'stack' ? 'block' : 'none'}}>
                             <StackView
