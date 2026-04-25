@@ -43,24 +43,19 @@ function Thumbnail({model}: {model: SelectedResourceViewModel}) {
     const thumbnailUrl = thumbnailPath ? convertFileSrc(thumbnailPath) : null;
     const isFolder = model.type instanceof ResourceTypeVariantFolder;
 
-    if (thumbnailUrl) {
-        return (
-            <img
-                src={thumbnailUrl}
-                alt=""
-                className="block object-cover"
-                style={{width: THUMBNAIL_SIZE, height: THUMBNAIL_SIZE}}
-                draggable={false}
-            />
-        );
-    }
-
     return (
         <div
-            className="flex items-center justify-center"
+            className="overflow-hidden flex items-center justify-center"
             style={{width: THUMBNAIL_SIZE, height: THUMBNAIL_SIZE}}
         >
-            {isFolder ? (
+            {thumbnailUrl ? (
+                <img
+                    src={thumbnailUrl}
+                    alt=""
+                    className="w-full h-full object-cover block"
+                    draggable={false}
+                />
+            ) : isFolder ? (
                 <FolderIcon className="w-12 h-12 text-primary"/>
             ) : (
                 <FileIcon className="w-12 h-12 text-primary"/>
