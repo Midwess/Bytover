@@ -113,6 +113,14 @@ pub async fn process_webhook(
             );
             HandlerOutcome::Ignored
         }
+        AppStoreConnectEvent::WebhookPing => {
+            log::info!(
+                "Acknowledging webhook test ping: type={}, delivery_id={:?}",
+                envelope.notification_type,
+                envelope.notification_id,
+            );
+            HandlerOutcome::Ignored
+        }
         AppStoreConnectEvent::Unknown(ref t) => {
             log::info!("Ignoring unknown notification type: {}", t);
             HandlerOutcome::Ignored
@@ -236,6 +244,45 @@ mod tests {
         let outcome = process_webhook(&headers, body, Some(&verifier), &test_config(), &repo, now).await;
         assert_eq!(outcome, HandlerOutcome::Ignored);
         assert!(repo.calls.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn webhook_test_ping_is_acknowledged_without_db_write() {
+        let repo = FakeRepo::default();
+        let verifier = WebhookSecretVerifier::new(b"test-secret".to_vec(), Duration::from_secs(300));
+        let body = br#"{"notificationType":"TEST","notificationId":"ping-1"}"#;
+        let (headers, now) = signed_headers(body);
+        let outcome = process_webhook(&headers, body, Some(&verifier), &test_config(), &repo, now).await;
+        assert_eq!(outcome, HandlerOutcome::Ignored);
+        assert!(repo.calls.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn webhook_ping_alias_is_acknowledged_without_db_write() {
+        let repo = FakeRepo::default();
+        let verifier = WebhookSecretVerifier::new(b"test-secret".to_vec(), Duration::from_secs(300));
+        let body = br#"{"notificationType":"PING","notificationId":"ping-2"}"#;
+        let (headers, now) = signed_headers(body);
+        let outcome = process_webhook(&headers, body, Some(&verifier), &test_config(), &repo, now).await;
+        assert_eq!(outcome, HandlerOutcome::Ignored);
+        assert!(repo.calls.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn unsigned_test_ping_is_rejected() {
+        let repo = FakeRepo::default();
+        let verifier = WebhookSecretVerifier::new(b"test-secret".to_vec(), Duration::from_secs(300));
+        let body = br#"{"notificationType":"TEST"}"#;
+        let outcome = process_webhook(
+            &HeaderMap::new(),
+            body,
+            Some(&verifier),
+            &test_config(),
+            &repo,
+            UNIX_EPOCH + Duration::from_secs(1_750_000_000),
+        )
+        .await;
+        assert_eq!(outcome, HandlerOutcome::Unauthorized);
     }
 
     #[tokio::test]
