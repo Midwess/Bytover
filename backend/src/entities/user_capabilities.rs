@@ -136,7 +136,7 @@ mod tests {
             Plan::Free,
             false,
             10,
-            8 * 1024 * 1024 * 1024,
+            20 * 1024 * 1024 * 1024,
             123_456,
             1,
             Some("dev-Y".to_owned()),

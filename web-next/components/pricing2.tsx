@@ -90,7 +90,7 @@ export function Pricing2() {
               <ul className="space-y-3 border-t border-white/5 pt-8">
                 {[
                   "Up to 10 files per transfer",
-                  "8 GB lifetime transfer cap",
+                  "20 GB lifetime transfer cap",
                   "1 active shelf at a time",
                   "Cross-platform desktop & mobile apps"
                 ].map((feature, i) => (
