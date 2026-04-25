@@ -1,7 +1,7 @@
 use crate::app::authentication::module::AuthenticationEvent;
 use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
-use crate::app::operations::dialog::DialogOperation;
+use crate::app::operations::dialog::{AlertDialog, DialogOperation};
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::operations::storekit::{StoreKitOperation, StoreKitOperationOutput, StoreKitTransactionDto};
 use crate::app::payment::module::{InFlight, PaymentEvent, ProductId};
@@ -140,7 +140,7 @@ impl AppCommand {
     }
 
     async fn surface_failure(&self, message: &str) {
-        self.run(DialogOperation::toast(message.to_owned())).await;
+        self.run(DialogOperation::alert(AlertDialog::alert(message.to_owned()))).await;
         self.notify_event(PaymentEvent::SubmissionFailed(message.to_owned()));
     }
 }
