@@ -8,7 +8,7 @@ import {
     TooltipProvider,
 } from "@/components/animate-ui/primitives/animate/tooltip"
 
-export function UpgradeButton() {
+export function UpgradeButton({tooltipText = "You have exceeded the free limit"}: {tooltipText?: string}) {
     const handleClick = () => {
         invoke("show_settings_with_tab", {tab: "account"}).then(noop)
     }
@@ -23,8 +23,8 @@ export function UpgradeButton() {
                         Upgrade to premium
                     </Button>
                 </TooltipTrigger>
-                <TooltipContent className="bg-popover text-popover-foreground text-xs px-2 py-1 rounded-md shadow-lg border">
-                    You has exceed the free limit
+                <TooltipContent className="bg-popover text-popover-foreground text-xs px-2 py-1 rounded-md shadow-lg border whitespace-pre-line text-center">
+                    {tooltipText}
                 </TooltipContent>
             </Tooltip>
         </TooltipProvider>
