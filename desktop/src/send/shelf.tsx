@@ -311,6 +311,7 @@ export function Shelf({
             </div>
             {/* Resources List */}
             <div
+                data-no-scrollbar
                 className="w-full h-full overflow-y-auto px-2.5 z-0 pt-9 shadow-[inset_0_20px_20px_-10px_hsl(var(--card)),inset_0_-20px_20px_-10px_hsl(var(--card))]">
                 {selectedResources.length === 0 && (
                     <div

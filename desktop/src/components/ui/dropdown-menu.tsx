@@ -28,6 +28,7 @@ function DropdownMenuContent({
     return (
         <DropdownMenuPrimitive.Portal container={container ?? undefined}>
             <DropdownMenuPrimitive.Content
+                data-no-scrollbar
                 sideOffset={sideOffset}
                 className={cn(
                     'bg-popover text-popover-foreground z-50 max-h-(--radix-dropdown-menu-content-available-height) min-w-[8rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-xl border p-1 shadow-md outline-none',
