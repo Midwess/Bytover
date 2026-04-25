@@ -7,10 +7,8 @@ import {
 } from "shared_types/types/shared_types";
 
 const MAX_VISIBLE_PEEKS = 2;
-const THUMBNAIL_SIZE = 104;
-const MAX_OFFSET_X = 14;
-const MAX_OFFSET_Y = 10;
-const MAX_ROTATION_DEG = 12;
+const THUMBNAIL_SIZE = 96;
+const MAX_ROTATION_DEG = 15;
 
 type StackViewProps = {
     resources: SelectedResourceViewModel[],
@@ -34,12 +32,10 @@ function makeRng(seed: number): () => number {
     };
 }
 
-function scatterTransform(orderId: string): string {
+function rotationFor(orderId: string): string {
     const rng = makeRng(hashSeed(orderId));
-    const dx = (rng() * 2 - 1) * MAX_OFFSET_X;
-    const dy = (rng() * 2 - 1) * MAX_OFFSET_Y;
     const rot = (rng() * 2 - 1) * MAX_ROTATION_DEG;
-    return `translate(${dx.toFixed(2)}px, ${dy.toFixed(2)}px) rotate(${rot.toFixed(2)}deg)`;
+    return `rotate(${rot.toFixed(2)}deg)`;
 }
 
 function Thumbnail({model}: {model: SelectedResourceViewModel}) {
@@ -94,20 +90,20 @@ export function StackView({resources, onOpen}: StackViewProps) {
     };
 
     return (
-        <div className="w-full h-full flex items-center justify-center">
+        <div className="w-full h-full flex items-center justify-center overflow-visible">
             <div
                 draggable
                 onDragStart={onDragStart}
                 onDoubleClick={() => onOpen(top.order_id)}
-                className="relative select-none"
+                className="relative select-none overflow-visible"
                 style={{width: THUMBNAIL_SIZE, height: THUMBNAIL_SIZE}}
             >
                 {peeks.map((resource, index) => (
                     <div
                         key={resource.order_id}
-                        className="absolute top-0 left-0 pointer-events-none"
+                        className="absolute inset-0 pointer-events-none"
                         style={{
-                            transform: scatterTransform(resource.order_id),
+                            transform: rotationFor(resource.order_id),
                             zIndex: 20 - index * 5,
                         }}
                         aria-hidden="true"
@@ -117,9 +113,9 @@ export function StackView({resources, onOpen}: StackViewProps) {
                 ))}
 
                 <div
-                    className="relative"
+                    className="absolute inset-0"
                     style={{
-                        transform: scatterTransform(top.order_id),
+                        transform: rotationFor(top.order_id),
                         zIndex: 30,
                     }}
                 >
