@@ -14,6 +14,7 @@ use schema::devlog::app_gateway::rpc::payment_service_client::PaymentServiceClie
 use schema::devlog::app_gateway::rpc::{
     GenerateNameRequest, GenerateRandomAvatarRequest, GetApplicationInfoRequest, PaymentRequest, StoreKitPayment,
 };
+use tonic::metadata::MetadataValue;
 
 pub struct AppGatewayImpl {
     pub channel: GrpcGatewayChannel,
@@ -59,6 +60,7 @@ impl PaymentGateway for AppGatewayImpl {
     async fn verify_storekit_transaction(
         &self,
         _user_order_id: u64,
+        auth_token: &str,
         transaction_id: &str,
         product_id: &str,
     ) -> Result<StoreKitVerifyOutcome, PaymentGatewayError> {
@@ -80,13 +82,21 @@ impl PaymentGateway for AppGatewayImpl {
         log::info!(
             "[payment] gateway PaymentService::pay invoking: idempotency_key={idempotency_key} product_id={product_id}"
         );
-        let request = PaymentRequest {
+        let payment = PaymentRequest {
             idempotency_key: idempotency_key.clone(),
             item: Some(PaymentItem::StorekitPayment(StoreKitPayment {
                 transaction_id: transaction_id.to_owned(),
                 product_id: product_id.to_owned(),
             })),
         };
+        let mut request = tonic::Request::new(payment);
+        let metadata_value = MetadataValue::try_from(auth_token).map_err(|e| {
+            log::warn!(
+                "[payment] gateway authorization metadata invalid: idempotency_key={idempotency_key} err={e}"
+            );
+            PaymentGatewayError::TonicStatus(tonic::Status::unauthenticated("invalid authorization token"))
+        })?;
+        request.metadata_mut().insert("authorization", metadata_value);
 
         let response = match client.pay(request).await {
             Ok(r) => r,

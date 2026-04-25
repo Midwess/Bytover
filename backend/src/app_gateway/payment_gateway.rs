@@ -50,6 +50,7 @@ pub trait PaymentGateway: Send + Sync {
     async fn verify_storekit_transaction(
         &self,
         user_order_id: u64,
+        auth_token: &str,
         transaction_id: &str,
         product_id: &str,
     ) -> Result<StoreKitVerifyOutcome, PaymentGatewayError>;

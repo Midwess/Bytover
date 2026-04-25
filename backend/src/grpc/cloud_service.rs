@@ -384,6 +384,12 @@ impl BitBridgeCloudService for CloudGrpcService {
         };
         let user_order_id = user.order_id;
 
+        let Some(token) = request.extensions().get::<Token>() else {
+            log::warn!("[payment] submit_storekit_transaction rejected: no Token in extensions (user_order_id={user_order_id})");
+            return Err(Status::unauthenticated("Unauthenticated".to_owned()));
+        };
+        let auth_token = token.0.clone();
+
         let body = request.get_ref();
         log::info!(
             "[payment] submit_storekit_transaction entered: user_order_id={user_order_id} transaction_id={} product_id={}",
@@ -405,7 +411,7 @@ impl BitBridgeCloudService for CloudGrpcService {
             body.transaction_id, body.product_id
         );
         let outcome = gateway
-            .verify_storekit_transaction(user_order_id, &body.transaction_id, &body.product_id)
+            .verify_storekit_transaction(user_order_id, &auth_token, &body.transaction_id, &body.product_id)
             .await
             .map_err(|e| {
                 log::warn!(
