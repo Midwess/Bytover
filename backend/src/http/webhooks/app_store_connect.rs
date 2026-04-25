@@ -1,7 +1,13 @@
 use crate::config::AppStoreConfig;
 use crate::di_container::DiContainer;
-use crate::http::webhooks::events::{classify, AppStoreConnectEvent, EventParseError, WebhookEnvelope};
-use crate::http::webhooks::ingestor::{ingest_app_store_release, IngestError};
+use crate::http::webhooks::asc_api::{AppStoreConnectApi, AscApiError};
+use crate::http::webhooks::events::{
+    classify, map_apple_platform, AppStoreConnectEvent, AppStoreVersionStateUpdate,
+    EventParseError, WebhookEnvelope, APP_STORE_STATE_READY_FOR_SALE,
+};
+use crate::http::webhooks::ingestor::{
+    ingest_app_store_release, AppStoreReleaseUpdatedData, IngestError,
+};
 use crate::http::webhooks::verify::{VerifyError, WebhookSecretVerifier};
 use crate::repositories::app_release::AppReleaseRepository;
 use actix_web::http::header::HeaderMap;
@@ -35,6 +41,7 @@ pub async fn process_webhook(
     verifier: Option<&WebhookSecretVerifier>,
     config: &AppStoreConfig,
     repo: &dyn AppReleaseRepository,
+    api: Option<&dyn AppStoreConnectApi>,
 ) -> HandlerOutcome {
     let Some(verifier) = verifier else {
         log::warn!(
@@ -66,53 +73,27 @@ pub async fn process_webhook(
             log::warn!("Webhook payload failed serde: {}", e);
             return HandlerOutcome::BadRequest;
         }
-        Err(EventParseError::MissingData(kind)) => {
-            log::warn!("Webhook payload missing data for {}", kind);
+        Err(EventParseError::MissingInstanceId(kind)) => {
+            log::warn!("Webhook payload missing instance id for {}", kind);
             return HandlerOutcome::BadRequest;
         }
     };
 
     match event {
-        AppStoreConnectEvent::AppStoreReleaseUpdated(data) => {
-            log::info!(
-                "Ingesting App Store release: platform={}, version={}, delivery_id={:?}",
-                data.platform,
-                data.version,
-                envelope.notification_id,
-            );
-            let fallback_url = config.default_store_url_for(&data.platform);
-            match ingest_app_store_release(repo, data, fallback_url).await {
-                Ok(()) => HandlerOutcome::Accepted,
-                Err(IngestError::InvalidVersion(v)) => {
-                    log::warn!("Rejecting non-semver version: {}", v);
-                    HandlerOutcome::BadRequest
-                }
-                Err(IngestError::EmptyPlatform) => HandlerOutcome::BadRequest,
-                Err(IngestError::MissingStoreUrl(p)) => {
-                    log::error!("No App Store URL configured for platform {}", p);
-                    HandlerOutcome::BadRequest
-                }
-                Err(IngestError::Database(e)) => {
-                    log::error!("Webhook upsert failed: {:?}", e);
-                    HandlerOutcome::InternalError
-                }
-            }
-        }
-        AppStoreConnectEvent::TestFlightExternalUpdated
-        | AppStoreConnectEvent::TestFlightInternalCreated
-        | AppStoreConnectEvent::AssetPackVersionUpdated => {
-            log::info!(
-                "Ignoring non-release event: type={}, delivery_id={:?}",
-                envelope.notification_type,
-                envelope.notification_id,
-            );
-            HandlerOutcome::Ignored
+        AppStoreConnectEvent::AppStoreVersionStateUpdated(update) => {
+            handle_version_state_update(update, envelope.data.id.as_str(), config, repo, api).await
         }
         AppStoreConnectEvent::WebhookPing => {
+            log::info!("Acknowledging webhook ping: id={}", envelope.data.id);
+            HandlerOutcome::Ignored
+        }
+        AppStoreConnectEvent::BuildUploadStateUpdated
+        | AppStoreConnectEvent::ExternalBuildStateUpdated
+        | AppStoreConnectEvent::BetaFeedback => {
             log::info!(
-                "Acknowledging webhook test ping: type={}, delivery_id={:?}",
-                envelope.notification_type,
-                envelope.notification_id,
+                "Ignoring non-release event: type={}, id={}",
+                envelope.data.event_type,
+                envelope.data.id,
             );
             HandlerOutcome::Ignored
         }
@@ -123,12 +104,98 @@ pub async fn process_webhook(
     }
 }
 
+async fn handle_version_state_update(
+    update: AppStoreVersionStateUpdate,
+    delivery_id: &str,
+    config: &AppStoreConfig,
+    repo: &dyn AppReleaseRepository,
+    api: Option<&dyn AppStoreConnectApi>,
+) -> HandlerOutcome {
+    let new_value = update.new_value.as_deref().unwrap_or("");
+    if new_value != APP_STORE_STATE_READY_FOR_SALE {
+        log::info!(
+            "Ignoring version state transition delivery_id={} app_store_version_id={} {:?} -> {:?}",
+            delivery_id,
+            update.app_store_version_id,
+            update.old_value,
+            update.new_value,
+        );
+        return HandlerOutcome::Ignored;
+    }
+
+    let Some(api) = api else {
+        log::error!(
+            "Cannot ingest READY_FOR_SALE event delivery_id={}: App Store Connect API credentials not configured",
+            delivery_id,
+        );
+        return HandlerOutcome::Skipped;
+    };
+
+    let info = match api.fetch_app_store_version(&update.app_store_version_id).await {
+        Ok(info) => info,
+        Err(err) => {
+            log::error!(
+                "Failed to fetch app store version delivery_id={} id={}: {}",
+                delivery_id,
+                update.app_store_version_id,
+                err,
+            );
+            return match err {
+                AscApiError::Status(status) if status.is_client_error() => HandlerOutcome::BadRequest,
+                _ => HandlerOutcome::InternalError,
+            };
+        }
+    };
+
+    let Some(platform) = map_apple_platform(&info.apple_platform) else {
+        log::warn!(
+            "Ignoring unsupported Apple platform '{}' delivery_id={}",
+            info.apple_platform,
+            delivery_id,
+        );
+        return HandlerOutcome::Ignored;
+    };
+
+    log::info!(
+        "Ingesting App Store release: platform={}, version={}, delivery_id={}",
+        platform,
+        info.version_string,
+        delivery_id,
+    );
+
+    let fallback_url = config.default_store_url_for(platform);
+    let event = AppStoreReleaseUpdatedData {
+        platform: platform.to_string(),
+        version: info.version_string,
+        app_store_url: None,
+        release_notes: None,
+    };
+
+    match ingest_app_store_release(repo, event, fallback_url).await {
+        Ok(()) => HandlerOutcome::Accepted,
+        Err(IngestError::InvalidVersion(v)) => {
+            log::warn!("Rejecting non-semver version: {}", v);
+            HandlerOutcome::BadRequest
+        }
+        Err(IngestError::EmptyPlatform) => HandlerOutcome::BadRequest,
+        Err(IngestError::MissingStoreUrl(p)) => {
+            log::error!("No App Store URL configured for platform {}", p);
+            HandlerOutcome::BadRequest
+        }
+        Err(IngestError::Database(e)) => {
+            log::error!("Webhook upsert failed: {:?}", e);
+            HandlerOutcome::InternalError
+        }
+    }
+}
+
 #[post("/webhooks/app-store-connect")]
 pub async fn handle(req: HttpRequest, body: web::Bytes) -> actix_web::Result<HttpResponse> {
     let di = DiContainer::instance().await;
     let config = di.get_app_store_config();
     let verifier = di.get_webhook_verifier();
     let repo = di.get_app_release_repository().await;
+    let api = di.get_app_store_connect_api();
 
     let outcome = process_webhook(
         req.headers(),
@@ -136,6 +203,7 @@ pub async fn handle(req: HttpRequest, body: web::Bytes) -> actix_web::Result<Htt
         verifier.as_ref(),
         config,
         &repo,
+        api.as_deref(),
     )
     .await;
 
@@ -145,10 +213,13 @@ pub async fn handle(req: HttpRequest, body: web::Bytes) -> actix_web::Result<Htt
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::AppStoreConnectApiCredentials;
     use crate::entities::app_release;
+    use crate::http::webhooks::asc_api::AppStoreVersionInfo;
     use crate::http::webhooks::verify::sign;
     use crate::repositories::app_release::{AppReleaseRepository, StoreReleaseUpsert};
     use actix_web::http::header::{HeaderMap, HeaderName, HeaderValue};
+    use async_trait::async_trait;
     use core_services::db::repository::abstraction::errors::RepositoryError;
     use std::sync::Mutex;
 
@@ -168,12 +239,46 @@ mod tests {
         }
     }
 
+    struct FakeApi {
+        info: AppStoreVersionInfo,
+        last_id: Mutex<Option<String>>,
+    }
+
+    impl FakeApi {
+        fn ready(version: &str, apple_platform: &str) -> Self {
+            Self {
+                info: AppStoreVersionInfo {
+                    version_string: version.to_string(),
+                    apple_platform: apple_platform.to_string(),
+                },
+                last_id: Mutex::new(None),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl AppStoreConnectApi for FakeApi {
+        async fn fetch_app_store_version(
+            &self,
+            id: &str,
+        ) -> Result<AppStoreVersionInfo, AscApiError> {
+            *self.last_id.lock().unwrap() = Some(id.to_string());
+            Ok(self.info.clone())
+        }
+    }
+
     fn test_config() -> AppStoreConfig {
         AppStoreConfig {
             webhook_secret: Some(b"test-secret".to_vec()),
             force_update_enabled: true,
             default_store_url_darwin: Some("https://apps.apple.com/app/bytover/id0000000000".into()),
             default_store_url_ios: None,
+            connect_api: Some(AppStoreConnectApiCredentials {
+                issuer_id: "issuer".into(),
+                key_id: "key".into(),
+                private_key_pem: "pem".into(),
+            }),
+            connect_api_base_url: "https://api.appstoreconnect.apple.com".into(),
         }
     }
 
@@ -187,18 +292,46 @@ mod tests {
         h
     }
 
+    fn ready_for_sale_body(instance_id: &str) -> Vec<u8> {
+        format!(
+            r#"{{
+                "data": {{
+                    "type": "appStoreVersionAppVersionStateUpdated",
+                    "id": "evt-1",
+                    "attributes": {{ "newValue": "READY_FOR_SALE", "oldValue": "PENDING_DEVELOPER_RELEASE" }},
+                    "relationships": {{
+                        "instance": {{
+                            "data": {{ "type": "appStoreVersions", "id": "{}" }}
+                        }}
+                    }}
+                }}
+            }}"#,
+            instance_id
+        )
+        .into_bytes()
+    }
+
     #[tokio::test]
-    async fn accepts_valid_app_store_release() {
+    async fn accepts_ready_for_sale_event_and_calls_api() {
         let repo = FakeRepo::default();
         let verifier = WebhookSecretVerifier::new(b"test-secret".to_vec());
-        let body = br#"{
-            "notificationType":"APP_STORE_RELEASE_UPDATED",
-            "notificationId":"abc",
-            "data":{"platform":"darwin","version":"2.0.0"}
-        }"#;
-        let headers = signed_headers(body);
-        let outcome = process_webhook(&headers, body, Some(&verifier), &test_config(), &repo).await;
+        let api = FakeApi::ready("2.0.0", "MAC_OS");
+
+        let body = ready_for_sale_body("asv-9");
+        let headers = signed_headers(&body);
+
+        let outcome = process_webhook(
+            &headers,
+            &body,
+            Some(&verifier),
+            &test_config(),
+            &repo,
+            Some(&api),
+        )
+        .await;
+
         assert_eq!(outcome, HandlerOutcome::Accepted);
+        assert_eq!(api.last_id.lock().unwrap().as_deref(), Some("asv-9"));
         let calls = repo.calls.lock().unwrap();
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].platform, "darwin");
@@ -207,78 +340,84 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn redelivery_is_idempotent_at_handler_level() {
+    async fn ignores_non_ready_state_transitions() {
         let repo = FakeRepo::default();
         let verifier = WebhookSecretVerifier::new(b"test-secret".to_vec());
+        let api = FakeApi::ready("2.0.0", "MAC_OS");
+
         let body = br#"{
-            "notificationType":"APP_STORE_RELEASE_UPDATED",
-            "notificationId":"abc",
-            "data":{"platform":"darwin","version":"2.0.0"}
+            "data": {
+                "type": "appStoreVersionAppVersionStateUpdated",
+                "id": "evt-2",
+                "attributes": { "newValue": "IN_REVIEW", "oldValue": "WAITING_FOR_REVIEW" },
+                "relationships": { "instance": { "data": { "type": "appStoreVersions", "id": "asv-1" } } }
+            }
         }"#;
         let headers = signed_headers(body);
-        let a = process_webhook(&headers, body, Some(&verifier), &test_config(), &repo).await;
-        let b = process_webhook(&headers, body, Some(&verifier), &test_config(), &repo).await;
-        assert_eq!(a, HandlerOutcome::Accepted);
-        assert_eq!(b, HandlerOutcome::Accepted);
-    }
 
-    #[tokio::test]
-    async fn testflight_events_ignored_without_db_write() {
-        let repo = FakeRepo::default();
-        let verifier = WebhookSecretVerifier::new(b"test-secret".to_vec());
-        let body = br#"{"notificationType":"EXTERNAL_TESTFLIGHT_RELEASE_UPDATED"}"#;
-        let headers = signed_headers(body);
-        let outcome = process_webhook(&headers, body, Some(&verifier), &test_config(), &repo).await;
-        assert_eq!(outcome, HandlerOutcome::Ignored);
-        assert!(repo.calls.lock().unwrap().is_empty());
-    }
-
-    #[tokio::test]
-    async fn webhook_test_ping_is_acknowledged_without_db_write() {
-        let repo = FakeRepo::default();
-        let verifier = WebhookSecretVerifier::new(b"test-secret".to_vec());
-        let body = br#"{"notificationType":"TEST","notificationId":"ping-1"}"#;
-        let headers = signed_headers(body);
-        let outcome = process_webhook(&headers, body, Some(&verifier), &test_config(), &repo).await;
-        assert_eq!(outcome, HandlerOutcome::Ignored);
-        assert!(repo.calls.lock().unwrap().is_empty());
-    }
-
-    #[tokio::test]
-    async fn webhook_ping_alias_is_acknowledged_without_db_write() {
-        let repo = FakeRepo::default();
-        let verifier = WebhookSecretVerifier::new(b"test-secret".to_vec());
-        let body = br#"{"notificationType":"PING","notificationId":"ping-2"}"#;
-        let headers = signed_headers(body);
-        let outcome = process_webhook(&headers, body, Some(&verifier), &test_config(), &repo).await;
-        assert_eq!(outcome, HandlerOutcome::Ignored);
-        assert!(repo.calls.lock().unwrap().is_empty());
-    }
-
-    #[tokio::test]
-    async fn unsigned_test_ping_is_rejected() {
-        let repo = FakeRepo::default();
-        let verifier = WebhookSecretVerifier::new(b"test-secret".to_vec());
-        let body = br#"{"notificationType":"TEST"}"#;
         let outcome = process_webhook(
-            &HeaderMap::new(),
+            &headers,
             body,
             Some(&verifier),
             &test_config(),
             &repo,
+            Some(&api),
         )
         .await;
-        assert_eq!(outcome, HandlerOutcome::Unauthorized);
+
+        assert_eq!(outcome, HandlerOutcome::Ignored);
+        assert!(api.last_id.lock().unwrap().is_none());
+        assert!(repo.calls.lock().unwrap().is_empty());
     }
 
     #[tokio::test]
-    async fn asset_pack_events_ignored() {
+    async fn webhook_ping_is_acknowledged_without_db_write() {
         let repo = FakeRepo::default();
         let verifier = WebhookSecretVerifier::new(b"test-secret".to_vec());
-        let body = br#"{"notificationType":"ASSET_PACK_VERSION_UPDATED"}"#;
+        let api = FakeApi::ready("2.0.0", "MAC_OS");
+
+        let body = br#"{"data":{"type":"webhookPingCreated","id":"ping-1"}}"#;
         let headers = signed_headers(body);
-        let outcome = process_webhook(&headers, body, Some(&verifier), &test_config(), &repo).await;
+
+        let outcome = process_webhook(
+            &headers,
+            body,
+            Some(&verifier),
+            &test_config(),
+            &repo,
+            Some(&api),
+        )
+        .await;
+
         assert_eq!(outcome, HandlerOutcome::Ignored);
+        assert!(repo.calls.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn build_and_feedback_events_are_ignored() {
+        let repo = FakeRepo::default();
+        let verifier = WebhookSecretVerifier::new(b"test-secret".to_vec());
+        let api = FakeApi::ready("2.0.0", "MAC_OS");
+
+        for ty in [
+            "buildUploadStateUpdated",
+            "buildBetaDetailExternalBuildStateUpdated",
+            "betaFeedbackScreenshotSubmissionCreated",
+            "betaFeedbackCrashSubmissionCreated",
+        ] {
+            let body = format!(r#"{{"data":{{"type":"{}","id":"e"}}}}"#, ty).into_bytes();
+            let headers = signed_headers(&body);
+            let outcome = process_webhook(
+                &headers,
+                &body,
+                Some(&verifier),
+                &test_config(),
+                &repo,
+                Some(&api),
+            )
+            .await;
+            assert_eq!(outcome, HandlerOutcome::Ignored, "{} should be Ignored", ty);
+        }
         assert!(repo.calls.lock().unwrap().is_empty());
     }
 
@@ -286,14 +425,15 @@ mod tests {
     async fn unsigned_request_is_rejected() {
         let repo = FakeRepo::default();
         let verifier = WebhookSecretVerifier::new(b"test-secret".to_vec());
-        let body = br#"{"notificationType":"APP_STORE_RELEASE_UPDATED"}"#;
-        let headers = HeaderMap::new();
+        let api = FakeApi::ready("2.0.0", "MAC_OS");
+        let body = ready_for_sale_body("asv-1");
         let outcome = process_webhook(
-            &headers,
-            body,
+            &HeaderMap::new(),
+            &body,
             Some(&verifier),
             &test_config(),
             &repo,
+            Some(&api),
         )
         .await;
         assert_eq!(outcome, HandlerOutcome::Unauthorized);
@@ -301,31 +441,52 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn no_secret_configured_returns_skipped_outcome() {
+    async fn missing_secret_returns_skipped() {
         let repo = FakeRepo::default();
-        let body = br#"{"notificationType":"APP_STORE_RELEASE_UPDATED","data":{"platform":"darwin","version":"2.0.0"}}"#;
-        let headers = signed_headers(body);
-        let outcome = process_webhook(&headers, body, None, &test_config(), &repo).await;
+        let api = FakeApi::ready("2.0.0", "MAC_OS");
+        let body = ready_for_sale_body("asv-1");
+        let headers = signed_headers(&body);
+        let outcome =
+            process_webhook(&headers, &body, None, &test_config(), &repo, Some(&api)).await;
+        assert_eq!(outcome, HandlerOutcome::Skipped);
+    }
+
+    #[tokio::test]
+    async fn ready_event_without_api_credentials_is_skipped() {
+        let repo = FakeRepo::default();
+        let verifier = WebhookSecretVerifier::new(b"test-secret".to_vec());
+        let body = ready_for_sale_body("asv-1");
+        let headers = signed_headers(&body);
+        let outcome = process_webhook(
+            &headers,
+            &body,
+            Some(&verifier),
+            &test_config(),
+            &repo,
+            None,
+        )
+        .await;
         assert_eq!(outcome, HandlerOutcome::Skipped);
         assert!(repo.calls.lock().unwrap().is_empty());
     }
 
     #[tokio::test]
-    async fn skipped_outcome_maps_to_service_unavailable() {
-        assert_eq!(HandlerOutcome::Skipped.into_response().status(), actix_web::http::StatusCode::SERVICE_UNAVAILABLE);
-    }
-
-    #[tokio::test]
-    async fn non_semver_version_is_bad_request() {
+    async fn unsupported_apple_platform_is_ignored() {
         let repo = FakeRepo::default();
         let verifier = WebhookSecretVerifier::new(b"test-secret".to_vec());
-        let body = br#"{
-            "notificationType":"APP_STORE_RELEASE_UPDATED",
-            "data":{"platform":"darwin","version":"not-a-semver"}
-        }"#;
-        let headers = signed_headers(body);
-        let outcome = process_webhook(&headers, body, Some(&verifier), &test_config(), &repo).await;
-        assert_eq!(outcome, HandlerOutcome::BadRequest);
+        let api = FakeApi::ready("2.0.0", "ANDROID");
+        let body = ready_for_sale_body("asv-1");
+        let headers = signed_headers(&body);
+        let outcome = process_webhook(
+            &headers,
+            &body,
+            Some(&verifier),
+            &test_config(),
+            &repo,
+            Some(&api),
+        )
+        .await;
+        assert_eq!(outcome, HandlerOutcome::Ignored);
         assert!(repo.calls.lock().unwrap().is_empty());
     }
 
@@ -333,9 +494,26 @@ mod tests {
     async fn malformed_json_is_bad_request() {
         let repo = FakeRepo::default();
         let verifier = WebhookSecretVerifier::new(b"test-secret".to_vec());
+        let api = FakeApi::ready("2.0.0", "MAC_OS");
         let body = b"not-json";
         let headers = signed_headers(body);
-        let outcome = process_webhook(&headers, body, Some(&verifier), &test_config(), &repo).await;
+        let outcome = process_webhook(
+            &headers,
+            body,
+            Some(&verifier),
+            &test_config(),
+            &repo,
+            Some(&api),
+        )
+        .await;
         assert_eq!(outcome, HandlerOutcome::BadRequest);
+    }
+
+    #[tokio::test]
+    async fn skipped_outcome_maps_to_service_unavailable() {
+        assert_eq!(
+            HandlerOutcome::Skipped.into_response().status(),
+            actix_web::http::StatusCode::SERVICE_UNAVAILABLE,
+        );
     }
 }
