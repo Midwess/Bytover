@@ -14,7 +14,7 @@ use serde::Deserialize;
 use shared::app::authentication::module::AuthenticationEvent;
 use shared::app::environment::module::EnvironmentEvent;
 use shared::app::operations::device::DeviceOperation;
-use shared::app::operations::dialog::DialogOperation;
+use shared::app::operations::dialog::{AlertDialog, DialogOperation};
 use shared::app::operations::webview::WebViewOperation;
 use shared::app::operations::CoreOperationOutput;
 use shared::app::p2p::module::P2PEvent;
@@ -39,6 +39,7 @@ use tauri::tray::{TrayIcon, TrayIconBuilder};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_deep_link::DeepLinkExt;
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_opener::{open_path, OpenerExt};
 use tauri_plugin_updater::UpdaterExt;
 use tokio::{fs, spawn};
@@ -330,12 +331,6 @@ struct BackendUpdateManifest {
     store_url: Option<String>,
 }
 
-const DEFAULT_BACKEND_API_BASE: &str = "https://api.bytover.com";
-
-fn backend_api_base() -> String {
-    var("BYTOVER_API_BASE_URL").unwrap_or_else(|_| DEFAULT_BACKEND_API_BASE.to_string())
-}
-
 fn backend_target_name() -> &'static str {
     if cfg!(target_os = "macos") {
         "darwin"
@@ -360,8 +355,8 @@ fn backend_arch_name() -> &'static str {
 
 async fn fetch_backend_manifest(current_version: &str) -> Option<BackendUpdateManifest> {
     let url = format!(
-        "{}/bitbridge/api/v1/update/{}/{}/{}",
-        backend_api_base(),
+        "{}/{}/{}/{}",
+        native::config::get_updater_url(),
         backend_target_name(),
         backend_arch_name(),
         current_version,
@@ -665,7 +660,7 @@ fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel], is_p
             return;
         };
         let upgrade_item = if !is_paid {
-            MenuItemBuilder::with_id("upgrade", "Upgrade").build(&app_handle).ok()
+            MenuItemBuilder::with_id("upgrade", "Upgrade to Premium").build(&app_handle).ok()
         } else {
             None
         };
@@ -833,7 +828,34 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
                 }
                 DialogOperation::Alert(alert) => {
                     log::info!(target: "alert", "{alert:?}");
-                    CORE.resolve(&mut handle, CoreOperationOutput::Bool(true)).unwrap_or_default()
+                    let bridge = DiContainer::get_instance().core_bridge();
+                    let request = CoreRequest::new(CruxRequest::RequestHandle(handle), bridge);
+                    let app_handle_clone = app_handle.clone();
+                    spawn(async move {
+                        let AlertDialog { message, affirmative, negative } = alert;
+                        let kind = if negative.is_some() {
+                            MessageDialogKind::Warning
+                        } else {
+                            MessageDialogKind::Error
+                        };
+                        let buttons = match negative {
+                            Some(neg) => MessageDialogButtons::OkCancelCustom(affirmative, neg),
+                            None => MessageDialogButtons::OkCustom(affirmative),
+                        };
+                        let (tx, rx) = tokio::sync::oneshot::channel::<bool>();
+                        app_handle_clone
+                            .dialog()
+                            .message(message)
+                            .title("Bytover")
+                            .kind(kind)
+                            .buttons(buttons)
+                            .show(move |result| {
+                                let _ = tx.send(result);
+                            });
+                        let confirmed = rx.await.unwrap_or(false);
+                        request.response(CoreOperationOutput::Bool(confirmed)).await;
+                    });
+                    continue;
                 }
                 DialogOperation::Message(msg, reason) => {
                     log::info!(target: "msg", "{msg:?} {reason:?}");
@@ -892,6 +914,7 @@ pub async fn run() {
         ))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             authenticate,
             add_resources,
