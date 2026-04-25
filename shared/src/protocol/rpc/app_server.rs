@@ -72,23 +72,25 @@ where
             .unwrap_or_default())
     }
 
-    pub async fn get_me(&self) -> Result<User, RpcErrors> {
+    pub async fn get_me(&self) -> Result<(User, String), RpcErrors> {
         let channel = self.rpc_module.connect().await?;
         let req = MeRequest { conditions: vec![] };
         let mut request = Request::new(req);
 
-        // Create request and add bearer token
         self.auth_provider.with_auth(&mut request).await?;
 
         let user_client = UserServiceClient::new(channel);
         let response = user_client.clone().me(request).await.map(|it| it.into_inner())?;
 
-        Ok(User {
+        let user = User {
             id: response.user.order_id,
             email: response.user.email.clone(),
             name: response.user.display_name.clone(),
             avatar: response.user.avatar_url.clone().unwrap_or_default(),
-        })
+        };
+        let device_unique_key = response.device.unique_key.clone();
+
+        Ok((user, device_unique_key))
     }
 
     pub async fn find_user(&self, user_order_id: u64) -> Result<Option<User>, RpcErrors> {

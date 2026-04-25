@@ -35,7 +35,7 @@ pub enum RpcOperation {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum RpcOperationOutput {
-    GetMe(User),
+    GetMe { user: User, device_unique_key: String },
     GetUserById(User),
     GenPeer(crate::entities::peer::Peer),
     GetCapabilities(UserCapabilities),
@@ -46,9 +46,9 @@ impl Operation for RpcOperation {
 }
 
 impl RpcOperation {
-    pub fn get_me() -> AppRequestBuilder<impl Future<Output = Result<User, CoreError>>> {
+    pub fn get_me() -> AppRequestBuilder<impl Future<Output = Result<(User, String), CoreError>>> {
         Command::request_from_shell(CoreOperation::Rpc(RpcOperation::GetMe())).map(|res| match res {
-            CoreOperationOutput::Rpc(RpcOperationOutput::GetMe(user)) => Ok(user),
+            CoreOperationOutput::Rpc(RpcOperationOutput::GetMe { user, device_unique_key }) => Ok((user, device_unique_key)),
             CoreOperationOutput::Error(error) => Err(error),
             e => panic!("Invalid output for RpcOperation::GetMe got {e:?}"),
         })
