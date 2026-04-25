@@ -17,6 +17,7 @@ import {
     User,
     Download,
     Info,
+    Github,
 } from "lucide-react"
 import {
     checkForUpdate,
@@ -219,7 +220,7 @@ function SettingsWindow() {
 
             {/* Content Area */}
             <div
-                className="flex-1 flex flex-col overflow-y-auto rounded-l-2xl relative"
+                className="flex-1 flex flex-col overflow-y-auto rounded-2xl m-2 relative"
                 data-tauri-drag-region
                 style={{background: "linear-gradient(to bottom, #0c1c4d 0%, #08143a 55%, #05071b 100%)"}}
             >
@@ -646,7 +647,7 @@ function UpdatesContent({isChecking, status, onCheck, isInstalling, installProgr
 
 function AboutContent({version}: {version: string}) {
     return (
-        <div className="space-y-6">
+        <div className="flex flex-col min-h-[340px]">
             <SettingsSection>
                 <button
                     onClick={() => openUrl("https://bytover.com")}
@@ -656,6 +657,18 @@ function AboutContent({version}: {version: string}) {
                         label="Website"
                         description="Visit bytover.com for more information."
                         icon={<ExternalLink className="w-4 h-4" />}
+                    >
+                        <ChevronRight className="w-4 h-4 text-white/20" />
+                    </SettingsRow>
+                </button>
+                <button
+                    onClick={() => openUrl("https://github.com/midwess/bytover")}
+                    className="w-full text-left"
+                >
+                    <SettingsRow
+                        label="GitHub"
+                        description="View the source on github.com/midwess/bytover."
+                        icon={<Github className="w-4 h-4" />}
                     >
                         <ChevronRight className="w-4 h-4 text-white/20" />
                     </SettingsRow>
@@ -687,8 +700,8 @@ function AboutContent({version}: {version: string}) {
                 </button>
             </SettingsSection>
 
-            <div className="flex flex-col items-center gap-1 mt-8 opacity-20">
-                <span className="text-xs uppercase tracking-[0.2em] font-bold">Built with Tauri</span>
+            <div className="mt-auto pt-12 flex flex-col items-center gap-1 opacity-30">
+                <span className="text-sm">Powered by Midwess</span>
                 <span className="text-xs">© 2026 Westrise</span>
             </div>
         </div>
