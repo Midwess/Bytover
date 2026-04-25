@@ -8,15 +8,13 @@ import {Button} from "@/components/ui/button"
 import {
     Info,
     RefreshCw,
-    LogOut,
     Loader2,
     Check,
     Settings,
-    User as UserIcon,
+    User,
     ChevronRight,
     ExternalLink,
     Shield,
-    X,
 } from "lucide-react"
 import {
     checkForUpdate,
@@ -160,28 +158,47 @@ function SettingsWindow() {
         }
     }
 
-    const tabs: {id: SettingsTab; label: string; icon: React.ReactNode}[] = [
-        {id: "general", label: "General", icon: <Settings />},
-        {id: "account", label: "Account", icon: <UserIcon />},
-        ...(IS_MACOS ? [] : [{id: "updates" as const, label: "Updates", icon: <RefreshCw />}]),
-        {id: "about", label: "About", icon: <Info />},
+    const tabs: {id: SettingsTab; label: string; description: string; icon: React.ReactNode}[] = [
+        {
+            id: "general",
+            label: "General",
+            description: "Configure how Bytover starts up and behaves on your system.",
+            icon: <Settings />,
+        },
+        {
+            id: "account",
+            label: "Account",
+            description: "Manage your Bytover account and session.",
+            icon: <User />,
+        },
+        ...(IS_MACOS ? [] : [{
+            id: "updates" as const,
+            label: "Updates",
+            description: "Keep your Bytover application up to date with the latest features.",
+            icon: <RefreshCw />,
+        }]),
+        {
+            id: "about",
+            label: "About",
+            description: "Learn more about Bytover and its creators.",
+            icon: <Info />,
+        },
     ]
 
     const activeTabInfo = tabs.find(t => t.id === activeTab)
-    const handleClose = () => {
-        getCurrentWindow()?.close()
-    }
 
     return (
         <main className="w-screen h-screen dark bg-black text-white flex overflow-hidden font-sans select-none">
             {/* Sidebar */}
             <div
-                className="w-[200px] bg-[#0a0a0a] border-r border-white/[0.06] flex flex-col pt-10 pb-4 px-3"
+                className="w-[180px] bg-[#0a0a0a] border-r border-white/[0.06] flex flex-col pt-12 pb-6 px-3 gap-1"
                 data-tauri-drag-region
             >
-                <SidebarProfile />
+                <div className="px-3 mb-4" data-tauri-drag-region>
+                    <h1 className="text-[10px] font-semibold text-white/35 uppercase tracking-[0.1em]">Settings</h1>
+                </div>
 
-                <div className="flex flex-col gap-0.5 mt-5">
+                <div className="flex flex-col gap-0.5">
                     {tabs.map((tab) => (
                         <SidebarItem
                             key={tab.id}
@@ -193,40 +210,36 @@ function SettingsWindow() {
                     ))}
                 </div>
 
-                <button
-                    onClick={handleSignOut}
-                    className="mt-auto flex items-center gap-3 px-2.5 py-2 rounded-lg text-[13px] text-white/50 hover:text-white hover:bg-white/[0.04] transition-colors"
-                >
-                    <LogOut className="w-[14px] h-[14px]" />
-                    <span className="font-medium tracking-tight">Sign Out</span>
-                </button>
+                <div className="mt-auto flex flex-col items-center gap-2 opacity-40">
+                    <img src="/icon.png" alt="Bytover" className="w-8 h-8 rounded-lg" />
+                    <div className="text-center">
+                        <div className="text-[11px] font-medium text-white/90">Bytover</div>
+                        <div className="text-xs text-white/40">Version {version}</div>
+                    </div>
+                </div>
             </div>
 
             {/* Content Area */}
-            <div className="flex-1 flex flex-col bg-black overflow-y-auto relative" data-tauri-drag-region>
-                <button
-                    onClick={handleClose}
-                    className="absolute top-4 right-4 w-7 h-7 rounded-full hover:bg-white/[0.06] flex items-center justify-center text-white/40 hover:text-white/90 transition-colors z-10"
-                    aria-label="Close"
-                >
-                    <X className="w-4 h-4" />
-                </button>
-
-                <div className="w-full max-w-[520px] mx-auto px-8 pt-10 pb-12 flex flex-col gap-7">
-                    <div data-tauri-drag-region>
-                        <h2 className="text-[20px] font-semibold tracking-tight text-white">
+            <div className="flex-1 flex flex-col bg-black overflow-y-auto" data-tauri-drag-region>
+                <div className="w-full mx-auto px-6 py-12 flex flex-col gap-4">
+                    {/* Header */}
+                    <div className="flex flex-col items-center text-center gap-1 mb-1" data-tauri-drag-region>
+                        <h2 className="text-[22px] font-semibold tracking-tight text-white">
                             {activeTabInfo?.label}
                         </h2>
+                        <p className="text-[12px] text-white/45 leading-snug max-w-[340px]">
+                            {activeTabInfo?.description}
+                        </p>
                     </div>
 
                     <div className="flex-1">
                         <AnimatePresence mode="wait">
                             <motion.div
                                 key={activeTab}
-                                initial={{opacity: 0, y: 8}}
+                                initial={{opacity: 0, y: 10}}
                                 animate={{opacity: 1, y: 0}}
-                                exit={{opacity: 0, y: -8}}
-                                transition={{duration: 0.18, ease: "easeOut"}}
+                                exit={{opacity: 0, y: -10}}
+                                transition={{duration: 0.2, ease: "easeOut"}}
                             >
                                 {activeTab === "general" && (
                                     <GeneralContent
@@ -236,7 +249,7 @@ function SettingsWindow() {
                                     />
                                 )}
                                 {activeTab === "account" && (
-                                    <AccountContent />
+                                    <AccountContent onSignOut={handleSignOut} />
                                 )}
                                 {activeTab === "updates" && (
                                     <UpdatesContent
@@ -257,39 +270,6 @@ function SettingsWindow() {
                 </div>
             </div>
         </main>
-    )
-}
-
-function SidebarProfile() {
-    const auth = core.useAuthentication()
-    const user = auth?.user
-    const isPaid = (auth?.capabilities?.plan as unknown) === "Paid"
-
-    const initial = (user?.name?.trim()?.[0] ?? user?.email?.trim()?.[0] ?? "?").toUpperCase()
-    const displayName = user?.name?.trim() || user?.email?.split("@")[0] || "Account"
-    const subtitle = user?.email ?? ""
-
-    return (
-        <div className="flex items-center gap-2.5 px-1.5 py-2">
-            <div className="w-9 h-9 rounded-full bg-white/[0.08] border border-white/[0.06] overflow-hidden shrink-0 flex items-center justify-center text-[13px] font-semibold text-white/80">
-                {user?.avatar ? (
-                    <img src={user.avatar} alt="" className="w-full h-full object-cover" />
-                ) : (
-                    <span>{initial}</span>
-                )}
-            </div>
-            <div className="flex flex-col min-w-0 flex-1">
-                <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="text-[12.5px] font-semibold text-white truncate">{displayName}</span>
-                    {isPaid && (
-                        <span className="text-[9px] font-bold tracking-wider text-purple-300 bg-purple-500/15 border border-purple-400/20 px-1 py-px rounded shrink-0">
-                            PRO
-                        </span>
-                    )}
-                </div>
-                <span className="text-[10.5px] text-white/40 truncate">{subtitle}</span>
-            </div>
-        </div>
     )
 }
 
@@ -509,10 +489,9 @@ function PaidPlanNotice() {
     )
 }
 
-function AccountContent() {
+function AccountContent({onSignOut}: {onSignOut: () => void}) {
     const auth = core.useAuthentication()
     const caps = auth?.capabilities
-    const user = auth?.user
     const currentPlan: PlanKind = (caps?.plan as unknown) === "Paid" ? "paid" : "free"
     const handleUpgrade = () => {}
 
@@ -533,18 +512,27 @@ function AccountContent() {
     )
 
     return (
-        <div className="space-y-7">
-            <SettingsSection title="Subscription Plan">
+        <div className="space-y-6">
+            <SettingsSection title="Subscription">
                 {subscriptionBody}
             </SettingsSection>
 
-            {user?.email && (
-                <SettingsSection title="Preferred Email">
-                    <div className="flex items-center px-3.5 py-3">
-                        <span className="text-[13px] text-white/85 truncate flex-1">{user.email}</span>
-                    </div>
-                </SettingsSection>
-            )}
+            <SettingsSection title="Current Session">
+                <SettingsRow
+                    label="Sign Out"
+                    description="Disconnect your account and clear local data."
+                    last={true}
+                >
+                    <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={onSignOut}
+                        className="h-[28px] px-4 text-[12px] bg-red-500/10 text-red-400 hover:bg-red-500/20 border-none rounded-full"
+                    >
+                        Sign Out
+                    </Button>
+                </SettingsRow>
+            </SettingsSection>
         </div>
     )
 }
