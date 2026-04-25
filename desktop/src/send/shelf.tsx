@@ -29,7 +29,7 @@ import {
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
-} from "@/components/animate-ui/components/radix/dropdown-menu.tsx";
+} from "@/components/ui/dropdown-menu.tsx";
 import {
     ResourceTypeVariantFolder,
     SelectedResourceViewModel,
