@@ -179,7 +179,7 @@ export function Shelf({
     const isResourceRemoveAllowed = currentShelf?.is_resource_remove_allowed ?? true
     const effectRan = useRef(false);
     const [isDraggingOver, setIsDraggingOver] = useState(false);
-    const [viewMode, setViewMode] = useState<ShelfViewMode>('list');
+    const [viewMode, setViewMode] = useState<ShelfViewMode>('stack');
     const containerRef = useRef<HTMLDivElement>(null);
 
     useShelfClipboard({shelfId, enabled: !disabled});
