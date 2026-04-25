@@ -21,9 +21,6 @@ import {
 } from "lucide-react"
 import {
     checkForUpdate,
-    installUpdate,
-    onUpdateProgress,
-    onUpdateFinished
 } from "@/lib/updater"
 import {motion, AnimatePresence} from "motion/react"
 import { openUrl } from "@tauri-apps/plugin-opener"
@@ -62,8 +59,6 @@ function SettingsWindow() {
     const [version, setVersion] = useState<string>("")
     const [isCheckingUpdate, setIsCheckingUpdate] = useState(false)
     const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null)
-    const [isInstalling, setIsInstalling] = useState(false)
-    const [installProgress, setInstallProgress] = useState(0)
     const [autoLaunchEnabled, setAutoLaunchEnabled] = useState(false)
     const [isLoadingAutoLaunch, setIsLoadingAutoLaunch] = useState(true)
 
@@ -124,23 +119,12 @@ function SettingsWindow() {
     }
 
     const handleInstallUpdate = async () => {
-        setIsInstalling(true)
-        setInstallProgress(0)
-        try {
-            const unlistenProgress = await onUpdateProgress((progress) => {
-                if (progress.total > 0) {
-                    setInstallProgress(Math.round((progress.downloaded / progress.total) * 100))
-                }
-            })
-            const unlistenFinished = await onUpdateFinished(() => {
-                setIsInstalling(false)
-            })
-            await installUpdate()
-            unlistenProgress()
-            unlistenFinished()
-        } catch (error) {
-            console.error("Failed to install update:", error)
-            setIsInstalling(false)
+        if (updateStatus?.store_url) {
+            try {
+                await openUrl(updateStatus.store_url)
+            } catch (error) {
+                console.error("Failed to open store URL:", error)
+            }
         }
     }
 
@@ -255,8 +239,6 @@ function SettingsWindow() {
                                         isChecking={isCheckingUpdate}
                                         status={updateStatus}
                                         onCheck={handleCheckUpdate}
-                                        isInstalling={isInstalling}
-                                        installProgress={installProgress}
                                         onInstall={handleInstallUpdate}
                                     />
                                 )}
@@ -562,7 +544,8 @@ function PaidPlanNotice() {
 
 function AccountContent({onSignOut}: {onSignOut: () => void}) {
     const auth = core.useAuthentication()
-    const caps = auth?.capabilities
+    const payment = core.usePayment()
+    const caps = payment?.capabilities
     const user = auth?.user
     const currentPlan: PlanKind = (caps?.plan as unknown) === "Paid" ? "paid" : "free"
     const handleUpgrade = async () => {
@@ -623,44 +606,36 @@ function AccountContent({onSignOut}: {onSignOut: () => void}) {
     )
 }
 
-function UpdatesContent({isChecking, status, onCheck, isInstalling, installProgress, onInstall}: {
+function UpdatesContent({isChecking, status, onCheck, onInstall}: {
     isChecking: boolean
     status: UpdateStatus | null
     onCheck: () => void
-    isInstalling: boolean
-    installProgress: number
     onInstall: () => void
 }) {
     return (
         <div className="space-y-6">
             <SettingsSection title="Software Update">
-                <SettingsRow 
-                    label="Automatic Updates" 
+                <SettingsRow
+                    label="Automatic Updates"
                     description="Keep Bytover up to date automatically."
                     last={!status?.available}
                 >
                     <Switch enabled={true} onToggle={() => {}} disabled={true} />
                 </SettingsRow>
-                
-                {status?.available && (
-                    <SettingsRow 
-                        label="New Version Available" 
+
+                {status?.available && status?.store_url && (
+                    <SettingsRow
+                        label="New Version Available"
                         description={`Version ${status.version} is ready.`}
                         last={true}
                     >
-                        {!isInstalling ? (
-                            <Button
-                                size="sm"
-                                onClick={onInstall}
-                                className="h-[28px] px-4 text-[12px] bg-blue-600 hover:bg-blue-500 text-white border-none rounded-full"
-                            >
-                                Update Now
-                            </Button>
-                        ) : (
-                            <div className="text-[12px] font-medium text-blue-400">
-                                {installProgress}%
-                            </div>
-                        )}
+                        <Button
+                            size="sm"
+                            onClick={onInstall}
+                            className="h-[28px] px-4 text-[12px] bg-blue-600 hover:bg-blue-500 text-white border-none rounded-full"
+                        >
+                            Open in App Store
+                        </Button>
                     </SettingsRow>
                 )}
             </SettingsSection>

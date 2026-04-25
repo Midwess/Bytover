@@ -43,7 +43,6 @@ use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_opener::{open_path, OpenerExt};
-use tauri_plugin_updater::UpdaterExt;
 use tokio::{fs, spawn};
 use uuid::Uuid;
 use {hostname, machine_uid};
@@ -410,37 +409,16 @@ async fn check_for_update(app_handle: AppHandle) -> Result<UpdateStatus, String>
         }
     }
 
-    let updater = app_handle.updater().map_err(|e| e.to_string())?;
-    let update = updater.check().await.map_err(|e| e.to_string())?;
-
-    if let Some(update) = update {
-        let current_semver = &app_handle.package_info().version;
-        let new_version_str = update.version.trim_start_matches('v');
-        let new_version = semver::Version::parse(new_version_str).map_err(|e| e.to_string())?;
-        let is_major_update = new_version.major > current_semver.major;
-
-        let status = UpdateStatus {
-            available: true,
-            version: Some(update.version.clone()),
-            release_notes: update.body.clone(),
-            is_critical: is_major_update,
-            store_url: None,
-        };
-        log::info!("Update check result (tauri): {:?}", status);
-        apply_pending_update(&app_handle, &status);
-        Ok(status)
-    } else {
-        let status = UpdateStatus {
-            available: false,
-            version: None,
-            release_notes: None,
-            is_critical: false,
-            store_url: None,
-        };
-        log::info!("Update check result: no update available");
-        apply_pending_update(&app_handle, &status);
-        Ok(status)
-    }
+    let status = UpdateStatus {
+        available: false,
+        version: None,
+        release_notes: None,
+        is_critical: false,
+        store_url: None,
+    };
+    log::info!("Update check result: no update available");
+    apply_pending_update(&app_handle, &status);
+    Ok(status)
 }
 
 fn apply_pending_update(app_handle: &AppHandle, status: &UpdateStatus) {
@@ -493,43 +471,6 @@ fn refresh_tray_menu(app_handle: &AppHandle) {
             .unwrap_or(false);
         update_tray_menu(app_handle, &shelf_view.shelves, is_paid);
     }
-}
-
-#[derive(serde::Serialize, Clone)]
-struct UpdateProgress {
-    downloaded: u64,
-    total: u64,
-}
-
-#[tauri::command]
-async fn install_update(app_handle: AppHandle) -> Result<(), String> {
-    let updater = app_handle.updater().map_err(|e| e.to_string())?;
-    let update = updater.check().await.map_err(|e| e.to_string())?.ok_or("No update available")?;
-
-    // Emit that update is starting
-    let _ = app_handle.emit("update-started", ());
-
-    let app_handle_progress = app_handle.clone();
-    let app_handle_finished = app_handle.clone();
-
-    // Download and install the update with callbacks
-    update
-        .download_and_install(
-            move |downloaded: usize, total: Option<u64>| {
-                let progress = UpdateProgress {
-                    downloaded: downloaded as u64,
-                    total: total.unwrap_or(0) as u64,
-                };
-                let _ = app_handle_progress.emit("update-progress", progress);
-            },
-            move || {
-                let _ = app_handle_finished.emit("update-finished", ());
-            },
-        )
-        .await
-        .map_err(|e| e.to_string())?;
-
-    Ok(())
 }
 
 pub(crate) async fn process_event(event: impl Into<AppEvent> + Send + Sync + 'static, app_handle: AppHandle) {
@@ -971,7 +912,6 @@ pub async fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
-        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
@@ -994,7 +934,6 @@ pub async fn run() {
             open_settings,
             show_settings_with_tab,
             check_for_update,
-            install_update,
             clear_shelf,
             sign_out,
             quit,
