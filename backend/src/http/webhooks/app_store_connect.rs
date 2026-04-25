@@ -12,20 +12,19 @@ use std::time::SystemTime;
 pub enum HandlerOutcome {
     Accepted,
     Ignored,
+    Skipped,
     Unauthorized,
     BadRequest,
     InternalError,
-    NotConfigured,
 }
 
 impl HandlerOutcome {
     fn into_response(self) -> HttpResponse {
         match self {
-            HandlerOutcome::Accepted | HandlerOutcome::Ignored => HttpResponse::Ok().finish(),
+            HandlerOutcome::Accepted | HandlerOutcome::Ignored | HandlerOutcome::Skipped => HttpResponse::Ok().finish(),
             HandlerOutcome::Unauthorized => HttpResponse::Unauthorized().finish(),
             HandlerOutcome::BadRequest => HttpResponse::BadRequest().finish(),
             HandlerOutcome::InternalError => HttpResponse::InternalServerError().finish(),
-            HandlerOutcome::NotConfigured => HttpResponse::ServiceUnavailable().finish(),
         }
     }
 }
@@ -39,8 +38,8 @@ pub async fn process_webhook(
     now: SystemTime,
 ) -> HandlerOutcome {
     let Some(verifier) = verifier else {
-        log::error!("APP_STORE_WEBHOOK_SECRET is not configured; rejecting inbound webhook");
-        return HandlerOutcome::NotConfigured;
+        log::debug!("APP_STORE_CONNECT_WEBHOOK_SECRET not set; skipping inbound webhook");
+        return HandlerOutcome::Skipped;
     };
 
     if let Err(err) = verifier.verify(headers, body, now) {
@@ -267,12 +266,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn no_secret_configured_returns_service_unavailable() {
+    async fn no_secret_configured_silently_skips_webhook() {
         let repo = FakeRepo::default();
-        let body = br#"{"notificationType":"APP_STORE_RELEASE_UPDATED"}"#;
+        let body = br#"{"notificationType":"APP_STORE_RELEASE_UPDATED","data":{"platform":"darwin","version":"2.0.0"}}"#;
         let (headers, now) = signed_headers(body);
         let outcome = process_webhook(&headers, body, None, &test_config(), &repo, now).await;
-        assert_eq!(outcome, HandlerOutcome::NotConfigured);
+        assert_eq!(outcome, HandlerOutcome::Skipped);
+        assert!(repo.calls.lock().unwrap().is_empty());
     }
 
     #[tokio::test]

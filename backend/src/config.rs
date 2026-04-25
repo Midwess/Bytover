@@ -26,7 +26,7 @@ impl AppStoreConfig {
 const DEFAULT_WEBHOOK_MAX_SKEW_SECS: u64 = 300;
 
 pub fn load_app_store_config() -> AppStoreConfig {
-    let webhook_secret = read_string("APP_STORE_WEBHOOK_SECRET").map(|s| s.into_bytes());
+    let webhook_secret = read_string("APP_STORE_CONNECT_WEBHOOK_SECRET").map(|s| s.into_bytes());
     let webhook_max_skew_secs = read_u64("WEBHOOK_MAX_SKEW_SECS").unwrap_or(DEFAULT_WEBHOOK_MAX_SKEW_SECS);
     let force_update_enabled = read_bool("APP_STORE_FORCE_UPDATE_ENABLED").unwrap_or(false);
     let default_store_url_darwin = read_string("APP_STORE_DEFAULT_URL_DARWIN");
