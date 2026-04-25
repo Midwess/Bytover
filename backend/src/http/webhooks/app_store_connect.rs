@@ -164,9 +164,15 @@ async fn handle_version_state_update(
                 update.app_store_version_id,
                 err,
             );
-            return match err {
-                AscApiError::Status(status) if status.is_client_error() => HandlerOutcome::BadRequest,
-                _ => HandlerOutcome::InternalError,
+            return match &err {
+                AscApiError::Status(status) => match status.as_u16() {
+                    401 | 403 | 408 | 429 => HandlerOutcome::Skipped,
+                    code if (500..=599).contains(&code) => HandlerOutcome::Skipped,
+                    _ => HandlerOutcome::BadRequest,
+                },
+                AscApiError::JwtSigning(_)
+                | AscApiError::Http(_)
+                | AscApiError::MissingField(_) => HandlerOutcome::Skipped,
             };
         }
     };
@@ -203,8 +209,12 @@ async fn handle_version_state_update(
         }
         Err(IngestError::EmptyPlatform) => HandlerOutcome::BadRequest,
         Err(IngestError::MissingStoreUrl(p)) => {
-            log::error!("No App Store URL configured for platform {}", p);
-            HandlerOutcome::BadRequest
+            log::error!(
+                "No App Store URL configured for platform {} delivery_id={}; returning Skipped so Apple retries",
+                p,
+                delivery_id,
+            );
+            HandlerOutcome::Skipped
         }
         Err(IngestError::Database(e)) => {
             log::error!("Webhook upsert failed: {:?}", e);
@@ -263,6 +273,7 @@ mod tests {
 
     struct FakeApi {
         info: AppStoreVersionInfo,
+        failure_status: Option<http::StatusCode>,
         last_id: Mutex<Option<String>>,
     }
 
@@ -273,6 +284,18 @@ mod tests {
                     version_string: version.to_string(),
                     apple_platform: apple_platform.to_string(),
                 },
+                failure_status: None,
+                last_id: Mutex::new(None),
+            }
+        }
+
+        fn failing(status: http::StatusCode) -> Self {
+            Self {
+                info: AppStoreVersionInfo {
+                    version_string: "0.0.0".into(),
+                    apple_platform: "MAC_OS".into(),
+                },
+                failure_status: Some(status),
                 last_id: Mutex::new(None),
             }
         }
@@ -285,6 +308,9 @@ mod tests {
             id: &str,
         ) -> Result<AppStoreVersionInfo, AscApiError> {
             *self.last_id.lock().unwrap() = Some(id.to_string());
+            if let Some(status) = self.failure_status {
+                return Err(AscApiError::Status(reqwest::StatusCode::from_u16(status.as_u16()).unwrap()));
+            }
             Ok(self.info.clone())
         }
     }
@@ -534,5 +560,133 @@ mod tests {
     #[tokio::test]
     async fn skipped_outcome_maps_to_service_unavailable() {
         assert_eq!(HandlerOutcome::Skipped.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[tokio::test]
+    async fn ios_release_without_default_url_is_skipped_for_retry() {
+        let repo = FakeRepo::default();
+        let verifier = WebhookSecretVerifier::new(b"test-secret".to_vec());
+        let api = FakeApi::ready("3.0.0", "IOS");
+        let body = ready_for_sale_body("asv-ios");
+        let headers = signed_headers(&body);
+
+        let outcome = process_webhook(
+            &headers,
+            &body,
+            Some(&verifier),
+            &test_config(),
+            &repo,
+            Some(&api),
+        )
+        .await;
+
+        assert_eq!(outcome, HandlerOutcome::Skipped);
+        assert!(repo.calls.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn asc_api_unauthorized_is_skipped_so_apple_retries() {
+        let repo = FakeRepo::default();
+        let verifier = WebhookSecretVerifier::new(b"test-secret".to_vec());
+        let api = FakeApi::failing(http::StatusCode::UNAUTHORIZED);
+        let body = ready_for_sale_body("asv-1");
+        let headers = signed_headers(&body);
+
+        let outcome = process_webhook(
+            &headers,
+            &body,
+            Some(&verifier),
+            &test_config(),
+            &repo,
+            Some(&api),
+        )
+        .await;
+
+        assert_eq!(outcome, HandlerOutcome::Skipped);
+        assert!(repo.calls.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn asc_api_forbidden_is_skipped() {
+        let repo = FakeRepo::default();
+        let verifier = WebhookSecretVerifier::new(b"test-secret".to_vec());
+        let api = FakeApi::failing(http::StatusCode::FORBIDDEN);
+        let body = ready_for_sale_body("asv-1");
+        let headers = signed_headers(&body);
+
+        let outcome = process_webhook(
+            &headers,
+            &body,
+            Some(&verifier),
+            &test_config(),
+            &repo,
+            Some(&api),
+        )
+        .await;
+
+        assert_eq!(outcome, HandlerOutcome::Skipped);
+    }
+
+    #[tokio::test]
+    async fn asc_api_rate_limit_is_skipped() {
+        let repo = FakeRepo::default();
+        let verifier = WebhookSecretVerifier::new(b"test-secret".to_vec());
+        let api = FakeApi::failing(http::StatusCode::TOO_MANY_REQUESTS);
+        let body = ready_for_sale_body("asv-1");
+        let headers = signed_headers(&body);
+
+        let outcome = process_webhook(
+            &headers,
+            &body,
+            Some(&verifier),
+            &test_config(),
+            &repo,
+            Some(&api),
+        )
+        .await;
+
+        assert_eq!(outcome, HandlerOutcome::Skipped);
+    }
+
+    #[tokio::test]
+    async fn asc_api_server_error_is_skipped() {
+        let repo = FakeRepo::default();
+        let verifier = WebhookSecretVerifier::new(b"test-secret".to_vec());
+        let api = FakeApi::failing(http::StatusCode::INTERNAL_SERVER_ERROR);
+        let body = ready_for_sale_body("asv-1");
+        let headers = signed_headers(&body);
+
+        let outcome = process_webhook(
+            &headers,
+            &body,
+            Some(&verifier),
+            &test_config(),
+            &repo,
+            Some(&api),
+        )
+        .await;
+
+        assert_eq!(outcome, HandlerOutcome::Skipped);
+    }
+
+    #[tokio::test]
+    async fn asc_api_not_found_is_bad_request() {
+        let repo = FakeRepo::default();
+        let verifier = WebhookSecretVerifier::new(b"test-secret".to_vec());
+        let api = FakeApi::failing(http::StatusCode::NOT_FOUND);
+        let body = ready_for_sale_body("asv-1");
+        let headers = signed_headers(&body);
+
+        let outcome = process_webhook(
+            &headers,
+            &body,
+            Some(&verifier),
+            &test_config(),
+            &repo,
+            Some(&api),
+        )
+        .await;
+
+        assert_eq!(outcome, HandlerOutcome::BadRequest);
     }
 }
