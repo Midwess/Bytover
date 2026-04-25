@@ -7,8 +7,8 @@ import {
 } from "shared_types/types/shared_types";
 
 const MAX_VISIBLE_PEEKS = 2;
-const THUMBNAIL_WIDTH = 63;
-const THUMBNAIL_HEIGHT = 112;
+const THUMBNAIL_WIDTH = 70;
+const THUMBNAIL_HEIGHT = 105;
 const FAN_SPREAD_DEG = 16;
 const ARC_STEP_DEG = FAN_SPREAD_DEG / Math.max(1, Math.ceil(MAX_VISIBLE_PEEKS / 2));
 const JITTER_DEG = 5;
