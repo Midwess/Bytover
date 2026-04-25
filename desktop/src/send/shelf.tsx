@@ -320,10 +320,10 @@ export function Shelf({
                 ) : (
                     <>
                         <div
-                            className="min-h-full flex-col"
+                            className="w-full min-h-full flex-col"
                             style={{display: viewMode === 'list' ? 'flex' : 'none'}}
                         >
-                            <div className="flex flex-col gap-2 my-auto">
+                            <div className="w-full flex flex-col gap-2 my-auto">
                                 {selectedResources.map((resource) => (
                                     <ResourceView
                                         key={resource.order_id}
