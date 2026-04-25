@@ -2,10 +2,10 @@ use core_services::logger;
 use devlog_sdk::api_gateway::client::ApiGatewayClient;
 use devlog_sdk::api_gateway::kong::client::KongGatewayAdminClient;
 use devlog_sdk::api_gateway::service::{GatewayRouteBuilder, GatewayRouteExpression, GatewayServiceBuilder};
-use devlog_sdk::tcp::listener::{find_grpc_listener, find_tcp_listener, GrpcConnection, TcpConnection};
+use devlog_sdk::tcp::listener::find_tcp_listener;
 use schema::devlog::bitbridge::bit_bridge_cloud_service_server::BitBridgeCloudServiceServer;
 use schema::devlog::bitbridge::p2p_orchestration_service_server::P2pOrchestrationServiceServer;
-use tonic::transport::Server;
+use tonic::service::Routes;
 use tonic_middleware::InterceptorFor;
 
 pub mod app_gateway;
@@ -30,87 +30,59 @@ enum MainErrors {
     TransportError(#[from] tonic::transport::Error),
     #[error("DI container error {0}")]
     DiContainerError(#[from] di_container::DiContainerError),
+    #[error("IO error {0}")]
+    Io(#[from] std::io::Error),
 }
 
 #[tokio::main]
 async fn main() -> Result<(), MainErrors> {
     logger::setup();
-    let grpc_connection = find_grpc_listener(None).await?;
-    let http_connection = find_tcp_listener(None).await?;
+
+    let connection = find_tcp_listener(None).await?;
+    let endpoint = config::resolve_public_endpoint(&connection.public_host, connection.port);
 
     let di = di_container::DiContainer::instance().await;
     di.start_cron_jobs().await?;
 
-    setup_grpc_gateway(&grpc_connection).await?;
-    setup_http_gateway(&http_connection).await?;
+    setup_grpc_gateway(endpoint.host.clone(), endpoint.port).await?;
+    setup_http_gateway(endpoint.host.clone(), endpoint.port).await?;
 
-    let http_port = http_connection.port;
-    let http_listener = http_connection.listener;
+    let grpc_router = Routes::new(InterceptorFor::new(
+        BitBridgeCloudServiceServer::new(di.get_grpc_cloud_service().await),
+        di.get_auth_middleware(),
+    ))
+    .add_service(InterceptorFor::new(
+        P2pOrchestrationServiceServer::new(di.get_grpc_p2p_service().await),
+        di.get_auth_middleware(),
+    ))
+    .prepare()
+    .into_axum_router();
 
-    let http_handle = tokio::spawn(async move {
-        log::info!("Starting HTTP server on port {}", http_port);
-        let std_listener = http_listener.into_std().expect("Failed to convert listener");
-        actix_web::HttpServer::new(|| actix_web::App::new().configure(http::config))
-            .listen(std_listener)
-            .expect("Failed to bind HTTP server")
-            .run()
-            .await
-    });
+    let app = grpc_router.merge(http::router());
 
-    // Wait for either gRPC server or Ctrl+C
-    tokio::select! {
-        result = start_grpc_server(grpc_connection) => {
-            if let Err(e) = result {
-                log::error!("gRPC server error: {}", e);
+    let local_addr = connection.listener.local_addr()?;
+    log::info!("Starting unified HTTP/gRPC server on {}", local_addr);
+
+    axum::serve(connection.listener, app)
+        .with_graceful_shutdown(async {
+            match tokio::signal::ctrl_c().await {
+                Ok(()) => log::info!("Received Ctrl+C, shutting down..."),
+                Err(e) => log::error!("Failed to listen for Ctrl+C: {}", e),
             }
-        }
-        result = tokio::signal::ctrl_c() => {
-            match result {
-                Ok(()) => {
-                    log::info!("Received Ctrl+C, shutting down...");
-                }
-                Err(e) => {
-                    log::error!("Failed to listen for Ctrl+C: {}", e);
-                }
-            }
-        }
-    }
-
-    log::info!("Waiting for HTTP server to stop...");
-    if let Err(error) = http_handle.await {
-        log::error!("HTTP server error: {}", error);
-    }
+        })
+        .await?;
 
     log::info!("Backend shutdown complete");
 
     Ok(())
 }
 
-async fn start_grpc_server(connection: GrpcConnection) -> Result<(), MainErrors> {
-    let di = di_container::DiContainer::instance().await;
-    log::info!("Start server at {}", connection.port);
-    Server::builder()
-        .add_service(InterceptorFor::new(
-            BitBridgeCloudServiceServer::new(di.get_grpc_cloud_service().await),
-            di.get_auth_middleware(),
-        ))
-        .add_service(InterceptorFor::new(
-            P2pOrchestrationServiceServer::new(di.get_grpc_p2p_service().await),
-            di.get_auth_middleware(),
-        ))
-        .serve_with_incoming(connection.listener)
-        .await?;
-
-    Ok(())
-}
-
-async fn setup_grpc_gateway(tcp: &GrpcConnection) -> Result<(), MainErrors> {
+async fn setup_grpc_gateway(public_host: String, port: u16) -> Result<(), MainErrors> {
     log::info!("Registering with gateway");
     let api_gateway = KongGatewayAdminClient::new(devlog_sdk::config::CONFIGS.kong.admin_url.clone());
-    let endpoint = config::resolve_public_grpc_endpoint(&tcp.public_host, tcp.port);
 
     let service = GatewayServiceBuilder::new()
-        .grpc(endpoint.host.clone(), endpoint.port)
+        .grpc(public_host.clone(), port)
         .name("bitbridge-grpc-server")
         .enable_cors(true)
         .routes(vec![

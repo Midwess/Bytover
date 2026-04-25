@@ -1,4 +1,4 @@
-use actix_web::http::header::HeaderMap;
+use http::HeaderMap;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
@@ -61,7 +61,7 @@ pub fn sign(secret: &[u8], raw_body: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use actix_web::http::header::{HeaderName, HeaderValue};
+    use http::header::{HeaderName, HeaderValue};
 
     fn build_headers(sig: &str) -> HeaderMap {
         let mut h = HeaderMap::new();

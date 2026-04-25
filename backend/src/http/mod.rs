@@ -1,12 +1,16 @@
 pub mod update;
 pub mod webhooks;
 
-use actix_web::web;
+use axum::routing::get;
+use axum::Router;
 
-pub fn config(cfg: &mut web::ServiceConfig) {
-    cfg.service(
-        web::scope("/bitbridge/api/v1")
-            .service(update::get_update_manifest)
-            .configure(webhooks::config),
-    );
+pub fn router() -> Router {
+    let api_v1 = Router::new()
+        .route(
+            "/update/{target}/{arch}/{current_version}",
+            get(update::get_update_manifest),
+        )
+        .merge(webhooks::router());
+
+    Router::new().nest("/bitbridge/api/v1", api_v1)
 }

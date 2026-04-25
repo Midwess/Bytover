@@ -10,8 +10,8 @@ use crate::http::webhooks::ingestor::{
 };
 use crate::http::webhooks::verify::{VerifyError, WebhookSecretVerifier};
 use crate::repositories::app_release::AppReleaseRepository;
-use actix_web::http::header::HeaderMap;
-use actix_web::{post, web, HttpRequest, HttpResponse};
+use axum::body::Bytes;
+use http::{HeaderMap, StatusCode};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum HandlerOutcome {
@@ -24,13 +24,13 @@ pub enum HandlerOutcome {
 }
 
 impl HandlerOutcome {
-    fn into_response(self) -> HttpResponse {
+    fn status(self) -> StatusCode {
         match self {
-            HandlerOutcome::Accepted | HandlerOutcome::Ignored => HttpResponse::Ok().finish(),
-            HandlerOutcome::Skipped => HttpResponse::ServiceUnavailable().finish(),
-            HandlerOutcome::Unauthorized => HttpResponse::Unauthorized().finish(),
-            HandlerOutcome::BadRequest => HttpResponse::BadRequest().finish(),
-            HandlerOutcome::InternalError => HttpResponse::InternalServerError().finish(),
+            HandlerOutcome::Accepted | HandlerOutcome::Ignored => StatusCode::OK,
+            HandlerOutcome::Skipped => StatusCode::SERVICE_UNAVAILABLE,
+            HandlerOutcome::Unauthorized => StatusCode::UNAUTHORIZED,
+            HandlerOutcome::BadRequest => StatusCode::BAD_REQUEST,
+            HandlerOutcome::InternalError => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
@@ -213,25 +213,23 @@ async fn handle_version_state_update(
     }
 }
 
-#[post("/webhooks/app-store-connect")]
-pub async fn handle(req: HttpRequest, body: web::Bytes) -> actix_web::Result<HttpResponse> {
+pub async fn handle(headers: HeaderMap, body: Bytes) -> StatusCode {
     let di = DiContainer::instance().await;
     let config = di.get_app_store_config();
     let verifier = di.get_webhook_verifier();
     let repo = di.get_app_release_repository().await;
     let api = di.get_app_store_connect_api();
 
-    let outcome = process_webhook(
-        req.headers(),
+    process_webhook(
+        &headers,
         body.as_ref(),
         verifier.as_ref(),
         config,
         &repo,
         api.as_deref(),
     )
-    .await;
-
-    Ok(outcome.into_response())
+    .await
+    .status()
 }
 
 #[cfg(test)]
@@ -242,7 +240,7 @@ mod tests {
     use crate::http::webhooks::asc_api::AppStoreVersionInfo;
     use crate::http::webhooks::verify::sign;
     use crate::repositories::app_release::{AppReleaseRepository, StoreReleaseUpsert};
-    use actix_web::http::header::{HeaderMap, HeaderName, HeaderValue};
+    use http::header::{HeaderMap, HeaderName, HeaderValue};
     use async_trait::async_trait;
     use core_services::db::repository::abstraction::errors::RepositoryError;
     use std::sync::Mutex;
@@ -535,9 +533,6 @@ mod tests {
 
     #[tokio::test]
     async fn skipped_outcome_maps_to_service_unavailable() {
-        assert_eq!(
-            HandlerOutcome::Skipped.into_response().status(),
-            actix_web::http::StatusCode::SERVICE_UNAVAILABLE,
-        );
+        assert_eq!(HandlerOutcome::Skipped.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
 }

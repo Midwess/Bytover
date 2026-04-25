@@ -76,11 +76,7 @@ fn read_private_key() -> Option<String> {
     }
 }
 
-pub fn resolve_public_grpc_endpoint(default_host: &str, default_port: u16) -> PublicEndpointConfig {
-    resolve_public_endpoint(default_host, default_port)
-}
-
-fn resolve_public_endpoint(default_host: &str, default_port: u16) -> PublicEndpointConfig {
+pub fn resolve_public_endpoint(default_host: &str, default_port: u16) -> PublicEndpointConfig {
     let host = read_string("SERVICE_PUBLIC_HOST").unwrap_or_else(|| default_host.to_string());
     let port = read_port("SERVICE_PUBLIC_PORT").unwrap_or(default_port);
 
@@ -103,13 +99,13 @@ fn read_bool(key: &str) -> Option<bool> {
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_public_grpc_endpoint;
+    use super::resolve_public_endpoint;
 
     #[test]
     fn uses_service_public_port_when_present() {
         std::env::set_var("SERVICE_PUBLIC_PORT", "18080");
 
-        let endpoint = resolve_public_grpc_endpoint("localhost", 3000);
+        let endpoint = resolve_public_endpoint("localhost", 3000);
 
         assert_eq!(endpoint.port, 18080);
 
@@ -120,7 +116,7 @@ mod tests {
     fn uses_service_public_host_when_present() {
         std::env::set_var("SERVICE_PUBLIC_HOST", "backend.internal");
 
-        let endpoint = resolve_public_grpc_endpoint("localhost", 3000);
+        let endpoint = resolve_public_endpoint("localhost", 3000);
 
         assert_eq!(endpoint.host, "backend.internal");
 
@@ -129,7 +125,7 @@ mod tests {
 
     #[test]
     fn falls_back_to_listener_values() {
-        let endpoint = resolve_public_grpc_endpoint("127.0.0.1", 3000);
+        let endpoint = resolve_public_endpoint("127.0.0.1", 3000);
 
         assert_eq!(endpoint.host, "127.0.0.1");
         assert_eq!(endpoint.port, 3000);

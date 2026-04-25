@@ -24,7 +24,6 @@ futures.workspace = true
 tokio-cron-scheduler = { workspace = true }
 chrono = { workspace = true }
 rand = "0.8"
-actix-web = "4"
 semver = "1"
 hmac = { workspace = true }
 sha2 = { workspace = true }
@@ -32,3 +31,9 @@ subtle = { workspace = true }
 hex = "0.4"
 jsonwebtoken = { version = "10.0.0", features = ["rust_crypto"] }
 reqwest = { workspace = true, features = ["json", "rustls"] }
+axum = "0.8"
+tower = { version = "0.5", features = ["steer"] }
+hyper = { version = "1", features = ["server", "http1", "http2"] }
+hyper-util = { version = "0.1", features = ["server-auto", "tokio"] }
+http = { workspace = true, default-features = true }
+bytes = { workspace = true, default-features = true }
