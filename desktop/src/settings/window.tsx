@@ -6,18 +6,13 @@ import {getCurrentWindow} from "@tauri-apps/api/window"
 import {listen} from "@tauri-apps/api/event"
 import {Button} from "@/components/ui/button"
 import {
-    Info,
     RefreshCw,
-    LogOut,
     Loader2,
     Check,
-    Settings,
-    Download,
-    User,
     ChevronRight,
     ExternalLink,
     Shield,
-    Search,
+    MessageSquare,
 } from "lucide-react"
 import {
     checkForUpdate,
@@ -161,93 +156,69 @@ function SettingsWindow() {
         }
     }
 
-    const tabs: {id: SettingsTab; label: string; description: string; icon: React.ReactNode; color: string}[] = [
+    const tabs: {id: SettingsTab; label: string; description: string}[] = [
         {
             id: "general",
             label: "General",
             description: "Configure how Bytover starts up and behaves on your system.",
-            icon: <Settings />,
-            color: "bg-[#7c7c7c]"
         },
         {
             id: "account",
             label: "Account",
             description: "Manage your Bytover account and session.",
-            icon: <User />,
-            color: "bg-[#f39c12]"
         },
         ...(IS_MACOS ? [] : [{
             id: "updates" as const,
             label: "Updates",
             description: "Keep your Bytover application up to date with the latest features.",
-            icon: <RefreshCw />,
-            color: "bg-[#3498db]"
         }]),
         {
             id: "about",
             label: "About",
             description: "Learn more about Bytover and its creators.",
-            icon: <Info />,
-            color: "bg-[#5856d6]"
-        }
+        },
     ]
 
     const activeTabInfo = tabs.find(t => t.id === activeTab)
 
     return (
-        <main className="w-screen h-screen dark bg-[#1e1e1e] text-white flex overflow-hidden font-sans select-none">
+        <main className="w-screen h-screen dark bg-[#0d1322] text-white flex overflow-hidden font-sans select-none">
             {/* Sidebar */}
-            <div 
-                className="w-[180px] bg-[#262626] border-r border-black flex flex-col pt-12 pb-6 px-3 gap-1"
+            <div
+                className="w-[210px] bg-[#0a101e] border-r border-white/[0.05] flex flex-col pt-10 pb-4 px-3"
                 data-tauri-drag-region
             >
-                <div className="px-3 mb-4" data-tauri-drag-region>
-                    <h1 className="text-[11px] font-medium text-white/30 uppercase tracking-wider">Settings</h1>
-                </div>
+                <SidebarProfile />
 
-                <div className="flex flex-col gap-0.5">
+                <div className="flex flex-col gap-0.5 mt-6">
                     {tabs.map((tab) => (
                         <SidebarItem
                             key={tab.id}
-                            icon={tab.icon}
-                            iconColor={tab.color}
                             label={tab.label}
                             active={activeTab === tab.id}
                             onClick={() => setActiveTab(tab.id)}
                         />
                     ))}
                 </div>
-
-                <div className="mt-auto flex flex-col items-center gap-2 opacity-40">
-                    <img src="/icon.png" alt="Bytover" className="w-8 h-8 rounded-lg" />
-                    <div className="text-center">
-                        <div className="text-[11px] font-medium text-white/90">Bytover</div>
-                        <div className="text-xs text-white/40">Version {version}</div>
-                    </div>
-                </div>
             </div>
 
             {/* Content Area */}
-            <div className="flex-1 flex flex-col bg-[#1e1e1e] overflow-y-auto" data-tauri-drag-region>
-                <div className="w-full mx-auto px-6 py-12 flex flex-col gap-4">
-                    {/* Header */}
-                    <div className="flex flex-col items-center text-center gap-1 mb-1" data-tauri-drag-region>
-                        <h2 className="text-[22px] font-bold tracking-tight text-white/95">
+            <div className="flex-1 flex flex-col bg-[#0d1322] overflow-y-auto" data-tauri-drag-region>
+                <div className="w-full max-w-[480px] mx-auto px-7 pt-10 pb-12 flex flex-col gap-7">
+                    <div data-tauri-drag-region>
+                        <h2 className="text-[20px] font-semibold tracking-tight text-white">
                             {activeTabInfo?.label}
                         </h2>
-                        <p className="text-[12px] text-white/50 leading-snug max-w-[340px]">
-                            {activeTabInfo?.description}
-                        </p>
                     </div>
-                    
+
                     <div className="flex-1">
                         <AnimatePresence mode="wait">
                             <motion.div
                                 key={activeTab}
-                                initial={{opacity: 0, y: 10}}
+                                initial={{opacity: 0, y: 8}}
                                 animate={{opacity: 1, y: 0}}
-                                exit={{opacity: 0, y: -10}}
-                                transition={{duration: 0.2, ease: "easeOut"}}
+                                exit={{opacity: 0, y: -8}}
+                                transition={{duration: 0.18, ease: "easeOut"}}
                             >
                                 {activeTab === "general" && (
                                     <GeneralContent
@@ -281,9 +252,66 @@ function SettingsWindow() {
     )
 }
 
-function SidebarItem({icon, iconColor, label, active, onClick}: {
-    icon: React.ReactNode
-    iconColor: string
+function getAvatarColor(url: string | undefined): string | null {
+    if (!url) return null
+    try {
+        const queryStart = url.indexOf("?")
+        if (queryStart === -1) return null
+        const params = new URLSearchParams(url.slice(queryStart))
+        const r = params.get("r")
+        const g = params.get("g")
+        const b = params.get("b")
+        if (r && g && b) return `rgb(${r}, ${g}, ${b})`
+    } catch {
+        return null
+    }
+    return null
+}
+
+function SidebarProfile() {
+    const auth = core.useAuthentication()
+    const user = auth?.user
+    const isPaid = (auth?.capabilities?.plan as unknown) === "Paid"
+
+    const initial = (user?.name?.trim()?.[0] ?? user?.email?.trim()?.[0] ?? "?").toUpperCase()
+    const displayName = user?.name?.trim() || user?.email?.split("@")[0] || "Account"
+    const subtitle = user?.email ?? ""
+    const avatarColor = getAvatarColor(user?.avatar)
+    const avatarStyle = avatarColor ? {backgroundColor: avatarColor} : undefined
+
+    return (
+        <div className="flex items-center gap-2.5 px-1.5 py-2 rounded-xl bg-white/[0.025] border border-white/[0.05]">
+            <div
+                className="w-9 h-9 rounded-full border border-white/10 shrink-0 overflow-hidden flex items-center justify-center text-[13px] font-semibold text-white"
+                style={avatarStyle}
+            >
+                {user?.avatar ? (
+                    <img
+                        src={user.avatar}
+                        alt=""
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover"
+                    />
+                ) : (
+                    <span>{initial}</span>
+                )}
+            </div>
+            <div className="flex flex-col min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-[12.5px] font-semibold text-white truncate">{displayName}</span>
+                    {isPaid && (
+                        <span className="text-[8.5px] font-bold tracking-[0.1em] text-blue-100 bg-gradient-to-b from-blue-500 to-blue-700 px-1.5 py-px rounded shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]">
+                            PRO
+                        </span>
+                    )}
+                </div>
+                <span className="text-[10.5px] text-white/40 truncate">{subtitle}</span>
+            </div>
+        </div>
+    )
+}
+
+function SidebarItem({label, active, onClick}: {
     label: string
     active: boolean
     onClick: () => void
@@ -292,16 +320,13 @@ function SidebarItem({icon, iconColor, label, active, onClick}: {
         <button
             onClick={onClick}
             className={`
-                flex items-center gap-3 px-2 py-1.5 rounded-lg text-[13px] w-full text-left transition-all duration-200
-                ${active 
-                    ? "bg-white/10 text-white" 
-                    : "text-white/80 hover:bg-white/5 hover:text-white"
+                px-3 py-2 rounded-lg text-[13px] w-full text-left transition-colors duration-150
+                ${active
+                    ? "bg-white/[0.07] text-white"
+                    : "text-white/55 hover:bg-white/[0.03] hover:text-white/90"
                 }
             `}
         >
-            <div className={`w-[20px] h-[20px] rounded-[5px] ${iconColor} flex items-center justify-center shadow-inner shrink-0`}>
-                {React.cloneElement(icon as React.ReactElement<any>, { className: "w-3 h-3 text-white" })}
-            </div>
             <span className="font-medium tracking-tight">{label}</span>
         </button>
     )
@@ -313,17 +338,17 @@ function SettingsSection({title, children, description}: {
     description?: string
 }) {
     return (
-        <div className="mb-4">
+        <div>
             {title && (
-                <h3 className="text-[11px] font-semibold text-white/30 px-1 mb-1.5 uppercase tracking-wider">
+                <h3 className="text-[10px] font-semibold text-white/40 mb-3 uppercase tracking-[0.14em]">
                     {title}
                 </h3>
             )}
-            <div className="bg-[#2c2c2e] border border-white/5 rounded-xl overflow-hidden shadow-sm">
+            <div>
                 {children}
             </div>
             {description && (
-                <p className="mt-1.5 text-[11px] text-white/30 px-1 leading-relaxed">
+                <p className="mt-2 text-[11px] text-white/30 leading-relaxed">
                     {description}
                 </p>
             )}
@@ -340,20 +365,19 @@ function SettingsRow({label, description, children, icon, last = false}: {
 }) {
     return (
         <div className={`
-            flex items-center justify-between px-3.5 py-2.5
-            ${!last ? "border-b border-white/5" : ""}
-            hover:bg-white/[0.02] transition-colors
+            flex items-center justify-between gap-4 py-3.5
+            ${!last ? "border-b border-white/[0.05]" : ""}
         `}>
-            <div className="flex gap-3 items-start">
-                {icon && <div className="mt-0.5 text-white/60">{icon}</div>}
-                <div className="flex flex-col">
-                    <span className="text-[13px] font-medium text-white/90">{label}</span>
+            <div className="flex gap-3 items-start min-w-0">
+                {icon && <div className="mt-0.5 text-white/55 shrink-0">{icon}</div>}
+                <div className="flex flex-col min-w-0">
+                    <span className="text-[13px] font-medium text-white/95">{label}</span>
                     {description && (
-                        <span className="text-[11px] text-white/40 leading-tight">{description}</span>
+                        <span className="text-[11px] text-white/45 leading-snug mt-0.5">{description}</span>
                     )}
                 </div>
             </div>
-            <div className="flex items-center gap-3 shrink-0 ml-4">
+            <div className="flex items-center shrink-0">
                 {children}
             </div>
         </div>
@@ -403,16 +427,6 @@ function GeneralContent({enabled, isLoading, onToggle}: {
                     last={true}
                 >
                     <Switch enabled={enabled} onToggle={onToggle} disabled={isLoading} />
-                </SettingsRow>
-            </SettingsSection>
-
-            <SettingsSection title="System">
-                <SettingsRow 
-                    label="Show in Menu Bar" 
-                    description="Display Bytover icon in the system menu bar."
-                    last={true}
-                >
-                    <Switch enabled={true} onToggle={() => {}} disabled={true} />
                 </SettingsRow>
             </SettingsSection>
         </div>
@@ -505,6 +519,7 @@ function PaidPlanNotice() {
 function AccountContent({onSignOut}: {onSignOut: () => void}) {
     const auth = core.useAuthentication()
     const caps = auth?.capabilities
+    const user = auth?.user
     const currentPlan: PlanKind = (caps?.plan as unknown) === "Paid" ? "paid" : "free"
     const handleUpgrade = () => {}
 
@@ -525,10 +540,18 @@ function AccountContent({onSignOut}: {onSignOut: () => void}) {
     )
 
     return (
-        <div className="space-y-6">
-            <SettingsSection title="Subscription">
+        <div className="space-y-7">
+            <SettingsSection title="Subscription Plan">
                 {subscriptionBody}
             </SettingsSection>
+
+            {user?.email && (
+                <SettingsSection title="Preferred Email">
+                    <div className="flex items-center py-3.5">
+                        <span className="text-[13px] text-white/90 truncate flex-1">{user.email}</span>
+                    </div>
+                </SettingsSection>
+            )}
 
             <SettingsSection title="Current Session">
                 <SettingsRow
@@ -620,24 +643,36 @@ function AboutContent({version}: {version: string}) {
     return (
         <div className="space-y-6">
             <SettingsSection>
-                <button 
+                <button
                     onClick={() => openUrl("https://bytover.com")}
                     className="w-full text-left"
                 >
-                    <SettingsRow 
-                        label="Website" 
+                    <SettingsRow
+                        label="Website"
                         description="Visit bytover.com for more information."
                         icon={<ExternalLink className="w-4 h-4" />}
                     >
                         <ChevronRight className="w-4 h-4 text-white/20" />
                     </SettingsRow>
                 </button>
-                <button 
+                <button
+                    onClick={() => openUrl("https://bytover.com/feedback")}
+                    className="w-full text-left"
+                >
+                    <SettingsRow
+                        label="Feedback"
+                        description="Share your thoughts to help us improve."
+                        icon={<MessageSquare className="w-4 h-4" />}
+                    >
+                        <ChevronRight className="w-4 h-4 text-white/20" />
+                    </SettingsRow>
+                </button>
+                <button
                     onClick={() => openUrl("https://bytover.com/policy")}
                     className="w-full text-left"
                 >
-                    <SettingsRow 
-                        label="Privacy Policy" 
+                    <SettingsRow
+                        label="Privacy Policy"
                         description="How we handle your data."
                         icon={<Shield className="w-4 h-4" />}
                         last={true}
