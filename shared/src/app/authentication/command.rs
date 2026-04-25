@@ -47,10 +47,16 @@ impl AppCommand {
     }
 
     pub async fn re_authorize(&self) -> Result<(), CoreError> {
-        let Ok(user) = RpcOperation::get_me().into_future(self.ctx()).await else {
+        let Ok((user, device_unique_key)) = RpcOperation::get_me().into_future(self.ctx()).await else {
             self.notify_event(AuthenticationEvent::UnAuthorized);
             return Ok(());
         };
+
+        if !self.ensure_token_matches_local_device(&device_unique_key).await {
+            self.run(SessionPersistentOperation::remove_session()).await?;
+            self.notify_event(AuthenticationEvent::UnAuthorized);
+            return Ok(());
+        }
 
         SessionPersistentOperation::save_user(user.clone()).into_future(self.ctx()).await?;
         self.notify_event(AppEvent::Authentication(AuthenticationEvent::Authorized { user }));
@@ -99,13 +105,45 @@ impl AppCommand {
             self.notify_event(ShelfEvent::Launch);
         }
 
-        let user = RpcOperation::get_me().into_future(self.ctx()).await?;
+        let (user, device_unique_key) = RpcOperation::get_me().into_future(self.ctx()).await?;
+
+        if !self.ensure_token_matches_local_device(&device_unique_key).await {
+            self.run(SessionPersistentOperation::remove_session()).await?;
+            self.run(DialogOperation::toast(
+                "Unauthorized: this token belongs to a different device".to_string(),
+            ))
+            .await;
+            self.notify_event(AuthenticationEvent::UnAuthorized);
+            return Ok(());
+        }
+
         self.notify_event(AppEvent::Authentication(AuthenticationEvent::Authorized { user }));
         self.notify_shell(CoreOperation::LaunchNearbyServer);
 
         self.fetch_and_assign_aliases().await;
 
         Ok(())
+    }
+
+    async fn ensure_token_matches_local_device(&self, server_device_key: &str) -> bool {
+        let Some(local) = self.run(DeviceOperation::get_device_info()).await else {
+            log::warn!(target: "auth", "Cannot verify token device: local DeviceInfo unavailable");
+            return false;
+        };
+        if server_device_key.is_empty() {
+            log::warn!(target: "auth", "Server returned empty device key; skipping device match check");
+            return true;
+        }
+        if local.unique_id != server_device_key {
+            log::error!(
+                target: "auth",
+                "Token device mismatch: local={} server={}",
+                local.unique_id,
+                server_device_key
+            );
+            return false;
+        }
+        true
     }
 
     async fn fetch_and_assign_aliases(&self) {

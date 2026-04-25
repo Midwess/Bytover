@@ -27,8 +27,8 @@ where
                 Ok(response.into())
             }
             RpcOperation::GetMe() => {
-                let response = self.app_server().get_me().await?;
-                Ok(RpcOperationOutput::GetMe(response).into())
+                let (user, device_unique_key) = self.app_server().get_me().await?;
+                Ok(RpcOperationOutput::GetMe { user, device_unique_key }.into())
             }
             RpcOperation::GetUserById(user_id) => {
                 let response = self.app_server().get_user_by_id(user_id).await?;

@@ -24,7 +24,7 @@ impl AppCommand {
     }
 
     pub async fn start_nearby_server(&self, current_peer: Option<Peer>) -> Result<(), CoreError> {
-        let user = RpcOperation::get_me().into_future(self.ctx()).await?;
+        let (user, _) = RpcOperation::get_me().into_future(self.ctx()).await?;
 
         let is_already_running = self.run(P2POperation::is_running()).await;
         if is_already_running.unwrap_or(false) {
