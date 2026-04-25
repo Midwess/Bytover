@@ -50,6 +50,7 @@ interface UpdateStatus {
     version: string | null
     release_notes: string | null
     is_critical: boolean
+    store_url: string | null
 }
 
 function SettingsWindow() {
@@ -75,7 +76,6 @@ function SettingsWindow() {
     }, [])
 
     useEffect(() => {
-        if (IS_MACOS) return
         checkForUpdate()
             .then(setUpdateStatus)
             .catch(console.error)
@@ -99,6 +99,16 @@ function SettingsWindow() {
         }
     }, [])
 
+    useEffect(() => {
+        if (IS_MACOS) return
+        const unlistenPromise = listen("tray-update-clicked", () => {
+            handleInstallUpdate()
+        })
+        return () => {
+            unlistenPromise.then((unlisten) => unlisten())
+        }
+    }, [])
+
     const handleCheckUpdate = async () => {
         setIsCheckingUpdate(true)
         setUpdateStatus(null)
@@ -107,7 +117,7 @@ function SettingsWindow() {
             setUpdateStatus(status)
         } catch (error) {
             console.error("Failed to check for update:", error)
-            setUpdateStatus({available: false, version: null, release_notes: null, is_critical: false})
+            setUpdateStatus({available: false, version: null, release_notes: null, is_critical: false, store_url: null})
         } finally {
             setIsCheckingUpdate(false)
         }

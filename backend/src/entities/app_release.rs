@@ -13,12 +13,14 @@ pub struct Model {
     pub architecture: String,
     #[sea_orm(column_name = "signature")]
     pub signature: String,
-    #[sea_orm(column_name = "download_url")]
-    pub download_url: String,
+    #[sea_orm(column_name = "download_url", nullable)]
+    pub download_url: Option<String>,
     #[sea_orm(column_name = "release_notes", nullable)]
     pub release_notes: Option<String>,
     #[sea_orm(column_name = "is_critical")]
     pub is_critical: bool,
+    #[sea_orm(column_name = "store_url", nullable)]
+    pub store_url: Option<String>,
     #[sea_orm(column_name = "created_at", column_type = "Timestamp")]
     pub created_at: chrono::NaiveDateTime,
 }

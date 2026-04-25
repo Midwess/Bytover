@@ -9,6 +9,8 @@ mod m20251229_000005_update_p2p_session_description;
 mod m20260328_000001_add_signalling_key_to_p2p_session;
 mod m20260408_000001_add_signalling_route_to_p2p_session;
 mod m20260423_000001_create_user_capabilities_table;
+mod m20260424_000001_merge_darwin_add_store_url;
+mod m20260424_000002_app_releases_unique_platform_version;
 pub mod model;
 
 pub struct Migrator;
@@ -26,6 +28,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260328_000001_add_signalling_key_to_p2p_session::Migration),
             Box::new(m20260408_000001_add_signalling_route_to_p2p_session::Migration),
             Box::new(m20260423_000001_create_user_capabilities_table::Migration),
+            Box::new(m20260424_000001_merge_darwin_add_store_url::Migration),
+            Box::new(m20260424_000002_app_releases_unique_platform_version::Migration),
         ]
     }
 }

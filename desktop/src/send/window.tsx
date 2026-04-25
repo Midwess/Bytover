@@ -8,6 +8,7 @@ import {getCurrentWindow, LogicalSize} from "@tauri-apps/api/window";
 import {ArrowRight} from "lucide-react";
 import {Button} from "@/components/ui/button.tsx";
 import {invoke} from "@tauri-apps/api/core";
+import {useForceUpdateStatus} from "@/components/force-update-overlay";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>
@@ -24,6 +25,7 @@ function Window() {
     const shelfInitializedRef = useRef(false)
     const label = window.label
     const isFakeShelf = label.startsWith("fake-shelf")
+    const updateStatus = useForceUpdateStatus()
     const showExpand = !isFakeShelf
     const effectiveExpanded = showExpand && isExpanded
 
@@ -87,7 +89,7 @@ function Window() {
                    )}
                 </div>
                 <div className={`h-full overflow-hidden bg-transparent ${effectiveExpanded ? 'flex' : 'hidden'}`}>
-                    <Transfer shelfId={shelfId} key={effectiveExpanded ? 'expanded' : 'collapsed'}/>
+                    <Transfer shelfId={shelfId} forceUpdate={updateStatus} key={effectiveExpanded ? 'expanded' : 'collapsed'}/>
                 </div>
            </div>
         </main>

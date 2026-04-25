@@ -30,8 +30,11 @@ import {Progress} from "@/components/animate-ui/components/radix/progress"
 import {ProgressIndicator} from "@/components/animate-ui/primitives/radix/progress"
 import {UnlimitedLineText} from "@/components/ui/unlimited-line-text"
 import {EmailTransfer} from "@/send/email-transfer"
+import {formatUpdateLabel, openForceUpdate} from "@/components/force-update-overlay"
+import {UpdateStatus} from "@/lib/updater"
 
-export function Transfer({ shelfId }: { shelfId: string | undefined }) {
+export function Transfer({ shelfId, forceUpdate }: { shelfId: string | undefined; forceUpdate: UpdateStatus | null }) {
+    const isUpdateBlocked = forceUpdate?.is_critical === true
     return (
         <div className="flex w-[208px] flex-col gap-6 h-full overflow-hidden">
             <Slide
@@ -50,17 +53,17 @@ export function Transfer({ shelfId }: { shelfId: string | undefined }) {
                         <TabsPanels className="flex-1 flex flex-col min-h-0 overflow-hidden">
                             <TabsPanel value="quick" className="flex flex-col h-full overflow-hidden">
                                 <CardContent className={"p-0 flex flex-col gap-1.5 h-full overflow-hidden"}>
-                                    <P2PSend shelfId={shelfId} />
+                                    <P2PSend shelfId={shelfId} forceUpdate={isUpdateBlocked ? forceUpdate : null} />
                                 </CardContent>
                             </TabsPanel>
                             <TabsPanel value="public" className="flex flex-col gap-2">
                                 <CardContent className={"p-0 flex flex-col gap-1.5"}>
-                                    <PublicTransfer shelfId={shelfId} />
+                                    <PublicTransfer shelfId={shelfId} forceUpdate={isUpdateBlocked ? forceUpdate : null} />
                                 </CardContent>
                             </TabsPanel>
                             <TabsPanel value="email" className="flex flex-col gap-2 w-[190px]">
                                 <CardContent className={"p-0 flex flex-col gap-1.5"}>
-                                    <EmailTransfer shelfId={shelfId} />
+                                    <EmailTransfer shelfId={shelfId} forceUpdate={isUpdateBlocked ? forceUpdate : null} />
                                 </CardContent>
                             </TabsPanel>
                         </TabsPanels>
@@ -71,7 +74,7 @@ export function Transfer({ shelfId }: { shelfId: string | undefined }) {
     );
 }
 
-function P2PSend({ shelfId }: { shelfId: string | undefined }) {
+function P2PSend({ shelfId, forceUpdate }: { shelfId: string | undefined; forceUpdate: UpdateStatus | null }) {
     const p2pSession = core.useP2PSessionForShelf(shelfId)
     const selectedResources = core.useSelectedResourcesForShelf(shelfId)
     const [password, setPassword] = useState(p2pSession?.password || '')
@@ -126,9 +129,14 @@ function P2PSend({ shelfId }: { shelfId: string | undefined }) {
                 <UrlInputWithCopy url={p2pSession?.access_url ?? ''}/>
             </Card>
         }
-        <Card shadowSize={0.5} className="flex flex-row gap-2 p-1 items-center w-[100px]">
+        <Card shadowSize={0.5} className={`flex flex-row gap-2 p-1 items-center ${forceUpdate ? "w-auto" : "w-[100px]"}`}>
             {
-                isInProgress ? (
+                forceUpdate ? (
+                    <Button onClick={() => openForceUpdate(forceUpdate)}
+                            className={"bg-bluePrimary text-foreground shadow-lg hover:bg-bluePrimary/60 px-3 w-auto"}>
+                        {formatUpdateLabel(forceUpdate)}
+                    </Button>
+                ) : isInProgress ? (
                     <Button onClick={handleStopTransfer}
                             className={"bg-muted-foreground/30 text-primary h-full shadow-lg w-full"}>Cancel</Button>
                 ) : (
@@ -188,7 +196,7 @@ function MyPeerInfo() {
     )
 }
 
-function PublicTransfer({ shelfId }: { shelfId: string | undefined }) {
+function PublicTransfer({ shelfId, forceUpdate }: { shelfId: string | undefined; forceUpdate: UpdateStatus | null }) {
     const [pwd, setPwd] = useState("");
     const [isLoading, setIsLoading] = useState(false)
     const selectedResources = core.useSelectedResourcesForShelf(shelfId)
@@ -226,7 +234,12 @@ function PublicTransfer({ shelfId }: { shelfId: string | undefined }) {
         }
         <Card shadowSize={0.5} className={`flex flex-row gap-2 p-1 items-center ${cloudSession?.progress ? "w-full" : "w-fit"}`}>
             {
-                cloudSession?.is_in_progress ? (
+                forceUpdate ? (
+                    <Button onClick={() => openForceUpdate(forceUpdate)}
+                            className={"bg-bluePrimary text-foreground shadow-lg hover:bg-bluePrimary/60 px-3 w-auto"}>
+                        {formatUpdateLabel(forceUpdate)}
+                    </Button>
+                ) : cloudSession?.is_in_progress ? (
                     <Button onClick={() => {
                         invoke("cancel_send", {sessionId: cloudSession?.session_id}).then(noop)
                     }} className={"bg-muted-foreground/30 text-primary w-[100px] h-full shadow-lg"}>Cancel</Button>
