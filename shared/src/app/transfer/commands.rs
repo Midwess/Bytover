@@ -1,5 +1,5 @@
-use crate::app::authentication::module::AuthenticationEvent;
 use crate::app::core::command::AppCommand;
+use crate::app::payment::module::PaymentEvent;
 use crate::app::AppEvent;
 use crate::app::core::extensions::CoreCommandContextUtils;
 use crate::app::core::model_events::{PeerReceivedEvent, SessionLoadError, TransferSessionModelEvent};
@@ -155,7 +155,8 @@ impl AppCommand {
         // We do not remove the public transfer since the user needs to see the information
         // after transfer completed.
         if transfer_session.is_success() && transfer_session.target.is_public() {
-            self.notify_event(AppEvent::Authentication(AuthenticationEvent::RefreshCapabilities));
+            let delta: u64 = transfer_session.resources.iter().map(|r| r.size).sum();
+            self.notify_event(AppEvent::Payment(PaymentEvent::ReportTransferBytesUsed { delta }));
             return Ok(());
         }
 

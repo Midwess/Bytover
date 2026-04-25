@@ -32,6 +32,35 @@ import {UnlimitedLineText} from "@/components/ui/unlimited-line-text"
 import {EmailTransfer} from "@/send/email-transfer"
 import {formatUpdateLabel, openForceUpdate} from "@/components/force-update-overlay"
 import {UpdateStatus} from "@/lib/updater"
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+    TooltipProvider,
+} from "@/components/animate-ui/primitives/animate/tooltip"
+
+function UpgradeButton({fullWidth = true}: {fullWidth?: boolean}) {
+    const handleClick = () => {
+        invoke("show_settings_with_tab", {tab: "account"}).then(noop)
+    }
+    return (
+        <TooltipProvider openDelay={200} closeDelay={100}>
+            <Tooltip side="top" sideOffset={4}>
+                <TooltipTrigger asChild>
+                    <Button
+                        onClick={handleClick}
+                        className={`bg-bluePrimary text-foreground shadow-lg hover:bg-bluePrimary/60 ${fullWidth ? "w-full" : "w-[100px]"}`}
+                    >
+                        Upgrade to premium
+                    </Button>
+                </TooltipTrigger>
+                <TooltipContent className="bg-popover text-popover-foreground text-xs px-2 py-1 rounded-md shadow-lg border">
+                    You has exceed the free limit
+                </TooltipContent>
+            </Tooltip>
+        </TooltipProvider>
+    )
+}
 
 export function Transfer({ shelfId, forceUpdate }: { shelfId: string | undefined; forceUpdate: UpdateStatus | null }) {
     const isUpdateBlocked = forceUpdate?.is_critical === true
@@ -77,6 +106,8 @@ export function Transfer({ shelfId, forceUpdate }: { shelfId: string | undefined
 function P2PSend({ shelfId, forceUpdate }: { shelfId: string | undefined; forceUpdate: UpdateStatus | null }) {
     const p2pSession = core.useP2PSessionForShelf(shelfId)
     const selectedResources = core.useSelectedResourcesForShelf(shelfId)
+    const payment = core.usePayment()
+    const capExceeded = payment?.cap_exceeded ?? false
     const [password, setPassword] = useState(p2pSession?.password || '')
     const [isLoading, setIsLoading] = useState(false)
     const isInProgress = p2pSession?.is_in_progress ?? false
@@ -139,6 +170,8 @@ function P2PSend({ shelfId, forceUpdate }: { shelfId: string | undefined; forceU
                 ) : isInProgress ? (
                     <Button onClick={handleStopTransfer}
                             className={"bg-muted-foreground/30 text-primary h-full shadow-lg w-full"}>Cancel</Button>
+                ) : capExceeded ? (
+                    <UpgradeButton fullWidth={true}/>
                 ) : (
                     <Button onClick={handleStartTransfer}
                             disabled={isLoading}
@@ -201,6 +234,8 @@ function PublicTransfer({ shelfId, forceUpdate }: { shelfId: string | undefined;
     const [isLoading, setIsLoading] = useState(false)
     const selectedResources = core.useSelectedResourcesForShelf(shelfId)
     const cloudSession = core.useCloudSessionForShelf(shelfId)
+    const payment = core.usePayment()
+    const capExceeded = payment?.cap_exceeded ?? false
     const progress = (cloudSession?.progress ?? 0) * 100
 
     const handleUpload = () => {
@@ -248,6 +283,8 @@ function PublicTransfer({ shelfId, forceUpdate }: { shelfId: string | undefined;
                         invoke("cancel_send", {sessionId: cloudSession?.session_id}).then(noop)
                     }}
                             className={"bg-greenSecondary/40 text-primary flex-2/5 shadow-lg hover:bg-greenSecondary/50"}>Continue</Button>
+                ) : capExceeded ? (
+                    <UpgradeButton fullWidth={false}/>
                 ) : (
                     <Button onClick={handleUpload}
                             disabled={isLoading}

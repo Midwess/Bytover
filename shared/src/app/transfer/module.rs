@@ -836,7 +836,7 @@ impl AppModule<BitBridge> for TransferModule {
 
         let total_p2p_receive_progress = received_session.as_ref().filter(|s| s.progress > 0.0 && !s.is_completed).map(|s| s.progress);
 
-        let caps = model.authentication.capabilities.as_ref();
+        let caps = model.payment.capabilities.as_ref();
         let password_encryption_allowed = caps.map(|c| c.transfer_limits.password_encryption_allowed).unwrap_or(false);
         let max_files_per_transfer = caps
             .map(|c| c.transfer_limits.max_files_per_transfer)

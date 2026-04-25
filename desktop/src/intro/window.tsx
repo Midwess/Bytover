@@ -30,8 +30,8 @@ function imageToBase64DataUrl(src: string): Promise<string> {
 
 function Window() {
     const [step, setStep] = useState(0);
-    const auth = core.useAuthentication()
-    const isPaid = (auth?.capabilities?.plan as unknown) === "Paid"
+    const payment = core.usePayment()
+    const isPaid = (payment?.capabilities?.plan as unknown) === "Paid"
 
     useEffect(() => {
         core.launch()

@@ -13,6 +13,7 @@ use schema::value::platform::Platform;
 use serde::Deserialize;
 use shared::app::authentication::module::AuthenticationEvent;
 use shared::app::environment::module::EnvironmentEvent;
+use shared::app::payment::module::PaymentEvent;
 use shared::app::operations::device::DeviceOperation;
 use shared::app::operations::dialog::{AlertDialog, DialogOperation};
 use shared::app::operations::storekit::{StoreKitOperation, StoreKitOperationOutput};
@@ -1022,7 +1023,7 @@ pub async fn run() {
                 }
                 let app_handle = window.app_handle().clone();
                 spawn(async move {
-                    process_event(AuthenticationEvent::RefreshCapabilities, app_handle).await;
+                    process_event(PaymentEvent::RefreshCapabilities, app_handle).await;
                 });
             }
         })
@@ -1212,7 +1213,7 @@ pub async fn run() {
                     if CORE.view().authentication.as_ref().and_then(|a| a.user.as_ref()).is_none() {
                         continue;
                     }
-                    process_event(AuthenticationEvent::RefreshCapabilities, poll_handle.clone()).await;
+                    process_event(PaymentEvent::RefreshCapabilities, poll_handle.clone()).await;
                 }
             });
 

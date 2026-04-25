@@ -355,7 +355,7 @@ impl AppModule<BitBridge> for ShelfModule {
 
         shelves.sort_by(|a, b| b.id.cmp(&a.id));
 
-        let max_shelves = model.authentication.capabilities.as_ref().and_then(|c| c.shelf_limit());
+        let max_shelves = model.payment.capabilities.as_ref().and_then(|c| c.shelf_limit());
         let can_create_shelf = match max_shelves {
             Some(limit) => (model.shelf.shelves.len() as u32) < limit,
             None => true,
@@ -372,7 +372,7 @@ impl AppModule<BitBridge> for ShelfModule {
 
 fn shelf_limit_reached(model: &AppModel) -> bool {
     model
-        .authentication
+        .payment
         .capabilities
         .as_ref()
         .and_then(|c| c.shelf_limit())

@@ -1,10 +1,10 @@
-use crate::app::authentication::module::AuthenticationEvent;
 use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
 use crate::app::operations::dialog::{AlertDialog, DialogOperation};
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::operations::storekit::{StoreKitOperation, StoreKitOperationOutput, StoreKitTransactionDto};
 use crate::app::payment::module::{InFlight, PaymentEvent, ProductId};
+use crate::app::AppEvent;
 use crate::errors::CoreError;
 use crate::protocol::rpc::cloud_server::SubmitStoreKitResult;
 
@@ -106,7 +106,7 @@ impl AppCommand {
         match result {
             SubmitStoreKitResult::Completed { capabilities, .. } => {
                 log::info!("[payment] submission Completed for transaction_id={transaction_id}");
-                self.notify_event(AuthenticationEvent::CapabilitiesLoaded(capabilities));
+                self.notify_event(PaymentEvent::CapabilitiesLoaded(capabilities));
                 let _ = self.run(StoreKitOperation::finish_transaction(transaction_id)).await;
                 self.notify_event(PaymentEvent::SubmissionCompleted);
             }
@@ -142,5 +142,16 @@ impl AppCommand {
     async fn surface_failure(&self, message: &str) {
         self.run(DialogOperation::alert(AlertDialog::alert(message.to_owned()))).await;
         self.notify_event(PaymentEvent::SubmissionFailed(message.to_owned()));
+    }
+
+    pub async fn refresh_payment_capabilities(&self) {
+        match RpcOperation::get_capabilities().into_future(self.ctx()).await {
+            Ok(caps) => {
+                self.notify_event(AppEvent::Payment(PaymentEvent::CapabilitiesLoaded(caps)));
+            }
+            Err(err) => {
+                self.notify_event(AppEvent::Payment(PaymentEvent::RefreshCapabilitiesFailed(format!("{err:?}"))));
+            }
+        }
     }
 }

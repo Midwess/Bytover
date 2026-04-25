@@ -13,8 +13,8 @@ type TransferPasswordFieldProps = {
 }
 
 export function TransferPasswordField({value, onChange, disabled, className, maxLength}: TransferPasswordFieldProps) {
-    const auth = core.useAuthentication()
-    const allowed = auth?.capabilities?.transfer_limits?.password_encryption_allowed ?? true
+    const payment = core.usePayment()
+    const allowed = payment?.capabilities?.transfer_limits?.password_encryption_allowed ?? true
 
     if (allowed) {
         return (
