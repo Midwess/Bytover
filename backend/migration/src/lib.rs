@@ -11,6 +11,7 @@ mod m20260408_000001_add_signalling_route_to_p2p_session;
 mod m20260423_000001_create_user_capabilities_table;
 mod m20260424_000001_merge_darwin_add_store_url;
 mod m20260424_000002_app_releases_unique_platform_version;
+mod m20260425_000001_add_device_unique_key_to_user_capabilities;
 pub mod model;
 
 pub struct Migrator;
@@ -30,6 +31,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260423_000001_create_user_capabilities_table::Migration),
             Box::new(m20260424_000001_merge_darwin_add_store_url::Migration),
             Box::new(m20260424_000002_app_releases_unique_platform_version::Migration),
+            Box::new(m20260425_000001_add_device_unique_key_to_user_capabilities::Migration),
         ]
     }
 }

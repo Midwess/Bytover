@@ -20,7 +20,41 @@ impl UserCapabilitiesPostgresRepository {
             m.total_transfer_bytes_lifetime_cap as u64,
             m.total_transfer_bytes_used as u64,
             m.max_visible_shelves as u32,
+            m.device_unique_key,
         )
+    }
+
+    async fn lookup_prior_free_bytes_for_device(
+        &self,
+        device_unique_key: &str,
+        current_user_order_id: u64,
+    ) -> Result<u64, RepositoryError> {
+        let sql = r#"
+            SELECT total_transfer_bytes_used
+            FROM user_capabilities
+            WHERE device_unique_key = $1
+              AND plan = $2
+              AND user_order_id <> $3
+            ORDER BY total_transfer_bytes_used DESC
+            LIMIT 1
+        "#;
+
+        let stmt = Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            sql,
+            [
+                device_unique_key.into(),
+                (Plan::Free.as_i16() as i64).into(),
+                (current_user_order_id as i64).into(),
+            ],
+        );
+
+        let row = BytesUsedRow::find_by_statement(stmt)
+            .one(&self.db)
+            .await
+            .map_err(|e| RepositoryError::DbError(e.to_string()))?;
+
+        Ok(row.map(|r| r.total_transfer_bytes_used as u64).unwrap_or(0))
     }
 }
 
@@ -31,7 +65,11 @@ struct BytesUsedRow {
 
 #[async_trait::async_trait]
 impl UserCapabilitiesRepository for UserCapabilitiesPostgresRepository {
-    async fn find_or_create_default(&self, user_order_id: u64) -> Result<UserCapabilities, RepositoryError> {
+    async fn find_or_create_default(
+        &self,
+        user_order_id: u64,
+        device_unique_key: &str,
+    ) -> Result<UserCapabilities, RepositoryError> {
         if let Some(m) = model::Entity::find_by_id(user_order_id as i64)
             .one(&self.db)
             .await
@@ -39,6 +77,18 @@ impl UserCapabilitiesRepository for UserCapabilitiesPostgresRepository {
         {
             return Ok(Self::model_to_entity(m));
         }
+
+        let seeded_bytes_used = if device_unique_key.is_empty() {
+            0
+        } else {
+            self.lookup_prior_free_bytes_for_device(device_unique_key, user_order_id).await?
+        };
+
+        let stored_device_key: Option<String> = if device_unique_key.is_empty() {
+            None
+        } else {
+            Some(device_unique_key.to_owned())
+        };
 
         let plan = Plan::Free;
         let defaults = defaults_for(plan);
@@ -49,8 +99,9 @@ impl UserCapabilitiesRepository for UserCapabilitiesPostgresRepository {
             password_encryption_allowed: Set(defaults.password_encryption_allowed),
             max_files_per_transfer: Set(defaults.max_files_per_transfer as i32),
             total_transfer_bytes_lifetime_cap: Set(defaults.total_transfer_bytes_lifetime_cap as i64),
-            total_transfer_bytes_used: Set(0),
+            total_transfer_bytes_used: Set(seeded_bytes_used as i64),
             max_visible_shelves: Set(defaults.max_visible_shelves as i32),
+            device_unique_key: Set(stored_device_key),
             created_at: Set(now),
             updated_at: Set(now),
         };
@@ -69,7 +120,7 @@ impl UserCapabilitiesRepository for UserCapabilitiesPostgresRepository {
     }
 
     async fn upgrade_to_paid(&self, user_order_id: u64) -> Result<UserCapabilities, RepositoryError> {
-        self.find_or_create_default(user_order_id).await?;
+        self.find_or_create_default(user_order_id, "").await?;
 
         let existing = model::Entity::find_by_id(user_order_id as i64)
             .one(&self.db)
