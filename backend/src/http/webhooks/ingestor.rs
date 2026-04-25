@@ -1,6 +1,13 @@
-use crate::http::webhooks::events::AppStoreReleaseUpdatedData;
 use crate::repositories::app_release::{AppReleaseRepository, StoreReleaseUpsert};
 use core_services::db::repository::abstraction::errors::RepositoryError;
+
+#[derive(Debug, Clone)]
+pub struct AppStoreReleaseUpdatedData {
+    pub platform: String,
+    pub version: String,
+    pub app_store_url: Option<String>,
+    pub release_notes: Option<String>,
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum IngestError {

@@ -3,6 +3,7 @@ use crate::app_gateway::markov::Markov;
 use crate::app_gateway::payment_gateway::PaymentGateway;
 use crate::cloud_storage::storage::CloudStorage;
 use crate::config::{load_app_store_config, AppStoreConfig};
+use crate::http::webhooks::asc_api::{AppStoreConnectApi, ReqwestAppStoreConnectApi};
 use crate::grpc::cloud_service::CloudGrpcService;
 use crate::grpc::middlewares::auth::AuthInterceptor;
 use crate::grpc::p2p_service::P2PGrpcService;
@@ -55,6 +56,7 @@ pub struct DiContainer {
     db_connection: DatabaseConnection,
     pub pg_pool: PgPool,
     app_store_config: AppStoreConfig,
+    app_store_connect_api: Option<Arc<dyn AppStoreConnectApi>>,
 }
 
 impl DiContainer {
@@ -97,6 +99,13 @@ impl DiContainer {
             .unwrap_or_else(|e| panic!("Failed to run DB migration: {e}"));
 
         let app_store_config = load_app_store_config();
+        let app_store_connect_api = app_store_config.connect_api.as_ref().map(|creds| {
+            let api = ReqwestAppStoreConnectApi::new(
+                creds.clone(),
+                app_store_config.connect_api_base_url.clone(),
+            );
+            Arc::new(api) as Arc<dyn AppStoreConnectApi>
+        });
 
         Self {
             grpc_gateway_channel: GrpcGatewayChannel::new(),
@@ -104,11 +113,16 @@ impl DiContainer {
             db_connection,
             pg_pool,
             app_store_config,
+            app_store_connect_api,
         }
     }
 
     pub fn get_app_store_config(&self) -> &AppStoreConfig {
         &self.app_store_config
+    }
+
+    pub fn get_app_store_connect_api(&self) -> Option<Arc<dyn AppStoreConnectApi>> {
+        self.app_store_connect_api.clone()
     }
 
     pub fn get_webhook_verifier(&self) -> Option<WebhookSecretVerifier> {

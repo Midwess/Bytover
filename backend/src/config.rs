@@ -10,6 +10,15 @@ pub struct AppStoreConfig {
     pub force_update_enabled: bool,
     pub default_store_url_darwin: Option<String>,
     pub default_store_url_ios: Option<String>,
+    pub connect_api: Option<AppStoreConnectApiCredentials>,
+    pub connect_api_base_url: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct AppStoreConnectApiCredentials {
+    pub issuer_id: String,
+    pub key_id: String,
+    pub private_key_pem: String,
 }
 
 impl AppStoreConfig {
@@ -27,12 +36,43 @@ pub fn load_app_store_config() -> AppStoreConfig {
     let force_update_enabled = read_bool("APP_STORE_FORCE_UPDATE_ENABLED").unwrap_or(false);
     let default_store_url_darwin = read_string("APP_STORE_DEFAULT_URL_DARWIN");
     let default_store_url_ios = read_string("APP_STORE_DEFAULT_URL_IOS");
+    let connect_api = load_connect_api_credentials();
+    let connect_api_base_url = read_string("APP_STORE_CONNECT_API_BASE_URL")
+        .unwrap_or_else(|| "https://api.appstoreconnect.apple.com".to_string());
 
     AppStoreConfig {
         webhook_secret,
         force_update_enabled,
         default_store_url_darwin,
         default_store_url_ios,
+        connect_api,
+        connect_api_base_url,
+    }
+}
+
+fn load_connect_api_credentials() -> Option<AppStoreConnectApiCredentials> {
+    let issuer_id = read_string("APP_STORE_CONNECT_ISSUER_ID")?;
+    let key_id = read_string("APP_STORE_CONNECT_KEY_ID")?;
+    let private_key_pem = read_private_key()?;
+
+    Some(AppStoreConnectApiCredentials {
+        issuer_id,
+        key_id,
+        private_key_pem,
+    })
+}
+
+fn read_private_key() -> Option<String> {
+    if let Some(inline) = read_string("APP_STORE_CONNECT_PRIVATE_KEY") {
+        return Some(inline);
+    }
+    let path = read_string("APP_STORE_CONNECT_PRIVATE_KEY_PATH")?;
+    match std::fs::read_to_string(&path) {
+        Ok(pem) => Some(pem),
+        Err(err) => {
+            log::error!("Failed to read APP_STORE_CONNECT_PRIVATE_KEY_PATH={}: {}", path, err);
+            None
+        }
     }
 }
 
