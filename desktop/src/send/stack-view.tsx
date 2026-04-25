@@ -9,7 +9,7 @@ import {
 const MAX_VISIBLE_PEEKS = 2;
 const THUMBNAIL_WIDTH = 75;
 const THUMBNAIL_HEIGHT = 100;
-const FAN_SPREAD_DEG = 16;
+const FAN_SPREAD_DEG = 20;
 const ARC_STEP_DEG = FAN_SPREAD_DEG / Math.max(1, Math.ceil(MAX_VISIBLE_PEEKS / 2));
 const JITTER_DEG = 5;
 
