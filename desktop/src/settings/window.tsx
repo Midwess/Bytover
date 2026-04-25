@@ -102,6 +102,16 @@ function SettingsWindow() {
         }
     }, [])
 
+    useEffect(() => {
+        if (IS_MACOS) return
+        const unlistenPromise = listen("tray-update-clicked", () => {
+            handleInstallUpdate()
+        })
+        return () => {
+            unlistenPromise.then((unlisten) => unlisten())
+        }
+    }, [])
+
     const handleCheckUpdate = async () => {
         setIsCheckingUpdate(true)
         setUpdateStatus(null)

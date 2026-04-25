@@ -59,6 +59,13 @@ static TRAY_ICON: LazyLock<Mutex<Option<TrayIcon>>> = LazyLock::new(|| Mutex::ne
 static TOAST_MESSAGE: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::new(None));
 static INTRO_SHOWN_AFTER_AUTH: LazyLock<Mutex<bool>> = LazyLock::new(|| Mutex::new(false));
 static EXPLICIT_AUTH_REQUESTED: LazyLock<Mutex<bool>> = LazyLock::new(|| Mutex::new(false));
+static PENDING_UPDATE: LazyLock<Mutex<Option<PendingUpdate>>> = LazyLock::new(|| Mutex::new(None));
+
+#[derive(Clone)]
+struct PendingUpdate {
+    version: String,
+    store_url: Option<String>,
+}
 
 #[tauri::command]
 async fn get_resource_path(app_handle: AppHandle, path: String) -> Result<String, String> {
@@ -397,6 +404,7 @@ async fn check_for_update(app_handle: AppHandle) -> Result<UpdateStatus, String>
                 store_url: manifest.store_url,
             };
             log::info!("Update check result (backend): {:?}", status);
+            apply_pending_update(&app_handle, &status);
             return Ok(status);
         }
     }
@@ -418,6 +426,7 @@ async fn check_for_update(app_handle: AppHandle) -> Result<UpdateStatus, String>
             store_url: None,
         };
         log::info!("Update check result (tauri): {:?}", status);
+        apply_pending_update(&app_handle, &status);
         Ok(status)
     } else {
         let status = UpdateStatus {
@@ -428,7 +437,60 @@ async fn check_for_update(app_handle: AppHandle) -> Result<UpdateStatus, String>
             store_url: None,
         };
         log::info!("Update check result: no update available");
+        apply_pending_update(&app_handle, &status);
         Ok(status)
+    }
+}
+
+fn apply_pending_update(app_handle: &AppHandle, status: &UpdateStatus) {
+    let next = if status.available {
+        status.version.clone().map(|version| PendingUpdate {
+            version,
+            store_url: status.store_url.clone(),
+        })
+    } else {
+        None
+    };
+
+    let changed = match PENDING_UPDATE.lock() {
+        Ok(mut guard) => {
+            let prev_eq = match (guard.as_ref(), next.as_ref()) {
+                (Some(a), Some(b)) => a.version == b.version && a.store_url == b.store_url,
+                (None, None) => true,
+                _ => false,
+            };
+            if prev_eq {
+                false
+            } else {
+                *guard = next;
+                true
+            }
+        }
+        Err(_) => false,
+    };
+
+    if changed {
+        refresh_tray_menu(app_handle);
+    }
+}
+
+fn refresh_tray_menu(app_handle: &AppHandle) {
+    let view = CORE.view();
+    let is_authorized = view.authentication.as_ref().map(|auth| auth.user.is_some()).unwrap_or(false);
+
+    if !is_authorized {
+        update_tray_menu_signed_out(app_handle);
+        return;
+    }
+
+    if let Some(shelf_view) = &view.shelf {
+        let is_paid = view
+            .authentication
+            .as_ref()
+            .and_then(|auth| auth.capabilities.as_ref())
+            .map(|caps| caps.is_paid())
+            .unwrap_or(false);
+        update_tray_menu(app_handle, &shelf_view.shelves, is_paid);
     }
 }
 
@@ -543,6 +605,12 @@ fn render(view: AppViewModel, app_handle: AppHandle) {
 fn update_tray_menu_signed_out(app_handle: &AppHandle) {
     let app_handle = app_handle.clone();
     let _ = app_handle.clone().run_on_main_thread(move || {
+        let pending = PENDING_UPDATE.lock().ok().and_then(|g| g.clone());
+        let update_item = pending.as_ref().and_then(|p| {
+            MenuItemBuilder::with_id("update_now", format!("Update to {}", p.version))
+                .build(&app_handle)
+                .ok()
+        });
         let Ok(user_guide_item) = MenuItemBuilder::with_id("user_guide", "User Guide").build(&app_handle) else {
             return;
         };
@@ -550,7 +618,11 @@ fn update_tray_menu_signed_out(app_handle: &AppHandle) {
             return;
         };
 
-        let Ok(menu) = MenuBuilder::new(&app_handle).item(&user_guide_item).separator().item(&quit_item).build() else {
+        let mut builder = MenuBuilder::new(&app_handle);
+        if let Some(item) = update_item.as_ref() {
+            builder = builder.item(item).separator();
+        }
+        let Ok(menu) = builder.item(&user_guide_item).separator().item(&quit_item).build() else {
             return;
         };
 
@@ -566,6 +638,12 @@ fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel], is_p
     let app_handle = app_handle.clone();
     let shelves: Vec<ShelfItemViewModel> = shelves.to_vec();
     let _ = app_handle.clone().run_on_main_thread(move || {
+        let pending = PENDING_UPDATE.lock().ok().and_then(|g| g.clone());
+        let update_item = pending.as_ref().and_then(|p| {
+            MenuItemBuilder::with_id("update_now", format!("Update to {}", p.version))
+                .build(&app_handle)
+                .ok()
+        });
         let Ok(new_shelf_item) = MenuItemBuilder::with_id("new_shelf", "New Shelf").build(&app_handle) else {
             return;
         };
@@ -606,7 +684,11 @@ fn update_tray_menu(app_handle: &AppHandle, shelves: &[ShelfItemViewModel], is_p
             return;
         };
 
-        let mut menu_builder = MenuBuilder::new(&app_handle)
+        let mut menu_builder = MenuBuilder::new(&app_handle);
+        if let Some(item) = update_item.as_ref() {
+            menu_builder = menu_builder.item(item).separator();
+        }
+        menu_builder = menu_builder
             .item(&new_shelf_item)
             .item(&new_shelf_clipboard_item)
             .item(&recent_submenu)
@@ -912,6 +994,19 @@ pub async fn run() {
                 .on_menu_event(|app, event| {
                     let event_id = event.id().as_ref();
                     match event_id {
+                        "update_now" => {
+                            let pending = PENDING_UPDATE.lock().ok().and_then(|g| g.clone());
+                            if let Some(p) = pending {
+                                if let Some(url) = p.store_url {
+                                    if let Err(e) = app.opener().open_url(url, Option::<&str>::None) {
+                                        log::warn!("[tray] failed to open store url: {e}");
+                                    }
+                                } else {
+                                    app.show_settings_with_tab("updates");
+                                    let _ = app.emit("tray-update-clicked", ());
+                                }
+                            }
+                        }
                         "user_guide" => {
                             app.show_intro();
                         }
