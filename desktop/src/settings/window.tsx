@@ -5,6 +5,7 @@ import {getVersion} from "@tauri-apps/api/app"
 import {getCurrentWindow} from "@tauri-apps/api/window"
 import {listen} from "@tauri-apps/api/event"
 import {Button} from "@/components/ui/button"
+import {Avatar, AvatarFallback, AvatarImage} from "@/components/ui/avatar"
 import {
     RefreshCw,
     Loader2,
