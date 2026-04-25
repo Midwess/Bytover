@@ -327,7 +327,7 @@ function SettingsSection({title, children, description}: {
                     {title}
                 </h3>
             )}
-            <div className="bg-[#141414] border border-white/[0.06] rounded-xl overflow-hidden">
+            <div className="bg-[#202020] border border-white/[0.06] rounded-xl overflow-hidden">
                 {children}
             </div>
             {description && (
