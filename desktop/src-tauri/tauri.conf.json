@@ -28,7 +28,7 @@
     "withGlobalTauri": true,
     "macOSPrivateApi": true,
     "security": {
-      "csp": "default-src 'self' ipc: http://ipc.localhost tauri:; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost https://midwess.sgp1.cdn.digitaloceanspaces.com tauri:",
+      "csp": "default-src 'self' ipc: http://ipc.localhost tauri:; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost https://midwess.sgp1.cdn.digitaloceanspaces.com https://pub-13678040a05e4d5eaa3d4afbb253827c.r2.dev tauri:",
       "assetProtocol": {
         "enable": true,
         "scope": ["$APPDATA/**", "$RESOURCE/**"]
