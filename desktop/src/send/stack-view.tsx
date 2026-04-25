@@ -9,7 +9,8 @@ import {
 const MAX_VISIBLE_PEEKS = 2;
 const THUMBNAIL_WIDTH = 112;
 const THUMBNAIL_HEIGHT = 63;
-const ARC_STEP_DEG = 12;
+const FAN_SPREAD_DEG = 16;
+const ARC_STEP_DEG = FAN_SPREAD_DEG / Math.max(1, Math.ceil(MAX_VISIBLE_PEEKS / 2));
 const JITTER_DEG = 5;
 
 type StackViewProps = {
