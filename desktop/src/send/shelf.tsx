@@ -20,6 +20,8 @@ import {
     Loader2,
     ClipboardPaste,
     ExternalLink,
+    Layers,
+    LayoutList,
 } from "lucide-react";
 import {Button} from "@/components/ui/button.tsx";
 import {
@@ -38,6 +40,9 @@ import useShelfDock, {DockEdge} from "@/hooks/use-shelf-dock.ts";
 import {throttle} from "lodash";
 import {UnlimitedLineText} from "@/components/ui/unlimited-line-text";
 import {PeerAvatarGroup} from "@/send/peer-avatar-group";
+import {StackView} from "@/send/stack-view";
+
+export type ShelfViewMode = 'list' | 'stack';
 
 export function ShelfWrapper({
     children,
@@ -174,6 +179,7 @@ export function Shelf({
     const isResourceRemoveAllowed = currentShelf?.is_resource_remove_allowed ?? true
     const effectRan = useRef(false);
     const [isDraggingOver, setIsDraggingOver] = useState(false);
+    const [viewMode, setViewMode] = useState<ShelfViewMode>('stack');
     const containerRef = useRef<HTMLDivElement>(null);
 
     useShelfClipboard({shelfId, enabled: !disabled});
@@ -312,52 +318,75 @@ export function Shelf({
                         <p className="text-md text-muted-foreground animate-pop-down-pulse">Drop or paste files here</p>
                     </div>
                 ) : (
-                    <div className="flex flex-col gap-2">
-                        {selectedResources.map((resource) => (
-                            <ResourceView
-                                key={resource.order_id}
-                                model={resource}
-                                isRemoveAllowed={isResourceRemoveAllowed}
-                                onRemove={(resourceId) => {
-                                    invoke("remove_resource", {shelfId, resourceId})
-                                }}
+                    <>
+                        <div
+                            className="flex flex-col gap-2"
+                            style={{display: viewMode === 'list' ? 'flex' : 'none'}}
+                        >
+                            {selectedResources.map((resource) => (
+                                <ResourceView
+                                    key={resource.order_id}
+                                    model={resource}
+                                    isRemoveAllowed={isResourceRemoveAllowed}
+                                    onRemove={(resourceId) => {
+                                        invoke("remove_resource", {shelfId, resourceId})
+                                    }}
+                                    onOpen={(resourceId) => {
+                                        invoke("open_shelf_resource", {shelfId, resourceId})
+                                    }}
+                                />
+                            ))}
+                            <div className={"h-5"}></div>
+                        </div>
+                        <div className="h-full" style={{display: viewMode === 'stack' ? 'block' : 'none'}}>
+                            <StackView
+                                resources={selectedResources}
                                 onOpen={(resourceId) => {
                                     invoke("open_shelf_resource", {shelfId, resourceId})
                                 }}
                             />
-                        ))}
-                        <div className={"h-5"}></div>
-                    </div>
+                        </div>
+                    </>
                 )}
             </div>
 
             <div
                 className="absolute bottom-0 left-0 right-0 h-fit bg-gradient-to-t from-card to-transparent z-20 w-full justify-center flex flex-row pb-2">
-                <div className="group z-20 flex flex-col items-center justify-end bg-transparent text-muted-foreground transition-all duration-500 ease-out hover:pb-2 gap-2">
-                    <div className="flex flex-col gap-1.5 overflow-hidden max-h-0 opacity-0 transition-all duration-300 ease-out group-hover:max-h-24 group-hover:opacity-100 group-hover:mb-1">
-                        {!!selectedResources.length && (
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                disabled={!isResourceRemoveAllowed}
-                                onClick={() => invoke("clear_shelf", {shelfId})}
-                                className="w-24 flex items-center justify-center gap-1.5 text-foreground text-xs bg-muted px-2 py-1 h-auto rounded-lg border disabled:opacity-50 disabled:cursor-not-allowed">
-                                <Trash2 className="h-3.5 w-3.5"/>
-                                <span>Clear all</span>
-                            </Button>
-                        )}
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => invoke('paste_from_clipboard', {shelfId})}
-                            className="flex items-center justify-center gap-1.5 text-foreground text-xs bg-muted px-2 py-1 h-auto w-24 rounded-lg border">
-                            <ClipboardPaste className="h-3.5 w-3.5"/>
-                            <span>Paste</span>
-                        </Button>
-                    </div>
-                    <MoreHorizontal
-                        className="h-7 w-7 flex-shrink-0 transition-transform text-foreground p-[2px] duration-500 ease-out bg-muted/90 rounded-full cursor-pointer"/>
-                </div>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <button
+                            type="button"
+                            aria-label="Shelf options"
+                            className="h-7 w-7 flex-shrink-0 flex items-center justify-center text-foreground p-[2px] bg-muted/90 hover:bg-muted rounded-full cursor-pointer transition-colors duration-200 ease-out">
+                            <MoreHorizontal className="h-full w-full"/>
+                        </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="center" side="top" sideOffset={6} className="dark">
+                        <DropdownMenuItem onClick={() => {
+                            setTimeout(() => {
+                                setViewMode(prev => prev === 'list' ? 'stack' : 'list');
+                            }, 0);
+                        }}>
+                            {viewMode === 'list' ? (
+                                <Layers className="w-4 h-4 mr-2"/>
+                            ) : (
+                                <LayoutList className="w-4 h-4 mr-2"/>
+                            )}
+                            {viewMode === 'list' ? 'Stack' : 'List'}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => invoke('paste_from_clipboard', {shelfId})}>
+                            <ClipboardPaste className="w-4 h-4 mr-2"/>
+                            Paste
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                            variant="destructive"
+                            disabled={!selectedResources.length || !isResourceRemoveAllowed}
+                            onClick={() => invoke('clear_shelf', {shelfId})}>
+                            <Trash2 className="w-4 h-4 mr-2"/>
+                            Clear all
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </div>
             </div>
             {overlay}
@@ -394,7 +423,7 @@ function ResourceView(props: {
     </div>
 }
 
-function FileView(props: {
+export function FileView(props: {
     model: SelectedResourceViewModel,
     isRemoveAllowed: boolean,
     onRemove: (resourceId: string) => void,
@@ -468,7 +497,7 @@ function FileView(props: {
     );
 }
 
-function MediaView(props: {
+export function MediaView(props: {
     model: SelectedResourceViewModel,
     isRemoveAllowed: boolean,
     onRemove: (resourceId: string) => void,
