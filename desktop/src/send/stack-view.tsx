@@ -7,36 +7,18 @@ import {
 } from "shared_types/types/shared_types";
 
 const MAX_VISIBLE_PEEKS = 2;
-const THUMBNAIL_WIDTH = 144;
-const THUMBNAIL_HEIGHT = 81;
-const MAX_ROTATION_DEG = 15;
+const THUMBNAIL_WIDTH = 112;
+const THUMBNAIL_HEIGHT = 63;
+
+const FAN_ANGLES = [0, 14, -12, 8, -10];
 
 type StackViewProps = {
     resources: SelectedResourceViewModel[],
     onOpen: (resourceId: string) => void,
 };
 
-function hashSeed(s: string): number {
-    let h = 5381;
-    for (let i = 0; i < s.length; i++) {
-        h = ((h << 5) + h) + s.charCodeAt(i);
-        h |= 0;
-    }
-    return h >>> 0 || 1;
-}
-
-function makeRng(seed: number): () => number {
-    let s = seed;
-    return () => {
-        s = (s * 1664525 + 1013904223) >>> 0;
-        return s / 0x100000000;
-    };
-}
-
-function rotationFor(orderId: string): string {
-    const rng = makeRng(hashSeed(orderId));
-    const rot = (rng() * 2 - 1) * MAX_ROTATION_DEG;
-    return `rotate(${rot.toFixed(2)}deg)`;
+function angleForStack(stackIndex: number): number {
+    return FAN_ANGLES[stackIndex % FAN_ANGLES.length];
 }
 
 function Thumbnail({model}: {model: SelectedResourceViewModel}) {
@@ -46,7 +28,7 @@ function Thumbnail({model}: {model: SelectedResourceViewModel}) {
 
     return (
         <div
-            className="overflow-hidden flex items-center justify-center rounded shadow-md bg-white"
+            className="overflow-hidden flex items-center justify-center rounded shadow-lg bg-white"
             style={{width: THUMBNAIL_WIDTH, height: THUMBNAIL_HEIGHT}}
         >
             {thumbnailUrl ? (
@@ -57,9 +39,9 @@ function Thumbnail({model}: {model: SelectedResourceViewModel}) {
                     draggable={false}
                 />
             ) : isFolder ? (
-                <FolderIcon className="w-12 h-12 text-primary"/>
+                <FolderIcon className="w-8 h-8 text-primary"/>
             ) : (
-                <FileIcon className="w-12 h-12 text-primary"/>
+                <FileIcon className="w-8 h-8 text-primary"/>
             )}
         </div>
     );
@@ -94,24 +76,27 @@ export function StackView({resources, onOpen}: StackViewProps) {
                 className="relative select-none overflow-visible"
                 style={{width: THUMBNAIL_WIDTH, height: THUMBNAIL_HEIGHT}}
             >
-                {peeks.map((resource, index) => (
-                    <div
-                        key={resource.order_id}
-                        className="absolute inset-0 pointer-events-none"
-                        style={{
-                            transform: rotationFor(resource.order_id),
-                            zIndex: 20 - index * 5,
-                        }}
-                        aria-hidden="true"
-                    >
-                        <Thumbnail model={resource}/>
-                    </div>
-                ))}
+                {peeks.map((resource, peekIndex) => {
+                    const stackIndex = peekIndex + 1;
+                    return (
+                        <div
+                            key={resource.order_id}
+                            className="absolute inset-0 pointer-events-none"
+                            style={{
+                                transform: `rotate(${angleForStack(stackIndex)}deg)`,
+                                zIndex: 20 - peekIndex * 5,
+                            }}
+                            aria-hidden="true"
+                        >
+                            <Thumbnail model={resource}/>
+                        </div>
+                    );
+                })}
 
                 <div
                     className="absolute inset-0"
                     style={{
-                        transform: rotationFor(top.order_id),
+                        transform: `rotate(${angleForStack(0)}deg)`,
                         zIndex: 30,
                     }}
                 >
