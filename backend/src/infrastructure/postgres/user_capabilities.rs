@@ -1,6 +1,6 @@
 use crate::app_gateway::plan::{defaults_for, Plan};
 use crate::entities::user_capabilities::UserCapabilities;
-use crate::repositories::user_capabilities::{ClampedIncrementOutcome, IncrementOutcome, UserCapabilitiesRepository};
+use crate::repositories::user_capabilities::{IncrementOutcome, UserCapabilitiesRepository};
 use core_services::db::repository::abstraction::errors::RepositoryError;
 use migration::model::user_capabilities as model;
 use sea_orm::ActiveValue::Set;
@@ -64,10 +64,10 @@ struct BytesUsedRow {
 }
 
 #[derive(FromQueryResult)]
-struct ClampedIncrementRow {
+struct IncrementRow {
     prev_used: i64,
     new_used: i64,
-    cap: i64,
+    lifetime_cap: i64,
 }
 
 #[async_trait::async_trait]
@@ -153,11 +153,7 @@ impl UserCapabilitiesRepository for UserCapabilitiesPostgresRepository {
         Ok(Self::model_to_entity(updated))
     }
 
-    async fn clamped_increment_bytes_used(
-        &self,
-        user_order_id: u64,
-        delta: u64,
-    ) -> Result<ClampedIncrementOutcome, RepositoryError> {
+    async fn increment_bytes_used(&self, user_order_id: u64, delta: u64) -> Result<IncrementOutcome, RepositoryError> {
         let sql = r#"
             WITH prev AS (
                 SELECT total_transfer_bytes_used, total_transfer_bytes_lifetime_cap
@@ -166,19 +162,15 @@ impl UserCapabilitiesRepository for UserCapabilitiesPostgresRepository {
             ),
             updated AS (
                 UPDATE user_capabilities
-                SET total_transfer_bytes_used = CASE
-                    WHEN total_transfer_bytes_lifetime_cap = 0
-                        THEN total_transfer_bytes_used + $1
-                    ELSE LEAST(total_transfer_bytes_used + $1, total_transfer_bytes_lifetime_cap)
-                END,
-                updated_at = NOW()
+                SET total_transfer_bytes_used = total_transfer_bytes_used + $1,
+                    updated_at = NOW()
                 WHERE user_order_id = $2
                 RETURNING total_transfer_bytes_used, total_transfer_bytes_lifetime_cap
             )
             SELECT
                 prev.total_transfer_bytes_used AS prev_used,
                 updated.total_transfer_bytes_used AS new_used,
-                updated.total_transfer_bytes_lifetime_cap AS cap
+                updated.total_transfer_bytes_lifetime_cap AS lifetime_cap
             FROM prev, updated
         "#;
 
@@ -188,67 +180,22 @@ impl UserCapabilitiesRepository for UserCapabilitiesPostgresRepository {
             [(delta as i64).into(), (user_order_id as i64).into()],
         );
 
-        let row = ClampedIncrementRow::find_by_statement(stmt)
-            .one(&self.db)
-            .await
-            .map_err(|e| RepositoryError::DbError(e.to_string()))?
-            .ok_or_else(|| RepositoryError::DbError("clamped_increment_bytes_used: row not found".to_owned()))?;
-
-        let prev_used = row.prev_used as u64;
-        let new_bytes_used = row.new_used as u64;
-        let cap = row.cap as u64;
-        let applied = new_bytes_used.saturating_sub(prev_used);
-        let cap_exceeded = applied < delta;
-
-        Ok(ClampedIncrementOutcome {
-            applied,
-            new_bytes_used,
-            cap,
-            cap_exceeded,
-        })
-    }
-
-    async fn increment_bytes_used(&self, user_order_id: u64, delta: u64) -> Result<IncrementOutcome, RepositoryError> {
-        let sql = r#"
-            UPDATE user_capabilities
-            SET total_transfer_bytes_used = total_transfer_bytes_used + $1,
-                updated_at = NOW()
-            WHERE user_order_id = $2
-              AND (
-                    total_transfer_bytes_lifetime_cap = 0
-                    OR total_transfer_bytes_used + $1 <= total_transfer_bytes_lifetime_cap
-                  )
-            RETURNING total_transfer_bytes_used
-        "#;
-
-        let stmt = Statement::from_sql_and_values(
-            DatabaseBackend::Postgres,
-            sql,
-            [(delta as i64).into(), (user_order_id as i64).into()],
-        );
-
-        if let Some(row) = BytesUsedRow::find_by_statement(stmt)
-            .one(&self.db)
-            .await
-            .map_err(|e| RepositoryError::DbError(e.to_string()))?
-        {
-            return Ok(IncrementOutcome::Updated {
-                new_bytes_used: row.total_transfer_bytes_used as u64,
-            });
-        }
-
-        let current = model::Entity::find_by_id(user_order_id as i64)
+        let row = IncrementRow::find_by_statement(stmt)
             .one(&self.db)
             .await
             .map_err(|e| RepositoryError::DbError(e.to_string()))?
             .ok_or_else(|| RepositoryError::DbError("increment_bytes_used: row not found".to_owned()))?;
 
-        Ok(IncrementOutcome::WouldExceedCap {
-            cap: current.total_transfer_bytes_lifetime_cap as u64,
-            used: current.total_transfer_bytes_used as u64,
-            requested: delta,
+        let prev_used = row.prev_used as u64;
+        let new_bytes_used = row.new_used as u64;
+        let lifetime_cap = row.lifetime_cap as u64;
+        let cap_crossed = lifetime_cap > 0 && prev_used < lifetime_cap && new_bytes_used >= lifetime_cap;
+
+        Ok(IncrementOutcome {
+            new_bytes_used,
+            cap_crossed,
+            lifetime_cap,
         })
     }
-
 }
 

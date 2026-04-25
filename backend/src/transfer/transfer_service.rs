@@ -7,7 +7,7 @@ use crate::entities::transfer_session::{TransferSession, TransferSessionErrors};
 use crate::entities::user_capabilities::UserCapabilities;
 use crate::mail::service::EmailService;
 use crate::repositories::transfer_session::{TransferSessionId, TransferSessionRepository};
-use crate::repositories::user_capabilities::{IncrementOutcome, UserCapabilitiesRepository};
+use crate::repositories::user_capabilities::UserCapabilitiesRepository;
 use core_services::db::repository::abstraction::errors::RepositoryError;
 use futures::join;
 use schema::crafter::email_template::Template::{self};
@@ -178,12 +178,11 @@ impl TransferService {
                         .user_capabilities_repository
                         .increment_bytes_used(user.order_id, completed_size)
                         .await?;
-                    if let IncrementOutcome::WouldExceedCap { cap, used, requested } = outcome {
-                        if let Some(p) = session.current_resource_progress_mut() {
-                            p.cancel();
-                        }
-                        self.transfer_repository.update_one(session).await?;
-                        return Err(TransferErrors::LifetimeBytesExceed { cap, used, requested });
+                    if outcome.cap_crossed {
+                        log::info!(
+                            "[transfer] user crossed lifetime cap on cloud upload: user_order_id={} new_used={} lifetime_cap={}",
+                            user.order_id, outcome.new_bytes_used, outcome.lifetime_cap
+                        );
                     }
                 }
 

@@ -389,19 +389,19 @@ impl BitBridgeCloudService for CloudGrpcService {
         let caps_repo = di.get_user_capabilities_repository().await;
 
         let outcome = caps_repo
-            .clamped_increment_bytes_used(user_order_id, delta)
+            .increment_bytes_used(user_order_id, delta)
             .await
             .map_err(|e| {
                 log::warn!(
-                    "[payment] report_p2p_bytes_used clamped_increment failed: user_order_id={user_order_id} delta={delta} err={e}"
+                    "[payment] report_p2p_bytes_used increment failed: user_order_id={user_order_id} delta={delta} err={e}"
                 );
                 Status::internal(e.to_string())
             })?;
 
-        if outcome.cap_exceeded {
+        if outcome.cap_crossed {
             log::info!(
-                "[payment] report_p2p_bytes_used cap clamped: user_order_id={user_order_id} delta={delta} applied={} new_used={} cap={}",
-                outcome.applied, outcome.new_bytes_used, outcome.cap
+                "[payment] user crossed lifetime cap: user_order_id={user_order_id} new_used={} lifetime_cap={}",
+                outcome.new_bytes_used, outcome.lifetime_cap
             );
         }
 
