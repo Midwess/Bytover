@@ -317,23 +317,30 @@ export function Shelf({
                         className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2 absolute left-0 top-0 w-full">
                         <p className="text-md text-muted-foreground animate-pop-down-pulse">Drop or paste files here</p>
                     </div>
-                ) : viewMode === 'stack' ? (
-                    <StackView
-                        resources={selectedResources}
-                        isRemoveAllowed={isResourceRemoveAllowed}
-                        onRemove={(resourceId) => {
-                            invoke("remove_resource", {shelfId, resourceId})
-                        }}
-                        onOpen={(resourceId) => {
-                            invoke("open_shelf_resource", {shelfId, resourceId})
-                        }}
-                    />
                 ) : (
-                    <div className="flex flex-col gap-2">
-                        {selectedResources.map((resource) => (
-                            <ResourceView
-                                key={resource.order_id}
-                                model={resource}
+                    <>
+                        <div
+                            className="flex flex-col gap-2"
+                            style={{display: viewMode === 'list' ? 'flex' : 'none'}}
+                        >
+                            {selectedResources.map((resource) => (
+                                <ResourceView
+                                    key={resource.order_id}
+                                    model={resource}
+                                    isRemoveAllowed={isResourceRemoveAllowed}
+                                    onRemove={(resourceId) => {
+                                        invoke("remove_resource", {shelfId, resourceId})
+                                    }}
+                                    onOpen={(resourceId) => {
+                                        invoke("open_shelf_resource", {shelfId, resourceId})
+                                    }}
+                                />
+                            ))}
+                            <div className={"h-5"}></div>
+                        </div>
+                        <div style={{display: viewMode === 'stack' ? 'block' : 'none'}}>
+                            <StackView
+                                resources={selectedResources}
                                 isRemoveAllowed={isResourceRemoveAllowed}
                                 onRemove={(resourceId) => {
                                     invoke("remove_resource", {shelfId, resourceId})
@@ -342,9 +349,8 @@ export function Shelf({
                                     invoke("open_shelf_resource", {shelfId, resourceId})
                                 }}
                             />
-                        ))}
-                        <div className={"h-5"}></div>
-                    </div>
+                        </div>
+                    </>
                 )}
             </div>
 
