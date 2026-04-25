@@ -1,7 +1,7 @@
 use crate::app::authentication::module::AuthenticationEvent;
 use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
-use crate::app::operations::dialog::{AlertDialog, DialogOperation};
+use crate::app::operations::dialog::DialogOperation;
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::operations::storekit::{StoreKitOperation, StoreKitOperationOutput, StoreKitTransactionDto};
 use crate::app::payment::module::{InFlight, PaymentEvent, ProductId};
@@ -90,9 +90,18 @@ impl AppCommand {
             dto.transaction_id, dto.product_id
         );
         let transaction_id = dto.transaction_id.clone();
-        let result = self
+        let result = match self
             .run(RpcOperation::submit_storekit_transaction(dto.transaction_id, dto.product_id))
-            .await?;
+            .await
+        {
+            Ok(r) => r,
+            Err(error) => {
+                let message = error.to_string();
+                log::warn!("[payment] submit_storekit_transaction transport failed: {message}");
+                self.surface_failure(&message).await;
+                return Err(error);
+            }
+        };
 
         match result {
             SubmitStoreKitResult::Completed { capabilities, .. } => {
@@ -104,8 +113,7 @@ impl AppCommand {
             SubmitStoreKitResult::Rejected { code, message } => {
                 let display = message.clone().unwrap_or_else(|| format!("Payment rejected ({code:?})"));
                 log::warn!("[payment] submission Rejected: code={code:?} message={message:?}");
-                self.run(DialogOperation::alert(AlertDialog::alert(display.clone()))).await;
-                self.notify_event(PaymentEvent::SubmissionFailed(display));
+                self.surface_failure(&display).await;
             }
         }
 
@@ -115,26 +123,19 @@ impl AppCommand {
     async fn submit_serially(&self, transactions: Vec<StoreKitTransactionDto>, label: &'static str) {
         let total = transactions.len();
         let mut succeeded = 0usize;
-        let mut failed_message: Option<String> = None;
 
         for (index, dto) in transactions.into_iter().enumerate() {
             log::info!("[payment] {label}: submitting [{}/{total}] transaction_id={}", index + 1, dto.transaction_id);
             match self.submit_and_finish(dto).await {
                 Ok(()) => succeeded += 1,
                 Err(error) => {
-                    let message = error.to_string();
-                    log::warn!("[payment] {label}: aborting at [{}/{total}]: {message}", index + 1);
-                    failed_message = Some(message);
+                    log::warn!(
+                        "[payment] {label}: aborting at [{}/{total}]: succeeded={succeeded}/{total} err={error}",
+                        index + 1
+                    );
                     break;
                 }
             }
-        }
-
-        if let Some(message) = failed_message {
-            let summary = format!("{label} interrupted: {succeeded}/{total} succeeded. Last error: {message}");
-            log::warn!("[payment] {summary}");
-            self.run(DialogOperation::alert(AlertDialog::alert(summary.clone()))).await;
-            self.notify_event(PaymentEvent::SubmissionFailed(summary));
         }
     }
 
