@@ -43,6 +43,8 @@ pub async fn process_webhook(
     repo: &dyn AppReleaseRepository,
     api: Option<&dyn AppStoreConnectApi>,
 ) -> HandlerOutcome {
+    log_inbound_request(headers, body);
+
     let Some(verifier) = verifier else {
         log::warn!(
             "APP_STORE_CONNECT_WEBHOOK_SECRET not set; rejecting inbound webhook with 503 so Apple retries"
@@ -101,6 +103,28 @@ pub async fn process_webhook(
             log::info!("Ignoring unknown notification type: {}", t);
             HandlerOutcome::Ignored
         }
+    }
+}
+
+fn log_inbound_request(headers: &HeaderMap, body: &[u8]) {
+    let header_dump: Vec<String> = headers
+        .iter()
+        .map(|(name, value)| {
+            let v = value.to_str().unwrap_or("<non-ascii>");
+            format!("{}: {}", name, v)
+        })
+        .collect();
+    log::info!(
+        "App Store Connect webhook inbound: headers=[{}]",
+        header_dump.join(" | "),
+    );
+    match std::str::from_utf8(body) {
+        Ok(s) => log::info!("App Store Connect webhook body ({} bytes): {}", body.len(), s),
+        Err(_) => log::info!(
+            "App Store Connect webhook body ({} bytes, non-utf8): {}",
+            body.len(),
+            hex::encode(body),
+        ),
     }
 }
 
