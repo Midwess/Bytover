@@ -1,4 +1,3 @@
-import {CSSProperties} from "react";
 import {startDrag} from "@crabnebula/tauri-plugin-drag";
 import {convertFileSrc} from "@tauri-apps/api/core";
 import {FileIcon, FolderIcon} from "lucide-react";
@@ -6,59 +5,71 @@ import {
     ResourceTypeVariantFolder,
     SelectedResourceViewModel,
 } from "shared_types/types/shared_types";
-import {Card} from "@/components/ui/card";
 
 const MAX_VISIBLE_PEEKS = 2;
-
-const CARD_WIDTH = 128;
-const CARD_HEIGHT = 144;
-
-const SLOT_STYLES: Record<number, CSSProperties> = {
-    0: {transform: 'none', zIndex: 30, opacity: 1},
-    1: {transform: 'translate(6px, 4px) rotate(4deg) scale(0.95)', zIndex: 20, opacity: 0.85},
-    2: {transform: 'translate(-6px, 8px) rotate(-4deg) scale(0.9)', zIndex: 10, opacity: 0.65},
-};
+const THUMBNAIL_SIZE = 104;
+const MAX_OFFSET_X = 14;
+const MAX_OFFSET_Y = 10;
+const MAX_ROTATION_DEG = 12;
 
 type StackViewProps = {
     resources: SelectedResourceViewModel[],
     onOpen: (resourceId: string) => void,
 };
 
-function StackCard({
-    model,
-    onDoubleClick,
-}: {
-    model: SelectedResourceViewModel,
-    onDoubleClick?: () => void,
-}) {
+function hashSeed(s: string): number {
+    let h = 5381;
+    for (let i = 0; i < s.length; i++) {
+        h = ((h << 5) + h) + s.charCodeAt(i);
+        h |= 0;
+    }
+    return h >>> 0 || 1;
+}
+
+function makeRng(seed: number): () => number {
+    let s = seed;
+    return () => {
+        s = (s * 1664525 + 1013904223) >>> 0;
+        return s / 0x100000000;
+    };
+}
+
+function scatterTransform(orderId: string): string {
+    const rng = makeRng(hashSeed(orderId));
+    const dx = (rng() * 2 - 1) * MAX_OFFSET_X;
+    const dy = (rng() * 2 - 1) * MAX_OFFSET_Y;
+    const rot = (rng() * 2 - 1) * MAX_ROTATION_DEG;
+    return `translate(${dx.toFixed(2)}px, ${dy.toFixed(2)}px) rotate(${rot.toFixed(2)}deg)`;
+}
+
+function Thumbnail({model}: {model: SelectedResourceViewModel}) {
     const thumbnailPath = (model.thumbnail_path as any)?.AbsolutePath;
     const thumbnailUrl = thumbnailPath ? convertFileSrc(thumbnailPath) : null;
     const isFolder = model.type instanceof ResourceTypeVariantFolder;
 
+    if (thumbnailUrl) {
+        return (
+            <img
+                src={thumbnailUrl}
+                alt=""
+                className="block object-cover"
+                style={{width: THUMBNAIL_SIZE, height: THUMBNAIL_SIZE}}
+                draggable={false}
+            />
+        );
+    }
+
     return (
-        <Card
-            shadowSize={0.35}
-            onDoubleClick={onDoubleClick}
-            className="bg-muted rounded-xl flex flex-col p-1.5 gap-1.5"
-            style={{width: CARD_WIDTH, height: CARD_HEIGHT}}
+        <div
+            className="flex items-center justify-center"
+            style={{width: THUMBNAIL_SIZE, height: THUMBNAIL_SIZE}}
         >
-            <div className="flex-1 rounded-lg bg-muted-foreground/15 overflow-hidden flex items-center justify-center">
-                {thumbnailUrl ? (
-                    <img
-                        src={thumbnailUrl}
-                        alt=""
-                        className="w-full h-full object-cover"
-                    />
-                ) : isFolder ? (
-                    <FolderIcon className="w-10 h-10 text-primary"/>
-                ) : (
-                    <FileIcon className="w-10 h-10 text-primary"/>
-                )}
-            </div>
-            <p className="text-xs font-medium text-primaryText text-center truncate px-1">
-                {model.name}
-            </p>
-        </Card>
+            {isFolder ? (
+                <FolderIcon className="w-12 h-12 text-primary"/>
+            ) : (
+                <FileIcon className="w-12 h-12 text-primary"/>
+            )}
+        </div>
     );
 }
 
@@ -87,28 +98,32 @@ export function StackView({resources, onOpen}: StackViewProps) {
             <div
                 draggable
                 onDragStart={onDragStart}
+                onDoubleClick={() => onOpen(top.order_id)}
                 className="relative select-none"
-                style={{width: CARD_WIDTH, height: CARD_HEIGHT}}
+                style={{width: THUMBNAIL_SIZE, height: THUMBNAIL_SIZE}}
             >
-                {peeks
-                    .slice()
-                    .reverse()
-                    .map((resource, reverseIndex) => {
-                        const slot = peeks.length - reverseIndex;
-                        return (
-                            <div
-                                key={resource.order_id}
-                                className="absolute top-0 left-0 right-0 pointer-events-none"
-                                style={SLOT_STYLES[slot]}
-                                aria-hidden="true"
-                            >
-                                <StackCard model={resource}/>
-                            </div>
-                        );
-                    })}
+                {peeks.map((resource, index) => (
+                    <div
+                        key={resource.order_id}
+                        className="absolute top-0 left-0 pointer-events-none"
+                        style={{
+                            transform: scatterTransform(resource.order_id),
+                            zIndex: 20 - index * 5,
+                        }}
+                        aria-hidden="true"
+                    >
+                        <Thumbnail model={resource}/>
+                    </div>
+                ))}
 
-                <div className="relative" style={SLOT_STYLES[0]}>
-                    <StackCard model={top} onDoubleClick={() => onOpen(top.order_id)}/>
+                <div
+                    className="relative"
+                    style={{
+                        transform: scatterTransform(top.order_id),
+                        zIndex: 30,
+                    }}
+                >
+                    <Thumbnail model={top}/>
                 </div>
 
                 {overflowCount > 0 && (
