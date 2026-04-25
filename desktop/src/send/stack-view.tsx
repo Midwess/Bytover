@@ -46,7 +46,7 @@ function Thumbnail({model}: {model: SelectedResourceViewModel}) {
 
     return (
         <div
-            className="overflow-hidden flex items-center justify-center"
+            className="overflow-hidden flex items-center justify-center rounded"
             style={{width: THUMBNAIL_WIDTH, height: THUMBNAIL_HEIGHT}}
         >
             {thumbnailUrl ? (
