@@ -1,4 +1,7 @@
-use actix_web::{get, web, HttpResponse, Result};
+use axum::extract::Path;
+use axum::response::{IntoResponse, Response};
+use axum::Json;
+use http::StatusCode;
 use sea_orm::EntityTrait;
 use semver::Version;
 use serde::Deserialize;
@@ -40,8 +43,7 @@ pub fn compute_is_critical(
     row_is_critical || (force_update_enabled && is_store_release && major_bump)
 }
 
-#[get("/update/{target}/{arch}/{current_version}")]
-pub async fn get_update_manifest(path: web::Path<UpdatePath>) -> Result<HttpResponse> {
+pub async fn get_update_manifest(Path(path): Path<UpdatePath>) -> Response {
     let target = &path.target;
     let arch = &path.arch;
     let current_version = &path.current_version;
@@ -57,7 +59,7 @@ pub async fn get_update_manifest(path: web::Path<UpdatePath>) -> Result<HttpResp
         Ok(v) => v,
         Err(e) => {
             log::warn!("Invalid current version format '{}': {}", current_version, e);
-            return Ok(HttpResponse::BadRequest().finish());
+            return StatusCode::BAD_REQUEST.into_response();
         }
     };
 
@@ -67,10 +69,13 @@ pub async fn get_update_manifest(path: web::Path<UpdatePath>) -> Result<HttpResp
 
     use crate::entities::app_release::Entity as AppReleaseEntity;
 
-    let releases = AppReleaseEntity::find().all(&db).await.map_err(|e| {
-        log::error!("Database error: {}", e);
-        actix_web::error::ErrorInternalServerError("Database error")
-    })?;
+    let releases = match AppReleaseEntity::find().all(&db).await {
+        Ok(rows) => rows,
+        Err(e) => {
+            log::error!("Database error: {}", e);
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
 
     let latest = releases
         .into_iter()
@@ -118,11 +123,11 @@ pub async fn get_update_manifest(path: web::Path<UpdatePath>) -> Result<HttpResp
                 major_bump,
                 is_store_release,
             );
-            Ok(HttpResponse::Ok().json(manifest))
+            Json(manifest).into_response()
         }
         None => {
             log::info!("No update available for {}-{}-{}", target, arch, current_version);
-            Ok(HttpResponse::NoContent().finish())
+            StatusCode::NO_CONTENT.into_response()
         }
     }
 }

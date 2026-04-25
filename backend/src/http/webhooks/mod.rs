@@ -4,8 +4,9 @@ pub mod events;
 pub mod ingestor;
 pub mod verify;
 
-use actix_web::web;
+use axum::routing::post;
+use axum::Router;
 
-pub fn config(cfg: &mut web::ServiceConfig) {
-    cfg.service(app_store_connect::handle);
+pub fn router() -> Router {
+    Router::new().route("/webhooks/app-store-connect", post(app_store_connect::handle))
 }
