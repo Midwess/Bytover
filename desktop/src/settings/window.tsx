@@ -156,30 +156,26 @@ function SettingsWindow() {
         }
     }
 
-    const tabs: {id: SettingsTab; label: string; description: string; icon: React.ReactNode}[] = [
+    const tabs: {id: SettingsTab; label: string; description: string}[] = [
         {
             id: "general",
             label: "General",
             description: "Configure how Bytover starts up and behaves on your system.",
-            icon: <Settings />,
         },
         {
             id: "account",
             label: "Account",
             description: "Manage your Bytover account and session.",
-            icon: <User />,
         },
         ...(IS_MACOS ? [] : [{
             id: "updates" as const,
             label: "Updates",
             description: "Keep your Bytover application up to date with the latest features.",
-            icon: <RefreshCw />,
         }]),
         {
             id: "about",
             label: "About",
             description: "Learn more about Bytover and its creators.",
-            icon: <Info />,
         },
     ]
 
@@ -190,19 +186,18 @@ function SettingsWindow() {
     }
 
     return (
-        <main className="w-screen h-screen dark bg-[#171717] text-white flex overflow-hidden font-sans select-none">
+        <main className="w-screen h-screen dark bg-[#0d1322] text-white flex overflow-hidden font-sans select-none">
             {/* Sidebar */}
             <div
-                className="w-[210px] bg-[#0f0f0f] border-r border-white/[0.06] flex flex-col pt-10 pb-4 px-3"
+                className="w-[210px] bg-[#0a101e] border-r border-white/[0.05] flex flex-col pt-10 pb-4 px-3"
                 data-tauri-drag-region
             >
                 <SidebarProfile />
 
-                <div className="flex flex-col gap-0.5 mt-5">
+                <div className="flex flex-col gap-0.5 mt-6">
                     {tabs.map((tab) => (
                         <SidebarItem
                             key={tab.id}
-                            icon={tab.icon}
                             label={tab.label}
                             active={activeTab === tab.id}
                             onClick={() => setActiveTab(tab.id)}
@@ -316,7 +311,7 @@ function SidebarProfile() {
                 <div className="flex items-center gap-1.5 min-w-0">
                     <span className="text-[12.5px] font-semibold text-white truncate">{displayName}</span>
                     {isPaid && (
-                        <span className="text-[8.5px] font-bold tracking-[0.1em] text-purple-200 bg-gradient-to-b from-purple-500 to-purple-700 px-1.5 py-px rounded shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]">
+                        <span className="text-[8.5px] font-bold tracking-[0.1em] text-blue-100 bg-gradient-to-b from-blue-500 to-blue-700 px-1.5 py-px rounded shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]">
                             PRO
                         </span>
                     )}
@@ -574,8 +569,8 @@ function AccountContent({onSignOut}: {onSignOut: () => void}) {
 
             {user?.email && (
                 <SettingsSection title="Preferred Email">
-                    <div className="flex items-center px-3.5 py-3">
-                        <span className="text-[13px] text-white/85 truncate flex-1">{user.email}</span>
+                    <div className="flex items-center py-3.5">
+                        <span className="text-[13px] text-white/90 truncate flex-1">{user.email}</span>
                     </div>
                 </SettingsSection>
             )}
