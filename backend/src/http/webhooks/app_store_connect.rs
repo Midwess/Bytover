@@ -21,7 +21,8 @@ pub enum HandlerOutcome {
 impl HandlerOutcome {
     fn into_response(self) -> HttpResponse {
         match self {
-            HandlerOutcome::Accepted | HandlerOutcome::Ignored | HandlerOutcome::Skipped => HttpResponse::Ok().finish(),
+            HandlerOutcome::Accepted | HandlerOutcome::Ignored => HttpResponse::Ok().finish(),
+            HandlerOutcome::Skipped => HttpResponse::ServiceUnavailable().finish(),
             HandlerOutcome::Unauthorized => HttpResponse::Unauthorized().finish(),
             HandlerOutcome::BadRequest => HttpResponse::BadRequest().finish(),
             HandlerOutcome::InternalError => HttpResponse::InternalServerError().finish(),
@@ -38,7 +39,9 @@ pub async fn process_webhook(
     now: SystemTime,
 ) -> HandlerOutcome {
     let Some(verifier) = verifier else {
-        log::debug!("APP_STORE_CONNECT_WEBHOOK_SECRET not set; skipping inbound webhook");
+        log::warn!(
+            "APP_STORE_CONNECT_WEBHOOK_SECRET not set; rejecting inbound webhook with 503 so Apple retries"
+        );
         return HandlerOutcome::Skipped;
     };
 
@@ -266,13 +269,18 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn no_secret_configured_silently_skips_webhook() {
+    async fn no_secret_configured_returns_skipped_outcome() {
         let repo = FakeRepo::default();
         let body = br#"{"notificationType":"APP_STORE_RELEASE_UPDATED","data":{"platform":"darwin","version":"2.0.0"}}"#;
         let (headers, now) = signed_headers(body);
         let outcome = process_webhook(&headers, body, None, &test_config(), &repo, now).await;
         assert_eq!(outcome, HandlerOutcome::Skipped);
         assert!(repo.calls.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn skipped_outcome_maps_to_service_unavailable() {
+        assert_eq!(HandlerOutcome::Skipped.into_response().status(), actix_web::http::StatusCode::SERVICE_UNAVAILABLE);
     }
 
     #[tokio::test]
