@@ -338,13 +338,9 @@ export function Shelf({
                             ))}
                             <div className={"h-5"}></div>
                         </div>
-                        <div style={{display: viewMode === 'stack' ? 'block' : 'none'}}>
+                        <div className="h-full" style={{display: viewMode === 'stack' ? 'block' : 'none'}}>
                             <StackView
                                 resources={selectedResources}
-                                isRemoveAllowed={isResourceRemoveAllowed}
-                                onRemove={(resourceId) => {
-                                    invoke("remove_resource", {shelfId, resourceId})
-                                }}
                                 onOpen={(resourceId) => {
                                     invoke("open_shelf_resource", {shelfId, resourceId})
                                 }}
