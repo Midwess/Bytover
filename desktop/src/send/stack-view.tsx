@@ -7,8 +7,8 @@ import {
 } from "shared_types/types/shared_types";
 
 const MAX_VISIBLE_PEEKS = 2;
-const THUMBNAIL_WIDTH = 70;
-const THUMBNAIL_HEIGHT = 105;
+const THUMBNAIL_WIDTH = 75;
+const THUMBNAIL_HEIGHT = 100;
 const FAN_SPREAD_DEG = 16;
 const ARC_STEP_DEG = FAN_SPREAD_DEG / Math.max(1, Math.ceil(MAX_VISIBLE_PEEKS / 2));
 const JITTER_DEG = 5;
@@ -122,7 +122,7 @@ export function StackView({resources, onOpen}: StackViewProps) {
 
                 {overflowCount > 0 && (
                     <div
-                        className="absolute -top-1.5 -right-1.5 z-40 bg-white/80 text-black backdrop-blur-md text-xs font-semibold rounded-full h-6 min-w-6 px-1.5 flex items-center justify-center pointer-events-none shadow-md"
+                        className="absolute -bottom-7 left-1/2 -translate-x-1/2 z-40 bg-white/80 text-black backdrop-blur-md text-xs font-semibold rounded-full h-6 min-w-6 px-1.5 flex items-center justify-center pointer-events-none shadow-md"
                         aria-label={`${overflowCount} more files`}
                     >
                         +{overflowCount}
