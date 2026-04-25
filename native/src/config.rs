@@ -44,16 +44,7 @@ pub fn get_signalling_server_http_url_for_route(route: &str) -> String {
 }
 
 pub fn get_updater_url() -> String {
-    let gateway_host = GATEWAY_HTTP1_HOST.unwrap_or(GATEWAY_HOST.unwrap_or("api.bytover.com"));
-    let gateway_port = GATEWAY_HTTP1_PORT
-        .map(|it| format!(":{it}"))
-        .unwrap_or(GATEWAY_PORT.map(|it| format!(":{it}")).unwrap_or("".to_owned()));
-
-    if WITH_SSL == Some("1") {
-        format!("https://{gateway_host}{gateway_port}/bitbridge/api/v1/update")
-    } else {
-        format!("http://{gateway_host}{gateway_port}/bitbridge/api/v1/update")
-    }
+    get_signalling_server_http_url_for_route("bitbridge/api/v1/update")
 }
 
 pub fn is_relay_only() -> bool {
