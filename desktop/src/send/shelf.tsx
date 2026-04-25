@@ -360,7 +360,11 @@ export function Shelf({
                         </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="center" side="top" sideOffset={6} className="dark">
-                        <DropdownMenuItem onClick={() => setViewMode(viewMode === 'list' ? 'stack' : 'list')}>
+                        <DropdownMenuItem onClick={() => {
+                            setTimeout(() => {
+                                setViewMode(prev => prev === 'list' ? 'stack' : 'list');
+                            }, 0);
+                        }}>
                             {viewMode === 'list' ? (
                                 <Layers className="w-4 h-4 mr-2"/>
                             ) : (
