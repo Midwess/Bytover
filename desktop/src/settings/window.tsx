@@ -464,7 +464,7 @@ function ProBadge({size = "md"}: {size?: "sm" | "md"}) {
     const dim = size === "sm" ? "w-9 h-9 rounded-[7px] text-[9px]" : "w-11 h-11 rounded-[9px] text-[10px]"
     return (
         <div
-            className={`${dim} bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_2px_8px_rgba(124,58,237,0.25)]`}
+            className={`${dim} bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_2px_10px_rgba(59,130,246,0.3)]`}
         >
             <span className="font-bold tracking-[0.1em] text-white">PRO</span>
         </div>
@@ -493,29 +493,27 @@ function PlanComparison({limits, onUpgrade}: {limits: FreeLimits; onUpgrade: () 
     ]
 
     return (
-        <div className="relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-purple-500/[0.06] via-transparent to-transparent pointer-events-none" />
-
-            <div className="relative px-5 pt-5 pb-5">
-                <div className="flex items-center gap-3 mb-5">
-                    <ProBadge />
-                    <div className="flex flex-col flex-1 min-w-0">
-                        <span className="text-[15px] font-semibold text-white tracking-tight">Bytover Pro</span>
-                        <span className="text-[11px] text-white/45 mt-0.5">You're on the Free plan</span>
-                    </div>
-                    <div className="flex flex-col items-end shrink-0">
-                        <span className="text-[18px] font-bold text-white tabular-nums tracking-tight leading-none">$14.99</span>
-                        <span className="text-[10.5px] text-white/40 mt-1 uppercase tracking-wider">Lifetime</span>
-                    </div>
+        <div
+            className="relative overflow-hidden rounded-xl border border-white/[0.14]"
+            style={{
+                background: "rgba(255,255,255,0.10)",
+                backdropFilter: "blur(24px) saturate(140%)",
+                WebkitBackdropFilter: "blur(24px) saturate(140%)",
+            }}
+        >
+            <div className="relative px-5 pt-6 pb-5">
+                <div className="flex flex-col items-center mb-5">
+                    <span className="text-[32px] font-bold text-white tabular-nums tracking-tight leading-none">$14.99</span>
+                    <span className="text-[10.5px] text-white/70 mt-1.5 uppercase tracking-wider">Lifetime</span>
                 </div>
 
-                <div className="h-px bg-white/[0.06]" />
+                <div className="h-px bg-white/[0.12]" />
 
                 <ul className="flex flex-col gap-2.5 py-4">
                     {features.map((f, i) => (
                         <li key={i} className="flex items-center gap-3">
-                            <div className="w-[18px] h-[18px] rounded-full bg-purple-500/15 flex items-center justify-center shrink-0">
-                                <Check className="w-[11px] h-[11px] text-purple-300" strokeWidth={3} />
+                            <div className="w-[18px] h-[18px] rounded-full bg-blue-500/20 flex items-center justify-center shrink-0">
+                                <Check className="w-[11px] h-[11px] text-blue-300" strokeWidth={3} />
                             </div>
                             <div className="flex items-center justify-between flex-1 min-w-0 gap-3">
                                 <span className="text-[12.5px] text-white/90 leading-tight truncate">{f.label}</span>
@@ -528,7 +526,7 @@ function PlanComparison({limits, onUpgrade}: {limits: FreeLimits; onUpgrade: () 
                 <Button
                     onClick={handlePurchaseClick}
                     disabled={isPurchasing}
-                    className="w-full h-9 text-[13px] font-semibold bg-gradient-to-b from-purple-500 to-purple-600 hover:from-purple-400 hover:to-purple-500 text-white border-none rounded-lg shadow-[0_4px_16px_rgba(124,58,237,0.3),inset_0_1px_0_rgba(255,255,255,0.18)] transition-all disabled:opacity-70 disabled:cursor-not-allowed"
+                    className="w-full h-9 text-[13px] font-semibold bg-gradient-to-b from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white border-none rounded-lg shadow-[0_4px_16px_rgba(59,130,246,0.35),inset_0_1px_0_rgba(255,255,255,0.2)] transition-all disabled:opacity-70 disabled:cursor-not-allowed"
                 >
                     {isPurchasing ? (
                         <span className="flex items-center justify-center gap-2">
@@ -546,8 +544,8 @@ function PlanComparison({limits, onUpgrade}: {limits: FreeLimits; onUpgrade: () 
 
 function PaidPlanNotice() {
     return (
-        <div className="relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-purple-500/[0.06] via-transparent to-transparent pointer-events-none" />
+        <div className="relative overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.02]">
+            <div className="absolute inset-0 bg-gradient-to-b from-blue-500/[0.08] via-transparent to-transparent pointer-events-none" />
             <div className="relative px-4 py-4 flex items-center gap-3">
                 <ProBadge size="sm" />
                 <div className="flex flex-col flex-1 min-w-0">
