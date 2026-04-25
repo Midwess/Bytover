@@ -311,8 +311,7 @@ function SidebarProfile() {
     )
 }
 
-function SidebarItem({icon, label, active, onClick}: {
-    icon: React.ReactNode
+function SidebarItem({label, active, onClick}: {
     label: string
     active: boolean
     onClick: () => void
