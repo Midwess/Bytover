@@ -303,16 +303,13 @@ function SidebarItem({icon, label, active, onClick}: {
         <button
             onClick={onClick}
             className={`
-                flex items-center gap-3 px-2.5 py-1.5 rounded-lg text-[13px] w-full text-left transition-colors duration-150
+                px-3 py-2 rounded-lg text-[13px] w-full text-left transition-colors duration-150
                 ${active
-                    ? "bg-white/[0.06] text-white"
-                    : "text-white/55 hover:bg-white/[0.03] hover:text-white/85"
+                    ? "bg-white/[0.07] text-white"
+                    : "text-white/55 hover:bg-white/[0.03] hover:text-white/90"
                 }
             `}
         >
-            {React.cloneElement(icon as React.ReactElement<any>, {
-                className: `w-[14px] h-[14px] shrink-0 ${active ? "text-white/90" : "text-white/55"}`,
-            })}
             <span className="font-medium tracking-tight">{label}</span>
         </button>
     )
@@ -351,20 +348,19 @@ function SettingsRow({label, description, children, icon, last = false}: {
 }) {
     return (
         <div className={`
-            flex items-center justify-between px-3.5 py-3
+            flex items-center justify-between gap-4 py-3.5
             ${!last ? "border-b border-white/[0.05]" : ""}
-            transition-colors
         `}>
             <div className="flex gap-3 items-start min-w-0">
                 {icon && <div className="mt-0.5 text-white/55 shrink-0">{icon}</div>}
                 <div className="flex flex-col min-w-0">
-                    <span className="text-[13px] font-medium text-white/90 truncate">{label}</span>
+                    <span className="text-[13px] font-medium text-white/95">{label}</span>
                     {description && (
-                        <span className="text-[11px] text-white/40 leading-tight mt-0.5">{description}</span>
+                        <span className="text-[11px] text-white/45 leading-snug mt-0.5">{description}</span>
                     )}
                 </div>
             </div>
-            <div className="flex items-center gap-3 shrink-0 ml-4">
+            <div className="flex items-center shrink-0">
                 {children}
             </div>
         </div>
