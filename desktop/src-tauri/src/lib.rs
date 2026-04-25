@@ -59,7 +59,7 @@ mod storekit;
 mod theme;
 mod thumbnail;
 
-const CAPABILITIES_POLL_INTERVAL_SECS: u64 = 300;
+const CAPABILITIES_POLL_INTERVAL_SECS: u64 = 60;
 
 static CORE: LazyLock<Arc<Core<BitBridge>>> = LazyLock::new(|| Arc::new(Core::new()));
 static TRAY_ICON: LazyLock<Mutex<Option<TrayIcon>>> = LazyLock::new(|| Mutex::new(None));
