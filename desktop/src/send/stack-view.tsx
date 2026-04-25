@@ -9,16 +9,32 @@ import {
 const MAX_VISIBLE_PEEKS = 2;
 const THUMBNAIL_WIDTH = 112;
 const THUMBNAIL_HEIGHT = 63;
-
-const FAN_ANGLES = [0, 14, -12, 8, -10];
+const ARC_STEP_DEG = 12;
+const JITTER_DEG = 5;
 
 type StackViewProps = {
     resources: SelectedResourceViewModel[],
     onOpen: (resourceId: string) => void,
 };
 
-function angleForStack(stackIndex: number): number {
-    return FAN_ANGLES[stackIndex % FAN_ANGLES.length];
+function baseAngleForStack(stackIndex: number): number {
+    if (stackIndex === 0) return 0;
+    const sign = stackIndex % 2 === 1 ? 1 : -1;
+    const magnitude = Math.ceil(stackIndex / 2) * ARC_STEP_DEG;
+    return sign * magnitude;
+}
+
+function jitterFor(seed: string): number {
+    let hash = 5381;
+    for (let i = 0; i < seed.length; i++) {
+        hash = ((hash << 5) + hash + seed.charCodeAt(i)) | 0;
+    }
+    const normalized = ((hash >>> 0) % 1000) / 999;
+    return (normalized * 2 - 1) * JITTER_DEG;
+}
+
+function angleForStack(stackIndex: number, seed: string): number {
+    return baseAngleForStack(stackIndex) + jitterFor(seed);
 }
 
 function Thumbnail({model}: {model: SelectedResourceViewModel}) {
@@ -83,7 +99,7 @@ export function StackView({resources, onOpen}: StackViewProps) {
                             key={resource.order_id}
                             className="absolute inset-0 pointer-events-none"
                             style={{
-                                transform: `rotate(${angleForStack(stackIndex)}deg)`,
+                                transform: `rotate(${angleForStack(stackIndex, resource.order_id)}deg)`,
                                 zIndex: 20 - peekIndex * 5,
                             }}
                             aria-hidden="true"
@@ -96,7 +112,7 @@ export function StackView({resources, onOpen}: StackViewProps) {
                 <div
                     className="absolute inset-0"
                     style={{
-                        transform: `rotate(${angleForStack(0)}deg)`,
+                        transform: `rotate(${angleForStack(0, top.order_id)}deg)`,
                         zIndex: 30,
                     }}
                 >
