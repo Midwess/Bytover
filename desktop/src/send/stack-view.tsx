@@ -1,6 +1,12 @@
 import {CSSProperties} from "react";
 import {startDrag} from "@crabnebula/tauri-plugin-drag";
-import {SelectedResourceViewModel} from "shared_types/types/shared_types";
+import {convertFileSrc} from "@tauri-apps/api/core";
+import {FileIcon, FolderIcon} from "lucide-react";
+import {
+    ResourceTypeVariantFolder,
+    SelectedResourceViewModel,
+} from "shared_types/types/shared_types";
+import {Card} from "@/components/ui/card";
 import {FileView, MediaView} from "@/send/shelf";
 
 const MAX_VISIBLE_PEEKS = 2;
@@ -22,7 +28,37 @@ function isFileResource(resource: SelectedResourceViewModel): boolean {
     return ['Folder', 'File'].includes(resource.type as any);
 }
 
-function ResourceCard({
+function PeekCard({model}: {model: SelectedResourceViewModel}) {
+    const thumbnailPath = (model.thumbnail_path as any)?.AbsolutePath;
+    const thumbnailUrl = thumbnailPath ? convertFileSrc(thumbnailPath) : null;
+    const isFolder = model.type instanceof ResourceTypeVariantFolder;
+
+    return (
+        <Card
+            shadowSize={0.35}
+            className="w-full border bg-muted rounded-xl flex flex-row p-1 gap-2"
+        >
+            <div className="w-12 h-12 shrink-0 rounded-lg bg-muted-foreground/15 p-1 overflow-hidden flex items-center justify-center">
+                {thumbnailUrl ? (
+                    <img
+                        src={thumbnailUrl}
+                        alt=""
+                        className="w-full h-full object-cover rounded-md"
+                    />
+                ) : isFolder ? (
+                    <FolderIcon className="w-6 h-6 text-primary"/>
+                ) : (
+                    <FileIcon className="w-6 h-6 text-primary"/>
+                )}
+            </div>
+            <div className="flex-1 min-w-0 flex flex-col justify-center">
+                <p className="text-sm font-medium text-primaryText truncate">{model.name}</p>
+            </div>
+        </Card>
+    );
+}
+
+function TopCard({
     model,
     isRemoveAllowed,
     onOpen,
@@ -78,18 +114,13 @@ export function StackView({resources, isRemoveAllowed, onOpen, onRemove}: StackV
                             style={SLOT_STYLES[slot]}
                             aria-hidden="true"
                         >
-                            <ResourceCard
-                                model={resource}
-                                isRemoveAllowed={isRemoveAllowed}
-                                onOpen={onOpen}
-                                onRemove={onRemove}
-                            />
+                            <PeekCard model={resource}/>
                         </div>
                     );
                 })}
 
             <div className="relative" style={SLOT_STYLES[0]}>
-                <ResourceCard
+                <TopCard
                     model={top}
                     isRemoveAllowed={isRemoveAllowed}
                     onOpen={onOpen}
