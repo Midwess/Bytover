@@ -16,9 +16,10 @@ use schema::devlog::bitbridge::subscribe_session_info_response::{Event, SessionU
 use schema::devlog::bitbridge::{
     AddResourcesRequest, AddResourcesResponse, CancelSessionRequest, CancelSessionResponse, ClientUploadRequest,
     CompleteUploadPartRequest, CompleteUploadPartResponse, CreatePublicTransferSessionRequest, CreatePublicTransferSessionResponse,
-    FindSessionRequest, FindSessionResponse, GetCapabilitiesRequest, GetCapabilitiesResponse, PublicSessionId, SubmitStoreKitError,
-    SubmitStoreKitErrorCode, SubmitStoreKitSuccess, SubmitStoreKitTransactionRequest, SubmitStoreKitTransactionResponse,
-    SubscribeSessionInfoRequest, SubscribeSessionInfoResponse, UpdateTransferProgressRequest, UpdateTransferProgressResponse,
+    FindSessionRequest, FindSessionResponse, GetCapabilitiesRequest, GetCapabilitiesResponse, PublicSessionId,
+    ReportP2pBytesUsedRequest, ReportP2pBytesUsedResponse, SubmitStoreKitError, SubmitStoreKitErrorCode, SubmitStoreKitSuccess,
+    SubmitStoreKitTransactionRequest, SubmitStoreKitTransactionResponse, SubscribeSessionInfoRequest, SubscribeSessionInfoResponse,
+    UpdateTransferProgressRequest, UpdateTransferProgressResponse,
 };
 use std::pin::Pin;
 use std::sync::Arc;
@@ -372,6 +373,45 @@ impl BitBridgeCloudService for CloudGrpcService {
 
         let msg = crate::app_gateway::plan::build_capabilities_msg(capabilities);
         Ok(Response::new(GetCapabilitiesResponse { capabilities: msg }))
+    }
+
+    async fn report_p2p_bytes_used(
+        &self,
+        request: Request<ReportP2pBytesUsedRequest>,
+    ) -> Result<Response<ReportP2pBytesUsedResponse>, Status> {
+        let Some(user) = request.extensions().get::<User>() else {
+            return Err(Status::unauthenticated("Unauthenticated".to_owned()));
+        };
+        let user_order_id = user.order_id;
+        let delta = request.get_ref().delta;
+
+        let di = DiContainer::instance().await;
+        let caps_repo = di.get_user_capabilities_repository().await;
+
+        let outcome = caps_repo
+            .clamped_increment_bytes_used(user_order_id, delta)
+            .await
+            .map_err(|e| {
+                log::warn!(
+                    "[payment] report_p2p_bytes_used clamped_increment failed: user_order_id={user_order_id} delta={delta} err={e}"
+                );
+                Status::internal(e.to_string())
+            })?;
+
+        if outcome.cap_exceeded {
+            log::info!(
+                "[payment] report_p2p_bytes_used cap clamped: user_order_id={user_order_id} delta={delta} applied={} new_used={} cap={}",
+                outcome.applied, outcome.new_bytes_used, outcome.cap
+            );
+        }
+
+        let caps_row = caps_repo
+            .find_or_create_default(user_order_id, "")
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?;
+        let caps_msg = crate::app_gateway::plan::build_capabilities_msg(&caps_row);
+
+        Ok(Response::new(ReportP2pBytesUsedResponse { capabilities: caps_msg }))
     }
 
     async fn submit_storekit_transaction(

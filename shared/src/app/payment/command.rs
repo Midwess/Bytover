@@ -154,4 +154,15 @@ impl AppCommand {
             }
         }
     }
+
+    pub async fn report_p2p_bytes_used(&self, delta: u64) {
+        match RpcOperation::report_p2p_bytes_used(delta).into_future(self.ctx()).await {
+            Ok(caps) => {
+                self.notify_event(AppEvent::Payment(PaymentEvent::CapabilitiesLoaded(caps)));
+            }
+            Err(err) => {
+                log::warn!("[payment] report_p2p_bytes_used failed: delta={delta} err={err:?}");
+            }
+        }
+    }
 }

@@ -28,6 +28,12 @@ pub enum InFlight {
     ResumePending,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TransferSource {
+    Cloud,
+    P2P,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum PaymentEvent {
     Purchase(ProductId),
@@ -45,7 +51,7 @@ pub enum PaymentEvent {
     #[serde(skip)]
     CapabilitiesLoaded(UserCapabilities),
     #[serde(skip)]
-    ReportTransferBytesUsed { delta: u64 },
+    ReportTransferBytesDelta { delta: u64, source: TransferSource },
     #[serde(skip)]
     ClearCapabilities,
 }
@@ -205,16 +211,26 @@ impl AppModule<BitBridge> for PaymentModule {
 
                 Command::all(vec![Command::render(), cleanup])
             }
-            PaymentEvent::ReportTransferBytesUsed { delta } => {
+            PaymentEvent::ReportTransferBytesDelta { delta, source } => {
                 if let Some(caps) = model.payment.capabilities.as_mut() {
                     caps.transfer_usage.total_transfer_bytes_used =
                         caps.transfer_usage.total_transfer_bytes_used.saturating_add(delta);
                 }
                 let render = Command::render();
-                let refresh = Command::new(|it| async move {
-                    it.app().notify_event(AppEvent::Payment(PaymentEvent::RefreshCapabilities));
-                });
-                Command::all(vec![render, refresh])
+                match source {
+                    TransferSource::P2P => {
+                        let rpc = Command::new(move |it| async move {
+                            it.app().report_p2p_bytes_used(delta).await;
+                        });
+                        Command::all(vec![render, rpc])
+                    }
+                    TransferSource::Cloud => {
+                        let refresh = Command::new(|it| async move {
+                            it.app().notify_event(AppEvent::Payment(PaymentEvent::RefreshCapabilities));
+                        });
+                        Command::all(vec![render, refresh])
+                    }
+                }
             }
             PaymentEvent::ClearCapabilities => {
                 model.payment.capabilities.take();
@@ -596,7 +612,7 @@ mod tests {
     }
 
     #[test]
-    fn report_transfer_bytes_used_advances_local_usage_and_queues_refresh() {
+    fn report_transfer_bytes_delta_cloud_advances_local_usage_and_queues_refresh() {
         let app = BitBridge::default();
         let mut model = signed_in_model();
         let mut free = UserCapabilities::free_defaults();
@@ -604,7 +620,28 @@ mod tests {
         model.payment.capabilities = Some(free);
 
         let mut command = app.update(
-            AppEvent::Payment(PaymentEvent::ReportTransferBytesUsed { delta: 500 }),
+            AppEvent::Payment(PaymentEvent::ReportTransferBytesDelta { delta: 500, source: TransferSource::Cloud }),
+            &mut model,
+            &(),
+        );
+        let _ = collect_effects(&mut command);
+
+        assert_eq!(
+            model.payment.capabilities.as_ref().unwrap().transfer_usage.total_transfer_bytes_used,
+            1500
+        );
+    }
+
+    #[test]
+    fn report_transfer_bytes_delta_p2p_advances_local_usage() {
+        let app = BitBridge::default();
+        let mut model = signed_in_model();
+        let mut free = UserCapabilities::free_defaults();
+        free.transfer_usage.total_transfer_bytes_used = 1000;
+        model.payment.capabilities = Some(free);
+
+        let mut command = app.update(
+            AppEvent::Payment(PaymentEvent::ReportTransferBytesDelta { delta: 500, source: TransferSource::P2P }),
             &mut model,
             &(),
         );

@@ -32,6 +32,9 @@ pub enum RpcOperation {
         device: DeviceInfo,
     },
     GetCapabilities,
+    ReportP2PBytesUsed {
+        delta: u64,
+    },
     SubmitStoreKitTransaction {
         transaction_id: String,
         product_id: String,
@@ -122,6 +125,16 @@ impl RpcOperation {
             CoreOperationOutput::Rpc(RpcOperationOutput::GetCapabilities(caps)) => Ok(caps),
             CoreOperationOutput::Error(error) => Err(error),
             e => panic!("Invalid output for RpcOperation::GetCapabilities got {e:?}"),
+        })
+    }
+
+    pub fn report_p2p_bytes_used(
+        delta: u64,
+    ) -> AppRequestBuilder<impl Future<Output = Result<UserCapabilities, CoreError>>> {
+        Command::request_from_shell(CoreOperation::Rpc(RpcOperation::ReportP2PBytesUsed { delta })).map(|res| match res {
+            CoreOperationOutput::Rpc(RpcOperationOutput::GetCapabilities(caps)) => Ok(caps),
+            CoreOperationOutput::Error(error) => Err(error),
+            e => panic!("Invalid output for RpcOperation::ReportP2PBytesUsed got {e:?}"),
         })
     }
 

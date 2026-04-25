@@ -10,8 +10,8 @@ use schema::devlog::bitbridge::{
     AddResourcesRequest, AddResourcesResponse, Capabilities as CapabilitiesMsg, CancelSessionRequest, ClientUploadRequest,
     CloudResourceMessage, CompleteUploadPartRequest, CreatePublicTransferSessionRequest, FindSessionRequest,
     FindSessionResponse, GetCapabilitiesRequest, MultiPartUpload, PublicSessionId, PublicTransferSessionMessage,
-    SubmitStoreKitErrorCode, SubmitStoreKitTransactionRequest, SubscribeSessionInfoRequest, SubscribeSessionInfoResponse,
-    UpdateTransferProgressRequest,
+    ReportP2pBytesUsedRequest, SubmitStoreKitErrorCode, SubmitStoreKitTransactionRequest, SubscribeSessionInfoRequest,
+    SubscribeSessionInfoResponse, UpdateTransferProgressRequest,
 };
 use serde::{Deserialize, Serialize};
 use tonic::{Request, Streaming};
@@ -240,6 +240,16 @@ where
         self.auth_provider.with_auth(&mut request).await?;
 
         let response = client.get_capabilities(request).await?.into_inner();
+        Ok(map_capabilities(response.capabilities))
+    }
+
+    pub async fn report_p2p_bytes_used(&self, delta: u64) -> Result<UserCapabilities, RpcErrors> {
+        let channel = self.rpc_module.connect().await?;
+        let mut client = BitBridgeCloudServiceClient::new(channel);
+        let mut request = Request::new(ReportP2pBytesUsedRequest { delta });
+        self.auth_provider.with_auth(&mut request).await?;
+
+        let response = client.report_p2p_bytes_used(request).await?.into_inner();
         Ok(map_capabilities(response.capabilities))
     }
 
