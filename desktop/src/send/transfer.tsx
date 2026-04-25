@@ -39,7 +39,7 @@ import {
     TooltipProvider,
 } from "@/components/animate-ui/primitives/animate/tooltip"
 
-function UpgradeButton({fullWidth = true}: {fullWidth?: boolean}) {
+function UpgradeButton() {
     const handleClick = () => {
         invoke("show_settings_with_tab", {tab: "account"}).then(noop)
     }
@@ -49,7 +49,7 @@ function UpgradeButton({fullWidth = true}: {fullWidth?: boolean}) {
                 <TooltipTrigger asChild>
                     <Button
                         onClick={handleClick}
-                        className={`bg-bluePrimary text-foreground shadow-lg hover:bg-bluePrimary/60 ${fullWidth ? "w-full" : "w-[100px]"}`}
+                        className="bg-bluePrimary text-foreground shadow-lg hover:bg-bluePrimary/60 min-w-[100px] w-fit whitespace-nowrap px-3"
                     >
                         Upgrade to premium
                     </Button>
@@ -160,7 +160,7 @@ function P2PSend({ shelfId, forceUpdate }: { shelfId: string | undefined; forceU
                 <UrlInputWithCopy url={p2pSession?.access_url ?? ''}/>
             </Card>
         }
-        <Card shadowSize={0.5} className={`flex flex-row gap-2 p-1 items-center ${forceUpdate ? "w-auto" : "w-[100px]"}`}>
+        <Card shadowSize={0.5} className={`flex flex-row gap-2 p-1 items-center ${forceUpdate ? "w-auto" : "min-w-[100px] w-fit"}`}>
             {
                 forceUpdate ? (
                     <Button onClick={() => openForceUpdate(forceUpdate)}
@@ -171,7 +171,7 @@ function P2PSend({ shelfId, forceUpdate }: { shelfId: string | undefined; forceU
                     <Button onClick={handleStopTransfer}
                             className={"bg-muted-foreground/30 text-primary h-full shadow-lg w-full"}>Cancel</Button>
                 ) : capExceeded ? (
-                    <UpgradeButton fullWidth={true}/>
+                    <UpgradeButton/>
                 ) : (
                     <Button onClick={handleStartTransfer}
                             disabled={isLoading}
@@ -284,7 +284,7 @@ function PublicTransfer({ shelfId, forceUpdate }: { shelfId: string | undefined;
                     }}
                             className={"bg-greenSecondary/40 text-primary flex-2/5 shadow-lg hover:bg-greenSecondary/50"}>Continue</Button>
                 ) : capExceeded ? (
-                    <UpgradeButton fullWidth={false}/>
+                    <UpgradeButton/>
                 ) : (
                     <Button onClick={handleUpload}
                             disabled={isLoading}
