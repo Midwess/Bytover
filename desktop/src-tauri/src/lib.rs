@@ -486,9 +486,9 @@ fn refresh_tray_menu(app_handle: &AppHandle) {
 
     if let Some(shelf_view) = &view.shelf {
         let is_paid = view
-            .authentication
+            .payment
             .as_ref()
-            .and_then(|auth| auth.capabilities.as_ref())
+            .and_then(|payment| payment.capabilities.as_ref())
             .map(|caps| caps.is_paid())
             .unwrap_or(false);
         update_tray_menu(app_handle, &shelf_view.shelves, is_paid);
@@ -581,9 +581,9 @@ fn render(view: AppViewModel, app_handle: AppHandle) {
 
         if let Some(shelf_view) = &view.shelf {
             let is_paid = view
-                .authentication
+                .payment
                 .as_ref()
-                .and_then(|auth| auth.capabilities.as_ref())
+                .and_then(|payment| payment.capabilities.as_ref())
                 .map(|caps| caps.is_paid())
                 .unwrap_or(false);
             update_tray_menu(&app_handle, &shelf_view.shelves, is_paid);
