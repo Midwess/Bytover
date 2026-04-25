@@ -157,7 +157,7 @@ mod tests {
         let mut model = signed_in_model();
         let mut free_with_one_shelf = UserCapabilities::free_defaults();
         free_with_one_shelf.presentation.max_visible_shelves = 1;
-        model.authentication.capabilities = Some(free_with_one_shelf);
+        model.payment.capabilities = Some(free_with_one_shelf);
         model.shelf.shelves.push(crate::entities::shelf::Shelf::default());
 
         let view_free = app.view(&model);
@@ -165,7 +165,7 @@ mod tests {
         assert_eq!(view_free.shelf.as_ref().and_then(|s| s.max_shelves), Some(1));
 
         let _ = app.update(
-            AppEvent::Authentication(AuthenticationEvent::CapabilitiesLoaded(paid_capabilities())),
+            AppEvent::Payment(PaymentEvent::CapabilitiesLoaded(paid_capabilities())),
             &mut model,
             &(),
         );
@@ -179,7 +179,7 @@ mod tests {
     fn transfer_view_model_password_encryption_reflects_capability_change() {
         let app = BitBridge::default();
         let mut model = signed_in_model();
-        model.authentication.capabilities = Some(UserCapabilities::free_defaults());
+        model.payment.capabilities = Some(UserCapabilities::free_defaults());
 
         let view_free = app.view(&model);
         assert_eq!(view_free.transfer.as_ref().map(|t| t.password_encryption_allowed), Some(false));
@@ -187,7 +187,7 @@ mod tests {
         let mut paid = paid_capabilities();
         paid.transfer_limits.password_encryption_allowed = true;
         let _ = app.update(
-            AppEvent::Authentication(AuthenticationEvent::CapabilitiesLoaded(paid)),
+            AppEvent::Payment(PaymentEvent::CapabilitiesLoaded(paid)),
             &mut model,
             &(),
         );
