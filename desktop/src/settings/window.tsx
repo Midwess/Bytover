@@ -460,63 +460,107 @@ function formatBytes(n: number): string {
     return Number.isInteger(mib) ? `${mib} MB` : `${mib.toFixed(1)} MB`
 }
 
-function PlanComparison({limits, onUpgrade}: {limits: FreeLimits; onUpgrade: () => void}) {
+function ProBadge({size = "md"}: {size?: "sm" | "md"}) {
+    const dim = size === "sm" ? "w-9 h-9 rounded-[7px] text-[9px]" : "w-11 h-11 rounded-[9px] text-[10px]"
+    return (
+        <div
+            className={`${dim} bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_2px_8px_rgba(124,58,237,0.25)]`}
+        >
+            <span className="font-bold tracking-[0.1em] text-white">PRO</span>
+        </div>
+    )
+}
+
+function PlanComparison({limits, onUpgrade}: {limits: FreeLimits; onUpgrade: () => Promise<unknown>}) {
+    const [isPurchasing, setIsPurchasing] = useState(false)
+    const handlePurchaseClick = async () => {
+        if (isPurchasing) return
+        setIsPurchasing(true)
+        try {
+            await onUpgrade()
+        } finally {
+            setIsPurchasing(false)
+        }
+    }
     const features: {label: string; freeNote: string}[] = [
-        {label: "Unlimited files per transfer", freeNote: `Free: ${formatCount(limits.maxFilesPerTransfer)}`},
-        {label: "No transfer size cap", freeNote: `Free: ${formatBytes(limits.transferLifetimeCapBytes)} lifetime`},
-        {label: "Unlimited shelves", freeNote: `Free: ${formatCount(limits.maxVisibleShelves)}`},
+        {label: "Unlimited files per transfer", freeNote: `${formatCount(limits.maxFilesPerTransfer)} on Free`},
+        {label: "No transfer size cap", freeNote: `${formatBytes(limits.transferLifetimeCapBytes)} on Free`},
+        {label: "Unlimited shelves", freeNote: `${formatCount(limits.maxVisibleShelves)} on Free`},
         {
             label: "Password-protected transfers",
-            freeNote: limits.passwordEncryptionAllowed ? "Included on Free" : "Not available on Free",
+            freeNote: limits.passwordEncryptionAllowed ? "Included" : "Not on Free",
         },
     ]
 
     return (
-        <div className="px-5 py-5">
-            <div className="flex items-start justify-between gap-6 mb-4">
-                <div className="flex flex-col">
-                    <span className="text-[14px] font-semibold text-white tracking-tight">Bytover Pro</span>
-                    <span className="text-[11px] text-white/40 mt-0.5">You're on the Free plan</span>
+        <div className="relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-b from-purple-500/[0.06] via-transparent to-transparent pointer-events-none" />
+
+            <div className="relative px-5 pt-5 pb-5">
+                <div className="flex items-center gap-3 mb-5">
+                    <ProBadge />
+                    <div className="flex flex-col flex-1 min-w-0">
+                        <span className="text-[15px] font-semibold text-white tracking-tight">Bytover Pro</span>
+                        <span className="text-[11px] text-white/45 mt-0.5">You're on the Free plan</span>
+                    </div>
+                    <div className="flex flex-col items-end shrink-0">
+                        <span className="text-[18px] font-bold text-white tabular-nums tracking-tight leading-none">$14.99</span>
+                        <span className="text-[10.5px] text-white/40 mt-1 uppercase tracking-wider">Lifetime</span>
+                    </div>
                 </div>
-                <div className="flex flex-col items-end shrink-0">
-                    <span className="text-[14px] font-semibold text-white tabular-nums">$14.99</span>
-                    <span className="text-[11px] text-white/40 mt-0.5">One-time · lifetime</span>
-                </div>
+
+                <div className="h-px bg-white/[0.06]" />
+
+                <ul className="flex flex-col gap-2.5 py-4">
+                    {features.map((f, i) => (
+                        <li key={i} className="flex items-center gap-3">
+                            <div className="w-[18px] h-[18px] rounded-full bg-purple-500/15 flex items-center justify-center shrink-0">
+                                <Check className="w-[11px] h-[11px] text-purple-300" strokeWidth={3} />
+                            </div>
+                            <div className="flex items-center justify-between flex-1 min-w-0 gap-3">
+                                <span className="text-[12.5px] text-white/90 leading-tight truncate">{f.label}</span>
+                                <span className="text-[10.5px] text-white/35 leading-tight shrink-0 tabular-nums">{f.freeNote}</span>
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+
+                <Button
+                    onClick={handlePurchaseClick}
+                    disabled={isPurchasing}
+                    className="w-full h-9 text-[13px] font-semibold bg-gradient-to-b from-purple-500 to-purple-600 hover:from-purple-400 hover:to-purple-500 text-white border-none rounded-lg shadow-[0_4px_16px_rgba(124,58,237,0.3),inset_0_1px_0_rgba(255,255,255,0.18)] transition-all disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                    {isPurchasing ? (
+                        <span className="flex items-center justify-center gap-2">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Connecting to Apple…
+                        </span>
+                    ) : (
+                        "Get lifetime access"
+                    )}
+                </Button>
             </div>
-
-            <div className="h-px bg-white/5" />
-
-            <ul className="flex flex-col gap-3 py-4">
-                {features.map((f, i) => (
-                    <li key={i} className="flex items-start gap-2.5">
-                        <Check className="w-3.5 h-3.5 text-white/70 mt-[3px] shrink-0" strokeWidth={2.5} />
-                        <div className="flex flex-col min-w-0">
-                            <span className="text-[12.5px] text-white/90 leading-tight">{f.label}</span>
-                            <span className="text-[11px] text-white/35 leading-tight mt-0.5">{f.freeNote}</span>
-                        </div>
-                    </li>
-                ))}
-            </ul>
-
-            <Button
-                onClick={onUpgrade}
-                className="w-full h-[32px] text-[12.5px] font-semibold bg-white text-black hover:bg-white/90 border-none rounded-lg shadow-none"
-            >
-                Get life time access
-            </Button>
         </div>
     )
 }
 
 function PaidPlanNotice() {
     return (
-        <div className="px-5 py-5 flex items-center gap-3">
-            <div className="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center shrink-0">
-                <Check className="w-3.5 h-3.5 text-white/80" strokeWidth={2.5} />
-            </div>
-            <div className="flex flex-col">
-                <span className="text-[13px] font-semibold text-white tracking-tight">Bytover Pro</span>
-                <span className="text-[11px] text-white/40 mt-0.5">Lifetime access. Thanks for supporting Bytover.</span>
+        <div className="relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-b from-purple-500/[0.06] via-transparent to-transparent pointer-events-none" />
+            <div className="relative px-4 py-4 flex items-center gap-3">
+                <ProBadge size="sm" />
+                <div className="flex flex-col flex-1 min-w-0">
+                    <span className="text-[13.5px] font-semibold text-white tracking-tight">Bytover Pro</span>
+                    <span className="text-[11px] text-white/45 mt-0.5">Lifetime · Thanks for supporting Bytover</span>
+                </div>
+                <Button
+                    variant="secondary"
+                    size="sm"
+                    className="h-[28px] px-3 text-[11.5px] bg-white/[0.06] hover:bg-white/[0.1] text-white/85 border border-white/[0.08] rounded-full shrink-0"
+                >
+                    Manage plan
+                </Button>
             </div>
         </div>
     )
