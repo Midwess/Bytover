@@ -62,24 +62,64 @@ impl PaymentGateway for AppGatewayImpl {
         transaction_id: &str,
         product_id: &str,
     ) -> Result<StoreKitVerifyOutcome, PaymentGatewayError> {
-        let channel = self.channel.connect().await?;
+        let idempotency_key = format!("storekit:{transaction_id}");
+        log::info!(
+            "[payment] gateway connect: idempotency_key={idempotency_key} transaction_id={transaction_id} product_id={product_id}"
+        );
+        let channel = match self.channel.connect().await {
+            Ok(c) => c,
+            Err(e) => {
+                log::warn!(
+                    "[payment] gateway channel connect failed: idempotency_key={idempotency_key} err={e}"
+                );
+                return Err(e.into());
+            }
+        };
         let mut client = PaymentServiceClient::new(channel);
 
+        log::info!(
+            "[payment] gateway PaymentService::pay invoking: idempotency_key={idempotency_key} product_id={product_id}"
+        );
         let request = PaymentRequest {
-            idempotency_key: format!("storekit:{transaction_id}"),
+            idempotency_key: idempotency_key.clone(),
             item: Some(PaymentItem::StorekitPayment(StoreKitPayment {
                 transaction_id: transaction_id.to_owned(),
                 product_id: product_id.to_owned(),
             })),
         };
 
-        let mut stream = client.pay(request).await?.into_inner();
+        let response = match client.pay(request).await {
+            Ok(r) => r,
+            Err(status) => {
+                log::warn!(
+                    "[payment] gateway PaymentService::pay returned error status: code={:?} message={:?} idempotency_key={idempotency_key}",
+                    status.code(),
+                    status.message()
+                );
+                return Err(status.into());
+            }
+        };
+        let mut stream = response.into_inner();
         let mut terminal: Option<StoreKitVerifyOutcome> = None;
 
         loop {
-            match stream.message().await? {
+            let next = match stream.message().await {
+                Ok(n) => n,
+                Err(status) => {
+                    log::warn!(
+                        "[payment] gateway pay stream errored: code={:?} message={:?} idempotency_key={idempotency_key}",
+                        status.code(),
+                        status.message()
+                    );
+                    return Err(status.into());
+                }
+            };
+            match next {
                 Some(message) => match message.response_item {
                     Some(ResponseItem::CompletedStatement(payment_statement_id)) => {
+                        log::info!(
+                            "[payment] gateway pay stream Completed: payment_statement_id={payment_statement_id} idempotency_key={idempotency_key}"
+                        );
                         if terminal.is_none() {
                             terminal = Some(StoreKitVerifyOutcome::Completed {
                                 payment_statement_id,
@@ -93,6 +133,9 @@ impl PaymentGateway for AppGatewayImpl {
                         }
                     }
                     Some(ResponseItem::Error(reason)) => {
+                        log::warn!(
+                            "[payment] gateway pay stream Error item: reason={reason:?} idempotency_key={idempotency_key}"
+                        );
                         if terminal.is_none() {
                             terminal = Some(StoreKitVerifyOutcome::Rejected(StoreKitVerifyRejection {
                                 code: StoreKitVerifyRejectionCode::Unknown,
@@ -100,12 +143,19 @@ impl PaymentGateway for AppGatewayImpl {
                             }));
                         }
                     }
-                    Some(ResponseItem::Redirect(_)) => {
+                    Some(ResponseItem::Redirect(redirect)) => {
+                        log::warn!(
+                            "[payment] gateway pay stream Redirect (unexpected for storekit): redirect={redirect:?} idempotency_key={idempotency_key}"
+                        );
                         return Err(PaymentGatewayError::MalformedResponse);
                     }
                     None => continue,
                 },
                 None => {
+                    log::info!(
+                        "[payment] gateway pay stream closed: terminal_present={} idempotency_key={idempotency_key}",
+                        terminal.is_some()
+                    );
                     return terminal.ok_or(PaymentGatewayError::MalformedResponse);
                 }
             }
