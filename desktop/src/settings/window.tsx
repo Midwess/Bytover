@@ -5,7 +5,6 @@ import {getVersion} from "@tauri-apps/api/app"
 import {getCurrentWindow} from "@tauri-apps/api/window"
 import {listen} from "@tauri-apps/api/event"
 import {Button} from "@/components/ui/button"
-import {Avatar, AvatarFallback, AvatarImage} from "@/components/ui/avatar"
 import {
     RefreshCw,
     Loader2,
@@ -13,7 +12,6 @@ import {
     ChevronRight,
     ExternalLink,
     Shield,
-    X,
 } from "lucide-react"
 import {
     checkForUpdate,
@@ -182,10 +180,6 @@ function SettingsWindow() {
 
     const activeTabInfo = tabs.find(t => t.id === activeTab)
 
-    const handleClose = () => {
-        getCurrentWindow()?.close()
-    }
-
     return (
         <main className="w-screen h-screen dark bg-[#0d1322] text-white flex overflow-hidden font-sans select-none">
             {/* Sidebar */}
@@ -208,15 +202,7 @@ function SettingsWindow() {
             </div>
 
             {/* Content Area */}
-            <div className="flex-1 flex flex-col bg-[#171717] overflow-y-auto relative" data-tauri-drag-region>
-                <button
-                    onClick={handleClose}
-                    className="absolute top-4 right-4 w-7 h-7 rounded-full hover:bg-white/[0.06] flex items-center justify-center text-white/40 hover:text-white/90 transition-colors z-10"
-                    aria-label="Close"
-                >
-                    <X className="w-4 h-4" />
-                </button>
-
+            <div className="flex-1 flex flex-col bg-[#171717] overflow-y-auto" data-tauri-drag-region>
                 <div className="w-full max-w-[480px] mx-auto px-7 pt-10 pb-12 flex flex-col gap-7">
                     <div data-tauri-drag-region>
                         <h2 className="text-[20px] font-semibold tracking-tight text-white">
@@ -294,20 +280,21 @@ function SidebarProfile() {
 
     return (
         <div className="flex items-center gap-2.5 px-1.5 py-2 rounded-xl bg-white/[0.025] border border-white/[0.05]">
-            <Avatar
-                className="w-9 h-9 rounded-full border border-white/10 shrink-0"
+            <div
+                className="w-9 h-9 rounded-full border border-white/10 shrink-0 overflow-hidden flex items-center justify-center text-[13px] font-semibold text-white"
                 style={avatarStyle}
             >
-                {user?.avatar && (
-                    <AvatarImage src={user.avatar} alt="" className="object-cover" />
+                {user?.avatar ? (
+                    <img
+                        src={user.avatar}
+                        alt=""
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover"
+                    />
+                ) : (
+                    <span>{initial}</span>
                 )}
-                <AvatarFallback
-                    className="text-[13px] font-semibold text-white bg-transparent"
-                    style={avatarStyle}
-                >
-                    {initial}
-                </AvatarFallback>
-            </Avatar>
+            </div>
             <div className="flex flex-col min-w-0 flex-1">
                 <div className="flex items-center gap-1.5 min-w-0">
                     <span className="text-[12.5px] font-semibold text-white truncate">{displayName}</span>
