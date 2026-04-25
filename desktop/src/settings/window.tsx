@@ -13,6 +13,10 @@ import {
     ExternalLink,
     Shield,
     MessageSquare,
+    Settings,
+    User,
+    Download,
+    Info,
 } from "lucide-react"
 import {
     checkForUpdate,
@@ -156,54 +160,69 @@ function SettingsWindow() {
         }
     }
 
-    const tabs: {id: SettingsTab; label: string; description: string}[] = [
+    const tabs: {id: SettingsTab; label: string; description: string; icon: React.ReactNode}[] = [
         {
             id: "general",
             label: "General",
             description: "Configure how Bytover starts up and behaves on your system.",
+            icon: <Settings className="w-[18px] h-[18px]" strokeWidth={1.75} />,
         },
         {
             id: "account",
             label: "Account",
             description: "Manage your Bytover account and session.",
+            icon: <User className="w-[18px] h-[18px]" strokeWidth={1.75} />,
         },
         ...(IS_MACOS ? [] : [{
             id: "updates" as const,
             label: "Updates",
             description: "Keep your Bytover application up to date with the latest features.",
+            icon: <Download className="w-[18px] h-[18px]" strokeWidth={1.75} />,
         }]),
         {
             id: "about",
             label: "About",
             description: "Learn more about Bytover and its creators.",
+            icon: <Info className="w-[18px] h-[18px]" strokeWidth={1.75} />,
         },
     ]
 
     const activeTabInfo = tabs.find(t => t.id === activeTab)
 
     return (
-        <main className="w-screen h-screen dark bg-[#0d1322] text-white flex overflow-hidden font-sans select-none">
+        <main
+            className="w-screen h-screen dark text-white flex overflow-hidden font-sans select-none"
+            style={{background: "#090e1b"}}
+        >
             {/* Sidebar */}
             <div
-                className="w-[210px] bg-[#0a101e] border-r border-white/[0.05] flex flex-col pt-10 pb-4 px-3"
+                className="w-[80px] flex flex-col pt-10 pb-5 px-2 shrink-0"
                 data-tauri-drag-region
+                style={{background: "#090e1b"}}
             >
-                <SidebarProfile />
-
-                <div className="flex flex-col gap-0.5 mt-6">
+                <div className="flex flex-col gap-1">
                     {tabs.map((tab) => (
                         <SidebarItem
                             key={tab.id}
                             label={tab.label}
+                            icon={tab.icon}
                             active={activeTab === tab.id}
                             onClick={() => setActiveTab(tab.id)}
                         />
                     ))}
                 </div>
+
+                <div className="mt-auto flex justify-center">
+                    <SidebarProfile />
+                </div>
             </div>
 
             {/* Content Area */}
-            <div className="flex-1 flex flex-col bg-[#0d1322] overflow-y-auto" data-tauri-drag-region>
+            <div
+                className="flex-1 flex flex-col overflow-y-auto rounded-l-2xl relative"
+                data-tauri-drag-region
+                style={{background: "linear-gradient(to bottom, #0c1c4d 0%, #08143a 55%, #05071b 100%)"}}
+            >
                 <div className="w-full max-w-[480px] mx-auto px-7 pt-10 pb-12 flex flex-col gap-7">
                     <div data-tauri-drag-region>
                         <h2 className="text-[20px] font-semibold tracking-tight text-white">
@@ -271,48 +290,33 @@ function getAvatarColor(url: string | undefined): string | null {
 function SidebarProfile() {
     const auth = core.useAuthentication()
     const user = auth?.user
-    const isPaid = (auth?.capabilities?.plan as unknown) === "Paid"
 
     const initial = (user?.name?.trim()?.[0] ?? user?.email?.trim()?.[0] ?? "?").toUpperCase()
-    const displayName = user?.name?.trim() || user?.email?.split("@")[0] || "Account"
-    const subtitle = user?.email ?? ""
     const avatarColor = getAvatarColor(user?.avatar)
     const avatarStyle = avatarColor ? {backgroundColor: avatarColor} : undefined
 
     return (
-        <div className="flex items-center gap-2.5 px-1.5 py-2 rounded-xl bg-white/[0.025] border border-white/[0.05]">
-            <div
-                className="w-9 h-9 rounded-full border border-white/10 shrink-0 overflow-hidden flex items-center justify-center text-[13px] font-semibold text-white"
-                style={avatarStyle}
-            >
-                {user?.avatar ? (
-                    <img
-                        src={user.avatar}
-                        alt=""
-                        referrerPolicy="no-referrer"
-                        className="w-full h-full object-cover"
-                    />
-                ) : (
-                    <span>{initial}</span>
-                )}
-            </div>
-            <div className="flex flex-col min-w-0 flex-1">
-                <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="text-[12.5px] font-semibold text-white truncate">{displayName}</span>
-                    {isPaid && (
-                        <span className="text-[8.5px] font-bold tracking-[0.1em] text-blue-100 bg-gradient-to-b from-blue-500 to-blue-700 px-1.5 py-px rounded shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]">
-                            PRO
-                        </span>
-                    )}
-                </div>
-                <span className="text-[10.5px] text-white/40 truncate">{subtitle}</span>
-            </div>
+        <div
+            className="w-10 h-10 rounded-full border border-white/10 overflow-hidden flex items-center justify-center text-[14px] font-semibold text-white"
+            style={avatarStyle}
+        >
+            {user?.avatar ? (
+                <img
+                    src={user.avatar}
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover"
+                />
+            ) : (
+                <span>{initial}</span>
+            )}
         </div>
     )
 }
 
-function SidebarItem({label, active, onClick}: {
+function SidebarItem({label, icon, active, onClick}: {
     label: string
+    icon: React.ReactNode
     active: boolean
     onClick: () => void
 }) {
@@ -320,14 +324,15 @@ function SidebarItem({label, active, onClick}: {
         <button
             onClick={onClick}
             className={`
-                px-3 py-2 rounded-lg text-[13px] w-full text-left transition-colors duration-150
+                flex flex-col items-center justify-center gap-1 py-2.5 px-1 rounded-lg w-full transition-colors duration-150
                 ${active
                     ? "bg-white/[0.07] text-white"
                     : "text-white/55 hover:bg-white/[0.03] hover:text-white/90"
                 }
             `}
         >
-            <span className="font-medium tracking-tight">{label}</span>
+            {icon}
+            <span className="text-[10.5px] font-medium tracking-tight">{label}</span>
         </button>
     )
 }
