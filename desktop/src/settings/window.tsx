@@ -430,16 +430,6 @@ function GeneralContent({enabled, isLoading, onToggle}: {
                     <Switch enabled={enabled} onToggle={onToggle} disabled={isLoading} />
                 </SettingsRow>
             </SettingsSection>
-
-            <SettingsSection title="System">
-                <SettingsRow 
-                    label="Show in Menu Bar" 
-                    description="Display Bytover icon in the system menu bar."
-                    last={true}
-                >
-                    <Switch enabled={true} onToggle={() => {}} disabled={true} />
-                </SettingsRow>
-            </SettingsSection>
         </div>
     )
 }
