@@ -28,13 +28,10 @@ import {
 import {motion, AnimatePresence} from "motion/react"
 import { openUrl } from "@tauri-apps/plugin-opener"
 import core from "@/core.ts"
-import {ForceUpdateGate} from "@/components/force-update-gate"
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>
-        <ForceUpdateGate>
-            <SettingsWindow/>
-        </ForceUpdateGate>
+        <SettingsWindow/>
     </React.StrictMode>,
 )
 

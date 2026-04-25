@@ -6,13 +6,10 @@ import {Button} from "@/components/ui/button.tsx";
 import {invoke} from "@tauri-apps/api/core";
 import {MousePointer2, Keyboard, Image as ImageIcon, Check} from "lucide-react";
 import {startDrag} from "@crabnebula/tauri-plugin-drag";
-import {ForceUpdateGate} from "@/components/force-update-gate";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>
-        <ForceUpdateGate>
-            <Window/>
-        </ForceUpdateGate>
+        <Window/>
     </React.StrictMode>,
 );
 

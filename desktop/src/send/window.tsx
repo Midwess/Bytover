@@ -8,6 +8,7 @@ import {getCurrentWindow, LogicalSize} from "@tauri-apps/api/window";
 import {ArrowRight} from "lucide-react";
 import {Button} from "@/components/ui/button.tsx";
 import {invoke} from "@tauri-apps/api/core";
+import {ForceUpdateOverlay, useForceUpdateStatus} from "@/components/force-update-overlay";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>
@@ -24,7 +25,9 @@ function Window() {
     const shelfInitializedRef = useRef(false)
     const label = window.label
     const isFakeShelf = label.startsWith("fake-shelf")
-    const showExpand = !isFakeShelf
+    const updateStatus = useForceUpdateStatus()
+    const isUpdateBlocked = updateStatus?.is_critical === true
+    const showExpand = !isFakeShelf && !isUpdateBlocked
     const effectiveExpanded = showExpand && isExpanded
 
     useEffect(() => {
@@ -65,7 +68,14 @@ function Window() {
         <main className={`w-screen h-screen dark bg-transparent flex items-center justify-start p-3.5 overflow-clip`} data-no-scrollbar>
             <div className={`${effectiveExpanded ? 'w-[412px]' : 'w-[230px]'} h-[255px] flex flex-row rounded-2xl bg-transparent space-x-0 animate-popup transition-all duration-300`}>
                 <div className={`h-[230px] bg-transparent relative min-w-[200px] w-[200px]`}>
-                   {isFakeShelf ? (
+                   {isUpdateBlocked && updateStatus ? (
+                       <Shelf
+                           shelfId={undefined}
+                           isCollapsed
+                           disabled
+                           overlay={<ForceUpdateOverlay status={updateStatus} />}
+                       />
+                   ) : isFakeShelf ? (
                        <Shelf
                            shelfId={undefined}
                            isCollapsed={!effectiveExpanded}
