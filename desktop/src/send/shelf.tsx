@@ -29,7 +29,7 @@ import {
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
-} from "@/components/animate-ui/components/radix/dropdown-menu.tsx";
+} from "@/components/ui/dropdown-menu.tsx";
 import {
     ResourceTypeVariantFolder,
     SelectedResourceViewModel,
@@ -311,43 +311,43 @@ export function Shelf({
             </div>
             {/* Resources List */}
             <div
+                data-no-scrollbar
                 className="w-full h-full overflow-y-auto px-2.5 z-0 pt-9 shadow-[inset_0_20px_20px_-10px_hsl(var(--card)),inset_0_-20px_20px_-10px_hsl(var(--card))]">
-                {selectedResources.length === 0 ? (
+                {selectedResources.length === 0 && (
                     <div
-                        className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2 absolute left-0 top-0 w-full">
+                        className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2 absolute left-0 top-0 w-full pointer-events-none">
                         <p className="text-md text-muted-foreground animate-pop-down-pulse">Drop or paste files here</p>
                     </div>
-                ) : (
-                    <>
-                        <div
-                            className="flex flex-col gap-2"
-                            style={{display: viewMode === 'list' ? 'flex' : 'none'}}
-                        >
-                            {selectedResources.map((resource) => (
-                                <ResourceView
-                                    key={resource.order_id}
-                                    model={resource}
-                                    isRemoveAllowed={isResourceRemoveAllowed}
-                                    onRemove={(resourceId) => {
-                                        invoke("remove_resource", {shelfId, resourceId})
-                                    }}
-                                    onOpen={(resourceId) => {
-                                        invoke("open_shelf_resource", {shelfId, resourceId})
-                                    }}
-                                />
-                            ))}
-                            <div className={"h-5"}></div>
-                        </div>
-                        <div className="h-full" style={{display: viewMode === 'stack' ? 'block' : 'none'}}>
-                            <StackView
-                                resources={selectedResources}
+                )}
+                <div
+                    className="w-full min-h-full flex-col"
+                    style={{display: viewMode === 'list' ? 'flex' : 'none'}}
+                >
+                    <div className="w-full flex flex-col gap-2 my-auto">
+                        {selectedResources.map((resource) => (
+                            <ResourceView
+                                key={resource.order_id}
+                                model={resource}
+                                isRemoveAllowed={isResourceRemoveAllowed}
+                                onRemove={(resourceId) => {
+                                    invoke("remove_resource", {shelfId, resourceId})
+                                }}
                                 onOpen={(resourceId) => {
                                     invoke("open_shelf_resource", {shelfId, resourceId})
                                 }}
                             />
-                        </div>
-                    </>
-                )}
+                        ))}
+                        <div className={"h-5"}></div>
+                    </div>
+                </div>
+                <div className="h-full" style={{display: viewMode === 'stack' ? 'block' : 'none'}}>
+                    <StackView
+                        resources={selectedResources}
+                        onOpen={(resourceId) => {
+                            invoke("open_shelf_resource", {shelfId, resourceId})
+                        }}
+                    />
+                </div>
             </div>
 
             <div
@@ -381,7 +381,11 @@ export function Shelf({
                         <DropdownMenuItem
                             variant="destructive"
                             disabled={!selectedResources.length || !isResourceRemoveAllowed}
-                            onClick={() => invoke('clear_shelf', {shelfId})}>
+                            onClick={() => {
+                                setTimeout(() => {
+                                    invoke('clear_shelf', {shelfId});
+                                }, 0);
+                            }}>
                             <Trash2 className="w-4 h-4 mr-2"/>
                             Clear all
                         </DropdownMenuItem>

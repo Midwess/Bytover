@@ -11,9 +11,7 @@ import {invoke} from "@tauri-apps/api/core";
 import {useForceUpdateStatus} from "@/components/force-update-overlay";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-    <React.StrictMode>
-        <Window />
-    </React.StrictMode>,
+    <Window />,
 );
 
 function Window() {
