@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::app::modules::AppModule;
 use crate::app::operations::dialog::DialogOperation;
-use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::AppEvent;
 use crate::CoreOperation;
@@ -54,13 +53,11 @@ impl AppModule<BitBridge> for AuthenticationModule {
             }),
             AuthenticationEvent::SignOut => {
                 model.authentication.user.take();
-                let stop_p2p = Command::new(|it| async move {
-                    let _ = it.app().run(P2POperation::stop()).await;
+                let do_sign_out = Command::handle_result(|ctx| async move {
+                    ctx.app().sign_out().await?;
+                    Ok(())
                 });
-                let clear_payment = Command::new(|it| async move {
-                    it.app().notify_event(AppEvent::Payment(PaymentEvent::ClearCapabilities));
-                });
-                Command::all(vec![Command::render(), stop_p2p, clear_payment])
+                Command::all(vec![Command::render(), do_sign_out])
             }
             AuthenticationEvent::OnRedirected { url } => {
                 if model.authentication.user.is_some() {

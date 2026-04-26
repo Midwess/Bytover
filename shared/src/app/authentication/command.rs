@@ -3,11 +3,13 @@ use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::dialog::DialogOperation;
+use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::persistent::{
     DeviceAliasPersistentOperation, SessionPersistentOperation, ShelfPersistentOperation, TransferSessionPersistentOperation,
 };
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::operations::webview::WebViewOperation;
+use crate::app::payment::module::PaymentEvent;
 use crate::app::shelf::module::ShelfEvent;
 use crate::app::transfer::module::TransferEvent;
 use crate::app::AppEvent;
@@ -36,12 +38,14 @@ impl AppCommand {
     }
 
     pub async fn sign_out(&self) -> Result<(), CoreError> {
+        let _ = self.run(P2POperation::stop()).await;
         self.run(SessionPersistentOperation::remove_session()).await?;
         self.run(TransferSessionPersistentOperation::clear_all()).await?;
         self.run(ShelfPersistentOperation::clear_all()).await?;
         self.run(DeviceAliasPersistentOperation::clear_all()).await?;
         self.notify_event(TransferEvent::Clear);
         self.notify_event(ShelfEvent::Launch);
+        self.notify_event(AppEvent::Payment(PaymentEvent::ClearCapabilities));
         self.re_authorize().await?;
         Ok(())
     }
@@ -111,11 +115,13 @@ impl AppCommand {
         }
 
         if prior_user_id.map_or(true, |id| id != user.id) {
+            let _ = self.run(P2POperation::stop()).await;
             self.run(TransferSessionPersistentOperation::clear_all()).await?;
             self.run(ShelfPersistentOperation::clear_all()).await?;
             self.run(DeviceAliasPersistentOperation::clear_all()).await?;
             self.notify_event(TransferEvent::Clear);
             self.notify_event(ShelfEvent::Launch);
+            self.notify_event(AppEvent::Payment(PaymentEvent::ClearCapabilities));
         }
 
         self.notify_event(AppEvent::Authentication(AuthenticationEvent::Authorized { user }));
