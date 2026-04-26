@@ -102,7 +102,7 @@ jobs:
             enable: ${{ github.event.inputs.platform == 'linux' || github.event.inputs.platform == 'all' }}
 
     runs-on: ${{ matrix.platform }}
-    timeout-minutes: 90
+    timeout-minutes: 2880
     env:
       BYTOVER_LOCATOR_URL: ${{ vars.BYTOVER_LOCATOR_URL }}
       BYTOVER_PUBLIC_HTTP1_GATEWAY_HOST: ${{ vars.BYTOVER_PUBLIC_HTTP1_GATEWAY_HOST }}
@@ -284,7 +284,7 @@ jobs:
                   --key-id "$APPLE_API_KEY_ID" \
                   --issuer "$APPLE_API_ISSUER" \
                   --wait \
-                  --timeout 30m; do
+                  --timeout 2h; do
             attempt=$((attempt + 1))
             if [ "$attempt" -ge "$max_attempts" ]; then
               echo "notarytool submit failed after $attempt attempts"
