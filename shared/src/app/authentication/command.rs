@@ -132,18 +132,17 @@ impl AppCommand {
         };
         if server_device_key.is_empty() {
             log::warn!(target: "auth", "Server returned empty device key; skipping device match check");
-            return true;
         }
-        if local.unique_id != server_device_key {
+        let matches = server_token_matches_device(server_device_key, &local.unique_id);
+        if !matches {
             log::error!(
                 target: "auth",
                 "Token device mismatch: local={} server={}",
                 local.unique_id,
                 server_device_key
             );
-            return false;
         }
-        true
+        matches
     }
 
     async fn fetch_and_assign_aliases(&self) {
@@ -179,5 +178,31 @@ impl AppCommand {
                 }
             }
         }
+    }
+}
+
+fn server_token_matches_device(server_device_key: &str, local_unique_id: &str) -> bool {
+    server_device_key.is_empty() || local_unique_id == server_device_key
+}
+
+#[cfg(test)]
+mod tests {
+    use super::server_token_matches_device;
+
+    #[test]
+    fn empty_server_device_key_accepts_any_local_device() {
+        assert!(server_token_matches_device("", "any-local-id"));
+        assert!(server_token_matches_device("", ""));
+    }
+
+    #[test]
+    fn matching_device_keys_accept() {
+        assert!(server_token_matches_device("abc-123", "abc-123"));
+    }
+
+    #[test]
+    fn mismatched_non_empty_device_keys_reject() {
+        assert!(!server_token_matches_device("abc-123", "xyz-789"));
+        assert!(!server_token_matches_device("abc-123", ""));
     }
 }
