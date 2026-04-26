@@ -93,17 +93,10 @@ impl AppCommand {
             return Ok(());
         }
 
-        SessionPersistentOperation::save_token(token).into_future(self.ctx()).await?;
+        let prior_session = SessionPersistentOperation::get_session().into_future(self.ctx()).await?;
+        let prior_user_id = prior_session.as_ref().and_then(|s| s.user.as_ref()).map(|u| u.id);
 
-        // Clear all data on fresh sign in (user signs in after signing out)
-        let session = SessionPersistentOperation::get_session().into_future(self.ctx()).await?;
-        if session.is_none() {
-            self.run(TransferSessionPersistentOperation::clear_all()).await?;
-            self.run(ShelfPersistentOperation::clear_all()).await?;
-            self.run(DeviceAliasPersistentOperation::clear_all()).await?;
-            self.notify_event(TransferEvent::Clear);
-            self.notify_event(ShelfEvent::Launch);
-        }
+        SessionPersistentOperation::save_token(token).into_future(self.ctx()).await?;
 
         let (user, device_unique_key) = RpcOperation::get_me().into_future(self.ctx()).await?;
 
@@ -115,6 +108,14 @@ impl AppCommand {
             .await;
             self.notify_event(AuthenticationEvent::UnAuthorized);
             return Ok(());
+        }
+
+        if prior_user_id.map_or(true, |id| id != user.id) {
+            self.run(TransferSessionPersistentOperation::clear_all()).await?;
+            self.run(ShelfPersistentOperation::clear_all()).await?;
+            self.run(DeviceAliasPersistentOperation::clear_all()).await?;
+            self.notify_event(TransferEvent::Clear);
+            self.notify_event(ShelfEvent::Launch);
         }
 
         self.notify_event(AppEvent::Authentication(AuthenticationEvent::Authorized { user }));
