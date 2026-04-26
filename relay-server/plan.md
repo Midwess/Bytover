@@ -116,3 +116,19 @@ When both legs of a `ProxyInstance` are actively connected, the sequence behaves
 - If a client determines the Direct P2P connection was successful, it will gracefully close its WebRTC connection to the Relay Server.
 - **Strict Termination Rule**: Once a `ProxyInstance` has been successfully connected, if *either* Leg 1 or Leg 2 terminates/disconnects for any reason, the `ProxyInstance` will immediately shut down the surviving leg and terminate itself.
 - The corresponding `ProxyInstance` cleans up any active Tokio tasks and removes itself from the global `HashMap` to free up server resources immediately.
+
+## Region Detection
+
+The relay-server self-identifies its bytover region (`asia` / `us` / `eu`) for signalling registration via a strict precedence chain:
+
+1. **`BYTOVER_REGION_CODE`** env (operator override). Top priority. Logged as `source=env`.
+2. **GeoIP lookup** on the STUN-discovered public IPv4 against a bundled MaxMind GeoLite2-Country DB (`assets/GeoLite2-Country.mmdb`). Logged as `source=geoip ipv4=…`.
+3. **gRPC `GetRegion`** call to the backend (legacy fallback). Logged as `source=grpc`.
+
+Country → region mapping lives in `src/geoip.rs::country_to_region`. Unmapped countries (e.g. BR, ZA, RU as of this writing) fall through to the gRPC path; if you operate relays in those markets, set `BYTOVER_REGION_CODE` explicitly.
+
+The GeoIP database is fetched at image-build time using the `MAXMIND_LICENSE_KEY` build arg; see `assets/README.md`. Distributing GeoLite2 data requires the upstream `LICENSE.txt` to ship alongside it (CC BY-SA 4.0):
+
+> This product includes GeoLite2 data created by MaxMind, available from <https://www.maxmind.com>.
+
+If the DB is missing at startup the relay logs a `WARN` and continues with the env-or-gRPC paths only — startup never fails on missing GeoIP data.
