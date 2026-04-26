@@ -3,6 +3,9 @@
   "bundle": {
     "targets": ["app"],
     "category": "public.app-category.productivity",
+    "resources": {
+      "PrivacyInfo.xcprivacy": "PrivacyInfo.xcprivacy"
+    },
     "macOS": {
       "signingIdentity": "3rd Party Mac Developer Application: Midwess LLC (BUJKWCX7F4)",
       "entitlements": "entitlements.appstore.plist",

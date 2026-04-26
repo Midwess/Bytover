@@ -207,3 +207,75 @@ log stream --predicate 'process == "Bytover" AND subsystem == "com.apple.sandbox
 ```
 
 Sandbox violations appear in `Console.app` filtered on `process:Bytover` + `subsystem:com.apple.sandbox`.
+
+## Compliance metadata
+
+The App Store build ships three pieces of compliance metadata beyond the entitlements file:
+
+1. `desktop/src-tauri/Info.appstore.plist` — App Store-only `Info.plist` overlay merged into the bundled `Info.plist` by the CI step `Inject App Store Info.plist keys & re-sign`.
+2. `desktop/src-tauri/PrivacyInfo.xcprivacy` — Apple Privacy Manifest. Bundled into `Bytover.app/Contents/Resources/` via `bundle.resources` in `tauri.conf.appstore.json`.
+3. Localized usage strings in `desktop/src-tauri/Info.plist` (`NSAccessibilityUsageDescription`, `NSInputMonitoringUsageDescription`, `NSAppleEventsUsageDescription`).
+
+### Export Compliance — first-time questionnaire answers
+
+`Info.appstore.plist` declares `ITSAppUsesNonExemptEncryption=true` because Bytover uses TLS (reqwest+rustls), DTLS-SRTP (webrtc-rs), and standard hashing (SHA-256). All qualify under the U.S. EAR §740.17(b)(1) mass-market exemption — no Encryption Registration Number (ERN) required.
+
+The first build with this declaration triggers a one-time questionnaire in App Store Connect. Answer with these literal values:
+
+1. **"Does your app use encryption?"** → **Yes**
+2. **"Does your app qualify for any of the exemptions provided in Category 5, Part 2?"** → **Yes**
+3. Tick the exemption that begins:
+   > "Your app uses or accesses encryption only for authentication, digital signature, or the decryption of data or files… **or** your app uses encryption only for the purpose of supporting the secure connections that are integral to the device or operating system, such as TLS, HTTPS, or DTLS"
+4. **Do not** enter an `ITSEncryptionExportComplianceCode` — Bytover does not have an ERN and does not need one under this exemption.
+
+Once answered, App Store Connect remembers the answer for every future build that carries `ITSAppUsesNonExemptEncryption=true`. No per-build interaction is needed.
+
+**When this changes:** if a future feature ships proprietary cryptography, end-to-end key exchange beyond DTLS-SRTP, or cryptographic operations as a primary product feature (encrypted-at-rest storage, advertised E2E messaging), the §740.17(b)(1) exemption may no longer apply. Consult Legal before merging such a feature; an ERN filing with U.S. BIS may be required (~2 week turnaround).
+
+### Privacy Manifest — when to update `PrivacyInfo.xcprivacy`
+
+`PrivacyInfo.xcprivacy` declares which "required reason" APIs Bytover's bundle uses, per Apple's privacy manifest spec (enforced since 2024-05-01).
+
+Currently declared:
+
+| Category | Reason | Source |
+|---|---|---|
+| `NSPrivacyAccessedAPICategoryFileTimestamp` | `C617.1` | `desktop/src-tauri/src/thumbnail.rs:313`, `libs/core-services/src/local_storage/file_system.rs:21` |
+| `NSPrivacyAccessedAPICategorySystemBootTime` | `35F9.1` | `libs/core-services/src/utils/time.rs:64`, `libs/core-services/src/local_storage/file_system.rs:149` |
+| `NSPrivacyAccessedAPICategoryUserDefaults` | `CA92.1` | Implicit via Tauri 2 WebKit framework linkage |
+
+**Update the manifest when a PR introduces:**
+
+- New `\.modified\(\)|\.created\(\)|\.accessed\(\)` calls on file metadata → confirm `FileTimestamp` is declared.
+- New `SystemTime::now()` paired with `duration_since(UNIX_EPOCH)` → `SystemBootTime` already covers this; only add a new entry if the call site is in App Store-reachable code.
+- New disk-space probes (`available_space` from `fs2::`, `statfs`, `attributesOfFileSystem`) → add `NSPrivacyAccessedAPICategoryDiskSpace` with reason `E174.1` (display info to user) or `B728.1` (free space for app).
+- New direct `NSUserDefaults` access from Rust (via `objc2-foundation`) → already covered, but verify reason `CA92.1` still applies (use `1C8F.1` if accessing across an App Group).
+- A third-party SDK (analytics, crash reporting) that ships its own `PrivacyInfo.xcprivacy` → no manifest update needed; Apple stitches it in. But re-run upload validation locally to confirm the merge.
+
+The CI step `Privacy manifest drift check (warning-only)` runs on every App Store build and emits `::warning::` annotations if a PR adds required-reason API symbols without modifying the manifest. Treat the warnings as a yellow flag — they are intentionally non-blocking so emergency releases can still ship.
+
+**App Privacy storefront answers** (App Store Connect → My Apps → Bytover → "App Privacy") are managed in the storefront UI and are independent of this bundled manifest. They must be kept consistent by humans. The bundled manifest currently declares `NSPrivacyTracking=false`, no tracking domains, and no collected data types; the storefront must reflect the same. If a future feature collects user data (email for account, telemetry), the PR must update both the storefront answers and the bundle manifest.
+
+### Sandbox usage descriptions — App Review rejection log
+
+Apple App Review §5.1.1 rejects vague usage strings. Past rejections we have already fixed:
+
+- Old `NSAccessibilityUsageDescription` = "Required to control windows and system interactions." → too vague.
+- New: "Bytover uses accessibility to position the file-transfer shelf next to the active window and to detect drag-and-drop targets across applications."
+
+- Old `NSInputMonitoringUsageDescription` = "Required to detect global mouse and keyboard input." → too vague.
+- New: "Bytover uses global keyboard and mouse input to trigger the shelf with the configured shortcut and to detect shift-drag for cross-app file transfers."
+
+When adding a new usage string: name the user-visible feature (not the abstract OS capability) and reference how the user triggers it. Reviewers manually test the named flow; vague strings draw rejections even when the build is otherwise correct.
+
+### CI verification (what runs automatically)
+
+The `Inject App Store Info.plist keys & re-sign` step asserts:
+
+- `plutil -lint` against both `Info.plist` (post-merge) and `PrivacyInfo.xcprivacy`.
+- `[ -f "$APP/Contents/Resources/PrivacyInfo.xcprivacy" ]` — fails if the manifest is missing from the bundle.
+- `plutil -extract ITSAppUsesNonExemptEncryption raw "$INFO"` — fails if the export-compliance key did not land.
+- `codesign --verify --deep --strict --verbose=2 "$APP"` — fails if the post-`plutil` re-sign produced an invalid signature.
+- `codesign -d --entitlements - --xml "$APP"` — sanity check on the re-signed entitlements.
+
+If any of these fail, the build halts before `productbuild` and `altool --upload-app`. No malformed bundle reaches App Store Connect.
