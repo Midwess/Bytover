@@ -98,9 +98,6 @@ openssl = "0.10"
 rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }
 rustls-platform-verifier = "0.6"
 
-[patch."https://github.com/Midwess/turn-rs.git"]
-turn-server = { path = ".dev/turn-rs" }
-
 [workspace.metadata.bin]
 cargo-xcode = { version = "=1.7.0" }
 cargo-run-bin = { version = "1.7.2" }
