@@ -3,8 +3,10 @@
 <plist version="1.0">
 <dict>
     <key>NSAccessibilityUsageDescription</key>
-    <string>Required to control windows and system interactions.</string>
+    <string>Bytover uses accessibility to position the file-transfer shelf next to the active window and to detect drag-and-drop targets across applications.</string>
     <key>NSInputMonitoringUsageDescription</key>
-    <string>Required to detect global mouse and keyboard input.</string>
+    <string>Bytover uses global keyboard and mouse input to trigger the shelf with the configured shortcut and to detect shift-drag for cross-app file transfers.</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Bytover uses Apple Events to receive files dragged from other apps such as Finder, Mail, and web browsers.</string>
 </dict>
 </plist>

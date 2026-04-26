@@ -251,6 +251,8 @@ jobs:
           security find-identity -v -p codesigning "$KEYCHAIN_PATH"
           rm -f "$P12"
           echo "APPSTORE_KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+          echo "::add-mask::$KEYCHAIN_PASSWORD"
+          echo "APPSTORE_KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> "$GITHUB_ENV"
 
       - name: Install App Store provisioning profile
         if: matrix.enable && matrix.name == 'build-macos-appstore'
@@ -292,6 +294,33 @@ jobs:
       - name: Debug BYTOVER environment
         if: matrix.enable
         run: printenv | grep BYTOVER
+
+      - name: Privacy manifest drift check (warning-only)
+        if: matrix.enable && matrix.name == 'build-macos-appstore'
+        shell: bash
+        run: |
+          set -uo pipefail
+          # Find required-reason API symbols added since main without
+          # a matching PrivacyInfo.xcprivacy update. Warn-only; never fails.
+          BASE="origin/main"
+          if ! git rev-parse --verify "$BASE" >/dev/null 2>&1; then
+            echo "Base ref $BASE not available; skipping drift check."
+            exit 0
+          fi
+          CHANGED=$(git diff --name-only "$BASE"...HEAD || true)
+          if echo "$CHANGED" | grep -q "^desktop/src-tauri/PrivacyInfo.xcprivacy$"; then
+            echo "PrivacyInfo.xcprivacy was updated in this branch — drift check satisfied."
+            exit 0
+          fi
+          PATTERN='\.modified\(\)|\.created\(\)|\.accessed\(\)|SystemTime::now|UNIX_EPOCH'
+          HITS=$(echo "$CHANGED" | grep -E '\.rs$' | xargs -I{} git diff "$BASE"...HEAD -- {} 2>/dev/null | grep -E "^\+" | grep -E "$PATTERN" || true)
+          if [ -n "$HITS" ]; then
+            echo "::warning::New required-reason API call sites detected in this branch without a PrivacyInfo.xcprivacy update."
+            echo "$HITS"
+            echo "If these calls are reachable in the App Store build, update desktop/src-tauri/PrivacyInfo.xcprivacy."
+          else
+            echo "No new required-reason API symbols in branch diff."
+          fi
 
       - name: Build Tauri App (DMG)
         if: matrix.enable && matrix.name == 'build-macos-dmg'
@@ -342,6 +371,55 @@ jobs:
           prerelease: false
           projectPath: desktop
           args: --target universal-apple-darwin --features log-file --bundles app --config src-tauri/tauri.conf.appstore.json
+
+      - name: Inject App Store Info.plist keys & re-sign
+        if: matrix.enable && matrix.name == 'build-macos-appstore'
+        env:
+          APPLE_SIGNING_IDENTITY: "3rd Party Mac Developer Application: Midwess LLC (BUJKWCX7F4)"
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_DIR="target/universal-apple-darwin/release/bundle/macos"
+          APP=$(find "$APP_DIR" -maxdepth 1 -name "*.app" -type d -print -quit)
+          if [ -z "$APP" ]; then
+            echo "::error::No .app bundle found in $APP_DIR"
+            exit 1
+          fi
+
+          INFO="$APP/Contents/Info.plist"
+          OVERLAY="desktop/src-tauri/Info.appstore.plist"
+          if [ ! -f "$OVERLAY" ]; then
+            echo "::error::Overlay file missing at $OVERLAY"
+            exit 1
+          fi
+
+          # Merge ITSAppUsesNonExemptEncryption into the bundled Info.plist.
+          # Idempotent: -replace if key exists, -insert otherwise.
+          if plutil -extract ITSAppUsesNonExemptEncryption raw "$INFO" >/dev/null 2>&1; then
+            plutil -replace ITSAppUsesNonExemptEncryption -bool YES "$INFO"
+          else
+            plutil -insert ITSAppUsesNonExemptEncryption -bool YES "$INFO"
+          fi
+          plutil -lint "$INFO"
+          echo "ITSAppUsesNonExemptEncryption=$(plutil -extract ITSAppUsesNonExemptEncryption raw "$INFO")"
+
+          # Verify the privacy manifest landed in Resources/ via tauri.conf.appstore.json.
+          MANIFEST="$APP/Contents/Resources/PrivacyInfo.xcprivacy"
+          if [ ! -f "$MANIFEST" ]; then
+            echo "::error::PrivacyInfo.xcprivacy missing from $MANIFEST. Check bundle.resources in tauri.conf.appstore.json."
+            exit 1
+          fi
+          plutil -lint "$MANIFEST"
+
+          # Re-sign the bundle: plutil -insert/-replace invalidated the inner code signature.
+          security unlock-keychain -p "$APPSTORE_KEYCHAIN_PASSWORD" "$APPSTORE_KEYCHAIN_PATH"
+          codesign --force --deep --options runtime \
+            --entitlements desktop/src-tauri/entitlements.appstore.plist \
+            --sign "$APPLE_SIGNING_IDENTITY" \
+            "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign -d --entitlements - --xml "$APP" >/dev/null
+          echo "Re-sign verified."
 
       - name: Build Tauri App (Windows / Linux)
         if: matrix.enable && matrix.platform != 'macos-latest'

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Apple Privacy Manifest (PrivacyInfo.xcprivacy)
+    Bytover — Mac App Store distribution
+
+    Audit reference (see .dev/changes/fix-appstore-missing-compliance/):
+      FileTimestamp / C617.1:
+        - desktop/src-tauri/src/thumbnail.rs:313  (mtime check for thumbnail cache freshness)
+        - libs/core-services/src/local_storage/file_system.rs:21  (FileEntry mtime metadata)
+      SystemBootTime / 35F9.1:
+        - libs/core-services/src/utils/time.rs:64  (epoch_micro for transfer timing)
+        - libs/core-services/src/local_storage/file_system.rs:149  (SystemTime::now)
+      UserDefaults / CA92.1:
+        - Implicit via Tauri 2 WebKit framework linkage; no direct app-side calls.
+
+    When updating this manifest, also update the audit list above and SIGNING.md.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>NSPrivacyTracking</key>
+    <false/>
+    <key>NSPrivacyTrackingDomains</key>
+    <array/>
+    <key>NSPrivacyCollectedDataTypes</key>
+    <array/>
+    <key>NSPrivacyAccessedAPITypes</key>
+    <array>
+        <dict>
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array>
+                <string>C617.1</string>
+            </array>
+        </dict>
+        <dict>
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSPrivacyAccessedAPICategorySystemBootTime</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array>
+                <string>35F9.1</string>
+            </array>
+        </dict>
+        <dict>
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array>
+                <string>CA92.1</string>
+            </array>
+        </dict>
+    </array>
+</dict>
+</plist>

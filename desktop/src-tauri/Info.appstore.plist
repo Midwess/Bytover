@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    App Store-only Info.plist overlay for Bytover.
+    Merged into <App>.app/Contents/Info.plist by the
+    "Inject App Store Info.plist keys & re-sign" step in
+    .github/workflows/desktop-build.yml.
+
+    Keys here are App Store specific. The DMG build path
+    (build-macos-dmg) does not consume this file.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <true/>
+</dict>
+</plist>
