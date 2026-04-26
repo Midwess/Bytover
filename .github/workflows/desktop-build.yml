@@ -393,12 +393,13 @@ jobs:
             exit 1
           fi
 
-          # Merge ITSAppUsesNonExemptEncryption into the bundled Info.plist.
+          # Merge ITSAppUsesNonExemptEncryption=false into the bundled Info.plist.
+          # Bytover qualifies for the EAR 740.17(b)(1) exemption - see SIGNING.md.
           # Idempotent: -replace if key exists, -insert otherwise.
           if plutil -extract ITSAppUsesNonExemptEncryption raw "$INFO" >/dev/null 2>&1; then
-            plutil -replace ITSAppUsesNonExemptEncryption -bool YES "$INFO"
+            plutil -replace ITSAppUsesNonExemptEncryption -bool NO "$INFO"
           else
-            plutil -insert ITSAppUsesNonExemptEncryption -bool YES "$INFO"
+            plutil -insert ITSAppUsesNonExemptEncryption -bool NO "$INFO"
           fi
           plutil -lint "$INFO"
           echo "ITSAppUsesNonExemptEncryption=$(plutil -extract ITSAppUsesNonExemptEncryption raw "$INFO")"

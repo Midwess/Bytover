@@ -216,21 +216,30 @@ The App Store build ships three pieces of compliance metadata beyond the entitle
 2. `desktop/src-tauri/PrivacyInfo.xcprivacy` — Apple Privacy Manifest. Bundled into `Bytover.app/Contents/Resources/` via `bundle.resources` in `tauri.conf.appstore.json`.
 3. Localized usage strings in `desktop/src-tauri/Info.plist` (`NSAccessibilityUsageDescription`, `NSInputMonitoringUsageDescription`, `NSAppleEventsUsageDescription`).
 
-### Export Compliance — first-time questionnaire answers
+### Export Compliance — declared exempt in Info.plist
 
-`Info.appstore.plist` declares `ITSAppUsesNonExemptEncryption=true` because Bytover uses TLS (reqwest+rustls), DTLS-SRTP (webrtc-rs), and standard hashing (SHA-256). All qualify under the U.S. EAR §740.17(b)(1) mass-market exemption — no Encryption Registration Number (ERN) required.
+`Info.appstore.plist` declares `ITSAppUsesNonExemptEncryption=false`. Bytover's encryption usage is fully covered by U.S. EAR §740.17(b)(1):
 
-The first build with this declaration triggers a one-time questionnaire in App Store Connect. Answer with these literal values:
+| Bytover usage | Exemption rationale |
+|---|---|
+| TLS via `rustls` (HTTPS to gateway/locator) | "Secure connections … such as TLS, HTTPS, or DTLS" |
+| DTLS-SRTP via `webrtc-rs` (peer transport) | Same — DTLS is named in the exemption |
+| SHA-256 file checksums | "Authentication, digital signature, or … integrity" — not confidentiality |
 
-1. **"Does your app use encryption?"** → **Yes**
-2. **"Does your app qualify for any of the exemptions provided in Category 5, Part 2?"** → **Yes**
-3. Tick the exemption that begins:
-   > "Your app uses or accesses encryption only for authentication, digital signature, or the decryption of data or files… **or** your app uses encryption only for the purpose of supporting the secure connections that are integral to the device or operating system, such as TLS, HTTPS, or DTLS"
-4. **Do not** enter an `ITSEncryptionExportComplianceCode` — Bytover does not have an ERN and does not need one under this exemption.
+The exemption is **use-case based**, not implementation-source based. Apple's questionnaire wording ("integral to the device or operating system") has historically caused confusion — earlier revisions of this doc set the key to `true` on the assumption that third-party Rust crates (rustls, webrtc-rs, ring) disqualified the exemption. They do not. EAR §740.17 governs *what the encryption does*, not *where the implementation came from*.
 
-Once answered, App Store Connect remembers the answer for every future build that carries `ITSAppUsesNonExemptEncryption=true`. No per-build interaction is needed.
+With `=false`, App Store Connect requires no questionnaire answer, no `ITSEncryptionExportComplianceCode`, and no ERN/CCATS filing. `altool --upload-app` accepts the `.pkg` without a per-build compliance lookup.
 
-**When this changes:** if a future feature ships proprietary cryptography, end-to-end key exchange beyond DTLS-SRTP, or cryptographic operations as a primary product feature (encrypted-at-rest storage, advertised E2E messaging), the §740.17(b)(1) exemption may no longer apply. Consult Legal before merging such a feature; an ERN filing with U.S. BIS may be required (~2 week turnaround).
+**Why this matters:** Apple's `altool` validator started enforcing per-build compliance comparison around 2024. With `=true` and an empty App Store Connect compliance record, uploads fail with `STATE_ERROR.VALIDATION_ERROR` and the message `"the export compliance key value [] in the app's Info.plist doesn't match the key value of the app's export compliance documentation"`. Setting `=false` removes Bytover from that comparison entirely.
+
+**When this must flip back to `true`:** if a future feature ships any of the following, the §740.17(b)(1) exemption may no longer apply, and the plist needs `=true` plus the App Store Connect questionnaire (and possibly an ERN filing with U.S. BIS, ~2 week turnaround):
+
+- Proprietary cryptography (custom algorithms, non-standard parameters, etc.).
+- End-to-end key exchange beyond what DTLS-SRTP already provides (e.g., signal-style ratchets, MLS).
+- Cryptographic operations as a primary, advertised product feature (encrypted-at-rest local storage promoted to users, "E2E secure messaging" as a marketing claim).
+- Encryption that is the *purpose* of the data flow rather than a transport layer underneath it.
+
+Consult Legal before merging such a feature. The `Inject App Store Info.plist keys & re-sign` step is the single source of truth for the boolean — flipping `-bool NO` back to `-bool YES` there plus the matching `<false/>` → `<true/>` in `Info.appstore.plist` is the entire change.
 
 ### Privacy Manifest — when to update `PrivacyInfo.xcprivacy`
 

@@ -7,11 +7,19 @@
 
     Keys here are App Store specific. The DMG build path
     (build-macos-dmg) does not consume this file.
+
+    ITSAppUsesNonExemptEncryption=false because Bytover's
+    encryption usage is fully covered by U.S. EAR §740.17(b)(1):
+    TLS via rustls, DTLS-SRTP via webrtc-rs, and SHA-256
+    integrity hashing all qualify as "secure connection" or
+    "authentication/integrity" exemptions. See SIGNING.md
+    "Compliance metadata" for the full rationale and the
+    triggers that would require this to flip back to true.
 -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>ITSAppUsesNonExemptEncryption</key>
-    <true/>
+    <false/>
 </dict>
 </plist>
