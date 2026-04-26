@@ -410,7 +410,7 @@ impl StunPhase {
 
         let elapsed = self.start.elapsed();
         if elapsed >= STUN_TIMEOUT {
-            self.fail("STUN gathering timed out".to_string());
+            self.complete_or_fail();
             return drive;
         }
 
@@ -1501,6 +1501,8 @@ mod tests {
                         listen: addr,
                         idle_timeout: 30,
                         mtu: 1500,
+                        demuxer_capacity: 4096,
+                        v6_only: false,
                     }],
                     ..Default::default()
                 },
