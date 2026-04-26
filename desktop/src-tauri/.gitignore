@@ -8,3 +8,8 @@
 
 # Signing keys (never commit!)
 /keys/
+
+# Provisioning profiles: dev profile is committed for tauri.conf.dev.json;
+# production profile is materialized at build time from a GitHub secret.
+*.provisionprofile
+!Bytover.provisionprofile
