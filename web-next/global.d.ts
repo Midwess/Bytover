@@ -5,5 +5,6 @@ declare global {
     self: any;
     interface Window {
         core: WasmCore;
+        __midwess_log?: boolean;
     }
 }
