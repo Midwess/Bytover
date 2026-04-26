@@ -3,11 +3,13 @@ use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
 use crate::app::operations::device::DeviceOperation;
 use crate::app::operations::dialog::DialogOperation;
+use crate::app::operations::p2p::P2POperation;
 use crate::app::operations::persistent::{
     DeviceAliasPersistentOperation, SessionPersistentOperation, ShelfPersistentOperation, TransferSessionPersistentOperation,
 };
 use crate::app::operations::rpc::RpcOperation;
 use crate::app::operations::webview::WebViewOperation;
+use crate::app::payment::module::PaymentEvent;
 use crate::app::shelf::module::ShelfEvent;
 use crate::app::transfer::module::TransferEvent;
 use crate::app::AppEvent;
@@ -36,12 +38,14 @@ impl AppCommand {
     }
 
     pub async fn sign_out(&self) -> Result<(), CoreError> {
+        let _ = self.run(P2POperation::stop()).await;
         self.run(SessionPersistentOperation::remove_session()).await?;
         self.run(TransferSessionPersistentOperation::clear_all()).await?;
         self.run(ShelfPersistentOperation::clear_all()).await?;
         self.run(DeviceAliasPersistentOperation::clear_all()).await?;
         self.notify_event(TransferEvent::Clear);
-        self.notify_event(ShelfEvent::Launch);
+        self.notify_event(ShelfEvent::Cleared);
+        self.notify_event(AppEvent::Payment(PaymentEvent::ClearCapabilities));
         self.re_authorize().await?;
         Ok(())
     }
@@ -93,17 +97,10 @@ impl AppCommand {
             return Ok(());
         }
 
-        SessionPersistentOperation::save_token(token).into_future(self.ctx()).await?;
+        let prior_session = SessionPersistentOperation::get_session().into_future(self.ctx()).await?;
+        let prior_user_id = prior_session.as_ref().and_then(|s| s.user.as_ref()).map(|u| u.id);
 
-        // Clear all data on fresh sign in (user signs in after signing out)
-        let session = SessionPersistentOperation::get_session().into_future(self.ctx()).await?;
-        if session.is_none() {
-            self.run(TransferSessionPersistentOperation::clear_all()).await?;
-            self.run(ShelfPersistentOperation::clear_all()).await?;
-            self.run(DeviceAliasPersistentOperation::clear_all()).await?;
-            self.notify_event(TransferEvent::Clear);
-            self.notify_event(ShelfEvent::Launch);
-        }
+        SessionPersistentOperation::save_token(token).into_future(self.ctx()).await?;
 
         let (user, device_unique_key) = RpcOperation::get_me().into_future(self.ctx()).await?;
 
@@ -115,6 +112,16 @@ impl AppCommand {
             .await;
             self.notify_event(AuthenticationEvent::UnAuthorized);
             return Ok(());
+        }
+
+        if prior_user_id.map_or(true, |id| id != user.id) {
+            let _ = self.run(P2POperation::stop()).await;
+            self.run(TransferSessionPersistentOperation::clear_all()).await?;
+            self.run(ShelfPersistentOperation::clear_all()).await?;
+            self.run(DeviceAliasPersistentOperation::clear_all()).await?;
+            self.notify_event(TransferEvent::Clear);
+            self.notify_event(ShelfEvent::Launch);
+            self.notify_event(AppEvent::Payment(PaymentEvent::ClearCapabilities));
         }
 
         self.notify_event(AppEvent::Authentication(AuthenticationEvent::Authorized { user }));
@@ -132,18 +139,17 @@ impl AppCommand {
         };
         if server_device_key.is_empty() {
             log::warn!(target: "auth", "Server returned empty device key; skipping device match check");
-            return true;
         }
-        if local.unique_id != server_device_key {
+        let matches = server_token_matches_device(server_device_key, &local.unique_id);
+        if !matches {
             log::error!(
                 target: "auth",
                 "Token device mismatch: local={} server={}",
                 local.unique_id,
                 server_device_key
             );
-            return false;
         }
-        true
+        matches
     }
 
     async fn fetch_and_assign_aliases(&self) {
@@ -179,5 +185,31 @@ impl AppCommand {
                 }
             }
         }
+    }
+}
+
+fn server_token_matches_device(server_device_key: &str, local_unique_id: &str) -> bool {
+    server_device_key.is_empty() || local_unique_id == server_device_key
+}
+
+#[cfg(test)]
+mod tests {
+    use super::server_token_matches_device;
+
+    #[test]
+    fn empty_server_device_key_accepts_any_local_device() {
+        assert!(server_token_matches_device("", "any-local-id"));
+        assert!(server_token_matches_device("", ""));
+    }
+
+    #[test]
+    fn matching_device_keys_accept() {
+        assert!(server_token_matches_device("abc-123", "abc-123"));
+    }
+
+    #[test]
+    fn mismatched_non_empty_device_keys_reject() {
+        assert!(!server_token_matches_device("abc-123", "xyz-789"));
+        assert!(!server_token_matches_device("abc-123", ""));
     }
 }

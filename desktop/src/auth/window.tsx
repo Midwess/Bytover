@@ -1,5 +1,5 @@
 import ReactDOM from "react-dom/client"
-import React, {useEffect, useState} from "react"
+import React, {useEffect, useRef, useState} from "react"
 import core from "@/core.ts"
 import {motion, noop} from "motion/react"
 import {Button} from "@/components/ui/button.tsx";
@@ -24,6 +24,7 @@ function Window() {
     const [authUrl, setAuthUrl] = useState<string | null>(null)
     const [copied, setCopied] = useState(false)
     const [showUrl, setShowUrl] = useState(false)
+    const logoTapRef = useRef<{ count: number; lastTap: number }>({ count: 0, lastTap: 0 })
 
     useEffect(() => {
         core.launch()
@@ -62,6 +63,22 @@ function Window() {
         setAuthPhase('google-signin')
     }
 
+    const handleLogoTap = () => {
+        if (authPhase !== 'google-signin') return
+        const now = Date.now()
+        const state = logoTapRef.current
+        if (now - state.lastTap > 1500) {
+            state.count = 1
+        } else {
+            state.count += 1
+        }
+        state.lastTap = now
+        if (state.count >= 5) {
+            state.count = 0
+            setAuthPhase('token-input')
+        }
+    }
+
     const handleCopyUrl = async () => {
         if (!authUrl) return
         try {
@@ -94,7 +111,8 @@ function Window() {
                         initial={{ opacity: 0, scale: 0.9 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ duration: 0.8, ease: "easeOut" }}
-                        className="w-32 h-32 bg-white/10 backdrop-blur-xl rounded-[24%] flex items-center justify-center border border-white/20 shadow-2xl"
+                        onClick={handleLogoTap}
+                        className="w-32 h-32 bg-white/10 backdrop-blur-xl rounded-[24%] flex items-center justify-center border border-white/20 shadow-2xl pointer-events-auto cursor-default"
                     >
                         <img src="/logo.svg" alt="Bytover Logo" className="w-20 h-20 object-contain brightness-110 drop-shadow-md" />
                     </motion.div>

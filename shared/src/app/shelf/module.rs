@@ -108,6 +108,8 @@ pub enum ShelfEvent {
     #[serde(skip)]
     ShelfCreated(Shelf),
     #[serde(skip)]
+    Cleared,
+    #[serde(skip)]
     ShelfUpdated(Shelf),
     #[serde(skip)]
     ShelfDeleted(u64),
@@ -320,6 +322,10 @@ impl AppModule<BitBridge> for ShelfModule {
                 log::info!("Shelf loaded: {:?}", shelf.resources.len());
                 model.shelf.shelves.push(shelf);
                 Command::done()
+            }
+            Self::Event::Cleared => {
+                model.shelf.shelves.clear();
+                Command::render()
             }
             Self::Event::ShelfUpdated(shelf) => {
                 if let Some(existing) = model.shelf.get_shelf_mut(shelf.id) {
