@@ -215,8 +215,9 @@ impl RtcClient {
         let sctp_transport = SctpTransportConfig::default()
             .with_max_init_retransmits(None)
             .with_max_data_retransmits(None)
-            .with_max_cwnd_bytes(None)
-            .with_rack_reo_wnd_floor(Duration::from_millis(700));
+            .with_max_cwnd_bytes(Some(400_000))
+            .with_rack_reo_wnd_floor(Duration::from_millis(700))
+            .with_rto_min_ms(2500);
 
         let mut rtc = RtcConfig::default()
             .set_sctp_max_message_size(256 * 1024)
