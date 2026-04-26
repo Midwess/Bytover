@@ -30,6 +30,8 @@ static SHELF_REGISTRY: LazyLock<Mutex<ShelfRegistry>> = LazyLock::new(|| {
     })
 });
 
+static AUTH_WINDOW_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
 /// Stable identity for a monitor derived from its physical position and size.
 fn monitor_hash(monitor: &tauri::Monitor) -> u64 {
     let pos = monitor.position();
@@ -161,23 +163,30 @@ impl<R: Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
     }
 
     fn show_auth(&self) -> WebviewWindow<R> {
-        self.close_all_windows(vec!["auth", "intro"]);
+        let _guard = AUTH_WINDOW_LOCK.lock().expect("auth window lock poisoned");
 
-        let window = match self.get_webview_window("auth") {
-            Some(window) => window,
-            None => WebviewWindowBuilder::new(self, "auth", WebviewUrl::App("auth.html".into()))
-                .title("Bytover")
-                .inner_size(600.0, 600.0)
-                .decorations(true)
-                .transparent(true)
-                .focused(true)
-                .skip_taskbar(false)
-                .resizable(false)
-                .shadow(true)
-                .devtools(true)
-                .build()
-                .expect("failed to create auth window"),
-        };
+        if let Some(window) = self.get_webview_window("auth") {
+            if !window.is_visible().unwrap_or(false) {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+            return window;
+        }
+
+        self.close_all_windows(vec!["intro"]);
+
+        let window = WebviewWindowBuilder::new(self, "auth", WebviewUrl::App("auth.html".into()))
+            .title("Bytover")
+            .inner_size(600.0, 600.0)
+            .decorations(true)
+            .transparent(true)
+            .focused(true)
+            .skip_taskbar(false)
+            .resizable(false)
+            .shadow(true)
+            .devtools(true)
+            .build()
+            .expect("failed to create auth window");
 
         let _ = window.show();
         window
