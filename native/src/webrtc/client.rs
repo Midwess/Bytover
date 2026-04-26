@@ -35,6 +35,7 @@ use str0m::channel::ChannelId;
 
 pub static MAX_BUFFER_SIZE: usize = WIRE_PART_SIZE * 20;
 pub static MIN_BUFFER_SIZE: usize = WIRE_PART_SIZE;
+pub static UDP_SOCKET_BUFFER_SIZE: usize = 8 * 1024 * 1024;
 const RELIABLE_DATA_QUEUE_CAPACITY: usize = MAX_BUFFER_SIZE / WIRE_PART_SIZE + 1;
 const OUTBOUND_RETRY_DELAY: Duration = Duration::from_millis(3);
 
@@ -104,7 +105,7 @@ impl WebRtcClient {
         let (ordered_msg_tx, ordered_msg_rx) = futures_mpsc::channel::<Vec<u8>>(64);
         let (_unordered_msg_tx, unordered_msg_rx) = futures_mpsc::channel::<Vec<u8>>(64);
         let (reliable_data_tx, reliable_data_rx) = mpsc::channel::<Vec<u8>>(RELIABLE_DATA_QUEUE_CAPACITY);
-        let (outbound_tx, outbound_rx) = futures_mpsc::channel::<Vec<u8>>(32);
+        let (outbound_tx, outbound_rx) = futures_mpsc::channel::<Vec<u8>>(256);
         let (pool_event_tx, pool_event_rx) = mpsc::channel::<(usize, RtcEvent)>(32);
 
         let pool = ConnectionPool::new_with_primary(rtc_client, total_slots.max(1), pool_event_tx);

@@ -20,6 +20,10 @@ impl Slot {
         self.handle.data_buffered_amount()
     }
 
+    pub fn is_relay(&self) -> bool {
+        self.handle.is_relay()
+    }
+
     pub fn send(&self, data: &[u8], channel_id: ChannelId) -> bool {
         self.handle.send(data, channel_id)
     }
@@ -159,6 +163,17 @@ impl ConnectionPool {
             .filter_map(|cell| cell.get())
             .filter(|s| s.is_alive())
             .count()
+    }
+
+    pub fn any_slot_is_relay(&self) -> bool {
+        if self.closed.load(Ordering::Relaxed) {
+            return false;
+        }
+        self.slots
+            .iter()
+            .filter_map(|cell| cell.get())
+            .filter(|s| s.is_alive())
+            .any(|s| s.is_relay())
     }
 
     pub fn shutdown_all(&self) {

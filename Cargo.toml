@@ -11,7 +11,7 @@ members = [
     "signalling",
     "relay-server"
 ]
-exclude = ["third_party/str0m", ".dev/turn-rs"]
+exclude = ["third_party/str0m", ".dev/turn-rs", ".dev/sctp-proto"]
 
 resolver = "2"
 

@@ -4,11 +4,12 @@ use socket2::{Domain, Socket, Type};
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use str0m::channel::{ChannelConfig, ChannelId};
 use str0m::net::{Protocol, Receive};
+use str0m::config::TransportConfig as SctpTransportConfig;
 use str0m::{Event, IceConnectionState, Input, Output, Rtc, RtcConfig};
 use stun_proto::agent::Transmit;
 use stun_proto::types::TransportType as StunTransportType;
@@ -16,7 +17,7 @@ use turn_client_proto::api::{BindChannelError, SendError, TurnClientApi};
 use turn_client_proto::udp::{TurnEvent, TurnPollRet, TurnRecvRet};
 
 use crate::config::is_relay_only;
-use crate::webrtc::client::{WebRtcClientError, MAX_BUFFER_SIZE};
+use crate::webrtc::client::{WebRtcClientError, UDP_SOCKET_BUFFER_SIZE};
 use crate::webrtc::ice::{strip_candidates_from_sdp, IceAgent};
 use crate::webrtc::signalling::SignallingSender;
 use crate::webrtc::turn::{stun_now, TurnRelayInfo};
@@ -41,10 +42,8 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 /// Maximum number of consecutive `MorePending` cycles.
 const MAX_PENDING_SPINS_PER_STEP: usize = 8;
 
-/// Reliable channel low watermark that triggers a refill event from str0m.
 const RELIABLE_BUFFERED_AMOUNT_LOW_THRESHOLD: usize = 256 * 1024;
 
-/// Refill reliable buffered data only up to this target to avoid large burst-then-drain cycles.
 const RELIABLE_BUFFERED_AMOUNT_REFILL_TARGET: usize = 512 * 1024;
 
 /// Events emitted from the RTC thread to the outside world.
@@ -67,6 +66,7 @@ pub struct RtcHandle {
     channel_ids: ChannelIds,
     thread_handle: Option<std::thread::JoinHandle<()>>,
     data_buffered_amount: Arc<AtomicUsize>,
+    is_relay: Arc<AtomicBool>,
 }
 
 impl RtcHandle {
@@ -93,6 +93,10 @@ impl RtcHandle {
 
     pub fn data_buffered_amount(&self) -> usize {
         self.data_buffered_amount.load(Ordering::Relaxed)
+    }
+
+    pub fn is_relay(&self) -> bool {
+        self.is_relay.load(Ordering::Relaxed)
     }
 
     /// Await the next event from the RTC thread.
@@ -158,6 +162,7 @@ struct RtcClient {
     candidate_rx: Option<tokio::sync::mpsc::Receiver<str0m::Candidate>>,
     turn: Option<TurnRelayInfo>,
     data_buffered_amount: Arc<AtomicUsize>,
+    is_relay: Arc<AtomicBool>,
 }
 
 impl RtcClient {
@@ -190,8 +195,7 @@ impl RtcClient {
         socket.set_only_v6(false)?;
         socket.set_nonblocking(true)?;
         socket.bind(&"[::]:0".parse::<SocketAddr>().unwrap().into())?;
-        let _ = socket.set_send_buffer_size(MAX_BUFFER_SIZE);
-        let _ = socket.set_recv_buffer_size(MAX_BUFFER_SIZE);
+        apply_udp_buffer_size(&socket, UDP_SOCKET_BUFFER_SIZE);
         let socket: std::net::UdpSocket = socket.into();
         let socket = tokio::net::UdpSocket::from_std(socket)?;
 
@@ -208,12 +212,18 @@ impl RtcClient {
             None => log::info!("[rtc-client] No TURN relay, operating P2P-only"),
         }
 
-        let config = RtcConfig::default()
+        let sctp_transport = SctpTransportConfig::default()
+            .with_max_init_retransmits(None)
+            .with_max_data_retransmits(None)
+            .with_max_cwnd_bytes(Some(200_000))
+            .with_rack_reo_wnd_floor(Duration::from_millis(400));
+
+        let mut rtc = RtcConfig::default()
             .set_sctp_max_message_size(256 * 1024)
             .set_sctp_buffer_size(5 * 1024 * 1024)
-            .set_stats_interval(Some(std::time::Duration::from_secs(10)));
-
-        let mut rtc = config.build(Instant::now());
+            .set_stats_interval(Some(std::time::Duration::from_secs(10)))
+            .set_sctp_transport_config(sctp_transport)
+            .build(Instant::now());
         let mut local_v4_addr = None;
         let mut local_v6_addr = None;
         for candidate in &candidates {
@@ -337,6 +347,7 @@ impl RtcClient {
             candidate_rx: Some(candidate_rx),
             turn: turn_info,
             data_buffered_amount: Arc::new(AtomicUsize::new(0)),
+            is_relay: Arc::new(AtomicBool::new(false)),
         };
 
         for candidate in ip_candidates {
@@ -358,6 +369,7 @@ impl RtcClient {
     fn spawn_thread(self) -> RtcHandle {
         let channel_ids = self.channel_ids;
         let data_buffered_amount = Arc::clone(&self.data_buffered_amount);
+        let is_relay = Arc::clone(&self.is_relay);
         let (event_tx, event_rx) = tokio::sync::mpsc::channel::<RtcEvent>(5);
         let (data_tx, data_rx) = tokio::sync::mpsc::channel::<(Vec<u8>, ChannelId)>(16);
         let thread_handle = std::thread::Builder::new()
@@ -380,6 +392,7 @@ impl RtcClient {
             channel_ids,
             thread_handle: Some(thread_handle),
             data_buffered_amount,
+            is_relay,
         }
     }
 
@@ -440,6 +453,33 @@ impl RtcClient {
                                 ice_disconnected_since = None;
                             }
                             _ => {}
+                        }
+                    }
+
+                    if let Event::PeerStats(s) = &event {
+                        log::info!(
+                            "[rtc-client] peer-stats peer_bytes_tx={} peer_bytes_rx={} bwe_tx={:?} egress_loss={:?} ingress_loss={:?} rtt={:?}",
+                            s.peer_bytes_tx,
+                            s.peer_bytes_rx,
+                            s.bwe_tx,
+                            s.egress_loss_fraction,
+                            s.ingress_loss_fraction,
+                            s.rtt,
+                        );
+                        if let Some(pair) = &s.selected_candidate_pair {
+                            let relayed = self
+                                .turn
+                                .as_ref()
+                                .is_some_and(|turn| pair.local.addr == turn.relay_addr);
+                            let prev = self.is_relay.swap(relayed, Ordering::Relaxed);
+                            if prev != relayed {
+                                log::info!(
+                                    "[rtc-client] selected pair relay={} local={} remote={}",
+                                    relayed,
+                                    pair.local.addr,
+                                    pair.remote.addr,
+                                );
+                            }
                         }
                     }
 
@@ -917,6 +957,25 @@ impl RtcClient {
 
     fn rtc_mut(&mut self) -> std::cell::RefMut<'_, Rtc> {
         self.rtc.borrow_mut()
+    }
+}
+
+fn apply_udp_buffer_size(socket: &Socket, requested: usize) {
+    let _ = socket.set_send_buffer_size(requested);
+    let _ = socket.set_recv_buffer_size(requested);
+    if let Ok(actual) = socket.send_buffer_size() {
+        if actual < requested / 2 {
+            log::warn!(
+                "[rtc-client] UDP send buf clamped: requested={requested} actual={actual} (raise kern.ipc.maxsockbuf or net.core.wmem_max)"
+            );
+        }
+    }
+    if let Ok(actual) = socket.recv_buffer_size() {
+        if actual < requested / 2 {
+            log::warn!(
+                "[rtc-client] UDP recv buf clamped: requested={requested} actual={actual} (raise kern.ipc.maxsockbuf or net.core.rmem_max)"
+            );
+        }
     }
 }
 

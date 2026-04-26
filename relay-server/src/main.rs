@@ -44,7 +44,22 @@ async fn async_main() -> Result<(), MainErrors> {
     let turn_username = env::var("TURN_USERNAME").unwrap_or_else(|_| "relay".to_string());
     let turn_password = env::var("TURN_PASSWORD").unwrap_or_else(|_| "relay-secret".to_string());
 
-    let interfaces = build_turn_interfaces(&public_addresses, turn_port).map_err(MainErrors::ExecutionError)?;
+    let turn_udp_send_buffer = env::var("TURN_UDP_SEND_BUFFER")
+        .unwrap_or_else(|_| (8 * 1024 * 1024).to_string())
+        .parse::<usize>()
+        .unwrap();
+    let turn_udp_recv_buffer = env::var("TURN_UDP_RECV_BUFFER")
+        .unwrap_or_else(|_| (8 * 1024 * 1024).to_string())
+        .parse::<usize>()
+        .unwrap();
+
+    let interfaces = build_turn_interfaces(
+        &public_addresses,
+        turn_port,
+        turn_udp_send_buffer,
+        turn_udp_recv_buffer,
+    )
+    .map_err(MainErrors::ExecutionError)?;
 
     let turn_config = Config {
         server: TurnServerConfig {
@@ -99,7 +114,12 @@ async fn async_main() -> Result<(), MainErrors> {
     Ok(())
 }
 
-fn build_turn_interfaces(public_addresses: &PublicAddresses, port: u16) -> Result<Vec<Interface>, String> {
+fn build_turn_interfaces(
+    public_addresses: &PublicAddresses,
+    port: u16,
+    send_buffer_size: usize,
+    recv_buffer_size: usize,
+) -> Result<Vec<Interface>, String> {
     let mut interfaces = Vec::new();
     if let Some(ipv4) = public_addresses.ipv4 {
         interfaces.push(Interface::Udp {
@@ -109,6 +129,8 @@ fn build_turn_interfaces(public_addresses: &PublicAddresses, port: u16) -> Resul
             mtu: 1500,
             demuxer_capacity: 4096,
             v6_only: false,
+            send_buffer_size,
+            recv_buffer_size,
         });
     }
     if let Some(ipv6) = public_addresses.ipv6 {
@@ -119,6 +141,8 @@ fn build_turn_interfaces(public_addresses: &PublicAddresses, port: u16) -> Resul
             mtu: 1500,
             demuxer_capacity: 4096,
             v6_only: true,
+            send_buffer_size,
+            recv_buffer_size,
         });
     }
     if interfaces.is_empty() {
@@ -504,6 +528,8 @@ mod tests {
                 ipv6: Some(Ipv6Addr::new(0x2404, 0xc140, 0x2100, 0, 0, 0, 0, 1)),
             },
             19101,
+            8 * 1024 * 1024,
+            8 * 1024 * 1024,
         )
         .unwrap();
 
@@ -528,6 +554,8 @@ mod tests {
                 ipv6: Some(Ipv6Addr::LOCALHOST),
             },
             19101,
+            8 * 1024 * 1024,
+            8 * 1024 * 1024,
         )
         .unwrap();
 
@@ -543,6 +571,8 @@ mod tests {
         let result = build_turn_interfaces(
             &PublicAddresses { ipv4: None, ipv6: None },
             19101,
+            8 * 1024 * 1024,
+            8 * 1024 * 1024,
         );
         assert!(result.is_err());
     }

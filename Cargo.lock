@@ -4563,7 +4563,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.5.10",
+ "socket2 0.4.10",
  "tokio",
  "tower-service",
  "tracing",
@@ -4697,7 +4697,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -5045,7 +5045,7 @@ dependencies = [
 [[package]]
 name = "is"
 version = "0.8.0"
-source = "git+https://github.com/Midwess/str0m.git#1764d53d6ca4e3c35b4dca225908e9a9b3db029c"
+source = "git+https://github.com/Midwess/str0m.git#09eadd0203fbdc20edb43d5421d57da9d08aa27d"
 dependencies = [
  "crc",
  "serde",
@@ -7532,7 +7532,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash",
  "rustls 0.23.34",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -7570,7 +7570,7 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "tracing",
  "windows-sys 0.59.0",
 ]
@@ -8480,8 +8480,8 @@ dependencies = [
 
 [[package]]
 name = "sctp-proto"
-version = "0.9.0"
-source = "git+https://github.com/Midwess/sctp-proto.git#8e9bef41e7716296eba19bc5956cf1b0449b178d"
+version = "0.9.1"
+source = "git+https://github.com/Midwess/sctp-proto.git#50942f6b93e95fa845e869a14b8f679d325c5b65"
 dependencies = [
  "bytes",
  "crc",
@@ -9560,7 +9560,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 [[package]]
 name = "str0m"
 version = "0.18.0"
-source = "git+https://github.com/Midwess/str0m.git#1764d53d6ca4e3c35b4dca225908e9a9b3db029c"
+source = "git+https://github.com/Midwess/str0m.git#09eadd0203fbdc20edb43d5421d57da9d08aa27d"
 dependencies = [
  "arrayvec",
  "base64ct",
@@ -9580,7 +9580,7 @@ dependencies = [
 [[package]]
 name = "str0m-aws-lc-rs"
 version = "0.3.0"
-source = "git+https://github.com/Midwess/str0m.git#1764d53d6ca4e3c35b4dca225908e9a9b3db029c"
+source = "git+https://github.com/Midwess/str0m.git#09eadd0203fbdc20edb43d5421d57da9d08aa27d"
 dependencies = [
  "aws-lc-rs",
  "dimpl",
@@ -9591,7 +9591,7 @@ dependencies = [
 [[package]]
 name = "str0m-proto"
 version = "0.4.0"
-source = "git+https://github.com/Midwess/str0m.git#1764d53d6ca4e3c35b4dca225908e9a9b3db029c"
+source = "git+https://github.com/Midwess/str0m.git#09eadd0203fbdc20edb43d5421d57da9d08aa27d"
 dependencies = [
  "base64ct",
  "dimpl",
@@ -11179,7 +11179,7 @@ dependencies = [
 [[package]]
 name = "turn-server"
 version = "4.0.1"
-source = "git+https://github.com/Midwess/turn-rs.git?branch=production#81a88ebfb990de6465912135affffe8e2e4f6d6d"
+source = "git+https://github.com/Midwess/turn-rs.git?branch=production#543f0d0f56a7b2395e5235a7ccf2271f57b98ac9"
 dependencies = [
  "ahash 0.8.12",
  "anyhow",
@@ -11213,7 +11213,7 @@ dependencies = [
 [[package]]
 name = "turn-server-protos"
 version = "0.1.0"
-source = "git+https://github.com/Midwess/turn-rs.git?branch=production#81a88ebfb990de6465912135affffe8e2e4f6d6d"
+source = "git+https://github.com/Midwess/turn-rs.git?branch=production#543f0d0f56a7b2395e5235a7ccf2271f57b98ac9"
 dependencies = [
  "prost 0.14.1",
  "prost-types 0.14.1",
