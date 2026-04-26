@@ -1,5 +1,5 @@
 pub const COMPRESSION_BLOCK_SIZE: usize = 128 * 1024;
-pub const WIRE_PART_SIZE: usize = 16 * 1024;
+pub const WIRE_PART_SIZE: usize = 8 * 1024;
 pub const WEBRTC_PACKET_HEADER_LEN: usize = 12;
 
 pub struct WebRtcPacket;
