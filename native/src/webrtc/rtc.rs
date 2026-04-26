@@ -211,10 +211,13 @@ impl RtcClient {
             None => log::info!("[rtc-client] No TURN relay, operating P2P-only"),
         }
 
-        let config = RtcConfig::default()
+        let mut config = RtcConfig::default()
             .set_sctp_max_message_size(256 * 1024)
             .set_sctp_buffer_size(5 * 1024 * 1024)
             .set_stats_interval(Some(std::time::Duration::from_secs(10)));
+        config.set_initial_stun_rto(std::time::Duration::from_millis(100));
+        config.set_max_stun_rto(std::time::Duration::from_millis(1000));
+        config.set_max_stun_retransmits(30);
 
         let mut rtc = config.build(Instant::now());
         let mut local_v4_addr = None;
