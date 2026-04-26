@@ -262,8 +262,10 @@ jobs:
             echo "::error::Profile file missing at $PROFILE_PATH. The Mac App Store distribution profile must be committed at this path."
             exit 1
           fi
-          PROFILE_TEAM=$(security cms -D -i "$PROFILE_PATH" | plutil -extract TeamIdentifier.0 raw -)
-          PROFILE_APP_ID=$(security cms -D -i "$PROFILE_PATH" | plutil -extract Entitlements.application-identifier raw -)
+          PROFILE_PLIST=$(security cms -D -i "$PROFILE_PATH")
+          PROFILE_TEAM=$(printf '%s' "$PROFILE_PLIST" | plutil -extract TeamIdentifier.0 raw -)
+          PROFILE_APP_ID=$(printf '%s' "$PROFILE_PLIST" | plutil -extract 'Entitlements.com\.apple\.application-identifier' raw - 2>/dev/null \
+            || printf '%s' "$PROFILE_PLIST" | plutil -extract 'Entitlements.application-identifier' raw -)
           if [ "$PROFILE_TEAM" != "BUJKWCX7F4" ]; then
             echo "::error::Provisioning profile TeamIdentifier mismatch: expected BUJKWCX7F4, got $PROFILE_TEAM"
             exit 1
@@ -272,7 +274,7 @@ jobs:
             echo "::error::Provisioning profile application-identifier mismatch: expected BUJKWCX7F4.com.midwess.bytover, got $PROFILE_APP_ID"
             exit 1
           fi
-          EXP_RAW=$(security cms -D -i "$PROFILE_PATH" | plutil -extract ExpirationDate raw -)
+          EXP_RAW=$(printf '%s' "$PROFILE_PLIST" | plutil -extract ExpirationDate raw -)
           EXP_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$EXP_RAW" +%s)
           NOW_EPOCH=$(date +%s)
           DAYS_LEFT=$(( (EXP_EPOCH - NOW_EPOCH) / 86400 ))
