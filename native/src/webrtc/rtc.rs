@@ -9,6 +9,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use str0m::channel::{ChannelConfig, ChannelId};
 use str0m::net::{Protocol, Receive};
+use str0m::config::TransportConfig as SctpTransportConfig;
 use str0m::{Event, IceConnectionState, Input, Output, Rtc, RtcConfig};
 use stun_proto::agent::Transmit;
 use stun_proto::types::TransportType as StunTransportType;
@@ -211,15 +212,17 @@ impl RtcClient {
             None => log::info!("[rtc-client] No TURN relay, operating P2P-only"),
         }
 
-        let mut config = RtcConfig::default()
+        let sctp_transport = SctpTransportConfig::default()
+            .with_max_init_retransmits(None)
+            .with_max_data_retransmits(None)
+            .with_max_cwnd_bytes(Some(200_000));
+
+        let mut rtc = RtcConfig::default()
             .set_sctp_max_message_size(256 * 1024)
             .set_sctp_buffer_size(5 * 1024 * 1024)
-            .set_stats_interval(Some(std::time::Duration::from_secs(10)));
-        config.set_initial_stun_rto(std::time::Duration::from_millis(100));
-        config.set_max_stun_rto(std::time::Duration::from_millis(1000));
-        config.set_max_stun_retransmits(30);
-
-        let mut rtc = config.build(Instant::now());
+            .set_stats_interval(Some(std::time::Duration::from_secs(10)))
+            .set_sctp_transport_config(sctp_transport)
+            .build(Instant::now());
         let mut local_v4_addr = None;
         let mut local_v6_addr = None;
         for candidate in &candidates {
