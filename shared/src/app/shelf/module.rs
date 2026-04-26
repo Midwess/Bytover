@@ -85,6 +85,10 @@ pub enum ShelfEvent {
         shelf_id: u64,
         selections: Vec<ResourceSelection>,
     },
+    LoadResourceThumbnail {
+        shelf_id: u64,
+        resource: LocalResource,
+    },
     RemoveResource {
         shelf_id: u64,
         resource_id: u64,
@@ -163,6 +167,9 @@ impl AppModule<BitBridge> for ShelfModule {
                 }));
 
                 Command::all(commands)
+            }
+            Self::Event::LoadResourceThumbnail { shelf_id, resource } => {
+                Command::handle_result(move |it| async move { it.app().load_resource_thumbnail(shelf_id, resource).await })
             }
             Self::Event::RemoveResource { shelf_id, resource_id } => {
                 if model.transfer.has_active_send_session(shelf_id) {

@@ -198,33 +198,6 @@ impl AppCommand {
                 None => self.run(LocalResourcePersistentOperation::get_resource_type(selection.path.clone())).await?,
             };
 
-            let (thumbnail_png_opt, thumbnail_path_opt) = self
-                .run(DeviceOperation::load_thumbnail_png(
-                    local_resource.order_id,
-                    selection.path.clone(),
-                    local_resource.r#type.clone(),
-                ))
-                .await;
-
-            if let Some(thumbnail_png) = thumbnail_png_opt {
-                match self
-                    .run(LocalResourcePersistentOperation::add_thumbnail(
-                        thumbnail_png,
-                        local_resource.order_id,
-                    ))
-                    .await
-                {
-                    Ok(thumbnail) => {
-                        local_resource.thumbnail_path = Some(thumbnail);
-                    }
-                    Err(e) => {
-                        log::error!("Failed to add thumbnail: {:?}", e);
-                    }
-                }
-            } else if let Some(thumbnail_path) = thumbnail_path_opt {
-                local_resource.thumbnail_path = Some(thumbnail_path);
-            }
-
             let mut new_resources = self.run(LocalResourcePersistentOperation::add(vec![local_resource])).await?;
             let Some(new_resource) = new_resources.pop() else {
                 continue;
@@ -237,9 +210,59 @@ impl AppCommand {
 
             self.notify_event(TransferEvent::NewTransferResource {
                 shelf_id: target_shelf_id,
+                resource: new_resource.clone(),
+            });
+
+            self.notify_event(ShelfEvent::LoadResourceThumbnail {
+                shelf_id: target_shelf_id,
                 resource: new_resource,
             });
         }
+
+        Ok(())
+    }
+
+    pub async fn load_resource_thumbnail(&self, shelf_id: u64, mut resource: LocalResource) -> Result<(), CoreError> {
+        let resource_id = resource.order_id;
+        let path = resource.path.clone();
+
+        let (thumbnail_png_opt, thumbnail_path_opt) = self
+            .run(DeviceOperation::load_thumbnail_png(resource_id, path.clone(), resource.r#type.clone()))
+            .await;
+
+        let thumbnail_path = if let Some(png) = thumbnail_png_opt {
+            match self.run(LocalResourcePersistentOperation::add_thumbnail(png, resource_id)).await {
+                Ok(p) => Some(p),
+                Err(e) => {
+                    log::error!("Failed to write thumbnail file for {}: {:?}", resource_id, e);
+                    return Ok(());
+                }
+            }
+        } else {
+            thumbnail_path_opt
+        };
+
+        let Some(thumbnail_path) = thumbnail_path else {
+            return Ok(());
+        };
+
+        resource.thumbnail_path = Some(thumbnail_path);
+
+        let persisted = match self.run(LocalResourcePersistentOperation::update(resource)).await {
+            Ok(r) => r,
+            Err(e) => {
+                log::warn!("Failed to persist thumbnail for {}: {:?}", resource_id, e);
+                return Ok(());
+            }
+        };
+
+        let id = LocalResourceId {
+            order_id: Some(resource_id),
+            shelf_id: Some(shelf_id),
+            path: Some(path),
+        };
+
+        self.update_model(LocalResourceEvent::Update(id, LocalResourceUpdateEvent::Update(persisted)));
 
         Ok(())
     }
