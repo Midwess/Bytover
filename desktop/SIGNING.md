@@ -144,9 +144,10 @@ The App Store path produces a sandboxed, Apple-Distribution-signed bundle wrappe
 
 ### Prerequisites
 
-- Apple Developer Identifier `com.midwess.bytover` has the **App Sandbox** capability enabled.
+- Apple Developer Identifier `com.midwess.bytover` has the **App Sandbox** capability enabled (already configured on the App ID).
 - App Store Connect app record exists for `com.midwess.bytover` with at least one draft version slot (Apple rejects uploads with no slot).
 - The `bytover-ci-notarization` API key (already provisioned for notarization) has at least the `Developer` role in App Store Connect → Users and Access → Integrations.
+- The `APPLE_CERTIFICATE` `.p12` (reused from the Developer ID path) **must contain both** the `Apple Distribution` and `3rd Party Mac Developer Installer` identities. Keychain Access exports a multi-identity `.p12` if you select all three certs (Developer ID Application + Apple Distribution + 3rd Party Mac Developer Installer) before `File → Export`.
 
 ### Files in the repo
 
@@ -158,18 +159,16 @@ The App Store path produces a sandboxed, Apple-Distribution-signed bundle wrappe
 
 ### Secrets (in GitHub environment `production`)
 
-In addition to the Developer ID secrets above:
+The App Store path **introduces no new secrets**. It reuses the existing Developer ID secrets:
 
-| Secret | Source |
+| Secret | How it's used on App Store path |
 |---|---|
-| `APPLE_DIST_CERTIFICATE` | `base64 -i AppleDistribution.p12 \| tr -d '\n'` |
-| `APPLE_DIST_CERTIFICATE_PASSWORD` | Password from the `.p12` export. |
-| `APPLE_DIST_INSTALLER_CERTIFICATE` | `base64 -i MacInstaller.p12 \| tr -d '\n'` |
-| `APPLE_DIST_INSTALLER_CERTIFICATE_PASSWORD` | Password from the `.p12` export. |
-| `APPLE_DIST_SIGNING_IDENTITY` | `Apple Distribution: Midwess LLC (BUJKWCX7F4)` — match `security find-identity -v -p codesigning`. |
-| `APPLE_DIST_INSTALLER_IDENTITY` | `3rd Party Mac Developer Installer: Midwess LLC (BUJKWCX7F4)`. |
+| `APPLE_CERTIFICATE` | Decoded and imported into a temp keychain on the App Store runner. The `.p12` must contain `Apple Distribution` and `3rd Party Mac Developer Installer` identities (multi-identity `.p12`). |
+| `APPLE_CERTIFICATE_PASSWORD` | Password for the multi-identity `.p12`. |
+| `APPLE_TEAM_ID` | Passed to the build for `team-identifier` propagation. |
+| `APPLE_API_ISSUER` / `APPLE_API_KEY_ID` / `APPLE_API_KEY_BASE64` | Reused from the notarization path — the same `.p8` works for both `notarytool submit` and `xcrun altool --upload-app`. |
 
-The App Store Connect API key (`APPLE_API_ISSUER`, `APPLE_API_KEY_ID`, `APPLE_API_KEY_BASE64`) is reused from the Developer ID notarization path — the same `.p8` works for both `notarytool submit` and `xcrun altool --upload-app`.
+The signing identity strings (`Apple Distribution`, `3rd Party Mac Developer Installer`) are **hardcoded** as prefixes in the workflow because `codesign`/`productbuild` substring-match against the keychain's identity CNs. Since the App Store run uses a fresh temp keychain populated only from `APPLE_CERTIFICATE`, the prefix uniquely picks the right identity without needing a separate `*_IDENTITY` secret.
 
 ### Provisioning profile rotation
 
@@ -186,7 +185,7 @@ The CI step `Install App Store provisioning profile` validates the file every ru
 | Error | Likely cause | Fix |
 |---|---|---|
 | `ITMS-90296: App sandbox not enabled` | App ID lacks the App Sandbox capability, or `app-sandbox: true` was dropped from `entitlements.appstore.plist`. | Enable the capability in Apple Developer portal; re-issue the profile if needed. |
-| `ITMS-91065: Missing signing certificate` | `.app` and `.pkg` signed with mismatched identities (e.g., Developer ID for the inner .app instead of Apple Distribution). | Verify `APPLE_DIST_SIGNING_IDENTITY` and `APPLE_DIST_INSTALLER_IDENTITY` are correct identity strings. |
+| `ITMS-91065: Missing signing certificate` | `.app` and `.pkg` signed with mismatched identities, or the `APPLE_CERTIFICATE` `.p12` lacks the `Apple Distribution` or `3rd Party Mac Developer Installer` identity. | Inspect the `Import App Store certificate` step's `security find-identity` output — both identities must be listed. Re-export `APPLE_CERTIFICATE` with all required certs selected in Keychain Access. |
 | `ITMS-90478: Invalid Version` | `CFBundleVersion` already uploaded for this bundle. | Bump `desktop/package.json` version and re-run. |
 | `ITMS-90438: Invalid Bundle / missing LSApplicationCategoryType` | `bundle.category` not set in `tauri.conf.json`. | Confirm `bundle.category: "public.app-category.productivity"` is present in the base config. |
 
