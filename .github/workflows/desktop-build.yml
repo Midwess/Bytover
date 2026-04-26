@@ -240,7 +240,7 @@ jobs:
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # --- Notarization (Tauri natively notarizes & staples both .app and .dmg) ---
+          # --- Notarization (submit only; --skip-stapling means we don't wait for Apple's verdict) ---
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_KEY_PATH: ${{ env.APPLE_API_KEY_PATH }}
@@ -260,7 +260,7 @@ jobs:
           releaseDraft: true
           prerelease: false
           projectPath: desktop
-          args: ${{ matrix.platform == 'macos-latest' && '--target universal-apple-darwin --features log-file' || format('--target {0} --features log-file', matrix.tauri_target) }}
+          args: ${{ matrix.platform == 'macos-latest' && '--target universal-apple-darwin --features log-file --skip-stapling' || format('--target {0} --features log-file', matrix.tauri_target) }}
 
       - name: Verify macOS signing
         if: matrix.enable && matrix.platform == 'macos-latest'
@@ -286,7 +286,29 @@ jobs:
           codesign -d --entitlements - --xml "$APP" 2>&1 || true
           echo "---- codesign --verify ----"
           codesign --verify --deep --strict --verbose=2 "$APP"
-          echo "---- spctl assess ----"
-          spctl --assess --type exec --verbose=4 "$APP"
-          echo "---- stapler validate ----"
-          xcrun stapler validate "$APP"
+          echo "---- spctl assess (online: may fail until Apple finishes notarizing) ----"
+          spctl --assess --type exec --verbose=4 "$APP" || echo "spctl not yet accepted (notarization may still be in flight)"
+          echo "---- stapler validate (will fail with --skip-stapling; staple manually after Apple accepts) ----"
+          xcrun stapler validate "$APP" || echo "no ticket stapled yet"
+
+      - name: Notarization status (manual follow-up)
+        if: matrix.enable && matrix.platform == 'macos-latest'
+        env:
+          KEY_PATH: ${{ env.APPLE_API_KEY_PATH }}
+          KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Recent notarization submissions for this account:"
+          xcrun notarytool history \
+            --key "$KEY_PATH" \
+            --key-id "$KEY_ID" \
+            --issuer "$ISSUER" || true
+          echo ""
+          echo "To check a submission later, run locally with the same API key:"
+          echo "  xcrun notarytool info <submission-id> --key AuthKey_<KEY_ID>.p8 --key-id <KEY_ID> --issuer <ISSUER>"
+          echo "  xcrun notarytool log  <submission-id> --key AuthKey_<KEY_ID>.p8 --key-id <KEY_ID> --issuer <ISSUER> developer_log.json"
+          echo "Once Apple returns Accepted, staple offline tickets manually:"
+          echo "  xcrun stapler staple Bytover.app"
+          echo "  xcrun stapler staple Bytover-*.dmg"
