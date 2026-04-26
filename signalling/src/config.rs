@@ -1,5 +1,5 @@
 const DEFAULT_REGION_CODE: &str = "local";
-const DEFAULT_CONNECTION_FANOUT: usize = 2;
+const DEFAULT_CONNECTION_FANOUT: usize = 3;
 const MAX_CONNECTION_FANOUT: usize = 3;
 
 #[derive(Debug, Clone)]
@@ -76,13 +76,13 @@ mod tests {
     use super::{normalize_railway_region, resolve_connection_fanout, resolve_region_code, MAX_CONNECTION_FANOUT};
 
     #[test]
-    fn connection_fanout_defaults_to_two_when_unset() {
-        assert_eq!(resolve_connection_fanout(None), 2);
+    fn connection_fanout_defaults_to_three_when_unset() {
+        assert_eq!(resolve_connection_fanout(None), 3);
     }
 
     #[test]
     fn connection_fanout_parses_positive_value() {
-        assert_eq!(resolve_connection_fanout(Some("3")), 3);
+        assert_eq!(resolve_connection_fanout(Some("1")), 1);
     }
 
     #[test]
@@ -97,7 +97,7 @@ mod tests {
 
     #[test]
     fn connection_fanout_ignores_non_numeric_value() {
-        assert_eq!(resolve_connection_fanout(Some("abc")), 2);
+        assert_eq!(resolve_connection_fanout(Some("abc")), 3);
     }
 
 

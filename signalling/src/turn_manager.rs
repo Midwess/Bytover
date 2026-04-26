@@ -170,33 +170,28 @@ impl TurnManager {
             }
         }
 
-        let mut candidates: Vec<RegisteredRelay> = relays.values().cloned().collect();
-        candidates.sort_by_key(|r| r.counter.load(Ordering::Relaxed));
-
-        let take = n.min(candidates.len());
-        if take < n {
-            log::warn!(
-                "connection fanout requested n={} but only {} distinct relays available for client {}",
-                n,
-                take,
-                client_id
-            );
+        if relays.is_empty() {
+            return Vec::new();
         }
 
-        let picked: Vec<RegisteredRelay> = candidates.into_iter().take(take).collect();
-        for relay in &picked {
-            relay.counter.fetch_add(1, Ordering::Relaxed);
+        let mut picked: Vec<RegisteredRelay> = Vec::with_capacity(n);
+        for _ in 0..n {
+            let next = relays
+                .values()
+                .min_by_key(|r| r.counter.load(Ordering::Relaxed))
+                .cloned()
+                .expect("relays non-empty checked above");
+            next.counter.fetch_add(1, Ordering::Relaxed);
+            picked.push(next);
         }
 
-        if !picked.is_empty() {
-            picks.insert(
-                client_id.to_string(),
-                SessionPick {
-                    relay_ids: picked.iter().map(|r| r.id.clone()).collect(),
-                    chosen_at: Instant::now(),
-                },
-            );
-        }
+        picks.insert(
+            client_id.to_string(),
+            SessionPick {
+                relay_ids: picked.iter().map(|r| r.id.clone()).collect(),
+                chosen_at: Instant::now(),
+            },
+        );
 
         picked
     }
@@ -311,28 +306,68 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn get_relay_configs_returns_distinct_relays_up_to_n() {
+    async fn assigned_relays_spreads_across_relays_when_balanced() {
         let manager = TurnManager::new().await;
         register(&manager, "198.51.100.10", 19101).await;
         register(&manager, "198.51.100.11", 19102).await;
         register(&manager, "198.51.100.12", 19103).await;
 
-        let configs = manager.get_relay_configs("client-1", 2).await;
-        assert_eq!(configs.len(), 2);
+        let assigned = manager.get_assigned_relays("client-1", 3).await;
+        assert_eq!(assigned.len(), 3);
 
-        let hosts: Vec<String> = configs.iter().flat_map(|c| c.urls.iter()).cloned().collect();
-        let distinct_relay_ports: std::collections::HashSet<_> = hosts.iter().filter_map(|u| u.rsplit(':').next()).collect();
-        assert_eq!(distinct_relay_ports.len(), 2);
+        let distinct_ids: std::collections::HashSet<_> = assigned.iter().map(|r| r.id.clone()).collect();
+        assert_eq!(distinct_ids.len(), 3);
+
+        let relays = manager.relays.lock().await;
+        for relay in relays.values() {
+            assert_eq!(relay.counter.load(std::sync::atomic::Ordering::Relaxed), 1);
+        }
     }
 
     #[tokio::test]
-    async fn get_relay_configs_caps_at_registered_count() {
+    async fn assigned_relays_returns_n_entries_even_when_fewer_relays_registered() {
+        let manager = TurnManager::new().await;
+        register(&manager, "198.51.100.10", 19101).await;
+
+        let assigned = manager.get_assigned_relays("client-1", 3).await;
+        assert_eq!(assigned.len(), 3);
+
+        let only_id = assigned[0].id.clone();
+        assert!(assigned.iter().all(|r| r.id == only_id));
+
+        let relays = manager.relays.lock().await;
+        let relay = relays.values().next().unwrap();
+        assert_eq!(relay.counter.load(std::sync::atomic::Ordering::Relaxed), 3);
+    }
+
+    #[tokio::test]
+    async fn assigned_relays_repeat_least_loaded_under_skew() {
         let manager = TurnManager::new().await;
         register(&manager, "198.51.100.10", 19101).await;
         register(&manager, "198.51.100.11", 19102).await;
+        register(&manager, "198.51.100.12", 19103).await;
 
-        let configs = manager.get_relay_configs("client-1", 5).await;
-        assert_eq!(configs.len(), 2);
+        let saturated_ids: Vec<String> = {
+            let relays = manager.relays.lock().await;
+            let mut iter = relays.values();
+            let _cold = iter.next().unwrap();
+            let hot_a = iter.next().unwrap();
+            let hot_b = iter.next().unwrap();
+            hot_a.counter.fetch_add(10, std::sync::atomic::Ordering::Relaxed);
+            hot_b.counter.fetch_add(10, std::sync::atomic::Ordering::Relaxed);
+            vec![hot_a.id.clone(), hot_b.id.clone()]
+        };
+
+        let assigned = manager.get_assigned_relays("client-1", 3).await;
+        assert_eq!(assigned.len(), 3);
+
+        let cold_id = assigned[0].id.clone();
+        assert!(!saturated_ids.contains(&cold_id));
+        assert!(assigned.iter().all(|r| r.id == cold_id));
+
+        let relays = manager.relays.lock().await;
+        let cold = relays.get(&cold_id).unwrap();
+        assert_eq!(cold.counter.load(std::sync::atomic::Ordering::Relaxed), 3);
     }
 
     #[tokio::test]
