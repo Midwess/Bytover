@@ -8,7 +8,8 @@ Bytover's desktop app has two signing paths: a **local** path for developers, an
 |---|---|---|---|
 | Local ad-hoc `.app` | `pnpm tauri build` on your Mac | `-` (null) | You, on your own Mac |
 | Local Apple-Dev `.app` | `pnpm tauri:build:dev` on your Mac | `Apple Development: <you>` | You, on your own Mac — required for cert-gated features like StoreKit / iCloud / Push |
-| CI release `.app` / `.dmg` | GitHub Actions `desktop-release` workflow, `production` environment | `Developer ID Application: Midwess LLC` + notarized + stapled | Anyone on any Mac, including beta testers and public users |
+| CI release `.app` / `.dmg` | GitHub Actions `desktop-release` workflow, `platform: macos-dmg` | `Developer ID Application: Midwess LLC` + notarized | Anyone on any Mac, including beta testers and public users |
+| CI App Store `.app` / `.pkg` | GitHub Actions `desktop-release` workflow, `platform: macos-appstore` | `Apple Distribution: Midwess LLC` (inner `.app`) + `3rd Party Mac Developer Installer: Midwess LLC` (outer `.pkg`) | Mac App Store reviewers, then App Store users |
 
 Apple Development signing is **local-only**. CI has no `development` path because an Apple-Dev-signed artifact can't be distributed to other machines without per-Mac manual approval — building it in CI would burn minutes for an artifact nobody can use.
 
@@ -74,12 +75,19 @@ Configure a **deployment-branch restriction** on the `production` environment so
 
 ### Triggering
 
-Actions → `desktop-release` → Run workflow → pick `platform` (`macos` / `windows` / `linux` / `all`). There is no profile input — it's always Developer ID + notarize.
+Actions → `desktop-release` → Run workflow → pick `platform`:
+
+- `macos-dmg` — Developer ID-signed `.dmg`, notarized (without stapling), attached to a draft GitHub release
+- `macos-appstore` — Apple-Distribution-signed `.app` wrapped in a `3rd Party Mac Developer Installer`-signed `.pkg`, uploaded to App Store Connect (no GitHub release). **Opt-in only**; not part of `all`.
+- `windows` / `linux` — unsigned, attached to a draft release
+- `all` — `macos-dmg` + `windows` + `linux`. Excludes `macos-appstore` because App Store uploads consume App Store Connect version slots and are visible to Apple even when not promoted to review.
+
+For the DMG and Windows/Linux paths:
 
 - From the `production` branch → tagged `v__VERSION__`, release title `Bytover v__VERSION__`
 - From any other branch → tagged `v__VERSION__-beta`, release title suffix `(Beta)`
 
-Both use the same Developer ID signing path. Beta testers and release users get the same signature guarantees; only the version number and release naming differ.
+Beta testers and release users get the same signature guarantees on the DMG path; only the version number and release naming differ. The App Store path produces no GitHub release artifact — the `.pkg` is exported as a workflow artifact (`Bytover-appstore-pkg`, 14-day retention) for smoke testing, and uploaded to App Store Connect Activity for review promotion.
 
 ## Verification
 
@@ -129,3 +137,74 @@ Must be an **app-specific** password from appleid.apple.com → Sign-In and Secu
 2. Update `APPLE_CERTIFICATE` + `APPLE_CERTIFICATE_PASSWORD` in the `production` GitHub environment.
 3. If the cert's common name changed, update `APPLE_SIGNING_IDENTITY` too.
 4. Re-run the workflow — the verify step confirms the new identity.
+
+## CI build (App Store)
+
+The App Store path produces a sandboxed, Apple-Distribution-signed bundle wrapped in a `3rd Party Mac Developer Installer`-signed `.pkg`, then uploads it to App Store Connect via `xcrun altool --upload-app`.
+
+### Prerequisites
+
+- Apple Developer Identifier `com.midwess.bytover` has the **App Sandbox** capability enabled.
+- App Store Connect app record exists for `com.midwess.bytover` with at least one draft version slot (Apple rejects uploads with no slot).
+- The `bytover-ci-notarization` API key (already provisioned for notarization) has at least the `Developer` role in App Store Connect → Users and Access → Integrations.
+
+### Files in the repo
+
+| Path | Purpose |
+|---|---|
+| `desktop/src-tauri/tauri.conf.appstore.json` | Overlay applied via `--config`. Picks Apple Distribution identity, sandbox entitlements, the embedded provisioning profile, and forces `bundle.targets: ["app"]` (no `.dmg`). |
+| `desktop/src-tauri/entitlements.appstore.plist` | Sandbox-compliant entitlements. Strict subset of the Developer ID set: enables `app-sandbox`, `network.client/server`, `files.user-selected.read-write`, `files.bookmarks.app-scope`. **Excludes** `cs.disable-library-validation` and `cs.allow-unsigned-executable-memory` (App Store rejects). |
+| `desktop/src-tauri/Bytover_Production.provisionprofile` | Mac App Store distribution provisioning profile. Committed to the repo; carries no private key — only Team ID, App ID, expiration, and the public DER cert. |
+
+### Secrets (in GitHub environment `production`)
+
+In addition to the Developer ID secrets above:
+
+| Secret | Source |
+|---|---|
+| `APPLE_DIST_CERTIFICATE` | `base64 -i AppleDistribution.p12 \| tr -d '\n'` |
+| `APPLE_DIST_CERTIFICATE_PASSWORD` | Password from the `.p12` export. |
+| `APPLE_DIST_INSTALLER_CERTIFICATE` | `base64 -i MacInstaller.p12 \| tr -d '\n'` |
+| `APPLE_DIST_INSTALLER_CERTIFICATE_PASSWORD` | Password from the `.p12` export. |
+| `APPLE_DIST_SIGNING_IDENTITY` | `Apple Distribution: Midwess LLC (BUJKWCX7F4)` — match `security find-identity -v -p codesigning`. |
+| `APPLE_DIST_INSTALLER_IDENTITY` | `3rd Party Mac Developer Installer: Midwess LLC (BUJKWCX7F4)`. |
+
+The App Store Connect API key (`APPLE_API_ISSUER`, `APPLE_API_KEY_ID`, `APPLE_API_KEY_BASE64`) is reused from the Developer ID notarization path — the same `.p8` works for both `notarytool submit` and `xcrun altool --upload-app`.
+
+### Provisioning profile rotation
+
+The Mac App Store distribution profile is committed to the repo (`Bytover_Production.provisionprofile`) — its contents are public-information-equivalent without the matching `Apple Distribution` private key. To rotate:
+
+1. Apple Developer portal → Profiles → regenerate the *Mac App Store Distribution* profile bound to the Apple Distribution cert + bundle ID `com.midwess.bytover`.
+2. Download the new `.provisionprofile` and replace `desktop/src-tauri/Bytover_Production.provisionprofile`.
+3. Open a PR — reviewers can `security cms -D -i` the new file to verify Team ID, App ID, and expiration match expectations.
+
+The CI step `Install App Store provisioning profile` validates the file every run: hard-fails on team-id mismatch, app-id mismatch, or expiration; warns within 30 days of expiry.
+
+### `ITMS-*` error reference
+
+| Error | Likely cause | Fix |
+|---|---|---|
+| `ITMS-90296: App sandbox not enabled` | App ID lacks the App Sandbox capability, or `app-sandbox: true` was dropped from `entitlements.appstore.plist`. | Enable the capability in Apple Developer portal; re-issue the profile if needed. |
+| `ITMS-91065: Missing signing certificate` | `.app` and `.pkg` signed with mismatched identities (e.g., Developer ID for the inner .app instead of Apple Distribution). | Verify `APPLE_DIST_SIGNING_IDENTITY` and `APPLE_DIST_INSTALLER_IDENTITY` are correct identity strings. |
+| `ITMS-90478: Invalid Version` | `CFBundleVersion` already uploaded for this bundle. | Bump `desktop/package.json` version and re-run. |
+| `ITMS-90438: Invalid Bundle / missing LSApplicationCategoryType` | `bundle.category` not set in `tauri.conf.json`. | Confirm `bundle.category: "public.app-category.productivity"` is present in the base config. |
+
+### Sandbox compatibility expectations
+
+The App Store sandbox restricts:
+
+- File system access outside the app container — custom save locations work via the file picker (`files.user-selected.read-write` + `files.bookmarks.app-scope` for persistence) but arbitrary path writes silently fail.
+- Library validation — third-party `.dylib`s and sidecar binaries must be Apple-signed or co-signed by us. The Developer ID build's `cs.disable-library-validation` workaround is unavailable.
+- Privileged ports — `network.server` allows server sockets but not ports below 1024 without a temporary exception entitlement.
+- `macOSPrivateApi: true` (currently set in `tauri.conf.json`) gives Tauri private window-styling APIs. Apple's review has historically been inconsistent on these — submission may be rejected for "uses non-public API" even if the build itself succeeds.
+
+Smoke-test the artifact (`Bytover-appstore-pkg` workflow artifact) on a clean Mac before promoting to review:
+
+```bash
+sudo installer -pkg Bytover.pkg -target /
+open /Applications/Bytover.app
+log stream --predicate 'process == "Bytover" AND subsystem == "com.apple.sandbox"'
+```
+
+Sandbox violations appear in `Console.app` filtered on `process:Bytover` + `subsystem:com.apple.sandbox`.

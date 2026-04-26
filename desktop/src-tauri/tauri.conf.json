@@ -35,6 +35,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "category": "public.app-category.productivity",
     "resources": {
       "icons/*": "icons/",
       "../public/icon.png": "icon.png"

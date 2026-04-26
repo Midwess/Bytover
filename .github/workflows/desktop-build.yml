@@ -4,11 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       platform:
-        description: 'Platform to build'
+        description: 'Platform to build (all = macos-dmg + windows + linux; macos-appstore is opt-in only)'
         required: true
         type: choice
         options:
-          - macos
+          - macos-dmg
+          - macos-appstore
           - windows
           - linux
           - all
@@ -75,11 +76,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: build-macos-universal
+          - name: build-macos-dmg
             platform: macos-latest
             target: aarch64-apple-darwin,x86_64-apple-darwin
             tauri_target: universal-apple-darwin
-            enable: ${{ github.event.inputs.platform == 'macos' || github.event.inputs.platform == 'all' }}
+            enable: ${{ github.event.inputs.platform == 'macos-dmg' || github.event.inputs.platform == 'all' }}
+          - name: build-macos-appstore
+            platform: macos-latest
+            target: aarch64-apple-darwin,x86_64-apple-darwin
+            tauri_target: universal-apple-darwin
+            enable: ${{ github.event.inputs.platform == 'macos-appstore' }}
           - name: build-windows-x64
             platform: windows-latest
             target: x86_64-pc-windows-msvc
@@ -224,29 +230,131 @@ jobs:
           chmod 600 "$KEY_PATH"
           echo "APPLE_API_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
 
+      - name: Import App Store certificates
+        if: matrix.enable && matrix.name == 'build-macos-appstore'
+        env:
+          APPLE_DIST_CERTIFICATE: ${{ secrets.APPLE_DIST_CERTIFICATE }}
+          APPLE_DIST_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DIST_CERTIFICATE_PASSWORD }}
+          APPLE_DIST_INSTALLER_CERTIFICATE: ${{ secrets.APPLE_DIST_INSTALLER_CERTIFICATE }}
+          APPLE_DIST_INSTALLER_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DIST_INSTALLER_CERTIFICATE_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEYCHAIN_PATH="$RUNNER_TEMP/appstore.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          DIST_P12="$RUNNER_TEMP/AppleDistribution.p12"
+          INST_P12="$RUNNER_TEMP/MacInstaller.p12"
+          printf '%s' "$APPLE_DIST_CERTIFICATE" | base64 --decode > "$DIST_P12"
+          printf '%s' "$APPLE_DIST_INSTALLER_CERTIFICATE" | base64 --decode > "$INST_P12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$DIST_P12" -k "$KEYCHAIN_PATH" -P "$APPLE_DIST_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/productbuild
+          security import "$INST_P12" -k "$KEYCHAIN_PATH" -P "$APPLE_DIST_INSTALLER_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/productbuild
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '"')
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+          rm -f "$DIST_P12" "$INST_P12"
+          echo "APPSTORE_KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+      - name: Install App Store provisioning profile
+        if: matrix.enable && matrix.name == 'build-macos-appstore'
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROFILE_PATH="desktop/src-tauri/Bytover_Production.provisionprofile"
+          if [ ! -f "$PROFILE_PATH" ]; then
+            echo "::error::Profile file missing at $PROFILE_PATH. The Mac App Store distribution profile must be committed at this path."
+            exit 1
+          fi
+          PROFILE_TEAM=$(security cms -D -i "$PROFILE_PATH" | plutil -extract TeamIdentifier.0 raw -)
+          PROFILE_APP_ID=$(security cms -D -i "$PROFILE_PATH" | plutil -extract Entitlements.application-identifier raw -)
+          if [ "$PROFILE_TEAM" != "BUJKWCX7F4" ]; then
+            echo "::error::Provisioning profile TeamIdentifier mismatch: expected BUJKWCX7F4, got $PROFILE_TEAM"
+            exit 1
+          fi
+          if [ "$PROFILE_APP_ID" != "BUJKWCX7F4.com.midwess.bytover" ]; then
+            echo "::error::Provisioning profile application-identifier mismatch: expected BUJKWCX7F4.com.midwess.bytover, got $PROFILE_APP_ID"
+            exit 1
+          fi
+          EXP_RAW=$(security cms -D -i "$PROFILE_PATH" | plutil -extract ExpirationDate raw -)
+          EXP_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$EXP_RAW" +%s)
+          NOW_EPOCH=$(date +%s)
+          DAYS_LEFT=$(( (EXP_EPOCH - NOW_EPOCH) / 86400 ))
+          if [ "$DAYS_LEFT" -lt 0 ]; then
+            echo "::error::Provisioning profile EXPIRED on $EXP_RAW. Re-issue from Apple Developer portal and commit the new file at $PROFILE_PATH."
+            exit 1
+          elif [ "$DAYS_LEFT" -lt 30 ]; then
+            echo "::warning::Provisioning profile expires in $DAYS_LEFT days ($EXP_RAW). Plan rotation."
+          else
+            echo "Provisioning profile valid for $DAYS_LEFT more days (until $EXP_RAW)"
+          fi
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/$(uuidgen).provisionprofile"
+
       - name: Debug BYTOVER environment
         if: matrix.enable
         run: printenv | grep BYTOVER
 
-      - name: Build Tauri App
-        if: matrix.enable
+      - name: Build Tauri App (DMG)
+        if: matrix.enable && matrix.name == 'build-macos-dmg'
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # --- Signing ---
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # --- Notarization (submit only; --skip-stapling means we don't wait for Apple's verdict) ---
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_KEY_PATH: ${{ env.APPLE_API_KEY_PATH }}
+          BYTOVER_LOCATOR_URL: ${{ vars.BYTOVER_LOCATOR_URL }}
+          BYTOVER_PUBLIC_HTTP1_GATEWAY_HOST: ${{ vars.BYTOVER_PUBLIC_HTTP1_GATEWAY_HOST }}
+          BYTOVER_PUBLIC_GATEWAY_HOST: ${{ vars.BYTOVER_PUBLIC_GATEWAY_HOST }}
+          BYTOVER_PUBLIC_GATEWAY_PORT: ${{ vars.BYTOVER_PUBLIC_GATEWAY_PORT }}
+          BYTOVER_PUBLIC_HTTP1_GATEWAY_PORT: ${{ vars.BYTOVER_PUBLIC_HTTP1_GATEWAY_PORT }}
+          BYTOVER_WITH_SSL: ${{ vars.BYTOVER_WITH_SSL }}
+        with:
+          tagName: ${{ github.ref_name == 'production' && 'v__VERSION__' || 'v__VERSION__-beta' }}
+          releaseName: "Bytover v__VERSION__ ${{ github.ref_name != 'production' && '(Beta)' || '' }}"
+          artifactName: Bytover-${{ github.ref_name != 'production' && '__VERSION__-beta' || '__VERSION__' }}-macos-dmg
+          releaseDraft: true
+          prerelease: false
+          projectPath: desktop
+          args: --target universal-apple-darwin --features log-file --skip-stapling
+
+      - name: Build Tauri App (App Store)
+        if: matrix.enable && matrix.name == 'build-macos-appstore'
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_DIST_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          BYTOVER_LOCATOR_URL: ${{ vars.BYTOVER_LOCATOR_URL }}
+          BYTOVER_PUBLIC_HTTP1_GATEWAY_HOST: ${{ vars.BYTOVER_PUBLIC_HTTP1_GATEWAY_HOST }}
+          BYTOVER_PUBLIC_GATEWAY_HOST: ${{ vars.BYTOVER_PUBLIC_GATEWAY_HOST }}
+          BYTOVER_PUBLIC_GATEWAY_PORT: ${{ vars.BYTOVER_PUBLIC_GATEWAY_PORT }}
+          BYTOVER_PUBLIC_HTTP1_GATEWAY_PORT: ${{ vars.BYTOVER_PUBLIC_HTTP1_GATEWAY_PORT }}
+          BYTOVER_WITH_SSL: ${{ vars.BYTOVER_WITH_SSL }}
+        with:
+          artifactName: Bytover-appstore-${{ github.ref_name == 'production' && '__VERSION__' || '__VERSION__-beta' }}
+          prerelease: false
+          projectPath: desktop
+          args: --target universal-apple-darwin --features log-file --bundles app --config src-tauri/tauri.conf.appstore.json
+
+      - name: Build Tauri App (Windows / Linux)
+        if: matrix.enable && matrix.platform != 'macos-latest'
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           PKG_CONFIG_PATH: ${{ matrix.target == 'aarch64-unknown-linux-gnu' && '/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig' || '' }}
           TAURI_LINUX_AYATANA_APPINDICATOR: true
-          # --- Bytover Environment ---
           BYTOVER_LOCATOR_URL: ${{ vars.BYTOVER_LOCATOR_URL }}
           BYTOVER_PUBLIC_HTTP1_GATEWAY_HOST: ${{ vars.BYTOVER_PUBLIC_HTTP1_GATEWAY_HOST }}
           BYTOVER_PUBLIC_GATEWAY_HOST: ${{ vars.BYTOVER_PUBLIC_GATEWAY_HOST }}
@@ -260,10 +368,58 @@ jobs:
           releaseDraft: true
           prerelease: false
           projectPath: desktop
-          args: ${{ matrix.platform == 'macos-latest' && '--target universal-apple-darwin --features log-file --skip-stapling' || format('--target {0} --features log-file', matrix.tauri_target) }}
+          args: --target ${{ matrix.tauri_target }} --features log-file
+
+      - name: Build App Store Package
+        if: matrix.enable && matrix.name == 'build-macos-appstore'
+        env:
+          APPLE_DIST_INSTALLER_IDENTITY: ${{ secrets.APPLE_DIST_INSTALLER_IDENTITY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_DIR="target/universal-apple-darwin/release/bundle/macos"
+          APP=$(find "$APP_DIR" -maxdepth 1 -name "*.app" -type d -print -quit)
+          if [ -z "$APP" ]; then
+            echo "::error::No .app bundle found in $APP_DIR"
+            exit 1
+          fi
+          PKG_PATH="$RUNNER_TEMP/Bytover.pkg"
+          productbuild --component "$APP" /Applications "$PKG_PATH" --sign "$APPLE_DIST_INSTALLER_IDENTITY"
+          pkgutil --check-signature "$PKG_PATH"
+          codesign -dv --verbose=4 "$APP" 2>&1 || true
+          echo "APPSTORE_PKG_PATH=$PKG_PATH" >> "$GITHUB_ENV"
+
+      - name: Export .pkg as workflow artifact
+        if: matrix.enable && matrix.name == 'build-macos-appstore'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bytover-appstore-pkg
+          path: ${{ env.APPSTORE_PKG_PATH }}
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Upload to App Store Connect
+        if: matrix.enable && matrix.name == 'build-macos-appstore'
+        env:
+          APPLE_API_KEY_PATH: ${{ env.APPLE_API_KEY_PATH }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPSTORE_PKG_PATH: ${{ env.APPSTORE_PKG_PATH }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for DIR in "$HOME/.appstoreconnect/private_keys" "$HOME/private_keys"; do
+            mkdir -p "$DIR"
+            cp "$APPLE_API_KEY_PATH" "$DIR/AuthKey_${APPLE_API_KEY_ID}.p8"
+            chmod 600 "$DIR/AuthKey_${APPLE_API_KEY_ID}.p8"
+          done
+          xcrun altool --upload-app -f "$APPSTORE_PKG_PATH" \
+            --type macos \
+            --apiKey "$APPLE_API_KEY_ID" \
+            --apiIssuer "$APPLE_API_ISSUER"
 
       - name: Verify macOS signing
-        if: matrix.enable && matrix.platform == 'macos-latest'
+        if: matrix.enable && matrix.name == 'build-macos-dmg'
         shell: bash
         run: |
           set -euo pipefail
@@ -292,7 +448,7 @@ jobs:
           xcrun stapler validate "$APP" || echo "no ticket stapled yet"
 
       - name: Notarization status (manual follow-up)
-        if: matrix.enable && matrix.platform == 'macos-latest'
+        if: matrix.enable && matrix.name == 'build-macos-dmg'
         env:
           KEY_PATH: ${{ env.APPLE_API_KEY_PATH }}
           KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
