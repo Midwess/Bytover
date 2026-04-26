@@ -4,7 +4,7 @@
     "targets": ["app"],
     "category": "public.app-category.productivity",
     "macOS": {
-      "signingIdentity": "Apple Distribution: Midwess LLC (BUJKWCX7F4)",
+      "signingIdentity": "3rd Party Mac Developer Application: Midwess LLC (BUJKWCX7F4)",
       "entitlements": "entitlements.appstore.plist",
       "providerShortName": "BUJKWCX7F4",
       "files": {

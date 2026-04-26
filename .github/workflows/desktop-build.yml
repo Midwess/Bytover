@@ -329,7 +329,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: Apple Distribution
+          APPLE_SIGNING_IDENTITY: "3rd Party Mac Developer Application: Midwess LLC (BUJKWCX7F4)"
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           BYTOVER_LOCATOR_URL: ${{ vars.BYTOVER_LOCATOR_URL }}
           BYTOVER_PUBLIC_HTTP1_GATEWAY_HOST: ${{ vars.BYTOVER_PUBLIC_HTTP1_GATEWAY_HOST }}
