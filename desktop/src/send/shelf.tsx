@@ -2,6 +2,7 @@ import {Card} from "@/components/ui/card.tsx";
 import {getCurrentWindow, PhysicalPosition} from "@tauri-apps/api/window";
 import {startDrag} from "@crabnebula/tauri-plugin-drag";
 import {noop} from "motion";
+import {motion, AnimatePresence} from "motion/react";
 import {invoke} from "@tauri-apps/api/core";
 import {convertFileSrc} from "@tauri-apps/api/core";
 import {useEffect, useRef, useState, ReactNode} from "react";
@@ -319,38 +320,53 @@ export function Shelf({
                         <p className="text-md text-muted-foreground animate-pop-down-pulse">Drop or paste files here</p>
                     </div>
                 )}
-                {viewMode === 'list' ? (
-                    <div
-                        key="list"
-                        className="w-full min-h-full flex flex-col animate-in fade-in duration-150"
-                    >
-                        <div className="w-full flex flex-col gap-2 my-auto">
-                            {selectedResources.map((resource) => (
-                                <ResourceView
-                                    key={resource.order_id}
-                                    model={resource}
-                                    isRemoveAllowed={isResourceRemoveAllowed}
-                                    onRemove={(resourceId) => {
-                                        invoke("remove_resource", {shelfId, resourceId})
-                                    }}
-                                    onOpen={(resourceId) => {
-                                        invoke("open_shelf_resource", {shelfId, resourceId})
-                                    }}
-                                />
-                            ))}
-                            <div className={"h-5"}></div>
-                        </div>
-                    </div>
-                ) : (
-                    <div key="stack" className="h-full animate-in fade-in duration-150">
-                        <StackView
-                            resources={selectedResources}
-                            onOpen={(resourceId) => {
-                                invoke("open_shelf_resource", {shelfId, resourceId})
-                            }}
-                        />
-                    </div>
-                )}
+                <AnimatePresence mode="wait" initial={false}>
+                    {viewMode === 'list' ? (
+                        <motion.div
+                            key="list"
+                            initial={{opacity: 0, scale: 0.96, y: 4}}
+                            animate={{opacity: 1, scale: 1, y: 0}}
+                            exit={{opacity: 0, scale: 1.02, y: -4}}
+                            transition={{duration: 0.18, ease: [0.22, 1, 0.36, 1]}}
+                            className="w-full min-h-full flex flex-col"
+                            style={{transformOrigin: "center top", willChange: "transform, opacity"}}
+                        >
+                            <div className="w-full flex flex-col gap-2 my-auto">
+                                {selectedResources.map((resource) => (
+                                    <ResourceView
+                                        key={resource.order_id}
+                                        model={resource}
+                                        isRemoveAllowed={isResourceRemoveAllowed}
+                                        onRemove={(resourceId) => {
+                                            invoke("remove_resource", {shelfId, resourceId})
+                                        }}
+                                        onOpen={(resourceId) => {
+                                            invoke("open_shelf_resource", {shelfId, resourceId})
+                                        }}
+                                    />
+                                ))}
+                                <div className={"h-5"}></div>
+                            </div>
+                        </motion.div>
+                    ) : (
+                        <motion.div
+                            key="stack"
+                            initial={{opacity: 0, scale: 0.96, y: 4}}
+                            animate={{opacity: 1, scale: 1, y: 0}}
+                            exit={{opacity: 0, scale: 1.02, y: -4}}
+                            transition={{duration: 0.18, ease: [0.22, 1, 0.36, 1]}}
+                            className="h-full"
+                            style={{transformOrigin: "center top", willChange: "transform, opacity"}}
+                        >
+                            <StackView
+                                resources={selectedResources}
+                                onOpen={(resourceId) => {
+                                    invoke("open_shelf_resource", {shelfId, resourceId})
+                                }}
+                            />
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </div>
 
             <div
