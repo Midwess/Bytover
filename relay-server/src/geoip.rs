@@ -1,4 +1,4 @@
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::path::{Path, PathBuf};
 
 use maxminddb::geoip2;
@@ -22,11 +22,11 @@ impl GeoipResolver {
         &self.db_path
     }
 
-    pub fn region_for(&self, ipv4: Ipv4Addr) -> Option<&'static str> {
-        if !is_routable_global(ipv4) {
+    pub fn region_for(&self, addr: IpAddr) -> Option<&'static str> {
+        if !is_routable_global(addr) {
             return None;
         }
-        let country: geoip2::Country = self.reader.lookup(IpAddr::V4(ipv4)).ok()?;
+        let country: geoip2::Country = self.reader.lookup(addr).ok()?;
         let iso = country.country.and_then(|c| c.iso_code)?;
         country_to_region(iso)
     }
@@ -49,7 +49,14 @@ pub fn country_to_region(iso_code: &str) -> Option<&'static str> {
     }
 }
 
-fn is_routable_global(ipv4: Ipv4Addr) -> bool {
+fn is_routable_global(addr: IpAddr) -> bool {
+    match addr {
+        IpAddr::V4(v4) => is_routable_global_v4(v4),
+        IpAddr::V6(v6) => is_routable_global_v6(v6),
+    }
+}
+
+fn is_routable_global_v4(ipv4: Ipv4Addr) -> bool {
     if ipv4.is_loopback() || ipv4.is_private() || ipv4.is_link_local() || ipv4.is_broadcast() || ipv4.is_unspecified() || ipv4.is_documentation() {
         return false;
     }
@@ -69,11 +76,31 @@ fn is_routable_global(ipv4: Ipv4Addr) -> bool {
     true
 }
 
+fn is_routable_global_v6(ipv6: Ipv6Addr) -> bool {
+    if ipv6.is_loopback() || ipv6.is_unspecified() || ipv6.is_multicast() {
+        return false;
+    }
+    let segs = ipv6.segments();
+    if (segs[0] & 0xfe00) == 0xfc00 {
+        return false;
+    }
+    if (segs[0] & 0xffc0) == 0xfe80 {
+        return false;
+    }
+    if segs[0] == 0x2001 && segs[1] == 0x0db8 {
+        return false;
+    }
+    if segs[0] == 0x0100 && segs[1] == 0 && segs[2] == 0 && segs[3] == 0 {
+        return false;
+    }
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::{country_to_region, is_routable_global, GeoipResolver};
-    use std::net::Ipv4Addr;
-    use std::path::Path;
+    use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+    use std::path::{Path, PathBuf};
 
     #[test]
     fn americas_codes_map_to_us() {
@@ -120,18 +147,36 @@ mod tests {
 
     #[test]
     fn loopback_and_private_skip_geoip() {
-        assert!(!is_routable_global(Ipv4Addr::LOCALHOST));
-        assert!(!is_routable_global(Ipv4Addr::new(10, 0, 0, 1)));
-        assert!(!is_routable_global(Ipv4Addr::new(192, 168, 1, 1)));
-        assert!(!is_routable_global(Ipv4Addr::new(172, 16, 0, 1)));
-        assert!(!is_routable_global(Ipv4Addr::new(100, 64, 0, 1)));
-        assert!(!is_routable_global(Ipv4Addr::new(169, 254, 0, 1)));
+        assert!(!is_routable_global(IpAddr::V4(Ipv4Addr::LOCALHOST)));
+        assert!(!is_routable_global(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1))));
+        assert!(!is_routable_global(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1))));
+        assert!(!is_routable_global(IpAddr::V4(Ipv4Addr::new(172, 16, 0, 1))));
+        assert!(!is_routable_global(IpAddr::V4(Ipv4Addr::new(100, 64, 0, 1))));
+        assert!(!is_routable_global(IpAddr::V4(Ipv4Addr::new(169, 254, 0, 1))));
     }
 
     #[test]
     fn public_ipv4_is_routable() {
-        assert!(is_routable_global(Ipv4Addr::new(64, 118, 143, 14)));
-        assert!(is_routable_global(Ipv4Addr::new(8, 8, 8, 8)));
+        assert!(is_routable_global(IpAddr::V4(Ipv4Addr::new(64, 118, 143, 14))));
+        assert!(is_routable_global(IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8))));
+    }
+
+    #[test]
+    fn loopback_and_reserved_v6_skip_geoip() {
+        assert!(!is_routable_global(IpAddr::V6(Ipv6Addr::LOCALHOST)));
+        assert!(!is_routable_global(IpAddr::V6(Ipv6Addr::UNSPECIFIED)));
+        assert!(!is_routable_global(IpAddr::V6("ff02::1".parse().unwrap())));
+        assert!(!is_routable_global(IpAddr::V6("fc00::1".parse().unwrap())));
+        assert!(!is_routable_global(IpAddr::V6("fd12:3456:789a::1".parse().unwrap())));
+        assert!(!is_routable_global(IpAddr::V6("fe80::1".parse().unwrap())));
+        assert!(!is_routable_global(IpAddr::V6("2001:db8::1".parse().unwrap())));
+        assert!(!is_routable_global(IpAddr::V6("100::1".parse().unwrap())));
+    }
+
+    #[test]
+    fn public_ipv6_is_routable() {
+        assert!(is_routable_global(IpAddr::V6("2404:c140:2100:6::46:6f69".parse().unwrap())));
+        assert!(is_routable_global(IpAddr::V6("2606:4700:4700::1111".parse().unwrap())));
     }
 
     #[test]
@@ -141,5 +186,25 @@ mod tests {
             Ok(_) => panic!("expected Err for nonexistent path"),
             Err(error) => assert!(error.contains("failed to open GeoIP database"), "unexpected error: {error}"),
         }
+    }
+
+    fn bundled_mmdb_path() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets/GeoLite2-Country.mmdb")
+    }
+
+    #[test]
+    fn singapore_host_v6_resolves_to_asia() {
+        let resolver = GeoipResolver::load(&bundled_mmdb_path()).expect("load bundled mmdb");
+        let v6: Ipv6Addr = "2404:c140:2100:6::46:6f69".parse().unwrap();
+        assert_eq!(resolver.region_for(IpAddr::V6(v6)), Some("asia"));
+    }
+
+    #[test]
+    fn singapore_host_v4_misclassified_as_us_in_geolite2() {
+        let resolver = GeoipResolver::load(&bundled_mmdb_path()).expect("load bundled mmdb");
+        assert_eq!(
+            resolver.region_for(IpAddr::V4(Ipv4Addr::new(64, 118, 143, 14))),
+            Some("us")
+        );
     }
 }

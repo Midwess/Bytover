@@ -6,7 +6,7 @@ mod public_ip;
 use base64::Engine;
 use serde::Serialize;
 use std::collections::HashMap;
-use std::net::{Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;
 
 use schema::devlog::bitbridge::p2p_orchestration_service_client::P2pOrchestrationServiceClient;
@@ -190,11 +190,24 @@ impl RegionResolver {
         }
     }
 
-    fn resolve_local(&self, ipv4: Option<Ipv4Addr>) -> Option<(String, &'static str)> {
+    fn resolve_local(&self, addrs: &PublicAddresses) -> Option<(String, &'static str)> {
         let env_override = config::local_region_code();
-        let geoip_region = self.geoip.as_ref().and_then(|geoip| ipv4.and_then(|ip| geoip.region_for(ip)));
+        let geoip_region = self
+            .geoip
+            .as_ref()
+            .and_then(|geoip| pick_geoip_region(addrs, |ip| geoip.region_for(ip)));
         resolve_local_region(env_override, geoip_region)
     }
+}
+
+fn pick_geoip_region<F>(addrs: &PublicAddresses, mut lookup: F) -> Option<&'static str>
+where
+    F: FnMut(IpAddr) -> Option<&'static str>,
+{
+    addrs
+        .ipv6
+        .and_then(|ip| lookup(IpAddr::V6(ip)))
+        .or_else(|| addrs.ipv4.and_then(|ip| lookup(IpAddr::V4(ip))))
 }
 
 fn resolve_local_region(env_override: Option<String>, geoip_region: Option<&'static str>) -> Option<(String, &'static str)> {
@@ -263,20 +276,20 @@ async fn start_registration_loop(
     loop {
         interval.tick().await;
 
-        let ipv4 = state.public_addresses.ipv4;
-        let url = match resolve_registration_url(&region_resolver, &grpc_gateway, ipv4).await {
+        let url = match resolve_registration_url(&region_resolver, &grpc_gateway, &state.public_addresses).await {
             Ok((url, source)) => {
                 if let Some((previous_url, next_url)) = state.update_registration_url(url.clone()) {
-                    let ipv4_attribution = ipv4.map(|ip| ip.to_string()).unwrap_or_else(|| "none".to_string());
+                    let ipv4_attribution = state.public_addresses.ipv4.map(|ip| ip.to_string()).unwrap_or_else(|| "none".to_string());
+                    let ipv6_attribution = state.public_addresses.ipv6.map(|ip| ip.to_string()).unwrap_or_else(|| "none".to_string());
                     if let Some(previous_url) = previous_url {
                         log::info!(
-                            "Relay registration URL changed from {} to {} (source={} ipv4={})",
-                            previous_url, next_url, source, ipv4_attribution
+                            "Relay registration URL changed from {} to {} (source={} ipv4={} ipv6={})",
+                            previous_url, next_url, source, ipv4_attribution, ipv6_attribution
                         );
                     } else {
                         log::info!(
-                            "Relay registration URL resolved to {} (source={} ipv4={})",
-                            next_url, source, ipv4_attribution
+                            "Relay registration URL resolved to {} (source={} ipv4={} ipv6={})",
+                            next_url, source, ipv4_attribution, ipv6_attribution
                         );
                     }
                 }
@@ -314,9 +327,9 @@ async fn start_registration_loop(
 async fn resolve_registration_url(
     region_resolver: &RegionResolver,
     grpc_gateway: &GatewayChannel,
-    ipv4: Option<Ipv4Addr>,
+    addrs: &PublicAddresses,
 ) -> Result<(String, &'static str), String> {
-    if let Some((region, source)) = region_resolver.resolve_local(ipv4) {
+    if let Some((region, source)) = region_resolver.resolve_local(addrs) {
         let route = format!("rpc-signalling-{region}");
         return Ok((config::get_signalling_registration_url(&route), source));
     }
@@ -335,9 +348,9 @@ async fn resolve_registration_url(
 
 #[cfg(test)]
 mod tests {
-    use super::{build_turn_interfaces, resolve_local_region, RegistrationState};
+    use super::{build_turn_interfaces, pick_geoip_region, resolve_local_region, RegistrationState};
     use crate::public_ip::PublicAddresses;
-    use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
+    use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
     use turn_server::config::Interface;
 
     #[test]
@@ -362,6 +375,58 @@ mod tests {
     fn precedence_env_used_when_geoip_unmapped() {
         let resolved = resolve_local_region(Some("us".to_string()), None);
         assert_eq!(resolved, Some(("us".to_string(), "env")));
+    }
+
+    #[test]
+    fn singapore_host_picks_v6_and_resolves_to_asia_not_us() {
+        let addrs = PublicAddresses {
+            ipv4: Some(Ipv4Addr::new(64, 118, 143, 14)),
+            ipv6: Some("2404:c140:2100:6::46:6f69".parse().unwrap()),
+        };
+        let lookup = |ip: IpAddr| match ip {
+            IpAddr::V4(v) if v == Ipv4Addr::new(64, 118, 143, 14) => Some("us"),
+            IpAddr::V6(v) if v == "2404:c140:2100:6::46:6f69".parse::<Ipv6Addr>().unwrap() => {
+                Some("asia")
+            }
+            _ => None,
+        };
+        assert_eq!(pick_geoip_region(&addrs, lookup), Some("asia"));
+    }
+
+    #[test]
+    fn picker_falls_back_to_v4_when_v6_unmapped() {
+        let addrs = PublicAddresses {
+            ipv4: Some(Ipv4Addr::new(8, 8, 8, 8)),
+            ipv6: Some("2c0f::1".parse().unwrap()),
+        };
+        let lookup = |ip: IpAddr| match ip {
+            IpAddr::V4(v) if v == Ipv4Addr::new(8, 8, 8, 8) => Some("us"),
+            _ => None,
+        };
+        assert_eq!(pick_geoip_region(&addrs, lookup), Some("us"));
+    }
+
+    #[test]
+    fn picker_returns_none_when_neither_address_resolves() {
+        let addrs = PublicAddresses {
+            ipv4: Some(Ipv4Addr::new(203, 0, 113, 1)),
+            ipv6: Some("2c0f::1".parse().unwrap()),
+        };
+        let lookup = |_: IpAddr| -> Option<&'static str> { None };
+        assert_eq!(pick_geoip_region(&addrs, lookup), None);
+    }
+
+    #[test]
+    fn picker_skips_v6_when_only_v4_present() {
+        let addrs = PublicAddresses {
+            ipv4: Some(Ipv4Addr::new(8, 8, 8, 8)),
+            ipv6: None,
+        };
+        let lookup = |ip: IpAddr| match ip {
+            IpAddr::V4(_) => Some("us"),
+            IpAddr::V6(_) => panic!("v6 lookup must not be called when address is absent"),
+        };
+        assert_eq!(pick_geoip_region(&addrs, lookup), Some("us"));
     }
 
     #[test]
