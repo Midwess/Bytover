@@ -4563,7 +4563,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.5.10",
+ "socket2 0.4.10",
  "tokio",
  "tower-service",
  "tracing",
@@ -4697,7 +4697,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -7532,7 +7532,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash",
  "rustls 0.23.34",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -7570,7 +7570,7 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "tracing",
  "windows-sys 0.59.0",
 ]
@@ -11179,7 +11179,7 @@ dependencies = [
 [[package]]
 name = "turn-server"
 version = "4.0.1"
-source = "git+https://github.com/Midwess/turn-rs.git?branch=production#81a88ebfb990de6465912135affffe8e2e4f6d6d"
+source = "git+https://github.com/Midwess/turn-rs.git?branch=production#543f0d0f56a7b2395e5235a7ccf2271f57b98ac9"
 dependencies = [
  "ahash 0.8.12",
  "anyhow",
@@ -11213,7 +11213,7 @@ dependencies = [
 [[package]]
 name = "turn-server-protos"
 version = "0.1.0"
-source = "git+https://github.com/Midwess/turn-rs.git?branch=production#81a88ebfb990de6465912135affffe8e2e4f6d6d"
+source = "git+https://github.com/Midwess/turn-rs.git?branch=production#543f0d0f56a7b2395e5235a7ccf2271f57b98ac9"
 dependencies = [
  "prost 0.14.1",
  "prost-types 0.14.1",
