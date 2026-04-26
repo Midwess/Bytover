@@ -22,6 +22,7 @@ use crate::config::is_relay_only;
 
 const STUN_TIMEOUT: Duration = Duration::from_millis(3000);
 const TURN_TIMEOUT: Duration = Duration::from_millis(5000);
+const TURN_PHASE_GRACE_AFTER_FIRST: Duration = Duration::from_millis(1500);
 const TURN_MIN_RECV_TIMEOUT: Duration = Duration::from_millis(1);
 const STUN_MAX_PACKET: usize = 512;
 
@@ -676,7 +677,8 @@ impl TurnAttempt {
 struct TurnPhase {
     start: Instant,
     attempts: Vec<TurnAttempt>,
-    success: Option<TurnRelayInfo>,
+    successes: Vec<TurnRelayInfo>,
+    first_success_at: Option<Instant>,
     failure: Option<String>,
 }
 
@@ -710,35 +712,64 @@ impl TurnPhase {
         Ok(Self {
             start: Instant::now(),
             attempts,
-            success: None,
+            successes: Vec::new(),
+            first_success_at: None,
             failure: None,
         })
     }
 
+    fn has_success(&self) -> bool {
+        !self.successes.is_empty()
+    }
+
+    fn grace_expired(&self) -> bool {
+        self.first_success_at
+            .is_some_and(|t| t.elapsed() >= TURN_PHASE_GRACE_AFTER_FIRST)
+    }
+
     fn is_complete(&self) -> bool {
-        self.success.is_some()
+        if self.has_success() && (self.attempts.is_empty() || self.grace_expired()) {
+            return true;
+        }
+        if self.start.elapsed() >= TURN_TIMEOUT {
+            return true;
+        }
+        false
     }
 
     fn failure(&self) -> Option<&str> {
-        self.failure.as_deref()
+        if self.is_complete() && !self.has_success() {
+            return self.failure.as_deref().or(Some("all TURN allocation attempts failed"));
+        }
+        self.failure.as_deref().filter(|_| !self.has_success())
     }
 
-    fn take_success(&mut self) -> Option<TurnRelayInfo> {
-        self.success.take()
+    fn take_successes(&mut self) -> Vec<TurnRelayInfo> {
+        std::mem::take(&mut self.successes)
+    }
+
+    fn effective_remaining(&self) -> Duration {
+        let elapsed = self.start.elapsed();
+        let timeout_remaining = TURN_TIMEOUT.saturating_sub(elapsed);
+        match self.first_success_at {
+            Some(t) => {
+                let grace_remaining = TURN_PHASE_GRACE_AFTER_FIRST.saturating_sub(t.elapsed());
+                timeout_remaining.min(grace_remaining)
+            }
+            None => timeout_remaining,
+        }
     }
 
     fn drive(&mut self) -> PhaseDrive {
-        if self.success.is_some() || self.failure.is_some() {
+        if self.is_complete() {
             return PhaseDrive::default();
         }
 
-        let elapsed = self.start.elapsed();
-        if elapsed >= TURN_TIMEOUT {
-            self.fail(format!("TURN gathering timed out after {:?}", TURN_TIMEOUT));
+        let remaining = self.effective_remaining();
+        if remaining.is_zero() {
             return PhaseDrive::default();
         }
 
-        let remaining = TURN_TIMEOUT.saturating_sub(elapsed);
         let mut drive = PhaseDrive::default();
         let mut next_wait = remaining;
         let mut saw_wait = false;
@@ -754,8 +785,7 @@ impl TurnPhase {
             }
 
             if self.try_capture_success(idx) {
-                log::info!("[ice] TURN phase completed in {:?}", self.start.elapsed());
-                return drive;
+                continue;
             }
 
             if let Some(reason) = self.attempts[idx].failure_reason().map(ToOwned::to_owned) {
@@ -768,7 +798,7 @@ impl TurnPhase {
             idx += 1;
         }
 
-        if self.attempts.is_empty() {
+        if self.attempts.is_empty() && !self.has_success() {
             self.fail("all TURN allocation attempts failed".to_string());
             return drive;
         }
@@ -782,7 +812,7 @@ impl TurnPhase {
     }
 
     fn handle_packet(&mut self, packet: &[u8], src: SocketAddr) -> bool {
-        if self.success.is_some() || self.failure.is_some() {
+        if self.is_complete() {
             return false;
         }
 
@@ -792,8 +822,7 @@ impl TurnPhase {
             handled |= self.attempts[idx].handle_packet(packet, src);
 
             if self.try_capture_success(idx) {
-                log::info!("[ice] TURN phase completed in {:?}", self.start.elapsed());
-                return true;
+                continue;
             }
 
             if let Some(reason) = self.attempts[idx].failure_reason().map(ToOwned::to_owned) {
@@ -806,7 +835,7 @@ impl TurnPhase {
             idx += 1;
         }
 
-        if self.attempts.is_empty() {
+        if self.attempts.is_empty() && !self.has_success() {
             self.fail("all TURN allocation attempts failed".to_string());
         }
 
@@ -817,17 +846,24 @@ impl TurnPhase {
         if !self.attempts[idx].is_succeeded() {
             return false;
         }
-
         let server_addr = self.attempts[idx].server_addr;
-        let relay_addr = self.attempts[idx].relay_addr.expect("successful TURN attempt missing relay addr");
         let attempt = self.attempts.swap_remove(idx);
-        self.success = attempt.into_relay_info();
-        self.attempts.clear();
-        log::info!(
-            "[ice] TURN allocation succeeded with server {}, relay: {}",
-            server_addr,
-            relay_addr
-        );
+        if let Some(info) = attempt.into_relay_info() {
+            let relay_addr = info.relay_addr;
+            log::info!(
+                "[ice] TURN allocation succeeded with server {}, relay: {}",
+                server_addr,
+                relay_addr
+            );
+            self.successes.push(info);
+            if self.first_success_at.is_none() {
+                self.first_success_at = Some(Instant::now());
+                log::info!(
+                    "[ice] First TURN success captured; granting {:?} grace for additional families",
+                    TURN_PHASE_GRACE_AFTER_FIRST
+                );
+            }
+        }
         true
     }
 
@@ -1281,7 +1317,7 @@ impl IceAgent {
     pub async fn gather_candidates(
         socket: &tokio::net::UdpSocket,
         config: &IceConfig,
-    ) -> Result<(Vec<Candidate>, Option<TurnRelayInfo>), IceError> {
+    ) -> Result<(Vec<Candidate>, Vec<TurnRelayInfo>), IceError> {
         log::info!("[ice] Gathering candidates using config {config:?}");
         let gather_start = Instant::now();
 
@@ -1304,23 +1340,32 @@ impl IceAgent {
                 }
 
                 if turn_phase.is_complete() {
-                    let turn_info = turn_phase.take_success().expect("TURN phase completed without relay info");
-                    let relay_addr = turn_info.relay_addr;
-                    match Candidate::relayed(relay_addr, relay_addr, "udp") {
-                        Ok(candidate) => {
-                            log::debug!("[ice] Relayed candidate: {}", candidate);
-                            candidates.insert(candidate);
-                        }
-                        Err(error) => {
-                            return Err(IceError::Parse(format!(
-                                "failed to create relayed candidate for {relay_addr}: {error:?}"
-                            )));
+                    let turn_infos = turn_phase.take_successes();
+                    for info in &turn_infos {
+                        let relay_addr = info.relay_addr;
+                        match Candidate::relayed(relay_addr, relay_addr, "udp") {
+                            Ok(candidate) => {
+                                log::debug!("[ice] Relayed candidate: {}", candidate);
+                                candidates.insert(candidate);
+                            }
+                            Err(error) => {
+                                log::warn!(
+                                    "[ice] Failed to create relayed candidate for {}: {:?}",
+                                    relay_addr,
+                                    error
+                                );
+                            }
                         }
                     }
 
                     let result: Vec<Candidate> = candidates.into_iter().collect();
-                    log::info!("[ice] Gathered {:?} relay-only candidates in {:?}", result, gather_start.elapsed());
-                    return Ok((result, Some(turn_info)));
+                    log::info!(
+                        "[ice] Gathered {} relay-only candidates ({} TURN allocation(s)) in {:?}",
+                        result.len(),
+                        turn_infos.len(),
+                        gather_start.elapsed()
+                    );
+                    return Ok((result, turn_infos));
                 }
 
                 let wait_for = turn_drive.wait.unwrap_or(TURN_MIN_RECV_TIMEOUT).max(TURN_MIN_RECV_TIMEOUT);
@@ -1380,23 +1425,32 @@ impl IceAgent {
             }
 
             if stun_phase.is_complete() && turn_phase.is_complete() {
-                let turn_info = turn_phase.take_success().expect("TURN phase completed without relay info");
-                let relay_addr = turn_info.relay_addr;
-                match Candidate::relayed(relay_addr, relay_addr, "udp") {
-                    Ok(candidate) => {
-                        log::debug!("[ice] Relayed candidate: {}", candidate);
-                        candidates.insert(candidate);
-                    }
-                    Err(error) => {
-                        return Err(IceError::Parse(format!(
-                            "failed to create relayed candidate for {relay_addr}: {error:?}"
-                        )));
+                let turn_infos = turn_phase.take_successes();
+                for info in &turn_infos {
+                    let relay_addr = info.relay_addr;
+                    match Candidate::relayed(relay_addr, relay_addr, "udp") {
+                        Ok(candidate) => {
+                            log::debug!("[ice] Relayed candidate: {}", candidate);
+                            candidates.insert(candidate);
+                        }
+                        Err(error) => {
+                            log::warn!(
+                                "[ice] Failed to create relayed candidate for {}: {:?}",
+                                relay_addr,
+                                error
+                            );
+                        }
                     }
                 }
 
                 let result: Vec<Candidate> = candidates.into_iter().collect();
-                log::info!("[ice] Gathered {:?} candidates in {:?}", result, gather_start.elapsed());
-                return Ok((result, Some(turn_info)));
+                log::info!(
+                    "[ice] Gathered {} candidates ({} TURN allocation(s)) in {:?}",
+                    result.len(),
+                    turn_infos.len(),
+                    gather_start.elapsed()
+                );
+                return Ok((result, turn_infos));
             }
 
             let wait_for = min_wait(stun_drive.wait, turn_drive.wait)
@@ -1503,6 +1557,8 @@ mod tests {
                         mtu: 1500,
                         demuxer_capacity: 4096,
                         v6_only: false,
+                        send_buffer_size: 8 * 1024 * 1024,
+                        recv_buffer_size: 8 * 1024 * 1024,
                     }],
                     ..Default::default()
                 },
@@ -1650,7 +1706,7 @@ mod tests {
         );
 
         let started = Instant::now();
-        let (candidates, turn_info) = IceAgent::gather_candidates(&socket, &config).await.unwrap();
+        let (candidates, turn_infos) = IceAgent::gather_candidates(&socket, &config).await.unwrap();
         let elapsed = started.elapsed();
 
         assert!(
@@ -1658,8 +1714,12 @@ mod tests {
             "parallel TURN gather should not wait for the blackhole address: {elapsed:?}"
         );
 
-        let turn_info = turn_info.expect("expected TURN relay info");
-        assert_eq!(turn_info.server_addr, turn_addr);
+        assert!(!turn_infos.is_empty(), "expected at least one TURN relay info");
+        assert!(
+            turn_infos.iter().any(|info| info.server_addr == turn_addr),
+            "expected the working TURN server in successes: {:?}",
+            turn_infos.iter().map(|i| i.server_addr).collect::<Vec<_>>()
+        );
 
         let candidate_strings: Vec<String> = candidates.iter().map(ToString::to_string).collect();
         assert!(

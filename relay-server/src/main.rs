@@ -45,11 +45,11 @@ async fn async_main() -> Result<(), MainErrors> {
     let turn_password = env::var("TURN_PASSWORD").unwrap_or_else(|_| "relay-secret".to_string());
 
     let turn_udp_send_buffer = env::var("TURN_UDP_SEND_BUFFER")
-        .unwrap_or_else(|_| (8 * 1024 * 1024).to_string())
+        .unwrap_or_else(|_| (2 * 1024 * 1024).to_string())
         .parse::<usize>()
         .unwrap();
     let turn_udp_recv_buffer = env::var("TURN_UDP_RECV_BUFFER")
-        .unwrap_or_else(|_| (8 * 1024 * 1024).to_string())
+        .unwrap_or_else(|_| (2 * 1024 * 1024).to_string())
         .parse::<usize>()
         .unwrap();
 
