@@ -39,20 +39,14 @@ async fn async_main() -> Result<(), MainErrors> {
     let turn_port = env::var("TURN_PORT").unwrap_or_else(|_| "19101".to_string()).parse().unwrap();
     let public_addresses = discover_public_addresses().await.map_err(MainErrors::ExecutionError)?.retain_families(true, true);
 
-    let turn_external_addr = turn_external_addr(&public_addresses, turn_port).map_err(MainErrors::ExecutionError)?;
-
     let turn_username = env::var("TURN_USERNAME").unwrap_or_else(|_| "relay".to_string());
     let turn_password = env::var("TURN_PASSWORD").unwrap_or_else(|_| "relay-secret".to_string());
 
+    let interfaces = build_turn_interfaces(&public_addresses, turn_port).map_err(MainErrors::ExecutionError)?;
+
     let turn_config = Config {
         server: TurnServerConfig {
-            interfaces: vec![Interface::Udp {
-                listen: format!("[::]:{}", turn_port).parse().unwrap(),
-                external: turn_external_addr,
-                idle_timeout: 20,
-                mtu: 1500,
-                demuxer_capacity: 4096,
-            }],
+            interfaces,
             ..Default::default()
         },
         auth: Auth {
@@ -100,12 +94,32 @@ async fn async_main() -> Result<(), MainErrors> {
     Ok(())
 }
 
-fn turn_external_addr(public_addresses: &PublicAddresses, port: u16) -> Result<SocketAddr, String> {
-    match (public_addresses.ipv4, public_addresses.ipv6) {
-        (Some(ipv4), _) => Ok(SocketAddr::new(ipv4.into(), port)),
-        (None, Some(ipv6)) => Ok(SocketAddr::new(ipv6.into(), port)),
-        (None, None) => Err("relay registration requires at least one public IP address".to_string()),
+fn build_turn_interfaces(public_addresses: &PublicAddresses, port: u16) -> Result<Vec<Interface>, String> {
+    let mut interfaces = Vec::new();
+    if let Some(ipv4) = public_addresses.ipv4 {
+        interfaces.push(Interface::Udp {
+            listen: format!("0.0.0.0:{}", port).parse().unwrap(),
+            external: SocketAddr::new(ipv4.into(), port),
+            idle_timeout: 20,
+            mtu: 1500,
+            demuxer_capacity: 4096,
+            v6_only: false,
+        });
     }
+    if let Some(ipv6) = public_addresses.ipv6 {
+        interfaces.push(Interface::Udp {
+            listen: format!("[::]:{}", port).parse().unwrap(),
+            external: SocketAddr::new(ipv6.into(), port),
+            idle_timeout: 20,
+            mtu: 1500,
+            demuxer_capacity: 4096,
+            v6_only: true,
+        });
+    }
+    if interfaces.is_empty() {
+        return Err("relay registration requires at least one public IP address".to_string());
+    }
+    Ok(interfaces)
 }
 
 #[derive(Serialize)]
@@ -257,9 +271,10 @@ async fn resolve_registration_url(grpc_gateway: &GatewayChannel) -> Result<Strin
 
 #[cfg(test)]
 mod tests {
-    use super::{turn_external_addr, RegistrationState};
+    use super::{build_turn_interfaces, RegistrationState};
     use crate::public_ip::PublicAddresses;
     use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
+    use turn_server::config::Interface;
 
     #[test]
     fn registration_state_tracks_initial_resolution() {
@@ -321,23 +336,40 @@ mod tests {
         );
     }
 
+    fn udp_pair(iface: &Interface) -> (SocketAddr, SocketAddr, bool) {
+        match iface {
+            Interface::Udp { listen, external, v6_only, .. } => (*listen, *external, *v6_only),
+            _ => panic!("expected Udp interface"),
+        }
+    }
+
     #[test]
-    fn turn_external_addr_prefers_ipv4_when_available() {
-        let addr = turn_external_addr(
+    fn build_turn_interfaces_dual_family_creates_two_udp_interfaces() {
+        let interfaces = build_turn_interfaces(
             &PublicAddresses {
                 ipv4: Some(Ipv4Addr::new(203, 0, 113, 10)),
-                ipv6: Some(Ipv6Addr::LOCALHOST),
+                ipv6: Some(Ipv6Addr::new(0x2404, 0xc140, 0x2100, 0, 0, 0, 0, 1)),
             },
             19101,
         )
         .unwrap();
 
-        assert_eq!(addr, SocketAddr::new(Ipv4Addr::new(203, 0, 113, 10).into(), 19101));
+        assert_eq!(interfaces.len(), 2);
+
+        let (v4_listen, v4_external, v4_only) = udp_pair(&interfaces[0]);
+        assert_eq!(v4_listen, "0.0.0.0:19101".parse::<SocketAddr>().unwrap());
+        assert_eq!(v4_external, SocketAddr::new(Ipv4Addr::new(203, 0, 113, 10).into(), 19101));
+        assert!(!v4_only);
+
+        let (v6_listen, v6_external, v6_only) = udp_pair(&interfaces[1]);
+        assert_eq!(v6_listen, "[::]:19101".parse::<SocketAddr>().unwrap());
+        assert_eq!(v6_external, SocketAddr::new(Ipv6Addr::new(0x2404, 0xc140, 0x2100, 0, 0, 0, 0, 1).into(), 19101));
+        assert!(v6_only);
     }
 
     #[test]
-    fn turn_external_addr_falls_back_to_ipv6() {
-        let addr = turn_external_addr(
+    fn build_turn_interfaces_v6_only_skips_v4_interface() {
+        let interfaces = build_turn_interfaces(
             &PublicAddresses {
                 ipv4: None,
                 ipv6: Some(Ipv6Addr::LOCALHOST),
@@ -346,6 +378,19 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(addr, SocketAddr::new(Ipv6Addr::LOCALHOST.into(), 19101));
+        assert_eq!(interfaces.len(), 1);
+        let (listen, external, v6_only) = udp_pair(&interfaces[0]);
+        assert_eq!(listen, "[::]:19101".parse::<SocketAddr>().unwrap());
+        assert_eq!(external, SocketAddr::new(Ipv6Addr::LOCALHOST.into(), 19101));
+        assert!(v6_only);
+    }
+
+    #[test]
+    fn build_turn_interfaces_no_addresses_errors() {
+        let result = build_turn_interfaces(
+            &PublicAddresses { ipv4: None, ipv6: None },
+            19101,
+        );
+        assert!(result.is_err());
     }
 }
