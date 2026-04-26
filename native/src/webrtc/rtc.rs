@@ -4,7 +4,7 @@ use socket2::{Domain, Socket, Type};
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use str0m::channel::{ChannelConfig, ChannelId};
@@ -65,6 +65,7 @@ pub struct RtcHandle {
     channel_ids: ChannelIds,
     thread_handle: Option<std::thread::JoinHandle<()>>,
     data_buffered_amount: Arc<AtomicUsize>,
+    is_relay: Arc<AtomicBool>,
 }
 
 impl RtcHandle {
@@ -91,6 +92,10 @@ impl RtcHandle {
 
     pub fn data_buffered_amount(&self) -> usize {
         self.data_buffered_amount.load(Ordering::Relaxed)
+    }
+
+    pub fn is_relay(&self) -> bool {
+        self.is_relay.load(Ordering::Relaxed)
     }
 
     /// Await the next event from the RTC thread.
@@ -156,6 +161,7 @@ struct RtcClient {
     candidate_rx: Option<tokio::sync::mpsc::Receiver<str0m::Candidate>>,
     turn: Option<TurnRelayInfo>,
     data_buffered_amount: Arc<AtomicUsize>,
+    is_relay: Arc<AtomicBool>,
 }
 
 impl RtcClient {
@@ -334,6 +340,7 @@ impl RtcClient {
             candidate_rx: Some(candidate_rx),
             turn: turn_info,
             data_buffered_amount: Arc::new(AtomicUsize::new(0)),
+            is_relay: Arc::new(AtomicBool::new(false)),
         };
 
         for candidate in ip_candidates {
@@ -355,6 +362,7 @@ impl RtcClient {
     fn spawn_thread(self) -> RtcHandle {
         let channel_ids = self.channel_ids;
         let data_buffered_amount = Arc::clone(&self.data_buffered_amount);
+        let is_relay = Arc::clone(&self.is_relay);
         let (event_tx, event_rx) = tokio::sync::mpsc::channel::<RtcEvent>(5);
         let (data_tx, data_rx) = tokio::sync::mpsc::channel::<(Vec<u8>, ChannelId)>(16);
         let thread_handle = std::thread::Builder::new()
@@ -377,6 +385,7 @@ impl RtcClient {
             channel_ids,
             thread_handle: Some(thread_handle),
             data_buffered_amount,
+            is_relay,
         }
     }
 
@@ -450,6 +459,21 @@ impl RtcClient {
                             s.ingress_loss_fraction,
                             s.rtt,
                         );
+                        if let Some(pair) = &s.selected_candidate_pair {
+                            let relayed = self
+                                .turn
+                                .as_ref()
+                                .is_some_and(|turn| pair.local.addr == turn.relay_addr);
+                            let prev = self.is_relay.swap(relayed, Ordering::Relaxed);
+                            if prev != relayed {
+                                log::info!(
+                                    "[rtc-client] selected pair relay={} local={} remote={}",
+                                    relayed,
+                                    pair.local.addr,
+                                    pair.remote.addr,
+                                );
+                            }
+                        }
                     }
 
                     if matches!(&event, Event::ChannelBufferedAmountLow(cid) if *cid == self.channel_ids.reliable) {
