@@ -127,7 +127,7 @@ The relay-server self-identifies its bytover region (`asia` / `us` / `eu`) for s
 
 Country → region mapping lives in `src/geoip.rs::country_to_region`. Unmapped countries (e.g. BR, ZA, RU as of this writing) fall through to the gRPC path; if you operate relays in those markets, set `BYTOVER_REGION_CODE` explicitly.
 
-The GeoIP database is fetched at image-build time using the `MAXMIND_LICENSE_KEY` build arg; see `assets/README.md`. Distributing GeoLite2 data requires the upstream `LICENSE.txt` to ship alongside it (CC BY-SA 4.0):
+The GeoIP database is **vendored** at `relay-server/assets/GeoLite2-Country.mmdb` (committed to the repo) and copied into the image at `/app/assets/`. No build-time MaxMind credentials required. See `assets/README.md` for the refresh procedure. Distributing GeoLite2 data requires the upstream `LICENSE.txt` to ship alongside it (CC BY-SA 4.0):
 
 > This product includes GeoLite2 data created by MaxMind, available from <https://www.maxmind.com>.
 

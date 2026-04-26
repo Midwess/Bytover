@@ -8,17 +8,27 @@ database is loaded once at startup (see `src/geoip.rs`).
 
 | File | Required? | Source |
 |------|-----------|--------|
-| `GeoLite2-Country.mmdb` | optional (resolver gracefully degrades to gRPC) | MaxMind |
+| `GeoLite2-Country.mmdb` | vendored (committed to repo) | MaxMind GeoLite2 |
 | `LICENSE-GEOLITE2.txt` | required when distributing the DB | MaxMind |
 
-## Acquiring the database
+## Vendored database
 
-GeoLite2 is free under **CC BY-SA 4.0** but requires a (free) MaxMind
-account and license key.
+`GeoLite2-Country.mmdb` is **committed to the repo** and copied into the
+Docker image at `/app/assets/GeoLite2-Country.mmdb`. This keeps builds
+hermetic — no MaxMind account, license key, or network access is needed at
+build time.
 
-1. Sign up at <https://www.maxmind.com/en/geolite2/signup>
-2. Generate a license key in the account portal
-3. Download the country DB:
+The current copy was sourced from the sibling `rpc-signalling` project,
+which uses the same MaxMind DB for the same purpose.
+
+## Refreshing the database
+
+MaxMind publishes updates roughly weekly. Country-level IP allocations are
+stable, so refreshing every few months is sufficient. To refresh:
+
+1. Sign up at <https://www.maxmind.com/en/geolite2/signup> (free account).
+2. Generate a license key in the account portal.
+3. Download:
 
    ```bash
    curl -L -o GeoLite2-Country.tar.gz \
@@ -29,16 +39,8 @@ account and license key.
    rm GeoLite2-Country.tar.gz
    ```
 
-4. Place `GeoLite2-Country.mmdb` and `LICENSE-GEOLITE2.txt` in this directory.
-
-## Build-time vs runtime
-
-- **Image build**: the Dockerfile copies `assets/*` into `/app/assets/`. If
-  `GeoLite2-Country.mmdb` is missing at build time, the image still builds and
-  the relay falls back to the gRPC `GetRegion` path with a `WARN` log at
-  startup.
-- **Override at runtime**: set `BYTOVER_GEOIP_DB_PATH=/path/inside/container`
-  to point at a sidecar-mounted DB.
+4. Replace `GeoLite2-Country.mmdb` and `LICENSE-GEOLITE2.txt` in this directory.
+5. Commit the updated files.
 
 ## Override env
 
@@ -46,6 +48,11 @@ account and license key.
 |-----|--------|
 | `BYTOVER_REGION_CODE` | Skip both GeoIP and gRPC; use this region directly. |
 | `BYTOVER_GEOIP_DB_PATH` | Override the `.mmdb` path. Default: `/app/assets/GeoLite2-Country.mmdb`. |
+
+## Failure mode
+
+If the DB file is missing or unreadable at startup, the relay logs a
+`WARN` and falls back to the gRPC `GetRegion` path. It does not panic.
 
 ## License attribution
 
@@ -55,5 +62,3 @@ The CC BY-SA 4.0 license requires:
 
 > This product includes GeoLite2 data created by MaxMind, available from
 > <https://www.maxmind.com>.
-
-Place the upstream `LICENSE.txt` here as `LICENSE-GEOLITE2.txt` to satisfy this.
