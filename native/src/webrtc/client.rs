@@ -22,7 +22,7 @@ use shared::entities::peer::Peer;
 use shared::errors::CoreError;
 use shared::protocol::webrtc::errors::WebRtcErrors;
 use shared::protocol::webrtc::message_channel::DirectMessageChannel;
-use shared::protocol::webrtc::packet::{COMPRESSION_BLOCK_SIZE, WebRtcPacket, WIRE_PART_SIZE, WIRE_PART_SIZE_RELAY};
+use shared::protocol::webrtc::packet::{COMPRESSION_BLOCK_SIZE, WebRtcPacket, WIRE_PART_SIZE};
 use shared::protocol::webrtc::transfer::{TransferDelimiterShema, TransfersContext};
 use shared::repository::local_resource::LocalResourceRepository;
 use shared::shell::api::CoreRequest;
@@ -41,7 +41,6 @@ const OUTBOUND_RETRY_DELAY: Duration = Duration::from_millis(3);
 
 const _PART_COUNT_FITS_BITMAP: () = {
     assert!((COMPRESSION_BLOCK_SIZE + WIRE_PART_SIZE - 1) / WIRE_PART_SIZE <= 31);
-    assert!((COMPRESSION_BLOCK_SIZE + WIRE_PART_SIZE_RELAY - 1) / WIRE_PART_SIZE_RELAY <= 31);
 };
 
 pub type WebRtcClientError = WebRtcErrors;
@@ -438,13 +437,6 @@ impl WebRtcClient {
         let mut cursor = self.resource_repo.read(resource.path.clone(), COMPRESSION_BLOCK_SIZE, compressed).await?;
         let mut current_offset: u64 = 0;
 
-        let chunk_size = if self.pool.get().is_some_and(|p| p.any_slot_is_relay()) {
-            log::info!("[webrtc-client] streaming with relay chunk size {}", WIRE_PART_SIZE_RELAY);
-            WIRE_PART_SIZE_RELAY
-        } else {
-            WIRE_PART_SIZE
-        };
-
         loop {
             match cursor.c_next(None).await? {
                 Some((data, raw_size)) => {
@@ -452,7 +444,7 @@ impl WebRtcClient {
                         log::warn!("[webrtc-client] Cursor returned empty data");
                         break;
                     }
-                    let part_count_usize = data.len().div_ceil(chunk_size);
+                    let part_count_usize = data.len().div_ceil(WIRE_PART_SIZE);
                     debug_assert!(
                         part_count_usize > 0 && part_count_usize < 32,
                         "part_count {} out of supported range",
@@ -460,7 +452,7 @@ impl WebRtcClient {
                     );
                     let part_count = part_count_usize as u8;
 
-                    for (idx, chunk) in data.chunks(chunk_size).enumerate() {
+                    for (idx, chunk) in data.chunks(WIRE_PART_SIZE).enumerate() {
                         let wire = WebRtcPacket::serialize(prefix, current_offset, idx as u8, part_count, chunk);
                         outbound_packet_sender
                             .send(wire)
