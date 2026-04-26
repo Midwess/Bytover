@@ -16,7 +16,7 @@ use turn_client_proto::api::{BindChannelError, SendError, TurnClientApi};
 use turn_client_proto::udp::{TurnEvent, TurnPollRet, TurnRecvRet};
 
 use crate::config::is_relay_only;
-use crate::webrtc::client::{WebRtcClientError, MAX_BUFFER_SIZE};
+use crate::webrtc::client::{WebRtcClientError, UDP_SOCKET_BUFFER_SIZE};
 use crate::webrtc::ice::{strip_candidates_from_sdp, IceAgent};
 use crate::webrtc::signalling::SignallingSender;
 use crate::webrtc::turn::{stun_now, TurnRelayInfo};
@@ -41,11 +41,9 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 /// Maximum number of consecutive `MorePending` cycles.
 const MAX_PENDING_SPINS_PER_STEP: usize = 8;
 
-/// Reliable channel low watermark that triggers a refill event from str0m.
-const RELIABLE_BUFFERED_AMOUNT_LOW_THRESHOLD: usize = 256 * 1024;
+const RELIABLE_BUFFERED_AMOUNT_LOW_THRESHOLD: usize = 2 * 1024 * 1024;
 
-/// Refill reliable buffered data only up to this target to avoid large burst-then-drain cycles.
-const RELIABLE_BUFFERED_AMOUNT_REFILL_TARGET: usize = 512 * 1024;
+const RELIABLE_BUFFERED_AMOUNT_REFILL_TARGET: usize = 4 * 1024 * 1024;
 
 /// Events emitted from the RTC thread to the outside world.
 pub enum RtcEvent {
@@ -190,8 +188,7 @@ impl RtcClient {
         socket.set_only_v6(false)?;
         socket.set_nonblocking(true)?;
         socket.bind(&"[::]:0".parse::<SocketAddr>().unwrap().into())?;
-        let _ = socket.set_send_buffer_size(MAX_BUFFER_SIZE);
-        let _ = socket.set_recv_buffer_size(MAX_BUFFER_SIZE);
+        apply_udp_buffer_size(&socket, UDP_SOCKET_BUFFER_SIZE);
         let socket: std::net::UdpSocket = socket.into();
         let socket = tokio::net::UdpSocket::from_std(socket)?;
 
@@ -441,6 +438,18 @@ impl RtcClient {
                             }
                             _ => {}
                         }
+                    }
+
+                    if let Event::PeerStats(s) = &event {
+                        log::info!(
+                            "[rtc-client] peer-stats peer_bytes_tx={} peer_bytes_rx={} bwe_tx={:?} egress_loss={:?} ingress_loss={:?} rtt={:?}",
+                            s.peer_bytes_tx,
+                            s.peer_bytes_rx,
+                            s.bwe_tx,
+                            s.egress_loss_fraction,
+                            s.ingress_loss_fraction,
+                            s.rtt,
+                        );
                     }
 
                     if matches!(&event, Event::ChannelBufferedAmountLow(cid) if *cid == self.channel_ids.reliable) {
@@ -917,6 +926,25 @@ impl RtcClient {
 
     fn rtc_mut(&mut self) -> std::cell::RefMut<'_, Rtc> {
         self.rtc.borrow_mut()
+    }
+}
+
+fn apply_udp_buffer_size(socket: &Socket, requested: usize) {
+    let _ = socket.set_send_buffer_size(requested);
+    let _ = socket.set_recv_buffer_size(requested);
+    if let Ok(actual) = socket.send_buffer_size() {
+        if actual < requested / 2 {
+            log::warn!(
+                "[rtc-client] UDP send buf clamped: requested={requested} actual={actual} (raise kern.ipc.maxsockbuf or net.core.wmem_max)"
+            );
+        }
+    }
+    if let Ok(actual) = socket.recv_buffer_size() {
+        if actual < requested / 2 {
+            log::warn!(
+                "[rtc-client] UDP recv buf clamped: requested={requested} actual={actual} (raise kern.ipc.maxsockbuf or net.core.rmem_max)"
+            );
+        }
     }
 }
 
