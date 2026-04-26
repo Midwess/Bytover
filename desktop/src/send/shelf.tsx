@@ -319,35 +319,38 @@ export function Shelf({
                         <p className="text-md text-muted-foreground animate-pop-down-pulse">Drop or paste files here</p>
                     </div>
                 )}
-                <div
-                    className="w-full min-h-full flex-col"
-                    style={{display: viewMode === 'list' ? 'flex' : 'none'}}
-                >
-                    <div className="w-full flex flex-col gap-2 my-auto">
-                        {selectedResources.map((resource) => (
-                            <ResourceView
-                                key={resource.order_id}
-                                model={resource}
-                                isRemoveAllowed={isResourceRemoveAllowed}
-                                onRemove={(resourceId) => {
-                                    invoke("remove_resource", {shelfId, resourceId})
-                                }}
-                                onOpen={(resourceId) => {
-                                    invoke("open_shelf_resource", {shelfId, resourceId})
-                                }}
-                            />
-                        ))}
-                        <div className={"h-5"}></div>
+                {viewMode === 'list' ? (
+                    <div
+                        key="list"
+                        className="w-full min-h-full flex flex-col animate-in fade-in duration-150"
+                    >
+                        <div className="w-full flex flex-col gap-2 my-auto">
+                            {selectedResources.map((resource) => (
+                                <ResourceView
+                                    key={resource.order_id}
+                                    model={resource}
+                                    isRemoveAllowed={isResourceRemoveAllowed}
+                                    onRemove={(resourceId) => {
+                                        invoke("remove_resource", {shelfId, resourceId})
+                                    }}
+                                    onOpen={(resourceId) => {
+                                        invoke("open_shelf_resource", {shelfId, resourceId})
+                                    }}
+                                />
+                            ))}
+                            <div className={"h-5"}></div>
+                        </div>
                     </div>
-                </div>
-                <div className="h-full" style={{display: viewMode === 'stack' ? 'block' : 'none'}}>
-                    <StackView
-                        resources={selectedResources}
-                        onOpen={(resourceId) => {
-                            invoke("open_shelf_resource", {shelfId, resourceId})
-                        }}
-                    />
-                </div>
+                ) : (
+                    <div key="stack" className="h-full animate-in fade-in duration-150">
+                        <StackView
+                            resources={selectedResources}
+                            onOpen={(resourceId) => {
+                                invoke("open_shelf_resource", {shelfId, resourceId})
+                            }}
+                        />
+                    </div>
+                )}
             </div>
 
             <div
