@@ -42,9 +42,9 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 /// Maximum number of consecutive `MorePending` cycles.
 const MAX_PENDING_SPINS_PER_STEP: usize = 8;
 
-const RELIABLE_BUFFERED_AMOUNT_LOW_THRESHOLD: usize = 2 * 1024 * 1024;
+const RELIABLE_BUFFERED_AMOUNT_LOW_THRESHOLD: usize = 256 * 1024;
 
-const RELIABLE_BUFFERED_AMOUNT_REFILL_TARGET: usize = 4 * 1024 * 1024;
+const RELIABLE_BUFFERED_AMOUNT_REFILL_TARGET: usize = 512 * 1024;
 
 /// Events emitted from the RTC thread to the outside world.
 pub enum RtcEvent {
