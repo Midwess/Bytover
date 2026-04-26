@@ -351,12 +351,18 @@ export function Shelf({
                     ) : (
                         <motion.div
                             key="stack"
-                            initial={{opacity: 0, scale: 0.96, y: 4}}
-                            animate={{opacity: 1, scale: 1, y: 0}}
-                            exit={{opacity: 0, scale: 1.02, y: -4}}
-                            transition={{duration: 0.18, ease: [0.22, 1, 0.36, 1]}}
+                            initial={{opacity: 0, scale: 0.6}}
+                            animate={{opacity: 1, scale: 1}}
+                            exit={{opacity: 0, scale: 0.9}}
+                            transition={{
+                                type: "spring",
+                                stiffness: 380,
+                                damping: 16,
+                                mass: 0.8,
+                                opacity: {duration: 0.12, ease: "easeOut"},
+                            }}
                             className="h-full"
-                            style={{transformOrigin: "center top", willChange: "transform, opacity"}}
+                            style={{transformOrigin: "center bottom", willChange: "transform, opacity"}}
                         >
                             <StackView
                                 resources={selectedResources}
