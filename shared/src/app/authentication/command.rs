@@ -44,7 +44,7 @@ impl AppCommand {
         self.run(ShelfPersistentOperation::clear_all()).await?;
         self.run(DeviceAliasPersistentOperation::clear_all()).await?;
         self.notify_event(TransferEvent::Clear);
-        self.notify_event(ShelfEvent::Launch);
+        self.notify_event(ShelfEvent::Cleared);
         self.notify_event(AppEvent::Payment(PaymentEvent::ClearCapabilities));
         self.re_authorize().await?;
         Ok(())

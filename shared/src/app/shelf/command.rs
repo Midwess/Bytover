@@ -14,10 +14,11 @@ use crate::{gen_shelf_id, CoreOperation};
 
 impl AppCommand {
     pub async fn load_shelves(&self) -> Result<(), CoreError> {
+        self.update_model(ShelfEvent::Cleared);
+
         let shelves = ShelfPersistentOperation::find_all(None).into_future(self.ctx()).await?;
         log::info!("Loaded {} shelves", shelves.len());
 
-        // Ensure there's always at least one shelf
         if shelves.is_empty() {
             log::info!("No shelves found, creating default shelf");
             self.create_shelf(gen_shelf_id()).await?;
