@@ -8481,7 +8481,7 @@ dependencies = [
 [[package]]
 name = "sctp-proto"
 version = "0.9.0"
-source = "git+https://github.com/Midwess/sctp-proto.git#c3d386041b751545ba8d18cb2fd306c39d3b2e62"
+source = "git+https://github.com/Midwess/sctp-proto.git#cd84d5384b01ee82fa41f891118dd0fe16433c9f"
 dependencies = [
  "bytes",
  "crc",
