@@ -1,11 +1,12 @@
 mod config;
 mod gateway;
+mod geoip;
 mod public_ip;
 
 use base64::Engine;
 use serde::Serialize;
 use std::collections::HashMap;
-use std::net::SocketAddr;
+use std::net::{Ipv4Addr, SocketAddr};
 use std::time::Duration;
 
 use schema::devlog::bitbridge::p2p_orchestration_service_client::P2pOrchestrationServiceClient;
@@ -13,6 +14,7 @@ use std::env;
 use tonic::Request;
 
 use crate::gateway::GatewayChannel;
+use crate::geoip::GeoipResolver;
 use crate::public_ip::{discover_public_addresses, PublicAddresses};
 use turn_server::config::{Auth, Config, Interface, Server as TurnServerConfig};
 
@@ -69,6 +71,9 @@ async fn async_main() -> Result<(), MainErrors> {
         turn_port
     );
 
+    let region_resolver = RegionResolver::from_environment();
+    log::info!("{}", region_resolver.startup_summary());
+
     let registration_state = RegistrationState::new(public_addresses, turn_username.clone(), turn_password.clone());
 
     let turn_handle = tokio::spawn(async move {
@@ -78,7 +83,7 @@ async fn async_main() -> Result<(), MainErrors> {
     });
 
     tokio::spawn(async move {
-        start_registration_loop(turn_port, turn_port, turn_port, registration_state).await;
+        start_registration_loop(turn_port, turn_port, turn_port, registration_state, region_resolver).await;
     });
 
     tokio::select! {
@@ -163,6 +168,42 @@ impl RegistrationState {
     }
 }
 
+struct RegionResolver {
+    geoip: Option<GeoipResolver>,
+    geoip_load_error: Option<String>,
+}
+
+impl RegionResolver {
+    fn from_environment() -> Self {
+        let path = config::geoip_db_path();
+        match GeoipResolver::load(&path) {
+            Ok(geoip) => Self { geoip: Some(geoip), geoip_load_error: None },
+            Err(error) => Self { geoip: None, geoip_load_error: Some(error) },
+        }
+    }
+
+    fn startup_summary(&self) -> String {
+        match (&self.geoip, &self.geoip_load_error) {
+            (Some(geoip), _) => format!("Region resolver initialized: env_override={:?} geoip_db={}", config::local_region_code(), geoip.db_path().display()),
+            (None, Some(error)) => format!("Region resolver initialized without GeoIP: env_override={:?} reason={}", config::local_region_code(), error),
+            (None, None) => format!("Region resolver initialized without GeoIP: env_override={:?}", config::local_region_code()),
+        }
+    }
+
+    fn resolve_local(&self, ipv4: Option<Ipv4Addr>) -> Option<(String, &'static str)> {
+        let env_override = config::local_region_code();
+        let geoip_region = self.geoip.as_ref().and_then(|geoip| ipv4.and_then(|ip| geoip.region_for(ip)));
+        resolve_local_region(env_override, geoip_region)
+    }
+}
+
+fn resolve_local_region(env_override: Option<String>, geoip_region: Option<&'static str>) -> Option<(String, &'static str)> {
+    if let Some(env_value) = env_override {
+        return Some((env_value, "env"));
+    }
+    geoip_region.map(|region| (region.to_string(), "geoip"))
+}
+
 fn relay_auth_header() -> String {
     let secret = env::var("RELAY_SERVER_SECRET").unwrap_or_else(|_| "supersecret".to_string());
     let auth_str = format!("user:{}", secret);
@@ -209,20 +250,34 @@ async fn register_relay_once(
     Ok(())
 }
 
-async fn start_registration_loop(stun_port: u16, relay_port: u16, turn_port: u16, mut state: RegistrationState) {
+async fn start_registration_loop(
+    stun_port: u16,
+    relay_port: u16,
+    turn_port: u16,
+    mut state: RegistrationState,
+    region_resolver: RegionResolver,
+) {
     let grpc_gateway = GatewayChannel::new(config::get_gateway_grpc_url(), config::get_gateway_grpc_host());
 
     let mut interval = tokio::time::interval(Duration::from_secs(5));
     loop {
         interval.tick().await;
 
-        let url = match resolve_registration_url(&grpc_gateway).await {
-            Ok(url) => {
+        let ipv4 = state.public_addresses.ipv4;
+        let url = match resolve_registration_url(&region_resolver, &grpc_gateway, ipv4).await {
+            Ok((url, source)) => {
                 if let Some((previous_url, next_url)) = state.update_registration_url(url.clone()) {
+                    let ipv4_attribution = ipv4.map(|ip| ip.to_string()).unwrap_or_else(|| "none".to_string());
                     if let Some(previous_url) = previous_url {
-                        log::info!("Relay registration URL changed from {} to {}", previous_url, next_url);
+                        log::info!(
+                            "Relay registration URL changed from {} to {} (source={} ipv4={})",
+                            previous_url, next_url, source, ipv4_attribution
+                        );
                     } else {
-                        log::info!("Relay registration URL resolved to {}", next_url);
+                        log::info!(
+                            "Relay registration URL resolved to {} (source={} ipv4={})",
+                            next_url, source, ipv4_attribution
+                        );
                     }
                 }
                 Some(url)
@@ -256,7 +311,16 @@ async fn start_registration_loop(stun_port: u16, relay_port: u16, turn_port: u16
     }
 }
 
-async fn resolve_registration_url(grpc_gateway: &GatewayChannel) -> Result<String, String> {
+async fn resolve_registration_url(
+    region_resolver: &RegionResolver,
+    grpc_gateway: &GatewayChannel,
+    ipv4: Option<Ipv4Addr>,
+) -> Result<(String, &'static str), String> {
+    if let Some((region, source)) = region_resolver.resolve_local(ipv4) {
+        let route = format!("rpc-signalling-{region}");
+        return Ok((config::get_signalling_registration_url(&route), source));
+    }
+
     let channel = grpc_gateway.connect().await?;
 
     let mut client = P2pOrchestrationServiceClient::new(channel);
@@ -266,15 +330,39 @@ async fn resolve_registration_url(grpc_gateway: &GatewayChannel) -> Result<Strin
         .map_err(|error| format!("backend get_region failed: {error}"))?
         .into_inner();
 
-    Ok(config::get_signalling_registration_url(&response.signalling_route))
+    Ok((config::get_signalling_registration_url(&response.signalling_route), "grpc"))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{build_turn_interfaces, RegistrationState};
+    use super::{build_turn_interfaces, resolve_local_region, RegistrationState};
     use crate::public_ip::PublicAddresses;
     use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
     use turn_server::config::Interface;
+
+    #[test]
+    fn precedence_env_wins_over_geoip() {
+        let resolved = resolve_local_region(Some("asia".to_string()), Some("us"));
+        assert_eq!(resolved, Some(("asia".to_string(), "env")));
+    }
+
+    #[test]
+    fn precedence_geoip_used_when_env_absent() {
+        let resolved = resolve_local_region(None, Some("eu"));
+        assert_eq!(resolved, Some(("eu".to_string(), "geoip")));
+    }
+
+    #[test]
+    fn precedence_returns_none_when_both_absent() {
+        let resolved = resolve_local_region(None, None);
+        assert_eq!(resolved, None);
+    }
+
+    #[test]
+    fn precedence_env_used_when_geoip_unmapped() {
+        let resolved = resolve_local_region(Some("us".to_string()), None);
+        assert_eq!(resolved, Some(("us".to_string(), "env")));
+    }
 
     #[test]
     fn registration_state_tracks_initial_resolution() {

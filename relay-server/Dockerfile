@@ -22,8 +22,8 @@ RUN cargo build --release -p relay-server
 FROM midwess/rust:runner1.89.0 as runner
 WORKDIR /app
 
-# Copy binary and content
 COPY --from=builder /app/target/release/relay-server ./
+COPY relay-server/assets/ /app/assets/
 
 EXPOSE 9101
 EXPOSE 3478/udp
