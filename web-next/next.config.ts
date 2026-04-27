@@ -69,6 +69,30 @@ const nextConfig: NextConfig = {
     output: "standalone",
     poweredByHeader: false,
     compress: true,
+    async redirects() {
+        return [
+            {
+                source: '/policy.html',
+                destination: '/policy',
+                permanent: true,
+            },
+            {
+                source: '/policy/privacy',
+                destination: '/policy#privacy',
+                permanent: true,
+            },
+            {
+                source: '/policy/terms',
+                destination: '/policy#terms',
+                permanent: true,
+            },
+            {
+                source: '/policy/eula',
+                destination: '/policy#eula',
+                permanent: true,
+            },
+        ];
+    },
 };
 
 export default nextConfig;
