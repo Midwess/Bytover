@@ -6,8 +6,8 @@ use schema::devlog::app_gateway::models::{Device, User};
 use schema::devlog::bitbridge::p2p_orchestration_service_server::P2pOrchestrationService;
 use schema::devlog::bitbridge::{
     find_p2p_session_request, CreateDeviceSessionRequest, CreateDeviceSessionResponse, FindP2pSessionRequest, FindP2pSessionResponse,
-    GenPeerRequest, GenPeerResponse, GetDeviceAliasesRequest, GetDeviceAliasesResponse, GetRegionRequest, GetRegionResponse,
-    P2pSession, PeerMessage,
+    GenAliasRequest, GenAliasResponse, GenPeerRequest, GenPeerResponse, GetDeviceAliasesRequest, GetDeviceAliasesResponse,
+    GetRegionRequest, GetRegionResponse, P2pSession, PeerMessage,
 };
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
@@ -169,6 +169,25 @@ impl P2pOrchestrationService for P2PGrpcService {
             .map_err(|e| Status::internal(e.to_string()))?;
 
         Ok(Response::new(GetDeviceAliasesResponse { aliases }))
+    }
+
+    async fn gen_alias(&self, request: Request<GenAliasRequest>) -> Result<Response<GenAliasResponse>, Status> {
+        let Some(user) = request.extensions().get::<User>() else {
+            return Err(Status::unauthenticated("Unauthenticated".to_owned()));
+        };
+
+        let Some(device) = request.extensions().get::<Device>() else {
+            return Err(Status::unauthenticated("Unauthenticated".to_owned()));
+        };
+
+        let p2p_transfer_service = DiContainer::instance().await.get_p2p_transfer_service().await;
+
+        let alias = p2p_transfer_service
+            .create_alias(user.order_id, device.order_id)
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?;
+
+        Ok(Response::new(GenAliasResponse { alias }))
     }
 
     async fn gen_peer(&self, request: Request<GenPeerRequest>) -> Result<Response<GenPeerResponse>, Status> {

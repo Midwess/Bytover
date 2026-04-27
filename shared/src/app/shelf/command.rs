@@ -108,7 +108,7 @@ impl AppCommand {
     }
 
     pub async fn create_shelf(&self, id: u64) -> Result<(), CoreError> {
-        let name = self.get_next_shelf_alias().await;
+        let name = self.get_next_shelf_alias(id).await;
         log::info!("Creating shelf {id}; {name}");
         let shelf = Shelf::with_id(id, name);
         let saved_shelf = ShelfPersistentOperation::add(shelf).into_future(self.ctx()).await?;
@@ -116,23 +116,23 @@ impl AppCommand {
         Ok(())
     }
 
-    async fn get_next_shelf_alias(&self) -> String {
-        let mut aliases = DeviceAliasPersistentOperation::get_all().into_future(self.ctx()).await.unwrap_or_default();
-
-        if aliases.is_empty() {
-            if let Ok(fetched_aliases) = RpcOperation::get_device_aliases().into_future(self.ctx()).await {
-                if !fetched_aliases.is_empty() {
-                    let _ = DeviceAliasPersistentOperation::save_all(fetched_aliases.clone()).into_future(self.ctx()).await;
-                    aliases = fetched_aliases;
-                }
-            }
-        }
-
+    async fn get_next_shelf_alias(&self, shelf_id: u64) -> String {
         let shelves = ShelfPersistentOperation::find_all(None)
             .into_future(self.ctx())
             .await
             .unwrap_or_default();
         let used_names: Vec<&str> = shelves.iter().map(|s| s.name.as_str()).collect();
+
+        let mut aliases = DeviceAliasPersistentOperation::get_all().into_future(self.ctx()).await.unwrap_or_default();
+
+        if aliases.len() <= shelves.len() {
+            if let Ok(fetched_aliases) = RpcOperation::get_device_aliases().into_future(self.ctx()).await {
+                if fetched_aliases.len() > aliases.len() {
+                    let _ = DeviceAliasPersistentOperation::save_all(fetched_aliases.clone()).into_future(self.ctx()).await;
+                    aliases = fetched_aliases;
+                }
+            }
+        }
 
         for alias in &aliases {
             if !used_names.contains(&alias.as_str()) {
@@ -140,7 +140,15 @@ impl AppCommand {
             }
         }
 
-        uuid::Uuid::new_v4().to_string()
+        if let Ok(new_alias) = RpcOperation::gen_alias().into_future(self.ctx()).await {
+            if !new_alias.is_empty() && !used_names.contains(&new_alias.as_str()) {
+                aliases.push(new_alias.clone());
+                let _ = DeviceAliasPersistentOperation::save_all(aliases).into_future(self.ctx()).await;
+                return new_alias;
+            }
+        }
+
+        format!("shelf-{shelf_id}")
     }
 
     pub async fn enforce_shelf_limit(&self, limit: usize) -> Result<(), CoreError> {

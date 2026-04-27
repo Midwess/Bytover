@@ -86,6 +86,16 @@ impl P2PTransferService {
         Ok(aliases)
     }
 
+    pub async fn create_alias(&self, user_id: u64, device_id: u64) -> Result<String, P2PTransferErrors> {
+        let alias = self
+            .generate_unique_alias()
+            .await?
+            .ok_or(P2PTransferErrors::AliasGenerationFailed)?;
+        let device_alias = DeviceAlias::new(alias.clone(), user_id, device_id);
+        self.device_alias_repository.create_alias(device_alias).await?;
+        Ok(alias)
+    }
+
     async fn generate_unique_alias(&self) -> Result<Option<String>, P2PTransferErrors> {
         let markov_alias = self.markov_generator.generate_name().await?;
 

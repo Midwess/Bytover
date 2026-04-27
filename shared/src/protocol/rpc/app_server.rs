@@ -11,7 +11,9 @@ use schema::devlog::app_gateway::rpc::people_service_client::PeopleServiceClient
 use schema::devlog::app_gateway::rpc::user_service_client::UserServiceClient;
 use schema::devlog::app_gateway::rpc::{AppFeedbackRequest, AuthenticateRequest, FindUserRequest, MeRequest};
 use schema::devlog::bitbridge::p2p_orchestration_service_client::P2pOrchestrationServiceClient;
-use schema::devlog::bitbridge::{CreateDeviceSessionRequest, FindP2pSessionRequest, GenPeerRequest, GetDeviceAliasesRequest};
+use schema::devlog::bitbridge::{
+    CreateDeviceSessionRequest, FindP2pSessionRequest, GenAliasRequest, GenPeerRequest, GetDeviceAliasesRequest,
+};
 use schema::value::auth_method::AuthMethod;
 use schema::value::device::RegisteringDevice;
 use tonic::Request;
@@ -168,6 +170,18 @@ where
         let mut client = P2pOrchestrationServiceClient::new(channel);
         let response = client.get_device_aliases(request).await?;
         Ok(response.into_inner().aliases)
+    }
+
+    pub async fn gen_alias(&self) -> Result<String, RpcErrors> {
+        let channel = self.rpc_module.connect().await?;
+        let req = GenAliasRequest {};
+        let mut request = Request::new(req);
+
+        self.auth_provider.with_auth(&mut request).await?;
+
+        let mut client = P2pOrchestrationServiceClient::new(channel);
+        let response = client.gen_alias(request).await?;
+        Ok(response.into_inner().alias)
     }
 
     pub async fn find_p2p_session_by_alias(&self, alias: String) -> Result<Option<schema::devlog::bitbridge::P2pSession>, RpcErrors> {

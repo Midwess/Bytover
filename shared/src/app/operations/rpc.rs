@@ -28,6 +28,7 @@ pub enum RpcOperation {
         signalling_route: String,
     },
     GetDeviceAliases,
+    GenAlias,
     GenPeer {
         device: DeviceInfo,
     },
@@ -109,6 +110,14 @@ impl RpcOperation {
             CoreOperationOutput::DeviceAliases(aliases) => Ok(aliases),
             CoreOperationOutput::Error(error) => Err(error),
             _ => panic!("Invalid output for RpcOperation::GetDeviceAliases"),
+        })
+    }
+
+    pub fn gen_alias() -> AppRequestBuilder<impl Future<Output = Result<String, CoreError>>> {
+        Command::request_from_shell(CoreOperation::Rpc(RpcOperation::GenAlias)).map(|res| match res {
+            CoreOperationOutput::String(alias) => Ok(alias),
+            CoreOperationOutput::Error(error) => Err(error),
+            _ => panic!("Invalid output for RpcOperation::GenAlias"),
         })
     }
 
