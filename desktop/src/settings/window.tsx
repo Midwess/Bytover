@@ -442,17 +442,6 @@ function formatBytes(n: number): string {
     return Number.isInteger(mib) ? `${mib} MB` : `${mib.toFixed(1)} MB`
 }
 
-function ProBadge({size = "md"}: {size?: "sm" | "md"}) {
-    const dim = size === "sm" ? "w-9 h-9 rounded-[7px] text-[9px]" : "w-11 h-11 rounded-[9px] text-[10px]"
-    return (
-        <div
-            className={`${dim} bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_2px_10px_rgba(59,130,246,0.3)]`}
-        >
-            <span className="font-bold tracking-[0.1em] text-white">PRO</span>
-        </div>
-    )
-}
-
 function PlanComparison({limits, onUpgrade}: {limits: FreeLimits; onUpgrade: () => Promise<unknown>}) {
     const payment = core.usePayment()
     const isPurchasing = payment?.is_loading ?? false
