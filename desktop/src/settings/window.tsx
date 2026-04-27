@@ -514,18 +514,10 @@ function PaidPlanNotice() {
         <div className="relative overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.02]">
             <div className="absolute inset-0 bg-gradient-to-b from-blue-500/[0.08] via-transparent to-transparent pointer-events-none" />
             <div className="relative px-4 py-4 flex items-center gap-3">
-                <ProBadge size="sm" />
                 <div className="flex flex-col flex-1 min-w-0">
                     <span className="text-[13.5px] font-semibold text-white tracking-tight">Bytover Pro</span>
                     <span className="text-[11px] text-white/45 mt-0.5">Lifetime · Thanks for supporting Bytover</span>
                 </div>
-                <Button
-                    variant="secondary"
-                    size="sm"
-                    className="h-[28px] px-3 text-[11.5px] bg-white/[0.06] hover:bg-white/[0.1] text-white/85 border border-white/[0.08] rounded-full shrink-0"
-                >
-                    Manage plan
-                </Button>
             </div>
         </div>
     )
