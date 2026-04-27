@@ -82,7 +82,7 @@ export function ShelfWrapper({
         <>
             <Card
                 className={`
-                    ${isCollapsed ? 'rounded-[27px]' : 'rounded-[30px]'}
+                    rounded-[30px]
                     justify-center
                     items-center
                     px-0
