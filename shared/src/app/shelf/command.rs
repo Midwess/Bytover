@@ -108,7 +108,7 @@ impl AppCommand {
     }
 
     pub async fn create_shelf(&self, id: u64) -> Result<(), CoreError> {
-        let name = self.get_next_shelf_alias().await;
+        let name = self.get_next_shelf_alias(id).await;
         log::info!("Creating shelf {id}; {name}");
         let shelf = Shelf::with_id(id, name);
         let saved_shelf = ShelfPersistentOperation::add(shelf).into_future(self.ctx()).await?;
@@ -116,7 +116,7 @@ impl AppCommand {
         Ok(())
     }
 
-    async fn get_next_shelf_alias(&self) -> String {
+    async fn get_next_shelf_alias(&self, shelf_id: u64) -> String {
         let shelves = ShelfPersistentOperation::find_all(None)
             .into_future(self.ctx())
             .await
@@ -148,7 +148,7 @@ impl AppCommand {
             }
         }
 
-        format!("Shelf {}", shelves.len() + 1)
+        format!("shelf-{shelf_id}")
     }
 
     pub async fn enforce_shelf_limit(&self, limit: usize) -> Result<(), CoreError> {
