@@ -140,6 +140,14 @@ impl AppCommand {
             }
         }
 
+        if let Ok(new_alias) = RpcOperation::gen_alias().into_future(self.ctx()).await {
+            if !new_alias.is_empty() && !used_names.contains(&new_alias.as_str()) {
+                aliases.push(new_alias.clone());
+                let _ = DeviceAliasPersistentOperation::save_all(aliases).into_future(self.ctx()).await;
+                return new_alias;
+            }
+        }
+
         format!("Shelf {}", shelves.len() + 1)
     }
 

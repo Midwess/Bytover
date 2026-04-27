@@ -50,6 +50,10 @@ where
                 let aliases = self.app_server().get_device_aliases().await?;
                 Ok(CoreOperationOutput::DeviceAliases(aliases))
             }
+            RpcOperation::GenAlias => {
+                let alias = self.app_server().gen_alias().await?;
+                Ok(CoreOperationOutput::String(alias))
+            }
             RpcOperation::GenPeer { device } => {
                 let peer = self.app_server().gen_peer(device).await?;
                 Ok(CoreOperationOutput::Rpc(RpcOperationOutput::GenPeer(peer)))
