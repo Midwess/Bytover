@@ -73,7 +73,22 @@ const nextConfig: NextConfig = {
         return [
             {
                 source: '/policy.html',
-                destination: '/policy/privacy',
+                destination: '/policy',
+                permanent: true,
+            },
+            {
+                source: '/policy/privacy',
+                destination: '/policy#privacy',
+                permanent: true,
+            },
+            {
+                source: '/policy/terms',
+                destination: '/policy#terms',
+                permanent: true,
+            },
+            {
+                source: '/policy/eula',
+                destination: '/policy#eula',
                 permanent: true,
             },
         ];

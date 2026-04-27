@@ -64,9 +64,9 @@ export default function Footer(props: {className?: string | undefined, isFullWid
                                 isLight ? "text-zinc-900" : "text-white"
                             )}>Legal</h4>
                             <ul className="flex flex-col gap-3">
-                                <li><Link href="/policy/privacy" className={cn("hover:text-zinc-900 transition-colors text-sm", isLight ? "text-zinc-500" : "text-zinc-500 hover:text-white")}>Privacy</Link></li>
-                                <li><Link href="/policy/terms" className={cn("hover:text-zinc-900 transition-colors text-sm", isLight ? "text-zinc-500" : "text-zinc-500 hover:text-white")}>Terms</Link></li>
-                                <li><Link href="/policy/eula" className={cn("hover:text-zinc-900 transition-colors text-sm", isLight ? "text-zinc-500" : "text-zinc-500 hover:text-white")}>EULA</Link></li>
+                                <li><Link href="/policy#privacy" className={cn("hover:text-zinc-900 transition-colors text-sm", isLight ? "text-zinc-500" : "text-zinc-500 hover:text-white")}>Privacy</Link></li>
+                                <li><Link href="/policy#terms" className={cn("hover:text-zinc-900 transition-colors text-sm", isLight ? "text-zinc-500" : "text-zinc-500 hover:text-white")}>Terms</Link></li>
+                                <li><Link href="/policy#eula" className={cn("hover:text-zinc-900 transition-colors text-sm", isLight ? "text-zinc-500" : "text-zinc-500 hover:text-white")}>EULA</Link></li>
                             </ul>
                         </div>
                         <div className="flex flex-col gap-4">
