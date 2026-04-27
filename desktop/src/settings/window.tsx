@@ -442,17 +442,6 @@ function formatBytes(n: number): string {
     return Number.isInteger(mib) ? `${mib} MB` : `${mib.toFixed(1)} MB`
 }
 
-function ProBadge({size = "md"}: {size?: "sm" | "md"}) {
-    const dim = size === "sm" ? "w-9 h-9 rounded-[7px] text-[9px]" : "w-11 h-11 rounded-[9px] text-[10px]"
-    return (
-        <div
-            className={`${dim} bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_2px_10px_rgba(59,130,246,0.3)]`}
-        >
-            <span className="font-bold tracking-[0.1em] text-white">PRO</span>
-        </div>
-    )
-}
-
 function PlanComparison({limits, onUpgrade}: {limits: FreeLimits; onUpgrade: () => Promise<unknown>}) {
     const payment = core.usePayment()
     const isPurchasing = payment?.is_loading ?? false
@@ -525,18 +514,10 @@ function PaidPlanNotice() {
         <div className="relative overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.02]">
             <div className="absolute inset-0 bg-gradient-to-b from-blue-500/[0.08] via-transparent to-transparent pointer-events-none" />
             <div className="relative px-4 py-4 flex items-center gap-3">
-                <ProBadge size="sm" />
                 <div className="flex flex-col flex-1 min-w-0">
                     <span className="text-[13.5px] font-semibold text-white tracking-tight">Bytover Pro</span>
                     <span className="text-[11px] text-white/45 mt-0.5">Lifetime · Thanks for supporting Bytover</span>
                 </div>
-                <Button
-                    variant="secondary"
-                    size="sm"
-                    className="h-[28px] px-3 text-[11.5px] bg-white/[0.06] hover:bg-white/[0.1] text-white/85 border border-white/[0.08] rounded-full shrink-0"
-                >
-                    Manage plan
-                </Button>
             </div>
         </div>
     )
