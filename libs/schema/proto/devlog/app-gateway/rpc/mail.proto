@@ -1,0 +1,20 @@
+syntax = "proto2";
+
+package devlog.app_gateway.rpc;
+
+import "crafter/email.proto";
+
+service MailService {
+    rpc send(SendMailRequest) returns (SendMailResponse);
+}
+
+message SendMailRequest {
+    required string from = 1;
+    required string to = 2;
+    required crafter.EmailTemplate template = 3;
+}
+
+message SendMailResponse {
+    required bool success = 1;
+    optional string message = 2;
+} 

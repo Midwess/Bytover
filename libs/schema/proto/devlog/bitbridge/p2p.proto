@@ -1,0 +1,78 @@
+syntax = "proto2";
+
+package devlog.bitbridge;
+
+import "devlog/bitbridge/peer.proto";
+import "value/device.proto";
+
+service P2POrchestrationService {
+  rpc create_device_session(CreateDeviceSessionRequest) returns (CreateDeviceSessionResponse);
+  rpc find_session(FindP2PSessionRequest) returns (FindP2PSessionResponse);
+  rpc get_device_aliases(GetDeviceAliasesRequest) returns (GetDeviceAliasesResponse);
+  rpc gen_alias(GenAliasRequest) returns (GenAliasResponse);
+  rpc gen_peer(GenPeerRequest) returns (GenPeerResponse);
+  rpc get_region(GetRegionRequest) returns (GetRegionResponse);
+}
+
+message P2PSession {
+  required uint64 session_id = 1;
+  required string signalling_key = 2;
+  required uint64 owner_user_id = 3;
+  optional string description = 4;
+  required string access_url = 5;
+  required string alias = 6;
+  required string signalling_route = 7;
+}
+
+message CreateDeviceSessionRequest {
+  required string alias = 1;
+  required string signalling_key = 2;
+  required string signalling_route = 3;
+}
+
+message CreateDeviceSessionResponse {
+  required P2PSession session = 1;
+}
+
+message FindP2PSessionRequest {
+  oneof key {
+    string alias = 1;
+  }
+}
+
+message FindP2PSessionResponse {
+  optional P2PSession session = 1;
+}
+
+message GetDeviceAliasesRequest {
+}
+
+message GetDeviceAliasesResponse {
+  repeated string aliases = 1;
+}
+
+message GenAliasRequest {
+}
+
+message GenAliasResponse {
+  required string alias = 1;
+}
+
+message GenPeerRequest {
+  required value.device.RegisteringDevice device = 1;
+}
+
+message GenPeerResponse {
+  required PeerMessage peer = 1;
+  optional string signalling_id = 2;
+  required string region_code = 3;
+  required string signalling_route = 4;
+}
+
+message GetRegionRequest {
+}
+
+message GetRegionResponse {
+  required string region_code = 1;
+  required string signalling_route = 2;
+}

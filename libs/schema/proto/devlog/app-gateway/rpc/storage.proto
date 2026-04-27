@@ -1,0 +1,31 @@
+syntax = "proto2";
+
+package devlog.app_gateway.rpc;
+
+import "value/static_resource.proto";
+
+service StorageService {
+    rpc create_application_resource(CreateApplicationResourceRequest) returns (CreateApplicationResourceResponse);
+    rpc get_application_resource(GetApplicationResourceRequest) returns (GetApplicationResourceResponse);
+}
+
+message CreateApplicationResourceRequest {
+    required string resource_name = 1;
+    map<string, string> params = 2;
+}
+
+message CreateApplicationResourceResponse {
+    required value.static_resource.StaticResource resource = 1;
+}
+
+message GetApplicationResourceRequest {
+    // If you signed in then the app name is not required,
+    // Infact, it will be overrided
+    optional string app_name = 1;
+    required string path = 2;
+    map<string, string> params = 3;
+}
+
+message GetApplicationResourceResponse {
+    required value.static_resource.StaticResource resource = 1;
+}

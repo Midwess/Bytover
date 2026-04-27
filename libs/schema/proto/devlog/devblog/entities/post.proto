@@ -1,0 +1,17 @@
+syntax="proto3";
+
+package devlog.devblog.entities;
+
+import "devlog/devblog/entities/author.proto";
+import "devlog/devblog/entities/interaction.proto";
+import "value/datetime.proto";
+
+message Post {
+    Author author = 1;
+    value.datetime.Datetime created_at = 2;
+    string title = 3; // required
+    string description = 4;
+    string url = 5;
+    int32 view_count = 6;
+    int32 like_count = 7;
+}

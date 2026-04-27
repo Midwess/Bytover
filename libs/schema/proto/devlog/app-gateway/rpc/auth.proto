@@ -1,0 +1,23 @@
+syntax = "proto2";
+
+package devlog.app_gateway.rpc;
+
+import "devlog/app-gateway/models/application.proto";
+import "value/auth_method.proto";
+import "value/device.proto";
+
+service AuthService {
+  rpc authenticate(AuthenticateRequest) returns (AuthenticateResponse);
+}
+
+message AuthenticateRequest {
+  required string app_name = 1;
+  required value.auth_method.AuthMethod method = 2;
+  required value.device.RegisteringDevice device = 3;
+}
+
+message AuthenticateResponse {
+  oneof action {
+    string open_url = 1;
+  }
+}

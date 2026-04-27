@@ -1,0 +1,41 @@
+syntax="proto2";
+
+package crafter;
+import 'value/datetime.proto';
+
+message WelcomeTemplate {
+    required string user_name = 1;
+    required value.datetime.Datetime datetime = 2;
+}
+
+message OtpTemplate {
+    required string otp_code = 1;
+}
+
+message FileResource {
+    required string name = 1;
+    required int32 size_in_bytes = 2;
+}
+
+message SendFileTemplate {
+    required string sender_email = 1;
+    optional string sender_display_name = 2;
+    required string download_url = 3;
+    required value.datetime.Datetime datetime = 4;
+    repeated FileResource files = 5;
+}
+
+message FeedbackTemplate {
+    optional string feedback_sender_email = 1;
+    optional string title = 2;
+    required string content = 3;
+}
+
+message EmailTemplate {
+    oneof template {
+        WelcomeTemplate welcome = 1;
+        OtpTemplate otp = 2;
+        SendFileTemplate send_file = 3;
+        FeedbackTemplate feedback = 4;
+    }
+}

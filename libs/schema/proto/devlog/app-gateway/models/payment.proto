@@ -1,0 +1,16 @@
+syntax = "proto2";
+
+package devlog.app_gateway.models;
+
+import "value/datetime.proto";
+
+enum PaymentAccount {
+    UNKNOWN = 0;
+    MIDWESS_AI = 1;
+}
+
+enum PaymentStatementStatus {
+    IN_PROGRESS = 0;
+    SUCCESS = 1;
+    FAILED = 2;
+}

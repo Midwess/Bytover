@@ -1,0 +1,33 @@
+syntax = "proto2";
+
+package midwess.api.internal;
+
+import "midwess_ai/api/models/usage_report.proto";
+
+service UsageService {
+    rpc ReportUsage(ReportUsageRequest) returns (ReportUsageResponse);
+}
+
+message SandboxUsage {
+    required int64 sandbox_id = 1;
+    required midwess.api.models.ComputationUsage computation_usage = 2;
+}
+
+message LlmUsage {
+    required int64 entity_id = 1;
+    required int64 amount = 2;
+}
+
+message ReportUsageRequest {
+    required int64 project_id = 1;
+    oneof event {
+        SandboxUsage sandbox_usage = 2;
+        LlmUsage llm_usage = 3;
+    }
+}
+
+message ReportUsageResponse {
+    required bool out_of_credits = 1;
+    required int64 credit_left = 2;
+    optional int64 total_consumed_credit = 3;
+}

@@ -1,0 +1,8 @@
+syntax = "proto2";
+
+package devlog.app_gateway.models;
+
+message Application {
+  required string name = 1;
+  optional string web_url = 2;
+}

@@ -1,0 +1,42 @@
+[package]
+name = "devlog-sdk"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = []
+backend = ["grpc-client", "grpc-server", "gateway", "s3"]
+grpc-client = ["tonic/transport"]
+grpc-server = ["tonic", "tonic-middleware", "core-services/grpc-server", "gateway", "tcp"]
+gateway = ["reqwest", "reqwest/json"]
+tcp = []
+smtp = ["core-services/smtp", "lettre"]
+s3 = ["core-services/s3", "aws-sdk-s3", "aws-smithy-async"]
+distributed_id = ["etcd-client"]
+
+[dependencies]
+core-services = { path="../core-services", default-features = false }
+log = "0.4.27"
+chrono = "0.4.39"
+serde = { version = "1.0.219", features = ["derive"], default-features = false }
+serde_json = { version = "1.0.117"}
+lazy_static = "1.5.0"
+tokio = { version = "1.46.1", default-features = false, features = ["sync", "macros", "time"] }
+async-trait = "0.1.88"
+thiserror = "2.0.12"
+futures-timer = "3.0.3"
+n0-future = "0.2.0"
+etcd-client = { version = "0.17.0", optional = true }
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+tokio = { version = "1.46.1", default-features = false, features = ["net", "sync", "macros", "time"] }
+socket2 = "0.6.3"
+
+lettre = { version = "0.11.7", optional = true }
+futures-util = { version = "0.3.31", optional = true }
+tonic-middleware = { version = "0.1.4", optional = true }
+tonic = { version = "0.13.1", optional = true }
+aws-sdk-s3 = { version = "1.76.0", optional = true }
+reqwest = { version = "0.12.22", default-features = false, optional = true }
+aws-smithy-async = {version = "1.2.5", optional = true}
+regex = "1.11.1"

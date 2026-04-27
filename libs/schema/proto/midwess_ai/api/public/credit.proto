@@ -1,0 +1,18 @@
+syntax = "proto2";
+
+package midwess.api.public;
+
+service CreditService {
+    rpc AddCredit(AddCreditRequest) returns (AddCreditResponse);
+}
+
+message AddCreditRequest {
+    required int32 amount = 1;
+}
+
+message AddCreditResponse {
+    oneof response_item {
+        string redirect = 1;
+        string error = 2;
+    }
+}

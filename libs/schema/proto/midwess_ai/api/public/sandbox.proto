@@ -1,0 +1,63 @@
+syntax = "proto2";
+
+package midwess.api.public;
+
+import "midwess_ai/api/models/models/sandbox.proto";
+
+service SandboxService {
+    rpc RegisterManager(RegisterManagerRequest) returns (RegisterManagerResponse);
+    rpc GetSandboxes(GetSandboxesRequest) returns (GetSandboxesResponse);
+    rpc RemoveSandbox(RemoveSandboxRequest) returns (RemoveSandboxResponse);
+    rpc CreateSandbox(CreateSandboxRequest) returns (CreateSandboxResponse);
+}
+
+message RegisterManagerRequest {
+    required int64 manager_id = 1;
+    required string provider_name = 2;
+    required string environment_name = 3;
+    required string grpc_endpoint = 4;
+}
+
+message RegisterManagerResponse {
+    required bool success = 1;
+    optional string message = 2;
+    optional SandboxManager manager = 3;
+}
+
+message SandboxManager {
+    required int64 id = 1;
+    required string environment_name = 2;
+    required string provider = 3;
+    required string manager_connection = 4;
+    required string region = 5;
+}
+
+message GetSandboxesRequest {
+    required string environment_name = 1;
+    required string provider_name = 2;
+}
+
+message GetSandboxesResponse {
+    repeated midwess.api.models.Sandbox sandboxes = 1;
+}
+
+message RemoveSandboxRequest {
+    required int64 id = 1;
+}
+
+message RemoveSandboxResponse {
+    required bool success = 1;
+    optional string message = 2;
+}
+
+message CreateSandboxRequest {
+    required string environment_id = 1;
+    required string provider = 2;
+    required midwess.api.models.Hardware hardware = 3;
+}
+
+message CreateSandboxResponse {
+    required bool success = 1;
+    optional string message = 2;
+    optional midwess.api.models.Sandbox sandbox = 3;
+}

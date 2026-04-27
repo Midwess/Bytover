@@ -1,0 +1,25 @@
+syntax = "proto2";
+
+package midwess.sandbox_manager.models;
+
+message PublicPort {
+    optional string assigned_host = 1;
+    required int32 application_port = 2;
+    required bool is_public = 3;
+    required bool http2_supported = 4;
+    required bool tls = 5;
+}
+
+message Hardware {
+    required int32 vcpu = 1;
+    required int32 memory = 2;
+    repeated PublicPort ports = 3;
+    optional string volume_mount_path = 4;
+}
+
+message Sandbox {
+    optional string assigned_project_id = 1;
+    required int64 id = 2;
+    required Hardware hardware = 3;
+    required bool available = 4;
+}

@@ -1,0 +1,69 @@
+syntax = "proto2";
+
+package midwess.api.public;
+
+import "midwess_ai/api/models/project.proto";
+
+service ProjectService {
+    rpc Get(GetProjectRequest) returns (midwess.api.models.Project);
+    rpc Create(CreateProjectRequest) returns (midwess.api.models.Project);
+    rpc List(ListProjectsRequest) returns (ListProjectsResponse);
+    rpc Remove(RemoveProjectRequest) returns (RemoveProjectResponse);
+    rpc UpdateStatus(UpdateProjectStatusRequest) returns (UpdateProjectStatusResponse);
+    rpc UpdateProjectInfo(UpdateProjectInfoRequest) returns (UpdateProjectInfoResponse);
+    rpc GetBySandbox(GetProjectBySandboxRequest) returns (GetProjectBySandboxResponse);
+}
+
+message GetProjectRequest {
+    required int64 id = 1;
+}
+
+message CreateProjectRequest {
+    optional string first_prompt = 4;
+    required int64 workspace_id = 5;
+    optional int64 llm_provider_id = 6;
+}
+
+message ListProjectsRequest {
+    required int64 workspace_id = 1;
+}
+
+message ListProjectsResponse {
+    repeated midwess.api.models.Project projects = 1;
+}
+
+message RemoveProjectRequest {
+    required int64 id = 1;
+}
+
+message RemoveProjectResponse {
+    required bool success = 1;
+    optional string message = 2;
+}
+
+message UpdateProjectStatusRequest {
+    required midwess.api.models.ProjectStatus status = 1;
+}
+
+message UpdateProjectStatusResponse {
+    required bool success = 1;
+}
+
+message UpdateProjectInfoRequest {
+    optional string name = 1;
+    optional string description = 2;
+}
+
+message UpdateProjectInfoResponse {
+    required bool success = 1;
+}
+
+message GetProjectBySandboxRequest {
+    // sandbox_id is extracted from the JWT token in x-sandbox-authorization header
+    // project_id is used as a fallback when the sandbox record has no project_id set
+    optional int64 project_id = 1;
+}
+
+message GetProjectBySandboxResponse {
+    optional midwess.api.models.Project project = 1;
+}

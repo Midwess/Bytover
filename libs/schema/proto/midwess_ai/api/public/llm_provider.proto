@@ -1,0 +1,51 @@
+syntax = "proto2";
+
+package midwess.api.public;
+
+service LlmProviderService {
+    rpc Create(CreateLlmProviderRequest) returns (LlmProviderResponse);
+    rpc Get(GetLlmProviderRequest) returns (LlmProviderResponse);
+    rpc List(ListLlmProvidersRequest) returns (ListLlmProvidersResponse);
+    rpc Delete(DeleteLlmProviderRequest) returns (DeleteLlmProviderResponse);
+}
+
+message LlmProviderResponse {
+    required int64 id = 1;
+    required string base_url = 2;
+    required string model_name = 3;
+    optional int32 max_tokens = 4;
+    optional int32 max_context_window = 5;
+    optional double price_per_token = 6;
+}
+
+message CreateLlmProviderRequest {
+    required string api_key = 1;
+    required string base_url = 2;
+    required string model_name = 3;
+    optional int32 max_tokens = 4;
+    optional int32 max_context_window = 5;
+    optional double price_per_token = 6;
+}
+
+message GetLlmProviderRequest {
+    required int64 id = 1;
+}
+
+message ListLlmProvidersRequest {}
+
+message LlmProviderSummary {
+    required int64 id = 1;
+    required string model_name = 2;
+}
+
+message ListLlmProvidersResponse {
+    repeated LlmProviderSummary providers = 1;
+}
+
+message DeleteLlmProviderRequest {
+    required int64 id = 1;
+}
+
+message DeleteLlmProviderResponse {
+    required bool success = 1;
+}

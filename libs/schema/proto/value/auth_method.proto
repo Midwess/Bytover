@@ -1,0 +1,8 @@
+syntax = "proto2";
+
+package value.auth_method;
+
+enum AuthMethod {
+  GOOGLE = 1;
+  GITHUB = 2;
+}

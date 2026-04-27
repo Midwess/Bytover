@@ -1,0 +1,85 @@
+syntax = "proto2";
+
+package devlog.app_gateway.rpc;
+
+import "value/datetime.proto";
+
+import "devlog/app-gateway/models/payment.proto";
+
+service PaymentService {
+    rpc pay(PaymentRequest) returns (stream PaymentResponse);
+    rpc list_account_statements(ListStatementRequest) returns (ListStatementResponse);
+    rpc list_transactions(ListTransactionsRequest) returns (ListTransactionsResponse);
+}
+
+message DefinedProduct {
+    required string name = 1;
+    required int32 quantity = 2;
+}
+
+message StripePayment {
+    required string payment_intent_id = 1;
+}
+
+message StoreKitPayment {
+    required string transaction_id = 1;
+    required string product_id = 2;
+}
+
+message PaymentRequest {
+    required string idempotency_key = 1;
+    oneof item {
+        DefinedProduct defined_product = 2;
+        StripePayment stripe_payment = 3;
+        StoreKitPayment storekit_payment = 4;
+    }
+}
+
+message PaymentResponse {
+    oneof response_item {
+        string redirect = 1;
+        string error = 2;
+        uint64 completed_statement = 3;
+    }
+}
+
+message PaymentStatement {
+    required uint64 id = 1;
+    required value.datetime.Datetime timestamp = 2;
+    required PaymentRequest request = 3;
+    required uint64 amount = 4;
+    required string currency = 5;
+    required devlog.app_gateway.models.PaymentStatementStatus status = 6;
+    optional string external_id = 7;
+}
+
+message ListStatementRequest {
+    required devlog.app_gateway.models.PaymentAccount account = 1;
+    optional value.datetime.Datetime since = 2;
+    optional int32 limit = 3;
+}
+
+message ListStatementResponse {
+    repeated PaymentStatement statements = 1;
+}
+
+message PaymentTransaction {
+    required uint64 id = 1;
+    required uint64 user_id = 2;
+    required value.datetime.Datetime timestamp = 3;
+    required PaymentRequest request = 4;
+    required uint64 amount = 5;
+    required string currency = 6;
+    required devlog.app_gateway.models.PaymentStatementStatus status = 7;
+    optional string external_id = 8;
+}
+
+message ListTransactionsRequest {
+    optional uint64 from_transaction_id = 1;
+    optional int32 limit = 2;
+}
+
+message ListTransactionsResponse {
+    repeated PaymentTransaction transactions = 1;
+}
+

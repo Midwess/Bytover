@@ -1,0 +1,34 @@
+syntax = "proto2";
+
+package midwess.sandbox_manager.rpc.internal.manager;
+
+import "midwess_ai/api/models/models/sandbox.proto";
+
+service SandboxManagerService {
+    rpc InitProject(InitProjectRequest) returns (InitProjectResponse);
+}
+
+message LlmProviderConfig {
+    required string api_key = 1;
+    required string base_url = 2;
+    required string model_name = 3;
+    optional int32 max_tokens = 4;
+}
+
+message InitProjectRequest {
+    required int64 project_id = 1;
+    optional string prompt = 2;
+    optional LlmProviderConfig llm_provider = 3;
+}
+
+message InitProjectResponse {
+    required int64 sandbox_id = 1;
+    required string status = 2;
+}
+
+message HardwareSpec {
+    required int32 vcpu = 1;
+    required int32 memory = 2;
+    repeated string port_keys = 3;
+    optional string volume_mount_path = 4;
+}

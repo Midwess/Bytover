@@ -1,0 +1,15 @@
+syntax = "proto2";
+
+package devlog.app_gateway.rpc;
+
+service MarkovGeneratorService {
+  rpc generate_name(GenerateNameRequest) returns (GenerateNameResponse);
+}
+
+message GenerateNameRequest {
+  optional int32 max_length = 1;
+}
+
+message GenerateNameResponse {
+  required string name = 1;
+}

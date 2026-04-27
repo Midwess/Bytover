@@ -1,0 +1,22 @@
+syntax = "proto2";
+
+package midwess.api.internal;
+
+import "midwess_ai/api/models/usage_report.proto";
+
+service TokenService {
+    rpc ReportUsage(ReportUsageRequest) returns (ReportUsageResponse);
+}
+
+message ReportUsageRequest {
+    required int64 project_id = 1;
+    oneof event {
+        midwess.api.models.ComputationUsage computation_usage = 2;
+        midwess.api.models.ObservationMemoryUsage observation_memory_usage = 3;
+    }
+}
+
+message ReportUsageResponse {
+    required bool out_of_tokens = 1;
+    required int64 total_consumed_token = 2;
+}

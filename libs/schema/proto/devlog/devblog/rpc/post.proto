@@ -1,0 +1,44 @@
+syntax="proto3";
+
+package devlog.devblog.rpc;
+
+import "devlog/devblog/entities/post.proto";
+import "devlog/devblog/entities/interaction.proto";
+
+service PostService {
+    rpc get(GetPostRequest) returns (GetPostResponse);
+    rpc create(CreatePostRequest) returns (CreatePostResponse);
+    rpc interact(PostInteractionRequest) returns (PostInteractionResponse);
+}
+
+message GetPostRequest {
+    string title = 1;
+}
+
+message GetPostResponse {
+    devlog.devblog.entities.Post post = 1;
+}
+
+message CreatePostRequest {
+    devlog.devblog.entities.Post post = 1;
+}
+
+message CreatePostResponse {
+    devlog.devblog.entities.Post post = 1;
+}
+
+message PostInteractionRequest {
+    string title = 1;
+
+    oneof interaction {
+        devlog.devblog.entities.Like like = 2;
+        devlog.devblog.entities.View view = 3;
+    }
+}
+
+message PostInteractionResponse {
+    oneof interaction_result {
+        int32 total_like_count = 1;
+        int32 total_view_count = 2;
+    }
+}

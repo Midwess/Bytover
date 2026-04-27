@@ -1,0 +1,11 @@
+syntax = "proto2";
+
+package midwess.api.public;
+
+message CreateAgentResponse {
+    required string model_name = 1;
+    required int64 api_key = 2;
+    required string base_url = 3;
+}
+
+message CreateAgentRequest {}

@@ -1,0 +1,77 @@
+syntax = "proto2";
+
+package devlog.bitbridge;
+
+import "devlog/bitbridge/resource.proto";
+import "devlog/bitbridge/peer.proto";
+import "devlog/bitbridge/session.proto";
+
+enum PeerErrorsMessage {
+    InvalidRequest = 1;
+    NoResponse = 2;
+    InvalidPassword = 3;
+    SessionNotFound = 4;
+    ResourceNotFound = 5;
+}
+
+message PeerMessageBody {
+    required string request_id = 1;
+
+    oneof request {
+        IntroduceRequestMessage introduce_request = 2;
+        P2PCancelSessionRequest cancel_request = 4;
+        KeepAliveRequestMessage keep_alive = 5;
+        FecFeedback fec_feedback = 7;
+        ViewSessionDetailRequest view_session_request = 9;
+        DownloadResourceRequest download_resource_request = 10;
+        ResourceNotificationRequest resource_notification = 11;
+    }
+
+    oneof response {
+        IntroduceResponseMessage introduce_response = 30;
+        VoidResponseMessage void_response = 32;
+        PeerErrorsMessage errors = 33;
+        ViewSessionDetailResponse view_session_response = 34;
+    }
+}
+
+message KeepAliveRequestMessage {}
+
+message P2PCancelSessionRequest {
+    required uint64 session_id = 1;
+    optional uint64 resource_id = 2;
+}
+
+message IntroduceRequestMessage {
+    required PeerMessage mine = 1;
+}
+
+message IntroduceResponseMessage {
+    required PeerMessage peer = 1;
+}
+
+message VoidResponseMessage {}
+
+message ViewSessionDetailRequest {
+    required uint64 order_id = 1;
+    optional string password = 2;
+}
+
+message ViewSessionDetailResponse {
+    oneof result {
+        P2PTransferSessionMessage session = 1;
+        ResourceMessage resource_updated = 2;
+        PeerErrorsMessage error = 3;
+    }
+}
+
+message DownloadResourceRequest {
+    required uint64 session_order_id = 1;
+    required uint64 resource_order_id = 2;
+    required uint32 transfer_id = 3;
+}
+
+message ResourceNotificationRequest {
+    required uint64 session_order_id = 1;
+    optional ResourceMessage resource = 2;
+}

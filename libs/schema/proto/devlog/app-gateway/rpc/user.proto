@@ -1,0 +1,32 @@
+syntax = "proto2";
+
+import "devlog/app-gateway/models/user.proto";
+import "devlog/app-gateway/models/device.proto";
+import "devlog/app-gateway/models/application.proto";
+
+package devlog.app_gateway.rpc;
+
+service UserService {
+  // Using token in header to return user
+  rpc me(MeRequest) returns (MeResponse);
+}
+
+message VerifyResponse {
+  optional devlog.app_gateway.models.User user = 1;
+}
+
+message MeRequest {
+  message Condition {
+    oneof condition {
+       string match_app_name = 1;
+    } 
+  }
+
+  repeated Condition conditions = 1;
+}
+
+message MeResponse {
+    required devlog.app_gateway.models.User user = 1;
+    required devlog.app_gateway.models.Device device = 2;
+    required devlog.app_gateway.models.Application app = 3;
+}

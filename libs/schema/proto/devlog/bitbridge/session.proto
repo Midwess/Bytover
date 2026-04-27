@@ -1,0 +1,12 @@
+syntax = "proto2";
+
+package devlog.bitbridge;
+
+import "devlog/bitbridge/peer.proto";
+import "devlog/bitbridge/resource.proto";
+
+message P2PTransferSessionMessage {
+  required uint64 order_id = 1;
+  optional string description = 2;
+  required bool password_protected = 3;
+}

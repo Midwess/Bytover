@@ -1,0 +1,16 @@
+syntax = "proto2";
+
+package value.static_resource;
+
+message S3Path {
+  required string bucket = 1;
+  required string prefix = 2;
+}
+
+message StaticResource {
+  oneof source {
+    string url = 1;
+    string path = 2;
+    S3Path s3_path = 3;
+  }
+}

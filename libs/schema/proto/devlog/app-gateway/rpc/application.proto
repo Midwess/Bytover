@@ -1,0 +1,28 @@
+syntax = "proto2";
+
+package devlog.app_gateway.rpc;
+
+import "devlog/app-gateway/models/application.proto";
+
+service ApplicationService {
+  // This generate avatar will returning a new random avatar if user is not signin yet
+  // If the user is signed in, it will always return the user avatar
+  rpc get_avatar(GenerateRandomAvatarRequest) returns (GenerateRandomAvatarResponse);
+  rpc get_application_info(GetApplicationInfoRequest) returns (GetApplicationInfoResponse);
+}
+
+message GetApplicationInfoRequest {
+  required string app_name = 1;
+}
+
+message GetApplicationInfoResponse {
+  optional devlog.app_gateway.models.Application app = 1;
+}
+
+message GenerateRandomAvatarRequest {
+  optional string app_name = 1;
+}
+
+message GenerateRandomAvatarResponse {
+  optional string avatar = 1;
+}

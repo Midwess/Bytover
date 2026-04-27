@@ -1,0 +1,31 @@
+syntax = "proto2";
+
+package devlog.bitbridge;
+
+enum Plan {
+    PLAN_UNSPECIFIED = 0;
+    PLAN_FREE = 1;
+    PLAN_PAID = 2;
+}
+
+message TransferLimits {
+    required bool password_encryption_allowed = 1;
+    required uint32 max_files_per_transfer = 2;
+    required uint64 total_transfer_bytes_lifetime_cap = 3;
+}
+
+message TransferUsage {
+    required uint64 total_transfer_bytes_used = 1;
+}
+
+message PresentationLimits {
+    required uint32 max_visible_shelves = 1;
+}
+
+message Capabilities {
+    required Plan plan = 1;
+    required TransferLimits transfer_limits = 2;
+    required TransferUsage transfer_usage = 3;
+    required PresentationLimits presentation = 4;
+    required uint32 capabilities_version = 6;
+}

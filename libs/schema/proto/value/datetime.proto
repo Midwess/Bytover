@@ -1,0 +1,8 @@
+syntax = "proto2";
+
+package value.datetime;
+
+message Datetime {
+    required int64 utc_timestamp = 1;
+    required int64 since = 2;
+}

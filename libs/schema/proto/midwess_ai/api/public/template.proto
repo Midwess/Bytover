@@ -1,0 +1,26 @@
+syntax = "proto2";
+
+package midwess.api.public;
+
+import "midwess_ai/api/models/models/template.proto";
+
+service TemplateService {
+    rpc Get(GetTemplateRequest) returns (GetTemplateResponse);
+    rpc List(ListTemplatesRequest) returns (ListTemplatesResponse);
+}
+
+message GetTemplateRequest {
+    required int64 id = 1;
+}
+
+message GetTemplateResponse {
+    optional midwess.api.models.Template template = 1;
+}
+
+message ListTemplatesRequest {
+    required int64 workspace_id = 1;
+}
+
+message ListTemplatesResponse {
+    repeated midwess.api.models.Template templates = 1;
+}
