@@ -216,18 +216,16 @@ impl RtcClient {
             }
         }
 
-        let sctp_transport = SctpTransportConfig::default()
+        let sctp_direct = SctpTransportConfig::default()
             .with_max_init_retransmits(None)
-            .with_max_data_retransmits(None)
-            .with_max_cwnd_bytes(Some(400_000))
-            .with_rack_reo_wnd_floor(Duration::from_millis(700))
-            .with_rto_min_ms(2500);
+            .with_max_data_retransmits(None);
+        let sctp_relay = SctpTransportConfig::for_relay();
 
         let mut rtc = RtcConfig::default()
             .set_sctp_max_message_size(256 * 1024)
             .set_sctp_buffer_size(5 * 1024 * 1024)
-            .set_stats_interval(Some(std::time::Duration::from_secs(10)))
-            .set_sctp_transport_config(sctp_transport)
+            .set_stats_interval(Some(Duration::from_secs(10)))
+            .set_sctp_transport_configs(sctp_direct, sctp_relay)
             .build(Instant::now());
         let mut local_v4_addr = None;
         let mut local_v6_addr = None;
@@ -462,15 +460,37 @@ impl RtcClient {
                     }
 
                     if let Event::PeerStats(s) = &event {
-                        log::info!(
-                            "[rtc-client] peer-stats peer_bytes_tx={} peer_bytes_rx={} bwe_tx={:?} egress_loss={:?} ingress_loss={:?} rtt={:?}",
-                            s.peer_bytes_tx,
-                            s.peer_bytes_rx,
-                            s.bwe_tx,
-                            s.egress_loss_fraction,
-                            s.ingress_loss_fraction,
-                            s.rtt,
-                        );
+                        if let Some(snap) = self.rtc.borrow().sctp_snapshot() {
+                            log::info!(
+                                "[rtc-client] peer-stats peer_bytes_tx={} peer_bytes_rx={} bwe_tx={:?} egress_loss={:?} ingress_loss={:?} rtt={:?} sctp_cwnd={} ssthresh={} srtt_ms={} rack_marks={} t3={} fr={} pending={}B/{}c inflight={}B/{}c",
+                                s.peer_bytes_tx,
+                                s.peer_bytes_rx,
+                                s.bwe_tx,
+                                s.egress_loss_fraction,
+                                s.ingress_loss_fraction,
+                                s.rtt,
+                                snap.cwnd,
+                                snap.ssthresh,
+                                snap.srtt_ms,
+                                snap.n_rack_loss_marks,
+                                snap.n_t3timeouts,
+                                snap.in_fast_recovery,
+                                snap.pending_bytes,
+                                snap.pending_chunks,
+                                snap.inflight_bytes,
+                                snap.inflight_chunks,
+                            );
+                        } else {
+                            log::info!(
+                                "[rtc-client] peer-stats peer_bytes_tx={} peer_bytes_rx={} bwe_tx={:?} egress_loss={:?} ingress_loss={:?} rtt={:?}",
+                                s.peer_bytes_tx,
+                                s.peer_bytes_rx,
+                                s.bwe_tx,
+                                s.egress_loss_fraction,
+                                s.ingress_loss_fraction,
+                                s.rtt,
+                            );
+                        }
                         if let Some(pair) = &s.selected_candidate_pair {
                             let relayed = self
                                 .turn

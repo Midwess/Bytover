@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "Bytover"
-version = "1.0.0"
+version = "1.0.2"
 dependencies = [
  "async-trait",
  "cacao",
@@ -5045,7 +5045,7 @@ dependencies = [
 [[package]]
 name = "is"
 version = "0.8.0"
-source = "git+https://github.com/Midwess/str0m.git#09eadd0203fbdc20edb43d5421d57da9d08aa27d"
+source = "git+https://github.com/Midwess/str0m.git#0c0ce40aa13b5b8e41ac3e7ccdfda4a3e741c3ba"
 dependencies = [
  "crc",
  "serde",
@@ -8480,8 +8480,8 @@ dependencies = [
 
 [[package]]
 name = "sctp-proto"
-version = "0.9.1"
-source = "git+https://github.com/Midwess/sctp-proto.git#51fa4467c24648cb61a13bc20e8d5954c6e6b27b"
+version = "0.10.5"
+source = "git+https://github.com/Midwess/sctp-proto.git#de3cbf3c0c0500d377fa98c0f30930882c49b151"
 dependencies = [
  "bytes",
  "crc",
@@ -9559,8 +9559,8 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "str0m"
-version = "0.18.0"
-source = "git+https://github.com/Midwess/str0m.git#09eadd0203fbdc20edb43d5421d57da9d08aa27d"
+version = "0.18.2"
+source = "git+https://github.com/Midwess/str0m.git#0c0ce40aa13b5b8e41ac3e7ccdfda4a3e741c3ba"
 dependencies = [
  "arrayvec",
  "base64ct",
@@ -9580,7 +9580,7 @@ dependencies = [
 [[package]]
 name = "str0m-aws-lc-rs"
 version = "0.3.0"
-source = "git+https://github.com/Midwess/str0m.git#09eadd0203fbdc20edb43d5421d57da9d08aa27d"
+source = "git+https://github.com/Midwess/str0m.git#0c0ce40aa13b5b8e41ac3e7ccdfda4a3e741c3ba"
 dependencies = [
  "aws-lc-rs",
  "dimpl",
@@ -9591,7 +9591,7 @@ dependencies = [
 [[package]]
 name = "str0m-proto"
 version = "0.4.0"
-source = "git+https://github.com/Midwess/str0m.git#09eadd0203fbdc20edb43d5421d57da9d08aa27d"
+source = "git+https://github.com/Midwess/str0m.git#0c0ce40aa13b5b8e41ac3e7ccdfda4a3e741c3ba"
 dependencies = [
  "base64ct",
  "dimpl",
