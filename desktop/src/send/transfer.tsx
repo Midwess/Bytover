@@ -37,17 +37,17 @@ import {UpgradeButton} from "@/send/upgrade-button"
 export function Transfer({ shelfId, forceUpdate }: { shelfId: string | undefined; forceUpdate: UpdateStatus | null }) {
     const isUpdateBlocked = forceUpdate?.is_critical === true
     return (
-        <div className="flex w-[208px] flex-col gap-6 h-full overflow-hidden">
+        <div className="flex w-[206px] flex-col gap-6 h-full overflow-hidden">
             <Slide
                 delay={240}
                 direction={"left"}
                 offset={380}
                 className="h-full flex">
                 <Tabs defaultValue="quick" className="items-start flex flex-col h-full">
-                    <TabsList className={"ml-2 rounded-xl border-2 shadow-background shadow-sm"}>
-                        <TabsTab value="quick" className="w-[64px] px-1"><Zap/> Quick</TabsTab>
-                        <TabsTab value="public" className="w-[64px] px-1"><Globe/> Cloud</TabsTab>
-                        <TabsTab value="email" className="w-[64px] px-1"><Mail/> Email</TabsTab>
+                    <TabsList className={"ml-2 rounded-xl border-2 shadow-background shadow-xs"}>
+                        <TabsTab value="quick" className="w-[63px] px-1"><Zap/> Quick</TabsTab>
+                        <TabsTab value="public" className="w-[63px] px-1"><Globe/> Cloud</TabsTab>
+                        <TabsTab value="email" className="w-[63px] px-1"><Mail/> Email</TabsTab>
                     </TabsList>
                     <div
                         className="pl-2 border-none bg-transparent relative w-full flex-1 flex flex-col min-h-0 overflow-hidden">

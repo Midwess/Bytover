@@ -131,6 +131,7 @@ fn build_turn_interfaces(
             v6_only: false,
             send_buffer_size,
             recv_buffer_size,
+            listener_count: 0,
         });
     }
     if let Some(ipv6) = public_addresses.ipv6 {
@@ -143,6 +144,7 @@ fn build_turn_interfaces(
             v6_only: true,
             send_buffer_size,
             recv_buffer_size,
+            listener_count: 0,
         });
     }
     if interfaces.is_empty() {
