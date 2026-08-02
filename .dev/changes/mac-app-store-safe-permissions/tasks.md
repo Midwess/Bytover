@@ -1,10 +1,10 @@
 # Tasks: mac-app-store-safe-permissions
 
-## Progress: [0/14]
+## Progress: [1/14]
 
 ## 1. Distribution Boundary
 
-- [ ] 1.1 Add the `mac-app-store` Cargo feature and reject unsupported target combinations.
+- [x] 1.1 Add the `mac-app-store` Cargo feature and reject unsupported target combinations.
 - [ ] 1.2 Extract a pure startup policy that describes allowed permission and monitor behavior for each build.
 - [ ] 1.3 Compile permission prompting and System Settings launches out of the Mac App Store build.
 - [ ] 1.4 Compile global mouse/input and drag-pasteboard monitor startup out of the Mac App Store build.
@@ -33,4 +33,3 @@
 ## Notes
 
 Do not replace the removed global monitor with a different system-wide API in this change.
-

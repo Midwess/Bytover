@@ -1,3 +1,6 @@
+#[cfg(all(feature = "mac-app-store", not(target_os = "macos")))]
+compile_error!("the mac-app-store feature is supported only for macOS targets");
+
 use crate::api::bridge::BridgeImpl;
 use crate::api::path_resolver::PathResolverImpl;
 use crate::extensions::AppHandleExt;
