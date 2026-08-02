@@ -3,12 +3,13 @@ compile_error!("the mac-app-store feature is supported only for macOS targets");
 
 use crate::api::bridge::BridgeImpl;
 use crate::api::path_resolver::PathResolverImpl;
-#[cfg(not(feature = "mac-app-store"))]
-use crate::distribution::{startup_policy, DesktopDistribution};
+use crate::distribution::current_startup_policy;
 use crate::extensions::AppHandleExt;
 #[cfg(not(feature = "mac-app-store"))]
 use crate::mouse_tracking::{check_accessibility_permission, check_input_monitoring_permission};
-use crate::mouse_tracking::{notify_user_did_drop, start_mouse_monitor, MouseMonitorConfig};
+use crate::mouse_tracking::notify_user_did_drop;
+#[cfg(not(feature = "mac-app-store"))]
+use crate::mouse_tracking::{start_mouse_monitor, MouseMonitorConfig};
 use crate::thumbnail::generate_thumbnail;
 use core_services::logger;
 use crux_core::Core;
@@ -1162,10 +1163,18 @@ pub async fn run() {
                 }
             });
 
+            let startup_policy = current_startup_policy();
+            log::info!(
+                "desktop startup policy — privileged permissions: {}, permission settings: {}, global input monitor: {}, drag pasteboard monitor: {}",
+                startup_policy.requests_privileged_permissions(),
+                startup_policy.opens_permission_settings(),
+                startup_policy.starts_global_input_monitor(),
+                startup_policy.starts_drag_pasteboard_monitor()
+            );
+
             #[cfg(not(feature = "mac-app-store"))]
             {
-                let policy = startup_policy(DesktopDistribution::Direct);
-                if policy.requests_privileged_permissions() {
+                if startup_policy.requests_privileged_permissions() {
                     let accessibility_granted = check_accessibility_permission(true);
                     let input_monitoring_granted = check_input_monitoring_permission(true);
                     log::info!(
@@ -1175,7 +1184,7 @@ pub async fn run() {
                     );
 
                     #[cfg(target_os = "macos")]
-                    if policy.opens_permission_settings() {
+                    if startup_policy.opens_permission_settings() {
                         if !accessibility_granted {
                             log::warn!("Accessibility not granted — opening System Settings pane");
                             let _ = std::process::Command::new("open")
@@ -1192,9 +1201,16 @@ pub async fn run() {
                 }
             }
 
-            start_mouse_monitor(MouseMonitorConfig::default(), handle.clone());
-            #[cfg(target_os = "macos")]
-            mouse_tracking::start_macos_drag_pasteboard_monitor();
+            #[cfg(not(feature = "mac-app-store"))]
+            {
+                if startup_policy.starts_global_input_monitor() {
+                    start_mouse_monitor(MouseMonitorConfig::default(), handle.clone());
+                }
+                #[cfg(target_os = "macos")]
+                if startup_policy.starts_drag_pasteboard_monitor() {
+                    mouse_tracking::start_macos_drag_pasteboard_monitor();
+                }
+            }
 
             Ok(())
         })

@@ -1,4 +1,5 @@
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[allow(dead_code)]
 pub(crate) enum DesktopDistribution {
     Direct,
     MacAppStore,
@@ -31,6 +32,14 @@ pub(crate) const fn startup_policy(distribution: DesktopDistribution) -> Startup
     StartupPolicy {
         allows_privileged_startup: matches!(distribution, DesktopDistribution::Direct),
     }
+}
+
+pub(crate) const fn current_startup_policy() -> StartupPolicy {
+    #[cfg(feature = "mac-app-store")]
+    return startup_policy(DesktopDistribution::MacAppStore);
+
+    #[cfg(not(feature = "mac-app-store"))]
+    startup_policy(DesktopDistribution::Direct)
 }
 
 #[cfg(test)]

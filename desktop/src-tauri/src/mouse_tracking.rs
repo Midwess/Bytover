@@ -1,13 +1,18 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
+#[cfg(not(feature = "mac-app-store"))]
 use crate::extensions::{AppHandleExt, OpenedShelf};
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", not(feature = "mac-app-store")))]
 use rdev::{set_is_main_thread, Button, EventType, Key};
-#[cfg(not(target_os = "macos"))]
+#[cfg(all(not(target_os = "macos"), not(feature = "mac-app-store")))]
 use rdev::{Button, EventType, Key};
+#[cfg(not(feature = "mac-app-store"))]
 use std::thread;
+#[cfg(not(feature = "mac-app-store"))]
 use std::thread::sleep;
+#[cfg(not(feature = "mac-app-store"))]
 use std::time::{Duration, Instant};
+#[cfg(not(feature = "mac-app-store"))]
 use tauri::{AppHandle, Manager, PhysicalPosition};
 
 /// Check if the app has accessibility permission on macOS.
@@ -125,23 +130,27 @@ pub fn check_input_monitoring_permission(_prompt: bool) -> bool {
 
 static USER_DID_DROP: AtomicBool = AtomicBool::new(false);
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", not(feature = "mac-app-store")))]
 static MACOS_DRAG_HAS_ITEMS: AtomicBool = AtomicBool::new(false);
 
+#[cfg(not(feature = "mac-app-store"))]
 static DRAG_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 pub fn notify_user_did_drop() {
     USER_DID_DROP.store(true, Ordering::SeqCst);
 }
 
+#[cfg(not(feature = "mac-app-store"))]
 pub fn drag_start_gesture() {
     DRAG_ACTIVE.store(true, Ordering::SeqCst);
 }
 
+#[cfg(not(feature = "mac-app-store"))]
 pub fn drag_end_gesture() {
     DRAG_ACTIVE.store(false, Ordering::SeqCst);
 }
 
+#[cfg(not(feature = "mac-app-store"))]
 pub fn detect_drag(_start: &PhysicalPosition<f64>, _current: &PhysicalPosition<f64>) -> bool {
     if !DRAG_ACTIVE.load(Ordering::SeqCst) {
         return false;
@@ -196,7 +205,7 @@ pub fn detect_drag(_start: &PhysicalPosition<f64>, _current: &PhysicalPosition<f
     }
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", not(feature = "mac-app-store")))]
 pub fn start_macos_drag_pasteboard_monitor() {
     use cacao::pasteboard::{Pasteboard, PasteboardName};
     use dispatch::Queue;
@@ -231,6 +240,7 @@ pub fn start_macos_drag_pasteboard_monitor() {
     });
 }
 
+#[cfg(not(feature = "mac-app-store"))]
 #[derive(Debug, Clone)]
 pub struct MouseMonitorConfig {
     pub required_shakes: u32,
@@ -238,6 +248,7 @@ pub struct MouseMonitorConfig {
     pub min_changed: f64,
 }
 
+#[cfg(not(feature = "mac-app-store"))]
 impl Default for MouseMonitorConfig {
     fn default() -> Self {
         #[cfg(target_os = "windows")]
@@ -253,6 +264,7 @@ impl Default for MouseMonitorConfig {
     }
 }
 
+#[cfg(not(feature = "mac-app-store"))]
 pub fn start_mouse_monitor(config: MouseMonitorConfig, app_handle: AppHandle) {
     let mut last_sampling = Instant::now();
     let sampling_interval = Duration::from_millis(50);
