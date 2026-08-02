@@ -1,6 +1,6 @@
 # Tasks: mac-app-store-safe-permissions
 
-## Progress: [7/14]
+## Progress: [8/14]
 
 ## 1. Distribution Boundary
 
@@ -14,7 +14,7 @@
 
 - [x] 2.1 Enable `mac-app-store` only in the `build-macos-appstore` workflow invocation.
 - [x] 2.2 Add a verifiable App Store distribution marker to the packaged artifact.
-- [ ] 2.3 Audit App Store Info.plist, configuration, and entitlements for permission descriptions or privileged capabilities.
+- [x] 2.3 Audit App Store Info.plist, configuration, and entitlements for permission descriptions or privileged capabilities.
 - [ ] 2.4 Add CI assertions for the feature marker, prohibited usage descriptions, and prohibited entitlements.
 
 ## 3. Verification

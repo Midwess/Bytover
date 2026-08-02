@@ -406,6 +406,13 @@ jobs:
           else
             plutil -insert BytoverDistributionChannel -string "mac-app-store" "$INFO"
           fi
+          # These descriptions belong only to the direct-download build. The App Store
+          # feature compiles out the corresponding privileged behavior.
+          for KEY in NSAccessibilityUsageDescription NSInputMonitoringUsageDescription NSAppleEventsUsageDescription; do
+            if plutil -extract "$KEY" raw "$INFO" >/dev/null 2>&1; then
+              plutil -remove "$KEY" "$INFO"
+            fi
+          done
           plutil -lint "$INFO"
           echo "ITSAppUsesNonExemptEncryption=$(plutil -extract ITSAppUsesNonExemptEncryption raw "$INFO")"
           echo "BytoverDistributionChannel=$(plutil -extract BytoverDistributionChannel raw "$INFO")"

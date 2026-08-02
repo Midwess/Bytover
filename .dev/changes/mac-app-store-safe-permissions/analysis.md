@@ -55,3 +55,9 @@ Task 1.5 verified the existing local resource-selection paths after the global m
 - `desktop/src-tauri/src/lib.rs::add_resources` converts the Tauri-provided paths directly into `ResourceSelection` values and dispatches `ShelfEvent::AddResources`.
 - The HTML drag/drop fallback invokes `add_resources_from_drag_pasteboard`, which reads the current drag pasteboard directly and does not require `start_mouse_monitor` or `start_macos_drag_pasteboard_monitor` to be running.
 - No user-facing system file-picker implementation exists in the current desktop source, so there is no existing picker path coupled to the removed monitoring infrastructure. This proposal preserves the existing Tauri drag/drop selection behavior and does not add a new picker.
+
+## App Store Metadata Audit
+
+Task 2.3 found that the base `Info.plist` intentionally contains Accessibility, Input Monitoring, and Apple Events usage descriptions for the direct-download build. Because the App Store overlay is applied after the base bundle is produced, those keys would otherwise remain in the App Store artifact. The App Store packaging step now removes all three keys before re-signing.
+
+The App Store entitlements contain only sandbox, application/team identity, network client/server, user-selected file access, and app-scoped bookmark entries. No Apple Events, Accessibility, temporary-exception, library-validation bypass, unsigned-memory, or other privileged entitlement is present. `tauri.conf.appstore.json` references only this entitlement file and the embedded distribution profile.
