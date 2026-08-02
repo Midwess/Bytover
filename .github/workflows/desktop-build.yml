@@ -401,8 +401,14 @@ jobs:
           else
             plutil -insert ITSAppUsesNonExemptEncryption -bool NO "$INFO"
           fi
+          if plutil -extract BytoverDistributionChannel raw "$INFO" >/dev/null 2>&1; then
+            plutil -replace BytoverDistributionChannel -string "mac-app-store" "$INFO"
+          else
+            plutil -insert BytoverDistributionChannel -string "mac-app-store" "$INFO"
+          fi
           plutil -lint "$INFO"
           echo "ITSAppUsesNonExemptEncryption=$(plutil -extract ITSAppUsesNonExemptEncryption raw "$INFO")"
+          echo "BytoverDistributionChannel=$(plutil -extract BytoverDistributionChannel raw "$INFO")"
 
           # Verify the privacy manifest landed in Resources/ via tauri.conf.appstore.json.
           MANIFEST="$APP/Contents/Resources/PrivacyInfo.xcprivacy"
