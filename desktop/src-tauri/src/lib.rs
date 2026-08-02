@@ -934,6 +934,11 @@ pub async fn run() {
         }));
     }
 
+    #[cfg(not(feature = "mac-app-store"))]
+    {
+        builder = builder.plugin(tauri_plugin_global_shortcut::Builder::new().build());
+    }
+
     builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_drag::init())
@@ -943,7 +948,6 @@ pub async fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             authenticate,

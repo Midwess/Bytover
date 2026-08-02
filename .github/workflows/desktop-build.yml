@@ -408,6 +408,13 @@ jobs:
             echo "::error::App executable was not compiled with the mac-app-store feature"
             exit 1
           fi
+          UNDEFINED_SYMBOLS="$RUNNER_TEMP/bytover-appstore-undefined-symbols.txt"
+          nm -u "$BINARY" > "$UNDEFINED_SYMBOLS"
+          PROHIBITED_INPUT_SYMBOLS='_(AXIsProcessTrustedWithOptions|CGEventTapCreate|CGEventTapEnable|CGPreflightListenEventAccess|CGRequestListenEventAccess|IOHIDCheckAccess|IOHIDRequestAccess|RegisterEventHotKey)'
+          if grep -E "$PROHIBITED_INPUT_SYMBOLS" "$UNDEFINED_SYMBOLS"; then
+            echo "::error::App executable links a prohibited permission or global-input API"
+            exit 1
+          fi
 
           # Merge ITSAppUsesNonExemptEncryption=false into the bundled Info.plist.
           # Bytover qualifies for the EAR 740.17(b)(1) exemption - see SIGNING.md.

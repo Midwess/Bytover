@@ -154,7 +154,7 @@ The App Store job is the only build that enables the Cargo feature `mac-app-stor
 - The executable embeds `BYTOVER_DISTRIBUTION_CHANNEL=mac-app-store`, and the package `Info.plist` contains `BytoverDistributionChannel=mac-app-store`.
 - App Store packaging removes `NSAccessibilityUsageDescription`, `NSInputMonitoringUsageDescription`, and `NSAppleEventsUsageDescription` before the bundle is re-signed.
 
-CI rejects the App Store artifact if its compiled marker or package marker is wrong, a prohibited usage description remains, App Sandbox is missing, or a privileged entitlement is present. The prohibited entitlement list includes Apple Events automation/temporary exceptions, library-validation bypass, unsigned executable memory, and `get-task-allow`.
+CI rejects the App Store artifact if its compiled marker or package marker is wrong, the executable links a permission-request/global-input API, a prohibited usage description remains, App Sandbox is missing, or a privileged entitlement is present. The symbol audit covers Accessibility trust prompts, Input Monitoring access, event taps, and Carbon global hotkeys. The prohibited entitlement list includes Apple Events automation/temporary exceptions, library-validation bypass, unsigned executable memory, and `get-task-allow`.
 
 ### Prerequisites
 
@@ -300,6 +300,7 @@ When adding a new usage string: name the user-visible feature (not the abstract 
 The `Inject App Store Info.plist keys & re-sign` step asserts:
 
 - The executable contains `BYTOVER_DISTRIBUTION_CHANNEL=mac-app-store` and `Info.plist` contains the matching `BytoverDistributionChannel` value.
+- The executable does not import Accessibility/Input Monitoring request APIs, Core Graphics event-tap APIs, or Carbon global-hotkey registration.
 - The packaged `Info.plist` does not contain Accessibility, Input Monitoring, or Apple Events usage descriptions.
 - `plutil -lint` against both `Info.plist` (post-merge) and `PrivacyInfo.xcprivacy`.
 - `[ -f "$APP/Contents/Resources/PrivacyInfo.xcprivacy" ]` — fails if the manifest is missing from the bundle.

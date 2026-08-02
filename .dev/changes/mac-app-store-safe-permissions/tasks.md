@@ -36,7 +36,7 @@ Do not replace the removed global monitor with a different system-wide API in th
 
 Task 1.5 found no existing user-facing system file picker in the desktop source. Existing selection was Tauri window drag/drop plus its drag-pasteboard fallback; both are independent of global monitor startup. Task 3.4 subsequently added an explicit native picker through that same resource-selection path.
 
-Task 2.4 verifies the compiled App Store marker, the packaged distribution marker, absence of privileged usage descriptions, sandbox enablement, and absence of prohibited entitlements after signing.
+Task 2.4 verifies the compiled App Store marker, absence of permission/global-input symbols, the packaged distribution marker, absence of privileged usage descriptions, sandbox enablement, and absence of prohibited entitlements after signing.
 
 Task 3.1 covers the explicit direct-download and App Store policies plus the policy and marker selected by each compiled feature configuration.
 
