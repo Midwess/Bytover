@@ -3,7 +3,7 @@ compile_error!("the mac-app-store feature is supported only for macOS targets");
 
 use crate::api::bridge::BridgeImpl;
 use crate::api::path_resolver::PathResolverImpl;
-use crate::distribution::current_startup_policy;
+use crate::distribution::{current_startup_policy, DISTRIBUTION_MARKER};
 use crate::extensions::AppHandleExt;
 #[cfg(not(feature = "mac-app-store"))]
 use crate::mouse_tracking::{check_accessibility_permission, check_input_monitoring_permission};
@@ -1165,7 +1165,8 @@ pub async fn run() {
 
             let startup_policy = current_startup_policy();
             log::info!(
-                "desktop startup policy — privileged permissions: {}, permission settings: {}, global input monitor: {}, drag pasteboard monitor: {}",
+                "{} — privileged permissions: {}, permission settings: {}, global input monitor: {}, drag pasteboard monitor: {}",
+                DISTRIBUTION_MARKER,
                 startup_policy.requests_privileged_permissions(),
                 startup_policy.opens_permission_settings(),
                 startup_policy.starts_global_input_monitor(),

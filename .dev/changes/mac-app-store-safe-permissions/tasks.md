@@ -1,6 +1,6 @@
 # Tasks: mac-app-store-safe-permissions
 
-## Progress: [8/14]
+## Progress: [9/14]
 
 ## 1. Distribution Boundary
 
@@ -15,7 +15,7 @@
 - [x] 2.1 Enable `mac-app-store` only in the `build-macos-appstore` workflow invocation.
 - [x] 2.2 Add a verifiable App Store distribution marker to the packaged artifact.
 - [x] 2.3 Audit App Store Info.plist, configuration, and entitlements for permission descriptions or privileged capabilities.
-- [ ] 2.4 Add CI assertions for the feature marker, prohibited usage descriptions, and prohibited entitlements.
+- [x] 2.4 Add CI assertions for the feature marker, prohibited usage descriptions, and prohibited entitlements.
 
 ## 3. Verification
 
@@ -35,3 +35,5 @@
 Do not replace the removed global monitor with a different system-wide API in this change.
 
 Task 1.5 found no existing user-facing system file picker in the desktop source. Existing selection is Tauri window drag/drop plus its drag-pasteboard fallback; both are independent of global monitor startup.
+
+Task 2.4 verifies the compiled App Store marker, the packaged distribution marker, absence of privileged usage descriptions, sandbox enablement, and absence of prohibited entitlements after signing.

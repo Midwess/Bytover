@@ -387,9 +387,20 @@ jobs:
           fi
 
           INFO="$APP/Contents/Info.plist"
+          BINARY="$APP/Contents/MacOS/Bytover"
           OVERLAY="desktop/src-tauri/Info.appstore.plist"
           if [ ! -f "$OVERLAY" ]; then
             echo "::error::Overlay file missing at $OVERLAY"
+            exit 1
+          fi
+          if [ ! -x "$BINARY" ]; then
+            echo "::error::App executable missing at $BINARY"
+            exit 1
+          fi
+          BINARY_STRINGS="$RUNNER_TEMP/bytover-appstore-binary-strings.txt"
+          strings "$BINARY" > "$BINARY_STRINGS"
+          if ! grep -Fq "BYTOVER_DISTRIBUTION_CHANNEL=mac-app-store" "$BINARY_STRINGS"; then
+            echo "::error::App executable was not compiled with the mac-app-store feature"
             exit 1
           fi
 
@@ -416,6 +427,16 @@ jobs:
           plutil -lint "$INFO"
           echo "ITSAppUsesNonExemptEncryption=$(plutil -extract ITSAppUsesNonExemptEncryption raw "$INFO")"
           echo "BytoverDistributionChannel=$(plutil -extract BytoverDistributionChannel raw "$INFO")"
+          if [ "$(plutil -extract BytoverDistributionChannel raw "$INFO")" != "mac-app-store" ]; then
+            echo "::error::Incorrect or missing BytoverDistributionChannel in $INFO"
+            exit 1
+          fi
+          for KEY in NSAccessibilityUsageDescription NSInputMonitoringUsageDescription NSAppleEventsUsageDescription; do
+            if plutil -extract "$KEY" raw "$INFO" >/dev/null 2>&1; then
+              echo "::error::Prohibited App Store usage description remains: $KEY"
+              exit 1
+            fi
+          done
 
           # Verify the privacy manifest landed in Resources/ via tauri.conf.appstore.json.
           MANIFEST="$APP/Contents/Resources/PrivacyInfo.xcprivacy"
@@ -432,7 +453,24 @@ jobs:
             --sign "$APPLE_SIGNING_IDENTITY" \
             "$APP"
           codesign --verify --deep --strict --verbose=2 "$APP"
-          codesign -d --entitlements - --xml "$APP" >/dev/null
+          ACTUAL_ENTITLEMENTS="$RUNNER_TEMP/bytover-appstore-entitlements.plist"
+          codesign -d --entitlements :- "$APP" > "$ACTUAL_ENTITLEMENTS"
+          plutil -lint "$ACTUAL_ENTITLEMENTS"
+          if [ "$(plutil -extract com.apple.security.app-sandbox raw "$ACTUAL_ENTITLEMENTS")" != "true" ]; then
+            echo "::error::App sandbox entitlement is missing from the signed artifact"
+            exit 1
+          fi
+          for KEY in \
+            com.apple.security.automation.apple-events \
+            com.apple.security.temporary-exception.apple-events \
+            com.apple.security.cs.disable-library-validation \
+            com.apple.security.cs.allow-unsigned-executable-memory \
+            com.apple.security.get-task-allow; do
+            if plutil -extract "$KEY" raw "$ACTUAL_ENTITLEMENTS" >/dev/null 2>&1; then
+              echo "::error::Prohibited entitlement remains in App Store artifact: $KEY"
+              exit 1
+            fi
+          done
           echo "Re-sign verified."
 
       - name: Build Tauri App (Windows / Linux)

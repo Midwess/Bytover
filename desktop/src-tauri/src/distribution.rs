@@ -1,3 +1,8 @@
+#[cfg(feature = "mac-app-store")]
+pub(crate) const DISTRIBUTION_MARKER: &str = "BYTOVER_DISTRIBUTION_CHANNEL=mac-app-store";
+#[cfg(not(feature = "mac-app-store"))]
+pub(crate) const DISTRIBUTION_MARKER: &str = "BYTOVER_DISTRIBUTION_CHANNEL=direct";
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[allow(dead_code)]
 pub(crate) enum DesktopDistribution {
