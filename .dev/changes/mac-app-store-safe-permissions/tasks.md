@@ -1,6 +1,6 @@
 # Tasks: mac-app-store-safe-permissions
 
-## Progress: [10/14]
+## Progress: [11/14]
 
 ## 1. Distribution Boundary
 
@@ -20,7 +20,7 @@
 ## 3. Verification
 
 - [x] 3.1 Add unit tests for direct-download and App Store startup policies.
-- [ ] 3.2 Compile/check both the default and `mac-app-store` feature configurations.
+- [x] 3.2 Compile/check both the default and `mac-app-store` feature configurations.
 - [ ] 3.3 Launch the signed App Store artifact on a clean macOS account and record that no permission or System Settings UI appears.
 - [ ] 3.4 Verify in-window drag/drop and file selection still complete a transfer setup without privileged access.
 
@@ -39,3 +39,5 @@ Task 1.5 found no existing user-facing system file picker in the desktop source.
 Task 2.4 verifies the compiled App Store marker, the packaged distribution marker, absence of privileged usage descriptions, sandbox enablement, and absence of prohibited entitlements after signing.
 
 Task 3.1 covers the explicit direct-download and App Store policies plus the policy and marker selected by each compiled feature configuration.
+
+Task 3.2 passes `cargo check -p Bytover` with and without `--features mac-app-store`. Both configurations retain four pre-existing warnings and report no errors.
