@@ -263,19 +263,43 @@ async fn submit_token(token: String, app_handle: AppHandle) {
     process_event(AuthenticationEvent::OnRedirected { url }, app_handle).await;
 }
 
-#[tauri::command]
-async fn add_resources(shelf_id: String, paths: Vec<String>, app_handle: AppHandle) {
-    notify_user_did_drop();
-    let shelf_id = shelf_id.parse::<u64>().unwrap_or_default();
-    let selections = paths
+fn resource_selections_from_paths(paths: Vec<String>) -> Vec<ResourceSelection> {
+    paths
         .into_iter()
         .map(|path| ResourceSelection {
             path: LocalResourcePath::AbsolutePath(path),
             r#type: None,
         })
-        .collect::<Vec<_>>();
+        .collect()
+}
+
+#[tauri::command]
+async fn add_resources(shelf_id: String, paths: Vec<String>, app_handle: AppHandle) {
+    notify_user_did_drop();
+    let shelf_id = shelf_id.parse::<u64>().unwrap_or_default();
+    let selections = resource_selections_from_paths(paths);
 
     process_event(ShelfEvent::AddResources { shelf_id, selections }, app_handle).await;
+}
+
+#[tauri::command]
+async fn choose_resources(shelf_id: String, app_handle: AppHandle) -> Result<(), String> {
+    let Some(files) = app_handle.dialog().file().blocking_pick_files() else {
+        return Ok(());
+    };
+    let paths = files
+        .into_iter()
+        .map(|file| {
+            file.into_path()
+                .map(|path| path.to_string_lossy().into_owned())
+                .map_err(|error| error.to_string())
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    if !paths.is_empty() {
+        add_resources(shelf_id, paths, app_handle).await;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -924,6 +948,7 @@ pub async fn run() {
         .invoke_handler(tauri::generate_handler![
             authenticate,
             add_resources,
+            choose_resources,
             add_resources_from_drag_pasteboard,
             submit_token,
             remove_resource,
@@ -1217,4 +1242,29 @@ pub async fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resource_selections_from_paths;
+    use shared::entities::local_resource::LocalResourcePath;
+
+    #[test]
+    fn local_paths_become_transfer_resource_selections() {
+        let selections = resource_selections_from_paths(vec![
+            "/tmp/report.pdf".to_string(),
+            "/tmp/photos".to_string(),
+        ]);
+
+        assert_eq!(selections.len(), 2);
+        assert_eq!(
+            selections[0].path,
+            LocalResourcePath::AbsolutePath("/tmp/report.pdf".to_string())
+        );
+        assert_eq!(
+            selections[1].path,
+            LocalResourcePath::AbsolutePath("/tmp/photos".to_string())
+        );
+        assert!(selections.iter().all(|selection| selection.r#type.is_none()));
+    }
 }

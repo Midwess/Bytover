@@ -13,6 +13,7 @@ import {
     Play,
     FolderIcon,
     FileIcon,
+    FilePlus2,
     MoreHorizontal,
     MoreVertical,
     Trash2,
@@ -403,6 +404,10 @@ export function Shelf({
                             <ClipboardPaste className="w-4 h-4 mr-2"/>
                             Paste
                         </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => invoke('choose_resources', {shelfId})}>
+                            <FilePlus2 className="w-4 h-4 mr-2"/>
+                            Choose files…
+                        </DropdownMenuItem>
                         <DropdownMenuItem
                             variant="destructive"
                             disabled={!selectedResources.length || !isResourceRemoveAllowed}
@@ -602,4 +607,3 @@ export function MediaView(props: {
         </Card>
     );
 }
-
