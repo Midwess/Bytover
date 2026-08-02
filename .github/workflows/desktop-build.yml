@@ -13,6 +13,11 @@ on:
           - windows
           - linux
           - all
+      upload_to_app_store:
+        description: 'Upload the signed App Store package to App Store Connect after verification'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -524,7 +529,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload to App Store Connect
-        if: matrix.enable && matrix.name == 'build-macos-appstore'
+        if: matrix.enable && matrix.name == 'build-macos-appstore' && inputs.upload_to_app_store
         env:
           APPLE_API_KEY_PATH: ${{ env.APPLE_API_KEY_PATH }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
