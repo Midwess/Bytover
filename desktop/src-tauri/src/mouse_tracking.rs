@@ -13,7 +13,7 @@ use tauri::{AppHandle, Manager, PhysicalPosition};
 /// Check if the app has accessibility permission on macOS.
 /// If `prompt` is true, it will show the system dialog asking user to grant permission.
 /// Returns true if permission is granted, false otherwise.
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", not(feature = "mac-app-store")))]
 pub fn check_accessibility_permission(prompt: bool) -> bool {
     use std::ptr;
 
@@ -80,7 +80,7 @@ pub fn check_accessibility_permission(_prompt: bool) -> bool {
 /// This is required for CGEventTap (used by rdev) on macOS 10.15+.
 /// If `prompt` is true, it will request access and show the system dialog.
 /// Returns true if permission is granted, false otherwise.
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", not(feature = "mac-app-store")))]
 pub fn check_input_monitoring_permission(prompt: bool) -> bool {
     #[repr(u32)]
     #[allow(dead_code)]

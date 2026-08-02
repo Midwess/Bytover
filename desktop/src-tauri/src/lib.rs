@@ -3,10 +3,12 @@ compile_error!("the mac-app-store feature is supported only for macOS targets");
 
 use crate::api::bridge::BridgeImpl;
 use crate::api::path_resolver::PathResolverImpl;
+#[cfg(not(feature = "mac-app-store"))]
+use crate::distribution::{startup_policy, DesktopDistribution};
 use crate::extensions::AppHandleExt;
-use crate::mouse_tracking::{
-    check_accessibility_permission, check_input_monitoring_permission, notify_user_did_drop, start_mouse_monitor, MouseMonitorConfig,
-};
+#[cfg(not(feature = "mac-app-store"))]
+use crate::mouse_tracking::{check_accessibility_permission, check_input_monitoring_permission};
+use crate::mouse_tracking::{notify_user_did_drop, start_mouse_monitor, MouseMonitorConfig};
 use crate::thumbnail::generate_thumbnail;
 use core_services::logger;
 use crux_core::Core;
@@ -1160,26 +1162,33 @@ pub async fn run() {
                 }
             });
 
-            let accessibility_granted = check_accessibility_permission(true);
-            let input_monitoring_granted = check_input_monitoring_permission(true);
-            log::info!(
-                "macOS permissions at startup — accessibility: {}, input monitoring: {}",
-                accessibility_granted,
-                input_monitoring_granted
-            );
-            #[cfg(target_os = "macos")]
+            #[cfg(not(feature = "mac-app-store"))]
             {
-                if !accessibility_granted {
-                    log::warn!("Accessibility not granted — opening System Settings pane");
-                    let _ = std::process::Command::new("open")
-                        .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
-                        .spawn();
-                }
-                if !input_monitoring_granted {
-                    log::warn!("Input Monitoring not granted — opening System Settings pane");
-                    let _ = std::process::Command::new("open")
-                        .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")
-                        .spawn();
+                let policy = startup_policy(DesktopDistribution::Direct);
+                if policy.requests_privileged_permissions() {
+                    let accessibility_granted = check_accessibility_permission(true);
+                    let input_monitoring_granted = check_input_monitoring_permission(true);
+                    log::info!(
+                        "macOS permissions at startup — accessibility: {}, input monitoring: {}",
+                        accessibility_granted,
+                        input_monitoring_granted
+                    );
+
+                    #[cfg(target_os = "macos")]
+                    if policy.opens_permission_settings() {
+                        if !accessibility_granted {
+                            log::warn!("Accessibility not granted — opening System Settings pane");
+                            let _ = std::process::Command::new("open")
+                                .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+                                .spawn();
+                        }
+                        if !input_monitoring_granted {
+                            log::warn!("Input Monitoring not granted — opening System Settings pane");
+                            let _ = std::process::Command::new("open")
+                                .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")
+                                .spawn();
+                        }
+                    }
                 }
             }
 
