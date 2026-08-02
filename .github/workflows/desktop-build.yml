@@ -370,7 +370,7 @@ jobs:
           artifactName: Bytover-appstore-${{ github.ref_name == 'production' && '__VERSION__' || '__VERSION__-beta' }}
           prerelease: false
           projectPath: desktop
-          args: --target universal-apple-darwin --features log-file --bundles app --config src-tauri/tauri.conf.appstore.json
+          args: --target universal-apple-darwin --features log-file,mac-app-store --bundles app --config src-tauri/tauri.conf.appstore.json
 
       - name: Inject App Store Info.plist keys & re-sign
         if: matrix.enable && matrix.name == 'build-macos-appstore'
