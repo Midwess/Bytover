@@ -1,6 +1,6 @@
 # Tasks: mac-app-store-safe-permissions
 
-## Progress: [4/14]
+## Progress: [5/14]
 
 ## 1. Distribution Boundary
 
@@ -8,7 +8,7 @@
 - [x] 1.2 Extract a pure startup policy that describes allowed permission and monitor behavior for each build.
 - [x] 1.3 Compile permission prompting and System Settings launches out of the Mac App Store build.
 - [x] 1.4 Compile global mouse/input and drag-pasteboard monitor startup out of the Mac App Store build.
-- [ ] 1.5 Verify ordinary Tauri window drag/drop and file-picker paths do not depend on the removed monitor startup.
+- [x] 1.5 Verify ordinary Tauri window drag/drop and file-picker paths do not depend on the removed monitor startup.
 
 ## 2. Build and Artifact Enforcement
 
@@ -33,3 +33,5 @@
 ## Notes
 
 Do not replace the removed global monitor with a different system-wide API in this change.
+
+Task 1.5 found no existing user-facing system file picker in the desktop source. Existing selection is Tauri window drag/drop plus its drag-pasteboard fallback; both are independent of global monitor startup.

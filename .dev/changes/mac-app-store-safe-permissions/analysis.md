@@ -47,3 +47,11 @@ A compile-time feature is preferable to a mutable runtime environment switch bec
 
 Create an added `macos-permissions` domain covering non-privileged App Store launch, disabled global monitoring, preserved local interaction, and distribution-feature verification.
 
+## Local Interaction Verification
+
+Task 1.5 verified the existing local resource-selection paths after the global monitor was gated:
+
+- `desktop/src/send/shelf.tsx` subscribes directly to Tauri `window.onDragDropEvent`; a drop with paths invokes `add_resources` without consulting the global mouse monitor.
+- `desktop/src-tauri/src/lib.rs::add_resources` converts the Tauri-provided paths directly into `ResourceSelection` values and dispatches `ShelfEvent::AddResources`.
+- The HTML drag/drop fallback invokes `add_resources_from_drag_pasteboard`, which reads the current drag pasteboard directly and does not require `start_mouse_monitor` or `start_macos_drag_pasteboard_monitor` to be running.
+- No user-facing system file-picker implementation exists in the current desktop source, so there is no existing picker path coupled to the removed monitoring infrastructure. This proposal preserves the existing Tauri drag/drop selection behavior and does not add a new picker.
