@@ -53,6 +53,7 @@ use {hostname, machine_uid};
 pub mod api;
 mod commands;
 mod content_handlers;
+mod distribution;
 pub mod extensions;
 pub(crate) mod mouse_tracking;
 mod pasteboard;
