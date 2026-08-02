@@ -49,7 +49,9 @@ pub(crate) const fn current_startup_policy() -> StartupPolicy {
 
 #[cfg(test)]
 mod tests {
-    use super::{startup_policy, DesktopDistribution};
+    use super::{
+        current_startup_policy, startup_policy, DesktopDistribution, DISTRIBUTION_MARKER,
+    };
 
     #[test]
     fn app_store_policy_disables_privileged_startup_behavior() {
@@ -69,5 +71,31 @@ mod tests {
         assert!(policy.opens_permission_settings());
         assert!(policy.starts_global_input_monitor());
         assert!(policy.starts_drag_pasteboard_monitor());
+    }
+
+    #[test]
+    fn compiled_distribution_uses_the_matching_policy_and_marker() {
+        let policy = current_startup_policy();
+
+        #[cfg(feature = "mac-app-store")]
+        {
+            assert_eq!(
+                policy,
+                startup_policy(DesktopDistribution::MacAppStore)
+            );
+            assert_eq!(
+                DISTRIBUTION_MARKER,
+                "BYTOVER_DISTRIBUTION_CHANNEL=mac-app-store"
+            );
+        }
+
+        #[cfg(not(feature = "mac-app-store"))]
+        {
+            assert_eq!(policy, startup_policy(DesktopDistribution::Direct));
+            assert_eq!(
+                DISTRIBUTION_MARKER,
+                "BYTOVER_DISTRIBUTION_CHANNEL=direct"
+            );
+        }
     }
 }
