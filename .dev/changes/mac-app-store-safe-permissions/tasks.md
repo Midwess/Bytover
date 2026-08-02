@@ -1,6 +1,6 @@
 # Tasks: mac-app-store-safe-permissions
 
-## Progress: [11/14]
+## Progress: [12/14]
 
 ## 1. Distribution Boundary
 
@@ -26,7 +26,7 @@
 
 ## 4. Documentation
 
-- [ ] 4.1 Update `desktop/SIGNING.md` and the App Review checklist with the distribution behavior and captured evidence.
+- [x] 4.1 Update `desktop/SIGNING.md` and the App Review checklist with the distribution behavior and captured evidence.
 
 ---
 
@@ -34,10 +34,14 @@
 
 Do not replace the removed global monitor with a different system-wide API in this change.
 
-Task 1.5 found no existing user-facing system file picker in the desktop source. Existing selection is Tauri window drag/drop plus its drag-pasteboard fallback; both are independent of global monitor startup.
+Task 1.5 found no existing user-facing system file picker in the desktop source. Existing selection was Tauri window drag/drop plus its drag-pasteboard fallback; both are independent of global monitor startup. Task 3.4 subsequently added an explicit native picker through that same resource-selection path.
 
 Task 2.4 verifies the compiled App Store marker, the packaged distribution marker, absence of privileged usage descriptions, sandbox enablement, and absence of prohibited entitlements after signing.
 
 Task 3.1 covers the explicit direct-download and App Store policies plus the policy and marker selected by each compiled feature configuration.
 
 Task 3.2 passes `cargo check -p Bytover` with and without `--features mac-app-store`. Both configurations retain four pre-existing warnings and report no errors.
+
+Task 3.3 cannot be completed on the feature branch: GitHub Actions run 30738512503 stopped before deployment because signing secrets are correctly restricted to the `production` branch, and this Mac has no App Store signing identity. The run used `upload_to_app_store=false`, so App Store Connect was not changed. Complete the signed clean-account test after merge to `production`; do not relax the environment restriction.
+
+Task 3.4 now has an explicit native “Choose files…” action routed through the same `ShelfEvent::AddResources` path as Tauri window drops. Its App Store-feature unit test and the production web build pass. Final end-to-end verification remains paired with the signed clean-account test in Task 3.3.

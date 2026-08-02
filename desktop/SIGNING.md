@@ -75,10 +75,12 @@ Configure a **deployment-branch restriction** on the `production` environment so
 
 ### Triggering
 
-Actions → `desktop-release` → Run workflow → pick `platform`:
+Actions → `desktop-release` → Run workflow → pick `platform` and decide whether the signed package should be uploaded:
 
 - `macos-dmg` — Developer ID-signed `.dmg`, notarized (without stapling), attached to a draft GitHub release
-- `macos-appstore` — Apple-Distribution-signed `.app` wrapped in a `3rd Party Mac Developer Installer`-signed `.pkg`, uploaded to App Store Connect (no GitHub release). **Opt-in only**; not part of `all`.
+- `macos-appstore` — Apple-Distribution-signed `.app` wrapped in a `3rd Party Mac Developer Installer`-signed `.pkg` (no GitHub release). **Opt-in only**; not part of `all`.
+- `upload_to_app_store: false` (default) — build, sign, verify, and retain the `.pkg` workflow artifact without changing App Store Connect. Use this for review smoke tests.
+- `upload_to_app_store: true` — upload the verified `.pkg` to App Store Connect. Select this only for an intentional submission build.
 - `windows` / `linux` — unsigned, attached to a draft release
 - `all` — `macos-dmg` + `windows` + `linux`. Excludes `macos-appstore` because App Store uploads consume App Store Connect version slots and are visible to Apple even when not promoted to review.
 
@@ -87,7 +89,7 @@ For the DMG and Windows/Linux paths:
 - From the `production` branch → tagged `v__VERSION__`, release title `Bytover v__VERSION__`
 - From any other branch → tagged `v__VERSION__-beta`, release title suffix `(Beta)`
 
-Beta testers and release users get the same signature guarantees on the DMG path; only the version number and release naming differ. The App Store path produces no GitHub release artifact — the `.pkg` is exported as a workflow artifact (`Bytover-appstore-pkg`, 14-day retention) for smoke testing, and uploaded to App Store Connect Activity for review promotion.
+Beta testers and release users get the same signature guarantees on the DMG path; only the version number and release naming differ. The App Store path produces no GitHub release artifact — the `.pkg` is exported as a workflow artifact (`Bytover-appstore-pkg`, 14-day retention) for smoke testing. It reaches App Store Connect only when `upload_to_app_store` is explicitly enabled.
 
 ## Verification
 
@@ -140,7 +142,19 @@ Must be an **app-specific** password from appleid.apple.com → Sign-In and Secu
 
 ## CI build (App Store)
 
-The App Store path produces a sandboxed, Apple-Distribution-signed bundle wrapped in a `3rd Party Mac Developer Installer`-signed `.pkg`, then uploads it to App Store Connect via `xcrun altool --upload-app`.
+The App Store path produces a sandboxed, Apple-Distribution-signed bundle wrapped in a `3rd Party Mac Developer Installer`-signed `.pkg`. Upload through `xcrun altool --upload-app` is a separate, explicit workflow choice.
+
+### Distribution behavior boundary
+
+The App Store job is the only build that enables the Cargo feature `mac-app-store`. This is a compile-time boundary, not a runtime environment toggle:
+
+- App Store builds compile out Accessibility and Input Monitoring requests, automatic System Settings navigation, the global input monitor, and the global drag-pasteboard monitor.
+- Direct-download builds omit `mac-app-store` and retain their existing permission and global-monitor behavior.
+- Ordinary drag/drop delivered to an open Tauri window still invokes `add_resources`; this local path does not depend on either global monitor.
+- The executable embeds `BYTOVER_DISTRIBUTION_CHANNEL=mac-app-store`, and the package `Info.plist` contains `BytoverDistributionChannel=mac-app-store`.
+- App Store packaging removes `NSAccessibilityUsageDescription`, `NSInputMonitoringUsageDescription`, and `NSAppleEventsUsageDescription` before the bundle is re-signed.
+
+CI rejects the App Store artifact if its compiled marker or package marker is wrong, a prohibited usage description remains, App Sandbox is missing, or a privileged entitlement is present. The prohibited entitlement list includes Apple Events automation/temporary exceptions, library-validation bypass, unsigned executable memory, and `get-task-allow`.
 
 ### Prerequisites
 
@@ -198,7 +212,11 @@ The App Store sandbox restricts:
 - Privileged ports — `network.server` allows server sockets but not ports below 1024 without a temporary exception entitlement.
 - `macOSPrivateApi: true` (currently set in `tauri.conf.json`) gives Tauri private window-styling APIs. Apple's review has historically been inconsistent on these — submission may be rejected for "uses non-public API" even if the build itself succeeds.
 
-Smoke-test the artifact (`Bytover-appstore-pkg` workflow artifact) on a clean Mac before promoting to review:
+Smoke-test the artifact (`Bytover-appstore-pkg` workflow artifact) on a clean macOS account before promoting it to review. Run the workflow with `upload_to_app_store: false`, download the artifact, and record the run URL and commit in `.dev/app-review/2026-05-05-review-checklist.md`.
+
+The `production` GitHub environment is intentionally restricted to the `production` branch. A feature-branch App Store run will stop before deployment and cannot access signing secrets. Do not weaken that restriction for testing; merge the reviewed commit first, then create the signed evidence build from `production` with upload disabled.
+
+Installing the exported package may itself require an administrator because it targets `/Applications`; that installer authorization is separate from app behavior. After installation, launch Bytover normally and verify that the app itself does not ask for an administrator, request Accessibility/Input Monitoring, or open System Settings:
 
 ```bash
 sudo installer -pkg Bytover.pkg -target /
@@ -210,11 +228,11 @@ Sandbox violations appear in `Console.app` filtered on `process:Bytover` + `subs
 
 ## Compliance metadata
 
-The App Store build ships three pieces of compliance metadata beyond the entitlements file:
+The build system manages three compliance-metadata inputs beyond the entitlements file; the first two ship in the App Store bundle, while the third is retained only by the direct build:
 
 1. `desktop/src-tauri/Info.appstore.plist` — App Store-only `Info.plist` overlay merged into the bundled `Info.plist` by the CI step `Inject App Store Info.plist keys & re-sign`.
 2. `desktop/src-tauri/PrivacyInfo.xcprivacy` — Apple Privacy Manifest. Bundled into `Bytover.app/Contents/Resources/` via `bundle.resources` in `tauri.conf.appstore.json`.
-3. Localized usage strings in `desktop/src-tauri/Info.plist` (`NSAccessibilityUsageDescription`, `NSInputMonitoringUsageDescription`, `NSAppleEventsUsageDescription`).
+3. Localized usage strings in the base `desktop/src-tauri/Info.plist` are direct-download metadata and are removed from the packaged App Store `Info.plist` before re-signing.
 
 ### Export Compliance — declared exempt in Info.plist
 
@@ -281,10 +299,12 @@ When adding a new usage string: name the user-visible feature (not the abstract 
 
 The `Inject App Store Info.plist keys & re-sign` step asserts:
 
+- The executable contains `BYTOVER_DISTRIBUTION_CHANNEL=mac-app-store` and `Info.plist` contains the matching `BytoverDistributionChannel` value.
+- The packaged `Info.plist` does not contain Accessibility, Input Monitoring, or Apple Events usage descriptions.
 - `plutil -lint` against both `Info.plist` (post-merge) and `PrivacyInfo.xcprivacy`.
 - `[ -f "$APP/Contents/Resources/PrivacyInfo.xcprivacy" ]` — fails if the manifest is missing from the bundle.
 - `plutil -extract ITSAppUsesNonExemptEncryption raw "$INFO"` — fails if the export-compliance key did not land.
 - `codesign --verify --deep --strict --verbose=2 "$APP"` — fails if the post-`plutil` re-sign produced an invalid signature.
-- `codesign -d --entitlements - --xml "$APP"` — sanity check on the re-signed entitlements.
+- The actual signed entitlements enable App Sandbox and omit every prohibited privileged entitlement.
 
 If any of these fail, the build halts before `productbuild` and `altool --upload-app`. No malformed bundle reaches App Store Connect.
