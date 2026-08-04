@@ -22,9 +22,9 @@ where
 
     async fn handle(&self, effect: RpcOperation) -> Result<CoreOperationOutput, CoreError> {
         match effect {
-            RpcOperation::GetAuthenticateUrl(device_info) => {
-                let response = self.app_server().authenticate(device_info).await?;
-                Ok(response.into())
+            RpcOperation::GetAuthenticateUrl { device, provider } => {
+                let response = self.app_server().authenticate(device, provider).await?;
+                Ok(CoreOperationOutput::Rpc(RpcOperationOutput::AuthenticationStart(response)))
             }
             RpcOperation::GetMe() => {
                 let (user, device_unique_key) = self.app_server().get_me().await?;

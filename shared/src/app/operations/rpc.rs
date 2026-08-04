@@ -4,18 +4,23 @@ use crux_core::capability::Operation;
 use crux_core::Command;
 use serde::{Deserialize, Serialize};
 
+use crate::app::authentication::provider::LoginProvider;
 use crate::app::AppRequestBuilder;
 use crate::entities::capabilities::UserCapabilities;
 use crate::entities::device::DeviceInfo;
 use crate::entities::user::User;
 use crate::errors::CoreError;
+use crate::protocol::rpc::app_server::AuthenticationStart;
 use crate::protocol::rpc::cloud_server::SubmitStoreKitResult;
 
 use super::{CoreOperation, CoreOperationOutput};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum RpcOperation {
-    GetAuthenticateUrl(DeviceInfo),
+    GetAuthenticateUrl {
+        device: DeviceInfo,
+        provider: LoginProvider,
+    },
     GetMe(),
     GetUserById(u64),
     Feedback {
@@ -44,6 +49,7 @@ pub enum RpcOperation {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum RpcOperationOutput {
+    AuthenticationStart(AuthenticationStart),
     GetMe { user: User, device_unique_key: String },
     GetUserById(User),
     GenPeer(crate::entities::peer::Peer),
@@ -72,11 +78,14 @@ impl RpcOperation {
         })
     }
 
-    pub fn get_authenticate_url(device_info: DeviceInfo) -> AppRequestBuilder<impl Future<Output = Result<String, CoreError>>> {
-        Command::request_from_shell(CoreOperation::Rpc(RpcOperation::GetAuthenticateUrl(device_info))).map(|res| match res {
-            CoreOperationOutput::String(value) => Ok(value),
+    pub fn get_authenticate_url(
+        device: DeviceInfo,
+        provider: LoginProvider,
+    ) -> AppRequestBuilder<impl Future<Output = Result<AuthenticationStart, CoreError>>> {
+        Command::request_from_shell(CoreOperation::Rpc(RpcOperation::GetAuthenticateUrl { device, provider })).map(|res| match res {
+            CoreOperationOutput::Rpc(RpcOperationOutput::AuthenticationStart(value)) => Ok(value),
             CoreOperationOutput::Error(error) => Err(error),
-            _ => panic!("Invalid output for RpcOperation::GetSignInUrl"),
+            _ => panic!("Invalid output for RpcOperation::GetAuthenticateUrl"),
         })
     }
 
@@ -137,9 +146,7 @@ impl RpcOperation {
         })
     }
 
-    pub fn report_p2p_bytes_used(
-        delta: u64,
-    ) -> AppRequestBuilder<impl Future<Output = Result<UserCapabilities, CoreError>>> {
+    pub fn report_p2p_bytes_used(delta: u64) -> AppRequestBuilder<impl Future<Output = Result<UserCapabilities, CoreError>>> {
         Command::request_from_shell(CoreOperation::Rpc(RpcOperation::ReportP2PBytesUsed { delta })).map(|res| match res {
             CoreOperationOutput::Rpc(RpcOperationOutput::GetCapabilities(caps)) => Ok(caps),
             CoreOperationOutput::Error(error) => Err(error),

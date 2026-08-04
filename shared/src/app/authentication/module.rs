@@ -1,3 +1,4 @@
+use super::provider::LoginProvider;
 use crate::app::core::extensions::{CoreCommandContextUtils, CoreCommandUtils};
 use crate::app::payment::module::PaymentEvent;
 use crate::app::{AppModel, BitBridge};
@@ -18,17 +19,23 @@ pub struct AuthenticationModule;
 pub struct AuthenticationModel {
     pub user: Option<User>,
     pub is_already_feedback: bool,
+    pub pending_provider: Option<LoginProvider>,
+    pub auth_error: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct AuthenticationViewModel {
     pub user: Option<User>,
     pub is_already_feedback: bool,
+    pub pending_provider: Option<String>,
+    pub auth_error: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum AuthenticationEvent {
-    Authenticate,
+    Authenticate { provider: LoginProvider },
+    AuthenticationCancelled,
+    AuthenticationFailed { code: String, message: String },
     SignOut,
     OnRedirected { url: String },
     Authorized { user: User },
@@ -47,17 +54,35 @@ impl AppModule<BitBridge> for AuthenticationModule {
         _caps: &<BitBridge as App>::Capabilities,
     ) -> Command<<BitBridge as App>::Effect, <BitBridge as App>::Event> {
         match event {
-            AuthenticationEvent::Authenticate => Command::handle_result(|ctx| async move {
-                ctx.app().authenticate().await;
-                Ok(())
-            }),
+            AuthenticationEvent::Authenticate { provider } => {
+                model.authentication.pending_provider = Some(provider);
+                model.authentication.auth_error.take();
+                Command::handle_result(move |ctx| async move {
+                    ctx.app().authenticate(provider).await;
+                    Ok(())
+                })
+                .then_render()
+            }
+            AuthenticationEvent::AuthenticationCancelled => {
+                model.authentication.pending_provider.take();
+                model.authentication.auth_error.take();
+                Command::render()
+            }
+            AuthenticationEvent::AuthenticationFailed { code: _, message } => {
+                model.authentication.pending_provider.take();
+                model.authentication.auth_error = Some(message);
+                Command::render()
+            }
             AuthenticationEvent::SignOut => {
                 model.authentication.user.take();
                 let do_sign_out = Command::handle_result(|ctx| async move {
                     ctx.app().sign_out().await?;
                     Ok(())
                 });
-                Command::all(vec![Command::render(), do_sign_out])
+                Command::all(vec![
+                    Command::render(),
+                    do_sign_out,
+                ])
             }
             AuthenticationEvent::OnRedirected { url } => {
                 if model.authentication.user.is_some() {
@@ -72,12 +97,17 @@ impl AppModule<BitBridge> for AuthenticationModule {
             }
             AuthenticationEvent::Authorized { user } => {
                 model.authentication.user.replace(user);
+                model.authentication.pending_provider.take();
+                model.authentication.auth_error.take();
 
                 let request_refresh = Command::new(|it| async move {
                     it.app().notify_event(AppEvent::Payment(PaymentEvent::RefreshCapabilities));
                 });
 
-                Command::all(vec![Command::render(), request_refresh])
+                Command::all(vec![
+                    Command::render(),
+                    request_refresh,
+                ])
             }
             AuthenticationEvent::UnAuthorized => Command::render(),
             AuthenticationEvent::Feedback { email, message } => {
@@ -108,6 +138,8 @@ impl AppModule<BitBridge> for AuthenticationModule {
         AuthenticationViewModel {
             user: model.authentication.user.clone(),
             is_already_feedback: model.authentication.is_already_feedback,
+            pending_provider: model.authentication.pending_provider.map(|provider| provider.label().to_string()),
+            auth_error: model.authentication.auth_error.clone(),
         }
     }
 }
@@ -149,6 +181,28 @@ mod tests {
     }
 
     #[test]
+    fn failed_provider_start_returns_to_selection() {
+        let app = BitBridge::default();
+        let mut model = AppModel::default();
+        model.authentication.pending_provider = Some(LoginProvider::Apple);
+
+        let _ = app.update(
+            AppEvent::Authentication(AuthenticationEvent::AuthenticationFailed {
+                code: "not_configured".to_string(),
+                message: "Sign in with Apple is temporarily unavailable.".to_string(),
+            }),
+            &mut model,
+            &(),
+        );
+
+        assert_eq!(model.authentication.pending_provider, None);
+        assert_eq!(
+            model.authentication.auth_error.as_deref(),
+            Some("Sign in with Apple is temporarily unavailable.")
+        );
+    }
+
+    #[test]
     fn shelf_view_model_can_create_shelf_reflects_capability_change() {
         let app = BitBridge::default();
         let mut model = signed_in_model();
@@ -183,11 +237,7 @@ mod tests {
 
         let mut paid = paid_capabilities();
         paid.transfer_limits.password_encryption_allowed = true;
-        let _ = app.update(
-            AppEvent::Payment(PaymentEvent::CapabilitiesLoaded(paid)),
-            &mut model,
-            &(),
-        );
+        let _ = app.update(AppEvent::Payment(PaymentEvent::CapabilitiesLoaded(paid)), &mut model, &());
 
         let view_paid = app.view(&model);
         assert_eq!(view_paid.transfer.as_ref().map(|t| t.password_encryption_allowed), Some(true));

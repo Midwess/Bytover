@@ -1,14 +1,11 @@
 import ReactDOM from "react-dom/client"
-import React, {useEffect, useRef, useState} from "react"
+import React, {useEffect} from "react"
 import core from "@/core.ts"
-import {motion, noop} from "motion/react"
+import {motion} from "motion/react"
 import {Button} from "@/components/ui/button.tsx";
-import {Input} from "@/components/ui/input.tsx";
 import Iridescence from "@/components/iridescene.tsx";
 import {invoke} from "@tauri-apps/api/core";
-import {listen} from "@tauri-apps/api/event";
 import {openUrl} from "@tauri-apps/plugin-opener";
-import {Check, Copy} from "lucide-react";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>
@@ -16,78 +13,17 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     </React.StrictMode>,
 );
 
-type AuthPhase = 'google-signin' | 'token-input' | 'loading';
-
 function Window() {
-    const [authPhase, setAuthPhase] = useState<AuthPhase>('google-signin')
-    const [tokenInput, setTokenInput] = useState('')
-    const [authUrl, setAuthUrl] = useState<string | null>(null)
-    const [copied, setCopied] = useState(false)
-    const [showUrl, setShowUrl] = useState(false)
-    const logoTapRef = useRef<{ count: number; lastTap: number }>({ count: 0, lastTap: 0 })
+    const authentication = core.useAuthentication()
+    const pendingProvider = authentication?.pending_provider?.toLowerCase()
 
     useEffect(() => {
         core.launch()
     }, [])
 
-    useEffect(() => {
-        const unlistenPromise = listen<string>('auth-url', (event) => {
-            setAuthUrl(event.payload)
-        })
-        return () => {
-            unlistenPromise.then((unlisten) => unlisten())
-        }
-    }, [])
-
-    const handleLogin = () => {
-        if (authPhase !== 'google-signin') return
-        setAuthPhase('token-input')
-        invoke("authenticate").then(noop)
-    }
-
-    const handleSubmitToken = () => {
-        if (!tokenInput.trim() || authPhase !== 'token-input') return
-        setAuthPhase('loading')
-        invoke("submit_token", { token: tokenInput.trim() }).then(noop)
-        setTimeout(() => {
-            setAuthPhase('token-input')
-        }, 4000)
-    }
-
-    const handleBack = () => {
-        if (authPhase !== 'token-input') return
-        setTokenInput('')
-        setAuthUrl(null)
-        setCopied(false)
-        setShowUrl(false)
-        setAuthPhase('google-signin')
-    }
-
-    const handleLogoTap = () => {
-        if (authPhase !== 'google-signin') return
-        const now = Date.now()
-        const state = logoTapRef.current
-        if (now - state.lastTap > 1500) {
-            state.count = 1
-        } else {
-            state.count += 1
-        }
-        state.lastTap = now
-        if (state.count >= 5) {
-            state.count = 0
-            setAuthPhase('token-input')
-        }
-    }
-
-    const handleCopyUrl = async () => {
-        if (!authUrl) return
-        try {
-            await navigator.clipboard.writeText(authUrl)
-            setCopied(true)
-            setTimeout(() => setCopied(false), 2000)
-        } catch {
-            setCopied(false)
-        }
+    const handleLogin = async (provider: 'apple' | 'google') => {
+        if (pendingProvider) return
+        await invoke("authenticate", {provider})
     }
 
     return (
@@ -111,8 +47,7 @@ function Window() {
                         initial={{ opacity: 0, scale: 0.9 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ duration: 0.8, ease: "easeOut" }}
-                        onClick={handleLogoTap}
-                        className="w-32 h-32 bg-white/10 backdrop-blur-xl rounded-[24%] flex items-center justify-center border border-white/20 shadow-2xl pointer-events-auto cursor-default"
+                        className="w-32 h-32 bg-white/10 backdrop-blur-xl rounded-[24%] flex items-center justify-center border border-white/20 shadow-2xl"
                     >
                         <img src="/logo.svg" alt="Bytover Logo" className="w-20 h-20 object-contain brightness-110 drop-shadow-md" />
                     </motion.div>
@@ -147,10 +82,21 @@ function Window() {
                     transition={{ delay: 0.6, duration: 0.6 }}
                     className="w-full flex flex-col items-center gap-5"
                 >
-                    {authPhase === 'google-signin' && (
+                    {!pendingProvider && (
                         <>
                             <Button
-                                onClick={handleLogin}
+                                onClick={() => handleLogin('apple')}
+                                aria-label="Sign in with Apple"
+                                className="min-w-[240px] h-12 bg-white hover:bg-white/90 text-blackBase rounded-full text-[15px] font-semibold transition-all active:scale-[0.98] border-none shadow-lg flex items-center justify-center gap-3"
+                            >
+                                <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+                                    <path fill="currentColor" d="M16.7 12.8c0-2.5 2-3.7 2.1-3.8a4.5 4.5 0 0 0-3.6-2c-1.5-.2-3 .9-3.8.9-.8 0-2-.9-3.3-.9-1.7 0-3.3 1-4.2 2.5-1.8 3.1-.5 7.7 1.3 10.2.9 1.2 1.9 2.6 3.2 2.5 1.3-.1 1.8-.8 3.4-.8 1.6 0 2 .8 3.4.8 1.4 0 2.3-1.2 3.1-2.5 1-1.4 1.4-2.8 1.4-2.9-.1 0-3-1.2-3-4Zm-2.5-7.4c.7-.9 1.2-2.1 1.1-3.4-1.1 0-2.4.7-3.2 1.6-.7.8-1.3 2-1.2 3.2 1.2.1 2.5-.6 3.3-1.4Z"/>
+                                </svg>
+                                Sign in with Apple
+                            </Button>
+                            <Button
+                                onClick={() => handleLogin('google')}
+                                aria-label="Sign in with Google"
                                 className="min-w-[240px] h-12 bg-white hover:bg-white/90 text-blackBase rounded-full text-[15px] font-semibold transition-all active:scale-[0.98] border-none shadow-lg flex items-center justify-center gap-3"
                             >
                                 <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -164,63 +110,18 @@ function Window() {
                             <p className="text-[13px] text-[#9ca3af] text-center">
                                 By signing in, you automatically accept our <span className="text-[#3b82f6] hover:underline cursor-pointer" onClick={() => openUrl('https://bytover.com/policy')}>policy</span>.
                             </p>
+                            {authentication?.auth_error && (
+                                <p role="alert" className="max-w-[360px] text-[13px] text-red-300 text-center">
+                                    {authentication.auth_error}
+                                </p>
+                            )}
                         </>
                     )}
 
-                    {authPhase === 'token-input' && (
-                        <div className="w-full max-w-[320px] flex flex-col items-center gap-3">
-                            <Input
-                                type="text"
-                                placeholder="Paste access token"
-                                value={tokenInput}
-                                onChange={(e) => setTokenInput(e.target.value)}
-                                className="w-full h-11 bg-white/[0.06] border-none text-white placeholder:text-zinc-500 rounded-xl text-[13px] px-3.5 focus-visible:ring-1 focus-visible:ring-white/20"
-                            />
-
-                            {showUrl && authUrl && (
-                                <div className="w-full flex items-center gap-2 pl-3.5 pr-1.5 py-1.5 rounded-xl bg-white/[0.06]">
-                                    <span className="flex-1 text-zinc-300 text-[12px] font-mono truncate">
-                                        {authUrl}
-                                    </span>
-                                    <button
-                                        onClick={handleCopyUrl}
-                                        className="shrink-0 h-7 w-7 rounded-md bg-white/10 hover:bg-white/15 text-white flex items-center justify-center transition-colors active:scale-[0.96]"
-                                    >
-                                        {copied ? <Check className="w-[13px] h-[13px]" /> : <Copy className="w-[13px] h-[13px]" />}
-                                    </button>
-                                </div>
-                            )}
-
-                            <Button
-                                onClick={handleSubmitToken}
-                                disabled={!tokenInput.trim()}
-                                className="w-full h-11 bg-white hover:bg-white/90 text-blackBase rounded-full text-[14px] font-semibold transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed border-none"
-                            >
-                                Continue
-                            </Button>
-
-                            {!showUrl && (
-                                <button
-                                    onClick={() => setShowUrl(true)}
-                                    className="text-[12px] text-zinc-500 hover:text-zinc-300 transition-colors"
-                                >
-                                    Your browser didn&apos;t open?
-                                </button>
-                            )}
-
-                            <button
-                                onClick={handleBack}
-                                className="text-[12px] text-zinc-500 hover:text-zinc-300 transition-colors"
-                            >
-                                Back
-                            </button>
-                        </div>
-                    )}
-
-                    {authPhase === 'loading' && (
+                    {pendingProvider && (
                         <div className="flex flex-col items-center gap-3">
                             <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white"></div>
-                            <p className="text-[14px] text-[#9ca3af]">Authenticating...</p>
+                            <p className="text-[14px] text-[#9ca3af]">Signing in with {authentication?.pending_provider}…</p>
                         </div>
                     )}
                 </motion.div>

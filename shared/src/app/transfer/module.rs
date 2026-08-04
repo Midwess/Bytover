@@ -244,7 +244,7 @@ impl AppModule<BitBridge> for TransferModule {
                 let Some(user) = model.authentication.user.clone() else {
                     log::info!("User is not login, open login page");
                     return Command::handle_result(|it| async move {
-                        it.app().authenticate().await;
+                        it.app().authenticate(crate::app::authentication::provider::LoginProvider::Google).await;
                         Ok(())
                     });
                 };
@@ -289,7 +289,7 @@ impl AppModule<BitBridge> for TransferModule {
                 let Some(user) = model.authentication.user.clone() else {
                     log::info!("User is not logged in, opening login page");
                     return Command::handle_result(|it| async move {
-                        it.app().authenticate().await;
+                        it.app().authenticate(crate::app::authentication::provider::LoginProvider::Google).await;
                         Ok(())
                     });
                 };
@@ -408,11 +408,8 @@ impl AppModule<BitBridge> for TransferModule {
                                     .unwrap_or(false);
                                 peer_event.is_first_receiver = is_first;
                                 if is_first {
-                                    if let Some(size) = session
-                                        .resources
-                                        .iter()
-                                        .find(|r| r.order_id == peer_event.resource_order_id)
-                                        .map(|r| r.size)
+                                    if let Some(size) =
+                                        session.resources.iter().find(|r| r.order_id == peer_event.resource_order_id).map(|r| r.size)
                                     {
                                         p2p_first_receive_size = Some((peer_event.resource_order_id, size));
                                     }
@@ -869,12 +866,12 @@ impl AppModule<BitBridge> for TransferModule {
 
         let caps = model.payment.capabilities.as_ref();
         let password_encryption_allowed = caps.map(|c| c.transfer_limits.password_encryption_allowed).unwrap_or(false);
-        let max_files_per_transfer = caps
-            .map(|c| c.transfer_limits.max_files_per_transfer)
-            .and_then(|n| if n == 0 { None } else { Some(n) });
-        let transfer_lifetime_cap_bytes = caps
-            .map(|c| c.transfer_limits.total_transfer_bytes_lifetime_cap)
-            .and_then(|n| if n == 0 { None } else { Some(n) });
+        let max_files_per_transfer =
+            caps.map(|c| c.transfer_limits.max_files_per_transfer)
+                .and_then(|n| if n == 0 { None } else { Some(n) });
+        let transfer_lifetime_cap_bytes =
+            caps.map(|c| c.transfer_limits.total_transfer_bytes_lifetime_cap)
+                .and_then(|n| if n == 0 { None } else { Some(n) });
         let transfer_bytes_used = caps.map(|c| c.transfer_usage.total_transfer_bytes_used).unwrap_or(0);
 
         Self::ViewModel {

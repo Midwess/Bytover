@@ -18,6 +18,7 @@ use schema::value::device::DeviceType;
 use schema::value::platform::Platform;
 use serde::Deserialize;
 use shared::app::authentication::module::AuthenticationEvent;
+use shared::app::authentication::provider::LoginProvider;
 use shared::app::environment::module::EnvironmentEvent;
 use shared::app::payment::module::PaymentEvent;
 use shared::app::operations::device::DeviceOperation;
@@ -54,6 +55,7 @@ use uuid::Uuid;
 use {hostname, machine_uid};
 
 pub mod api;
+mod auth_session;
 mod commands;
 mod content_handlers;
 mod distribution;
@@ -250,17 +252,17 @@ async fn sign_out(app_handle: AppHandle) {
 }
 
 #[tauri::command]
-async fn authenticate(app_handle: AppHandle) {
+async fn authenticate(provider: String, app_handle: AppHandle) -> Result<(), String> {
     if let Ok(mut requested) = EXPLICIT_AUTH_REQUESTED.lock() {
         *requested = true;
     }
-    process_event(AuthenticationEvent::Authenticate, app_handle).await;
-}
-
-#[tauri::command]
-async fn submit_token(token: String, app_handle: AppHandle) {
-    let url = format!("bytover://auth?access_token={}", token);
-    process_event(AuthenticationEvent::OnRedirected { url }, app_handle).await;
+    let provider = match provider.as_str() {
+        "google" => LoginProvider::Google,
+        "apple" => LoginProvider::Apple,
+        _ => return Err("unsupported authentication provider".to_string()),
+    };
+    process_event(AuthenticationEvent::Authenticate { provider }, app_handle).await;
+    Ok(())
 }
 
 fn resource_selections_from_paths(paths: Vec<String>) -> Vec<ResourceSelection> {
@@ -719,7 +721,7 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
                             .and_then(|it| it.to_str().map(|it| it.to_owned()))
                             .unwrap_or(Uuid::new_v4().to_string()),
                         device_type,
-                        url: "bytover://".to_owned(),
+                        url: "bytover://app".to_owned(),
                         unique_id: machine_uid::get().unwrap_or(Uuid::new_v4().to_string()),
                     };
 
@@ -780,15 +782,26 @@ async fn process_effects(mut effects: Vec<AppOperation>, app_handle: AppHandle) 
                     CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
                 }
             },
-            CoreOperation::WebView(WebViewOperation::OpenUrl(url)) => {
-                if let Err(e) = app_handle.emit("auth-url", url.clone()) {
-                    log::warn!("[auth] failed to emit auth-url event: {e}");
+            CoreOperation::WebView(WebViewOperation::Authenticate { url, callback_scheme }) => {
+                #[cfg(all(target_os = "macos", feature = "mac-app-store"))]
+                {
+                    let outcome = auth_session::authenticate(app_handle.clone(), url, callback_scheme).await;
+                    CORE.resolve(&mut handle, CoreOperationOutput::AuthenticationSession(outcome))
+                        .unwrap_or_default()
                 }
-                match app_handle.opener().open_url(url, Option::<&str>::None) {
-                    Ok(_) => log::info!("[auth] browser open requested for url"),
-                    Err(e) => log::warn!("[auth] failed to open browser: {e}"),
+
+                #[cfg(not(all(target_os = "macos", feature = "mac-app-store")))]
+                {
+                    let _ = callback_scheme;
+                    let outcome = match app_handle.opener().open_url(url, Option::<&str>::None) {
+                        Ok(_) => shared::app::operations::webview::AuthenticationSessionOutcome::ExternalBrowserStarted,
+                        Err(_) => shared::app::operations::webview::AuthenticationSessionOutcome::Failed {
+                            code: "external_browser_failed".to_string(),
+                        },
+                    };
+                    CORE.resolve(&mut handle, CoreOperationOutput::AuthenticationSession(outcome))
+                        .unwrap_or_default()
                 }
-                CORE.resolve(&mut handle, CoreOperationOutput::None).unwrap_or_default()
             }
             CoreOperation::Dialog(dialog) => match dialog {
                 DialogOperation::Toast(msg) => {
@@ -954,7 +967,6 @@ pub async fn run() {
             add_resources,
             choose_resources,
             add_resources_from_drag_pasteboard,
-            submit_token,
             remove_resource,
             ui_launched,
             public_transfer,

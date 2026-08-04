@@ -32,7 +32,7 @@ use rpc::{RpcOperation, RpcOperationOutput};
 use serde::{Deserialize, Serialize};
 use storekit::{StoreKitOperation, StoreKitOperationOutput};
 use transfer::{TransferOperation, TransferOperationOutput};
-use webview::WebViewOperation;
+use webview::{AuthenticationSessionOutcome, WebViewOperation};
 
 use super::AppEvent;
 
@@ -83,6 +83,7 @@ pub enum CoreOperationOutput {
     ResourcePathMap(std::collections::HashMap<u64, LocalResourcePath>),
     ZipDownloadPaths(ZipDownloadPaths),
     ResourceSelections(Vec<ResourceSelection>),
+    AuthenticationSession(AuthenticationSessionOutcome),
 
     Error(CoreError),
 

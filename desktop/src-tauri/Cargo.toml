@@ -60,9 +60,11 @@ mac-app-store = []
 windows = { version = "0.62.2", features = ["Win32_UI_Input_KeyboardAndMouse", "Win32_Foundation", "Win32_Graphics_Gdi", "Win32_UI_Shell", "Win32_System_Com", "Win32_UI_WindowsAndMessaging", "Win32_System_DataExchange", "Win32_System_Memory"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6"
 cacao = { version = "0.4.0-beta2", features = ["appkit"] }
 objc2 = "0.6"
-objc2-foundation = { version = "0.3", features = ["NSArray", "NSString", "NSError", "NSDictionary", "NSLocale", "NSNotification", "NSObject", "NSThread", "NSSet"] }
+objc2-authentication-services = { version = "0.3", default-features = false, features = ["std", "ASFoundation", "ASWebAuthenticationSession", "block2"] }
+objc2-foundation = { version = "0.3", features = ["NSArray", "NSString", "NSURL", "NSError", "NSDictionary", "NSLocale", "NSNotification", "NSObject", "NSThread", "NSSet"] }
 objc2-store-kit = { version = "0.3", features = ["SKPayment", "SKPaymentQueue", "SKPaymentTransaction", "SKProduct", "SKProductsRequest", "SKRequest", "SKError"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]

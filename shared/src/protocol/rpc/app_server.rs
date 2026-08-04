@@ -1,3 +1,4 @@
+use crate::app::authentication::provider::LoginProvider;
 use crate::entities::device::DeviceInfo;
 use crate::entities::user::User;
 use crate::protocol::rpc::auth_provider::AuthProvider;
@@ -14,8 +15,8 @@ use schema::devlog::bitbridge::p2p_orchestration_service_client::P2pOrchestratio
 use schema::devlog::bitbridge::{
     CreateDeviceSessionRequest, FindP2pSessionRequest, GenAliasRequest, GenPeerRequest, GetDeviceAliasesRequest,
 };
-use schema::value::auth_method::AuthMethod;
 use schema::value::device::RegisteringDevice;
+use serde::{Deserialize, Serialize};
 use tonic::Request;
 
 pub struct AppServer<T>
@@ -29,6 +30,12 @@ where
 {
     rpc_module: Box<dyn RpcNetworkModule<T>>,
     auth_provider: AuthProvider,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum AuthenticationStart {
+    OpenUrl(String),
+    ProviderUnavailable { code: String, display_message: Option<String> },
 }
 
 impl<T> AppServer<T>
@@ -48,30 +55,31 @@ where
         }
     }
 
-    pub async fn authenticate(&self, device: DeviceInfo) -> Result<String, RpcErrors> {
+    pub async fn authenticate(&self, device: DeviceInfo, provider: LoginProvider) -> Result<AuthenticationStart, RpcErrors> {
         let channel = self.rpc_module.connect().await?;
         let request = AuthenticateRequest {
             app_name: "BitBridge".to_string(),
-            method: AuthMethod::Google.into(),
+            method: schema::value::auth_method::AuthMethod::from(provider).into(),
             device: RegisteringDevice {
                 device_name: device.name,
                 device_unique_key: device.unique_id,
                 platform: device.platform.into(),
                 device_type: device.device_type.into(),
-                url: format!("{}/oauth", device.url),
+                url: device.url,
             },
         };
 
         let auth_client = AuthServiceClient::new(channel);
         let response = auth_client.clone().authenticate(request).await.map(|it| it.into_inner())?;
 
-        Ok(response
-            .action
-            .map(|it| match it {
-                Action::OpenUrl(url) => url,
-            })
-            .clone()
-            .unwrap_or_default())
+        match response.action {
+            Some(Action::OpenUrl(url)) => Ok(AuthenticationStart::OpenUrl(url)),
+            Some(Action::ProviderUnavailable(unavailable)) => Ok(AuthenticationStart::ProviderUnavailable {
+                code: unavailable.code,
+                display_message: unavailable.display_message,
+            }),
+            None => Err(RpcErrors::BadRequest("Authentication provider returned no action".to_string())),
+        }
     }
 
     pub async fn get_me(&self) -> Result<(User, String), RpcErrors> {

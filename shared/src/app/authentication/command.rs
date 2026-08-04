@@ -1,4 +1,5 @@
 use crate::app::authentication::module::AuthenticationEvent;
+use crate::app::authentication::provider::LoginProvider;
 use crate::app::core::command::AppCommand;
 use crate::app::core::extensions::CoreCommandContextUtils;
 use crate::app::operations::device::DeviceOperation;
@@ -8,7 +9,7 @@ use crate::app::operations::persistent::{
     DeviceAliasPersistentOperation, SessionPersistentOperation, ShelfPersistentOperation, TransferSessionPersistentOperation,
 };
 use crate::app::operations::rpc::RpcOperation;
-use crate::app::operations::webview::WebViewOperation;
+use crate::app::operations::webview::{AuthenticationSessionOutcome, WebViewOperation};
 use crate::app::payment::module::PaymentEvent;
 use crate::app::shelf::module::ShelfEvent;
 use crate::app::transfer::module::TransferEvent;
@@ -19,22 +20,70 @@ use crate::CoreOperation;
 use devlog_sdk::distributed_id::gen_id;
 use url::Url;
 
+const AUTH_CALLBACK_SCHEME: &str = "bytover";
+const AUTH_CALLBACK_HOST: &str = "app";
+const AUTH_CALLBACK_PATH: &str = "/oauth/callback";
+
+#[derive(Debug, PartialEq, Eq)]
+enum AuthCallback {
+    Success { access_token: String },
+    Cancelled,
+    Failed { code: String, message: String },
+}
+
 impl AppCommand {
-    pub async fn authenticate(&self) {
+    pub async fn authenticate(&self, provider: LoginProvider) {
         let Some(device_info) = self.run(DeviceOperation::get_device_info()).await else {
             self.run(DialogOperation::toast("Device not found".to_string())).await;
             return;
         };
 
-        let url = match RpcOperation::get_authenticate_url(device_info).into_future(self.ctx()).await {
-            Ok(url) => url,
-            Err(e) => {
-                log::error!(target: "auth", "Failed to get sign in url: {e:?}");
+        let start = match RpcOperation::get_authenticate_url(device_info, provider).into_future(self.ctx()).await {
+            Ok(start) => start,
+            Err(_) => {
+                log::warn!(target: "auth", "provider={} outcome=start_request_failed", provider.label());
+                self.update_model(AuthenticationEvent::AuthenticationFailed {
+                    code: "start_request_failed".to_string(),
+                    message: "Sign in could not start. Please try again.".to_string(),
+                });
                 return;
             }
         };
 
-        WebViewOperation::open_url(url).into_future(self.ctx()).await;
+        let crate::protocol::rpc::app_server::AuthenticationStart::OpenUrl(url) = start else {
+            let crate::protocol::rpc::app_server::AuthenticationStart::ProviderUnavailable {
+                code,
+                display_message: _,
+            } = start
+            else {
+                return;
+            };
+            self.update_model(AuthenticationEvent::AuthenticationFailed {
+                code,
+                message: format!("Sign in with {} is temporarily unavailable.", provider.label()),
+            });
+            return;
+        };
+
+        match WebViewOperation::authenticate(url, AUTH_CALLBACK_SCHEME.to_string()).into_future(self.ctx()).await {
+            AuthenticationSessionOutcome::Completed { callback_url } => {
+                if self.authorize(callback_url).await.is_err() {
+                    log::warn!(target: "auth", "provider={} outcome=callback_failed", provider.label());
+                    self.update_model(AuthenticationEvent::AuthenticationFailed {
+                        code: "authentication_failed".to_string(),
+                        message: "Sign in could not be completed. Please try again.".to_string(),
+                    });
+                }
+            }
+            AuthenticationSessionOutcome::Cancelled => self.update_model(AuthenticationEvent::AuthenticationCancelled),
+            AuthenticationSessionOutcome::Failed { code } => {
+                self.update_model(AuthenticationEvent::AuthenticationFailed {
+                    code,
+                    message: "The secure sign-in window could not start. Please try again.".to_string(),
+                });
+            }
+            AuthenticationSessionOutcome::ExternalBrowserStarted => {}
+        }
     }
 
     pub async fn sign_out(&self) -> Result<(), CoreError> {
@@ -73,18 +122,26 @@ impl AppCommand {
     }
 
     pub async fn authorize(&self, url: String) -> Result<(), CoreError> {
-        let Ok(url) = Url::parse(url.as_str()) else {
-            log::warn!("The redirect url is invalid: {url}");
-            return Ok(());
+        let callback = match parse_auth_callback(&url) {
+            Ok(callback) => callback,
+            Err(error) => {
+                self.update_model(AuthenticationEvent::AuthenticationFailed {
+                    code: "invalid_callback".to_string(),
+                    message: "The sign-in callback was invalid. Please try again.".to_string(),
+                });
+                return Err(error);
+            }
         };
-
-        if let Some(error_msg) = url.query_pairs().find(|it| it.0 == "message") {
-            return Err(CoreError::BadRequest(error_msg.1.to_string()));
-        }
-
-        let Some(token) = url.query_pairs().find(|it| it.0 == "access_token").map(|it| it.1.to_string()) else {
-            log::info!("The redirect url does not contain access token");
-            return Ok(());
+        let token = match callback {
+            AuthCallback::Success { access_token } => access_token,
+            AuthCallback::Cancelled => {
+                self.update_model(AuthenticationEvent::AuthenticationCancelled);
+                return Ok(());
+            }
+            AuthCallback::Failed { code, message } => {
+                self.update_model(AuthenticationEvent::AuthenticationFailed { code, message });
+                return Ok(());
+            }
         };
 
         let token = Token {
@@ -93,7 +150,7 @@ impl AppCommand {
         };
 
         if token.value.is_empty() {
-            log::error!(target: "auth", "Failed to get access token from auth response {url}");
+            log::warn!(target: "auth", "outcome=empty_access_token");
             return Ok(());
         }
 
@@ -188,13 +245,47 @@ impl AppCommand {
     }
 }
 
+fn parse_auth_callback(raw_url: &str) -> Result<AuthCallback, CoreError> {
+    let url = Url::parse(raw_url).map_err(|_| CoreError::BadRequest("The sign-in callback was invalid.".to_string()))?;
+    if url.scheme() != AUTH_CALLBACK_SCHEME || url.host_str() != Some(AUTH_CALLBACK_HOST) || url.path() != AUTH_CALLBACK_PATH {
+        return Err(CoreError::BadRequest("The sign-in callback did not match Bytover.".to_string()));
+    }
+
+    let outcome = url.query_pairs().find(|(key, _)| key == "outcome").map(|(_, value)| value.into_owned());
+    let access_token = url.query_pairs().find(|(key, _)| key == "access_token").map(|(_, value)| value.into_owned());
+    if url.query_pairs().any(|(key, _)| key == "message") {
+        return Ok(AuthCallback::Failed {
+            code: "provider_error".to_string(),
+            message: "Sign in could not be completed. Please try again.".to_string(),
+        });
+    }
+
+    match outcome.as_deref() {
+        Some("success") => access_token
+            .filter(|value| !value.is_empty())
+            .map(|access_token| AuthCallback::Success { access_token })
+            .ok_or_else(|| CoreError::BadRequest("The sign-in response was incomplete.".to_string())),
+        Some("authorization_denied") => Ok(AuthCallback::Cancelled),
+        Some("profile_unavailable") => Ok(AuthCallback::Failed {
+            code: "profile_unavailable".to_string(),
+            message: "Apple did not provide the account details needed for first sign-in. Please allow email sharing and try again."
+                .to_string(),
+        }),
+        Some(code) => Ok(AuthCallback::Failed {
+            code: code.to_string(),
+            message: "Sign in could not be completed. Please try again.".to_string(),
+        }),
+        None => Err(CoreError::BadRequest("The sign-in response was incomplete.".to_string())),
+    }
+}
+
 fn server_token_matches_device(server_device_key: &str, local_unique_id: &str) -> bool {
     server_device_key.is_empty() || local_unique_id == server_device_key
 }
 
 #[cfg(test)]
 mod tests {
-    use super::server_token_matches_device;
+    use super::{parse_auth_callback, server_token_matches_device, AuthCallback};
 
     #[test]
     fn empty_server_device_key_accepts_any_local_device() {
@@ -211,5 +302,30 @@ mod tests {
     fn mismatched_non_empty_device_keys_reject() {
         assert!(!server_token_matches_device("abc-123", "xyz-789"));
         assert!(!server_token_matches_device("abc-123", ""));
+    }
+
+    #[test]
+    fn callback_accepts_only_exact_success_uri() {
+        assert_eq!(
+            parse_auth_callback("bytover://app/oauth/callback?outcome=success&access_token=secret").unwrap(),
+            AuthCallback::Success {
+                access_token: "secret".to_string()
+            }
+        );
+
+        assert!(parse_auth_callback("bytover://attacker/oauth/callback?outcome=success&access_token=secret").is_err());
+        assert!(parse_auth_callback("bytover://app/oauth/callback/extra?outcome=success&access_token=secret").is_err());
+    }
+
+    #[test]
+    fn callback_maps_denial_and_missing_profile_without_tokens() {
+        assert_eq!(
+            parse_auth_callback("bytover://app/oauth/callback?outcome=authorization_denied").unwrap(),
+            AuthCallback::Cancelled
+        );
+        assert!(matches!(
+            parse_auth_callback("bytover://app/oauth/callback?outcome=profile_unavailable").unwrap(),
+            AuthCallback::Failed { code, .. } if code == "profile_unavailable"
+        ));
     }
 }
